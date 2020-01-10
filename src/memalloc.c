@@ -11,7 +11,6 @@
 
 
 // Method allocating a certain memory region to a buffer process.
-//int64_t memalloc (int64_t req_mem, int32_t block_size, unsigned char ** reference)
 int64_t memalloc (int64_t req_mem, unsigned char ** reference)
 {
 	// Available memory in the system.

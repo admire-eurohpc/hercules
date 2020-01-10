@@ -20,7 +20,6 @@ unsigned char *pt;
 //SIGINT & SIGKILL signal handler.
 void exit_server(int32_t)
 {
-	printf("IN SIG HANDLER\n");
 	//Free the memory buffer.
 	free(pt);
 
@@ -67,7 +66,7 @@ int32_t main (int32_t argc, char **argv)
 	//Execute all threads.
 	for (int32_t i = 0; i < (THREAD_POOL+1); i++)
 	{
-		//Add port number to set of thread arguments.
+		//Add port number to thread arguments.
 		arguments[i].port = port++;
 
 		//Deploy all dispatcher + service threads.
@@ -77,7 +76,7 @@ int32_t main (int32_t argc, char **argv)
 			if (pthread_create(&threads[i], NULL, dispatcher, (void *) &arguments[i]) == -1)
 			{
 				//Notify thread error deployment.
-				perror("ERRIMSS_BUFF_DISP_DPLY");
+				perror("ERRIMSS_BUFF_DISPAT_DPLY");
 				return -1;
 			}
 		}
@@ -108,8 +107,6 @@ int32_t main (int32_t argc, char **argv)
 			return -1;
 		}
 	}
-
-	//TODO: add persistent storage.
 
 	free(pt);
 

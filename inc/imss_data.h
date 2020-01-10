@@ -50,10 +50,6 @@ typedef struct {
 	int32_t num_data_elem;
 	//Size of each data element (in KB).
 	int32_t data_entity_size;
-	//IMSS storage system storing the dataset.
-	char imss_depot[URI_];
-	//Node storing the first data element of the corresponding dataset.
-	int32_t root_node; //TODO: no le veo mucho futuro a esto.
 	//IMSS descriptor managing the dataset in the current client session.
 	int32_t imss_d;
 

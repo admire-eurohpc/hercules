@@ -26,7 +26,7 @@ void * worker (void * th_argv)
 	//Append corresponding port number to each string.
 	strcat(str1, buf); 
 
-	//TODO: set a timeout over the socket. FOR SURE?
+	//TODO consider adding a timeout to the socket.
 	//ZeroMQ context intialization.
 	void * context = zmq_ctx_new();
 	//ZeroMQ socket creation (RECEIVER).
@@ -60,7 +60,7 @@ void * worker (void * th_argv)
 		//Save the request to be served.
 		zmq_msg_recv(&client_req, server, 0);
 
-		printf("CLIENT: %d\tREQUEST: %s\n", *((int *) zmq_msg_data(&client_id)), (char *) zmq_msg_data(&client_req));
+		//printf("CLIENT: %d\tREQUEST: %s\n", *((int *) zmq_msg_data(&client_id)), (char *) zmq_msg_data(&client_req));
 
 		//Check the requests' type in relation to the number of remaining incomming messages.
 		if ((zmq_getsockopt(server, ZMQ_RCVMORE, &more, &more_size)) == -1)
@@ -194,7 +194,7 @@ void * dispatcher(void * th_argv)
 	//Append corresponding port number to each string.
 	strcat(str1, buf); 
 
-	//TODO: set a timeout over the socket. FOR SURE?
+	//TODO consider adding a timeout to the socket.
 	//ZeroMQ context intialization.
 	void * context = zmq_ctx_new();
 	//ZeroMQ socket creation (RECEIVER).

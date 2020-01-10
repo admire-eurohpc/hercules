@@ -13,10 +13,6 @@
 #define WRITE			0
 #define READ			1
 
-//argv[1] = BLOCK_SIZE (KB)  argv[2] = PORT  	argv[3] = #CLIENTS
-//argv[4] = SERVER_MACHINES  argv[5] = #SERVERS	argv[6] = POLICY
-//argv[7] = OPERATION	     argv[8] = STAT_IP	argv[9] = STAT_PORT
-
 //argv[1] = IMSS_HOSTFILE	argv[2] = STAT_IP	argv[3] = STAT_PORT
 
 uint64_t block_size;

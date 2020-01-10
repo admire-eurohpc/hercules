@@ -25,7 +25,7 @@ void * worker (void * th_argv)
 	//Append corresponding port number to each string.
 	strcat(str1, buf); 
 
-	//TODO: set a timeout over the socket. FOR SURE?
+	//TODO: consider adding a timeout to the socket.
 	//ZeroMQ context intialization.
 	void * context = zmq_ctx_new();
 	//ZeroMQ socket creation (RECEIVER).
@@ -191,7 +191,7 @@ void * dispatcher(void * th_argv)
 	//Append corresponding port number to each string.
 	strcat(str1, buf); 
 
-	//TODO: set a timeout over the socket. FOR SURE?
+	//TODO: consider adding a timeout to the socket.
 	//ZeroMQ context intialization.
 	void * context = zmq_ctx_new();
 	//ZeroMQ socket creation (RECEIVER).
@@ -267,8 +267,6 @@ void * dispatcher(void * th_argv)
 			//If there are no remaining clients connected to the IMSS, tear it down.
 			if (!connected_clients)
 			{
-				printf("IN TEAR DOWN!\n");
-
 				pid_t pid = getpid();
 
 				kill(pid, SIGINT);
