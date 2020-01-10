@@ -1,0 +1,15 @@
+
+TASKS:
+
+	1. POLICY: modify policy management considering multiple datasets (merge set_policy & find_server).
+	2. Modify the design in order to consider MANAGEMENT OF MULTIPLE DATASETS AND IMSS SYSTEMS.
+	3. ERASE UNNECESSARY DEPEDENCIES.
+	4. DATA MUST BE SENT FROM THE CLIENT WITH A '\0' CONCLUDING THE DATA SENT (in order to comply with the string.h library functionality requirements). SOLO HAZLO, no preguntes.
+	5. Add a DISPATCHER thread to the buffer system.
+	6. Specify by a conditional the error that a thread will be displaying in relation to the thread type.
+
+
+IDEAS:
+
+	1. LEAVE THE METADATA SERVER IMPROVEMENT FOR THE FUTURE. Jesus's design will consider the IMSS metadata information stored in the client side as there will be just one IMSS.
+
