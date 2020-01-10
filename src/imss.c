@@ -57,7 +57,7 @@ int32_t conn_crt_(void ** context, void ** socket, char * ip_, int16_t port, int
 	}
 
 	//Connection address.
-	char addr_[32]; memset(addr_, '\0', 32);
+	char addr_[512]; 
 	sprintf(addr_, "%s%s%c%d", "tcp://", ip_, ':', port);
 
 	//Connect to the specified endpoint.
@@ -196,10 +196,11 @@ int32_t init_imss(char * imss_uri, int32_t n_servers, int32_t buff_size, char * 
 	//TODO: check if an IMSS already exists with the same name.
 
 	//Final command to be executed.
-	char command[512]; memset(command, '\0', 512);
+	char command[1024]; 
+        memset(command, 0, 1024);
 
 	//Path to the IMSS server binary.
-	char binary[] 	= "bin/buffer";
+	char binary[] 	= "./buffer";
 	char mpirun_1[]	= "mpirun -np ";
 	char mpirun_2[]	= " -f ";
 
@@ -284,7 +285,6 @@ int32_t init_imss(char * imss_uri, int32_t n_servers, int32_t buff_size, char * 
 
 		//Close the previous connection.
 		if (conn_dstr_(&(imss_d.contexts_[i]), &(imss_d.sockets_[i])) == -1)
-
 			return -1;
 
 		//Port that the new client must connect to.
@@ -452,12 +452,10 @@ int32_t open_dataset(char * dataset_uri)
 
 	//Check if the IMSS containing the dataset exists within the clients session.
 	if ((imssd = imss_check(dataset_uri)) == -1)
-
 		return -1;
 
 	//Dataset metadata request.
 	if (stat_dataset(dataset_uri, &dataset_) == -1)
-	
 		return -1;
 
 	//Assign the associated IMSS descriptor to the new dataset structure.
@@ -487,7 +485,7 @@ int32_t stat_dataset(char * dataset_uri, dataset_info * dataset_info_)
 {
 	//Formated dataset uri to be sent to the metadata server.
 	char formated_uri[strlen(dataset_uri)+1];
-	sprintf(formated_uri, "%c%s", '$', dataset_uri);
+	sprintf(formated_uri, "$%s", dataset_uri);
 
 	//Message containing the dataset request.
 	zmq_msg_t dataset_req;
@@ -553,7 +551,7 @@ int32_t get_data(int32_t datasetd, int32_t data_id, unsigned char * buffer, int6
 	}
 
 	//Key related to the requested data element.
-	char key[KEY]; sprintf(key, "%d%c%s%c%d", 0, '$', dataset_.uri_, '$', data_id);
+	char key[KEY]; sprintf(key, "0$%s$%d",  dataset_.uri_, data_id);
 
 	//Message containing the key of the block to be retrieved.
 	zmq_msg_t msg;
