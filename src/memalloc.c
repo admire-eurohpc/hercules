@@ -33,20 +33,20 @@ int64_t memalloc (int64_t req_mem, unsigned char ** reference)
 	{
 		// Redirect the standard input to the pipe.
 		close(0);
-		dup(pp[0]);
+		if (dup(pp[0]) == -1) return -1;
 		close(pp[0]);
 		close(pp[1]);
 		// Wait for the child process.
 		wait(&status);
 		// Read AWK command's result.
-		scanf("%ld", &mem_avail);
+		if (scanf("%ld", &mem_avail) != 1) return -1;
 	}
 	// Check if the current process is the child one.
 	else if (!pid_)
 	{
 		// Redirect the standard output to the pipe.
 		close(1);
-		dup(pp[1]);
+		if (dup(pp[1]) == -1) return -1;
 		close(pp[0]);
 		close(pp[1]);
 
