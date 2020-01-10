@@ -19,4 +19,5 @@ tst/BUCKETS.csv
 tst/2_4_6_SERVERS_RESULTS.csv
 aux
 kill_stat.sh
+build
 TODO

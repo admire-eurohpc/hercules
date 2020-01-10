@@ -2,7 +2,7 @@ SRC = ./src/
 BIN = ./bin/
 
 CC = g++
-CCFLAGS = -std=c++14 -Wall
+CCFLAGS = -std=c++17 -Wall
 MPICC = mpic++
 
 INCLUDE = -I/home/mandres/install/include -I./inc
