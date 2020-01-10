@@ -199,7 +199,7 @@ int32_t init_imss(char * imss_uri, int32_t n_servers, int32_t buff_size, char * 
 	char command[512]; memset(command, '\0', 512);
 
 	//Path to the IMSS server binary.
-	char binary[] 	= "~/Burst-Buffer/bin/buffer";
+	char binary[] 	= "bin/buffer";
 	char mpirun_1[]	= "mpirun -np ";
 	char mpirun_2[]	= " -f ";
 
@@ -321,7 +321,8 @@ int32_t init_imss(char * imss_uri, int32_t n_servers, int32_t buff_size, char * 
 int32_t release_imss(char * imss_uri)
 {
 	//TODO add vectors managing the whole set of data structures underneath.
-	//TODO: add vectorial behavior.
+
+	//TODO add vectorial behavior.
 
 	//Send a release message to each buffer within the corresponding IMSS.
 	for (int32_t i = 0; i < imss_.num_storages; i++)
@@ -662,6 +663,7 @@ int32_t get_data_location(int32_t datasetd, int32_t data_id)
 /***************************** DATA RELEASE RESOURCES *****************************/
 
 
+//FIXME
 //Method releasing typedef structures.
 int32_t free_(int32_t typedef_, void * typedef_ref_)
 {
