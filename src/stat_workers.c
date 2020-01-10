@@ -19,12 +19,8 @@ void * worker (void * th_argv)
 	//Obtain the current map class element from the set of arguments.
 	map_records * map = arguments->map;
 
-	//Initialize strings to be used by zmq_bind functions.
-	char str1[] = "tcp://*:";
 	//Turn port number (int) into a string.
-	char buf[16]; sprintf(buf, "%d", arguments->port);
-	//Append corresponding port number to each string.
-	strcat(str1, buf); 
+	char str1[24]; sprintf(str1, "%s%d", "tcp://*:", arguments->port);
 
 	//TODO consider adding a timeout to the socket.
 	//ZeroMQ context intialization.
@@ -48,7 +44,8 @@ void * worker (void * th_argv)
 	zmq_msg_init (&block);
 
 	//Resources specifying if more messages will be received in the first attached.
-	int64_t more; size_t more_size = sizeof(more);
+	int64_t more; 
+	size_t more_size = sizeof(more);
 
 	//Code to be sent if the requested to-be-read key does not exist.
 	char err_code[] = "$ERRIMSS_NO_KEY_AVAIL$";
@@ -187,12 +184,8 @@ void * dispatcher(void * th_argv)
 	//Cast from generic pointer type to p_argv struct type pointer.
 	p_argv * arguments = (p_argv *) th_argv;
 
-	//Initialize strings to be used by zmq_bind functions.
-	char str1[] = "tcp://*:";
 	//Turn port number (int) into a string.
-	char buf[16]; sprintf(buf, "%d", arguments->port);
-	//Append corresponding port number to each string.
-	strcat(str1, buf); 
+	char str1[24]; sprintf(str1, "%s%d", "tcp://*:", arguments->port);
 
 	//TODO consider adding a timeout to the socket.
 	//ZeroMQ context intialization.
