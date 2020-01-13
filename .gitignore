@@ -19,3 +19,4 @@ aux
 kill_stat.sh
 build
 TODO
+Makefile
