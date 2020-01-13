@@ -5,8 +5,6 @@ crc16.c
 crc64.c
 test_map.c
 free_tst.sh
-CMakeLists.txt
-src/CMakeLists.txt
 tst/TESTS.csv
 tst/compute_3_tsts.csv
 .memalloctst.c
