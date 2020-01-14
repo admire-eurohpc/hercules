@@ -1,0 +1,16 @@
+
+	BEFORE ANY EXECUTION IT MUST ME ENSURED THAT THE mpi/mpich3/3.2.1 module HAS BEEN LOADED.
+
+	METADATA SERVER:
+
+		bin: 		stat_srv
+		arguments:	1. PORT NUMBER
+				2. BUFFER SIZE (in GB)
+				3. METADATA FILE PATH
+
+	CLIENT ENTITY:
+
+		bin:		client
+		arguments:	1. IMSS SERVER DEPLOYMENT FILE (MPI HOSTFILE): //hostfiles/servers
+				2. METADATA SERVER IP
+				3. METADATA SERVER PORT NUMBER
