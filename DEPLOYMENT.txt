@@ -19,6 +19,6 @@
 				2. METADATA SERVER IP			      10.0.40.15
 				3. METADATA SERVER PORT NUMBER		      5555	
 
-		execution*:	./client ../hostfile/servers 10.0.40.15 5555
+		execution*:	./client ../hostfiles/servers 10.0.40.15 5555
 
 	*The previous execution examples should be performed from the //IMSS/build directory.
