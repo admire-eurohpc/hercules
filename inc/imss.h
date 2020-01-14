@@ -75,7 +75,7 @@ int32_t get_data(int32_t datasetd, int32_t data_id, unsigned char * buffer, int6
 int32_t set_data(int32_t datasetd, int32_t data_id, unsigned char * buffer);
 
 //Method storing a certain data object and checking that it has been correctly stored.
-int32_t setv_data(char * dataset_uri, uint64_t data_id, unsigned char * buffer);
+int32_t setv_data(int32_t datasetd, int32_t data_id, unsigned char * buffer);
 
 //Method retrieving the location of a specific data object.
 int32_t get_data_location(int32_t datasetd, int32_t data_id);
