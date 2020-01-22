@@ -3,18 +3,21 @@
 #include <errno.h>
 #include <string.h>
 #include <stdlib.h>
+#include <mpi.h>
 #include "imss.h"
 #include "policies.h"
 
 
 /******************************** GLOBAL VARIABLES ********************************/
 
-void * stat_context;		//Metadata server context.
-void * stat_client;		//Metadata server socket.
-imss_info imss_;		//Structure storing current IMSS metadata information.
-imss_descriptor imss_d;		//Structure storing resources required to connect to a certain IMSS.
+void * stat_context;				//Metadata server context.
+void * stat_client;				//Metadata server socket.
+imss_info imss_;				//Structure storing current IMSS metadata information.
+imss_descriptor imss_d;				//Structure storing resources required to connect to a certain IMSS.
 dataset_info dataset_;
-int32_t current_dataset;	// Last dataset whose policy was established as the current one.
+int32_t current_dataset;			//Last dataset whose policy was established as the current one.
+char client_node[MPI_MAX_PROCESSOR_NAME];	//Node name where the client is running.
+int32_t len_client_node;			//Length of the previous node name.
 
 
 
@@ -124,6 +127,9 @@ int32_t imss_check(char * dataset_uri)
 int32_t stat_init(char * ip, uint16_t port)
 {
 	current_dataset = -1;
+
+	//Obtain the node name where the client is running.
+	MPI_Get_processor_name(client_node, &len_client_node);
 
 	//Create the connection to the metadata server dispatcher thread.
 	if (conn_crt_(&stat_context, &stat_client, ip, port, -1) == -1)
@@ -240,6 +246,8 @@ int32_t init_imss(char * imss_uri, int32_t n_servers, int32_t buff_size, char * 
 	//Number of characters successfully read from the line.
 	int n_chars;
 
+	imss_d.matching_server = -1;
+
 	//Connect to all servers.
 	for (int i = 0; i < n_servers; i++)
 	{
@@ -252,6 +260,11 @@ int32_t init_imss(char * imss_uri, int32_t n_servers, int32_t buff_size, char * 
 
 		//Erase the new line character ('\n') from the string.
 		((imss_.ips)[i])[n_chars - 1] = '\0';
+
+		//Save the current socket value when the IMSS ip matches the clients' one.
+		if (!strncmp((imss_.ips)[i], client_node, len_client_node))
+		
+			imss_d.matching_server = i;
 
 		//Create the connection to the IMSS server dispatcher thread.
 		if (conn_crt_(&(imss_d.contexts_[i]), &(imss_d.sockets_[i]), (imss_.ips)[i], imss_.conn_port, -1) == -1)
@@ -435,7 +448,7 @@ int32_t create_dataset(char * dataset_uri, char * policy, int32_t num_data_elem,
 	}
 
 	//Set the specified policy.
-	if (set_policy(dataset_.policy, dataset_.num_data_elem) == -1)
+	if (set_policy(dataset_.policy, dataset_.num_data_elem, imss_d.matching_server) == -1)
 	{
 		perror("ERRIMSS_DATASET_SETPLCY");
 		return -1;
@@ -464,7 +477,7 @@ int32_t open_dataset(char * dataset_uri)
 	printf("%s - %s - %d - %d\n", dataset_.uri_, dataset_.policy, dataset_.num_data_elem, dataset_.data_entity_size);
 
 	//Set the specified policy.
-	if (set_policy(dataset_.policy, dataset_.num_data_elem) == -1)
+	if (set_policy(dataset_.policy, dataset_.num_data_elem, imss_d.matching_server) == -1)
 	{
 		perror("ERRIMSS_DATASET_SETPLCY");
 		return -1;
@@ -636,7 +649,7 @@ int32_t get_data_location(int32_t datasetd, int32_t data_id)
 	if (current_dataset != datasetd)
 	{
 		//Set the corresponding.
-		if (set_policy(dataset_.policy, dataset_.num_data_elem) == -1)
+		if (set_policy(dataset_.policy, dataset_.num_data_elem, imss_d.matching_server) == -1)
 		{
 			perror("ERRIMSS_SET_POLICY");
 			return -1;

@@ -20,11 +20,6 @@ int message_copied = 0;
 int n_servers;
 
 
-//Display in which machine I am running.
-//char name[MPI_MAX_PROCESSOR_NAME]; int len;
-//MPI_Get_processor_name(name, &len);
-//printf("Hello, world. I am running on %s\n", name);
-
 int main (int argc, char **argv)
 {
 	MPI_Init(&argc, &argv);
@@ -48,7 +43,7 @@ int main (int argc, char **argv)
 		return -1;
 
 	char dataset_uri[] = "imss:/MYIMSS/mydataset";
-	char dataset_policy[] = "RR";
+	char dataset_policy[] = "LOCAL";
 
 	int32_t datasetd;
 

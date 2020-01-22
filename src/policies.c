@@ -5,19 +5,24 @@
 #include "policies.h"
 #include "crc.h"
 
-// Default session policy: ROUND ROBIN.
+//Default session policy: ROUND ROBIN.
 int32_t session_plcy = ROUND_ROBIN_;
-// Number of blocks to be sent.
+//Number of blocks to be sent.
 int32_t n_blocks;
+//Socket connecting the client to the imss server running in the same node.
+int32_t matching_node_socket;
 
-int32_t set_policy (const char * policy, int32_t blocks)
+int32_t set_policy (const char * policy, int32_t blocks, int32_t matching_node_conn)
 {
-	// Invalid number of blocks to be sent.
+	//Invalid number of blocks to be sent.
 	if (blocks <= 0)
 
 		return -1;
 
-	// Set blocks to be sent.
+	//Save the connection to the imss server running in the same node.
+	matching_node_socket = matching_node_conn;
+
+	//Set blocks to be sent.
 	n_blocks = blocks;
 
 	//Set the corresponding policy.
@@ -41,6 +46,10 @@ int32_t set_policy (const char * policy, int32_t blocks)
 	{
 		session_plcy = 4;
 	}
+	else if (!strcmp(policy, "LOCAL"))
+	{
+		session_plcy = 5;
+	}
 	else
 	{
 		perror("ERR_SETPLCY_INVLD");
@@ -50,46 +59,46 @@ int32_t set_policy (const char * policy, int32_t blocks)
 	return 0;
 }
 
-// Method retrieving the server that will receive the following message attending a policy.
+//Method retrieving the server that will receive the following message attending a policy.
 int32_t find_server (int32_t n_servers, uint64_t n_msg, const char * fname)
 {
 	uint64_t next_server = -1;
 
 	switch (session_plcy)
 	{
-		// Follow a round robin policy.
+		//Follow a round robin policy.
 		case ROUND_ROBIN_:
 		{
 			uint16_t crc_ = crc16(fname, strlen(fname));
 
-			// First server that received a block from the current file.
+			//First server that received a block from the current file.
 			next_server = crc_ % n_servers;
 
-			// Next server receiving the following block.
+			//Next server receiving the following block.
 			next_server = (next_server + n_msg) % n_servers;
 		}
 			break;
 
-		// Follow a bucketbnn distribution.
+		//Follow a bucketbnn distribution.
 		case BUCKETS_: 
 		{
 			uint16_t crc_ = crc16(fname, strlen(fname));
 
-			// First server that received a block from the current file.
+			//First server that received a block from the current file.
 			uint32_t initial_server = crc_ % n_servers;
 
-			// Number of the server from the first one receiving the current message.
+			//Number of the server from the first one receiving the current message.
 			next_server = (n_msg / (n_blocks / n_servers)) % n_servers;
 
-			// Actual server receiving the next message.
+			//Actual server receiving the next message.
 			next_server = (next_server + initial_server) % n_servers;
 		}
 			break;
 
-		// Follow a hashed distribution.
+		//Follow a hashed distribution.
 		case HASHED_:
 		{
-			// Key identifying the current to-be-sent file block.
+			//Key identifying the current to-be-sent file block.
 			char key[strlen(fname) + 64];
 			sprintf(key, "%s%c%lu", fname, '$', n_msg);
 
@@ -99,7 +108,7 @@ int32_t find_server (int32_t n_servers, uint64_t n_msg, const char * fname)
 			uint32_t i    	= 0;
 			uint32_t length = strlen(key);
 
-			// Create the  hash through the messages's content.
+			//Create the  hash through the messages's content.
 			for (i = 0; i < length; ++i)	
 			{
 					hash = hash * a + (key[i]);
@@ -110,10 +119,10 @@ int32_t find_server (int32_t n_servers, uint64_t n_msg, const char * fname)
 		}
 			break;
 
-		// Following another hashed distribution using Redis's CRC16.
+		//Following another hashed distribution using Redis's CRC16.
 		case CRC16_:
 		{
-			// Key identifying the current to-be-sent file block.
+			//Key identifying the current to-be-sent file block.
 			char key[strlen(fname) + 64];
 			sprintf(key, "%s%c%lu", fname, '$', n_msg);
 			next_server = crc16(key, strlen(key)) % n_servers;
@@ -121,16 +130,22 @@ int32_t find_server (int32_t n_servers, uint64_t n_msg, const char * fname)
 
 			break;
 
-		// Following another hashed distribution using Redis's CRC64.
+		//Following another hashed distribution using Redis's CRC64.
 		case CRC64_:
 		{
-			// Key identifying the current to-be-sent file block.
+			//Key identifying the current to-be-sent file block.
 			char key[strlen(fname) + 64];
 			sprintf(key, "%s%c%lu", fname, '$', n_msg);
 			next_server = crc64(0, (unsigned char *) key, strlen(key)) % n_servers;
 		}
 
 			break;
+
+		//Follow a locality distribution.
+		case LOCAL_:
+		{
+			next_server = matching_node_socket;
+		}
 
 		default:
 

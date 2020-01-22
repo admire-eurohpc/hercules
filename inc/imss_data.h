@@ -35,7 +35,9 @@ typedef struct {
 	//Set of actual sockets.
 	void ** sockets_;
 	//ID that the client takes in the current connections.
-	int c_id;
+	int32_t c_id;
+	//Socket connecting the corresponding client to the server running in the same node.
+	int32_t matching_server;
 
 } imss_descriptor;
 
@@ -52,6 +54,8 @@ typedef struct {
 	int32_t data_entity_size;
 	//IMSS descriptor managing the dataset in the current client session.
 	int32_t imss_d;
+
+	//TODO: add a field specifying the name of the node where the dataset was stored in case of a LOCAL distribution.
 
 } dataset_info;
 
