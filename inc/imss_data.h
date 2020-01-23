@@ -54,8 +54,8 @@ typedef struct {
 	int32_t data_entity_size;
 	//IMSS descriptor managing the dataset in the current client session.
 	int32_t imss_d;
-
-	//TODO: add a field specifying the name of the node where the dataset was stored in case of a LOCAL distribution.
+	//Node were the dataset was stored if the LOCAL distribution policy was used.
+	int32_t root_node;
 
 } dataset_info;
 

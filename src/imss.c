@@ -420,9 +420,11 @@ int32_t create_dataset(char * dataset_uri, char * policy, int32_t num_data_elem,
 	strcpy(dataset_.uri_, dataset_uri);
 	strcpy(dataset_.policy, policy);
 	//TODO: will we be knowing the number of elements that a dataset will be compossed by beforehand?
-	dataset_.num_data_elem = num_data_elem;
-	dataset_.data_entity_size = data_elem_size*1024;
-	dataset_.imss_d = imssd;
+	dataset_.num_data_elem 		= num_data_elem;
+	dataset_.data_entity_size 	= data_elem_size*1024;
+	dataset_.imss_d 		= imssd;
+	//FIXME: the following line will end up being like "... = imss_d[dataset_.imss_d].matching_server".
+	dataset_.root_node 		= imss_d.matching_server;
 
 	char msg[REQ_MSG];
 	sprintf(msg, "%lu%c%s", sizeof(dataset_info), '$', dataset_uri);
@@ -448,7 +450,7 @@ int32_t create_dataset(char * dataset_uri, char * policy, int32_t num_data_elem,
 	}
 
 	//Set the specified policy.
-	if (set_policy(dataset_.policy, dataset_.num_data_elem, imss_d.matching_server) == -1)
+	if (set_policy(dataset_.policy, dataset_.num_data_elem, dataset_.root_node) == -1)
 	{
 		perror("ERRIMSS_DATASET_SETPLCY");
 		return -1;
@@ -477,7 +479,7 @@ int32_t open_dataset(char * dataset_uri)
 	printf("%s - %s - %d - %d\n", dataset_.uri_, dataset_.policy, dataset_.num_data_elem, dataset_.data_entity_size);
 
 	//Set the specified policy.
-	if (set_policy(dataset_.policy, dataset_.num_data_elem, imss_d.matching_server) == -1)
+	if (set_policy(dataset_.policy, dataset_.num_data_elem, dataset_.root_node) == -1)
 	{
 		perror("ERRIMSS_DATASET_SETPLCY");
 		return -1;
@@ -649,7 +651,7 @@ int32_t get_data_location(int32_t datasetd, int32_t data_id)
 	if (current_dataset != datasetd)
 	{
 		//Set the corresponding.
-		if (set_policy(dataset_.policy, dataset_.num_data_elem, imss_d.matching_server) == -1)
+		if (set_policy(dataset_.policy, dataset_.num_data_elem, dataset_.root_node) == -1)
 		{
 			perror("ERRIMSS_SET_POLICY");
 			return -1;
