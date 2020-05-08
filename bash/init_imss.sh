@@ -39,6 +39,8 @@ The following options are available:
 	-P	Port within the previous machine that the
 		metadata server is listening to.
 
+	-B	Buffer binary location.
+
 The whole set of parameters must be provided in order to 
 perform a successful deployment.
 
@@ -69,10 +71,11 @@ imss_buffer_size="-1"
 imss_port_number="-1"
 metadata_server_port="-1"
 metadata_server_address="-1"
+binary_location="-1"
 
 
 #GETOPTS loop parsing the set of arguments provided. Just those options requiring an argument must be followed by a semicolon.
-while getopts ":u:d:b:p:P:A:h" opt
+while getopts ":u:d:b:p:P:A:B:h" opt
    do
 	case ${opt} in
 
@@ -100,6 +103,10 @@ while getopts ":u:d:b:p:P:A:h" opt
 		metadata_server_address=$OPTARG
 		check_argument "$metadata_server_address" "$opt"
 		;;
+	   B )
+		binary_location=$OPTARG
+		check_argument "$binary_location" "$opt"
+		;;
 
 	   #Print the usage options of the script.
 	   h )
@@ -126,7 +133,7 @@ while getopts ":u:d:b:p:P:A:h" opt
 
 
 
-if [ "$#" -ne 12 ]
+if [ "$#" -ne 14 ]
    then
 	echo -n "init_imss.sh ERROR: expected arguments not provided ("
 
@@ -154,6 +161,10 @@ if [ "$#" -ne 12 ]
 	   then
 		echo -n " -A"
 	   fi
+	if [ "$binary_location" == "-1" ]
+	   then
+		echo -n " -B"
+	   fi
 
 	echo " )"
 
@@ -165,4 +176,4 @@ if [ "$#" -ne 12 ]
 #Required if non-getopts additional arguments were provided.
 #shift $((OPTIND - 1))
 
-echo "Arguments provided: URI $imss_uri, HOSTFILE: $imss_hostfile, IMSS_BUFFER_SIZE: $imss_buffer_size, IMSS_PORT_NUMBER: $imss_port_number, METADATA_PORT: $metadata_server_port, METADATA_ADDRESS: $metadata_server_address"
+echo "Arguments provided: LOCATION OF BINARY FILE $binary_location URI $imss_uri, HOSTFILE: $imss_hostfile, IMSS_BUFFER_SIZE: $imss_buffer_size, IMSS_PORT_NUMBER: $imss_port_number, METADATA_PORT: $metadata_server_port, METADATA_ADDRESS: $metadata_server_address"
