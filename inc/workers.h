@@ -1,9 +1,16 @@
-#ifndef ARG_STRUCT_H
-#define ARG_STRUCT_H
+#ifndef WORKER_H
+#define WORKER_H
 
 #include "records.hpp"
 
-#define KB		1024
+#define READ_OP			0
+#define WRITE_OP		1
+
+#define THREAD_POOL		4
+
+#define LOCAL_DATASET_UPDATE	0
+
+#define KB			1024
 
 
 //Set of arguments passed to each server thread.
@@ -18,4 +25,12 @@ typedef struct {
 
 } p_argv;
 
+
+//Thread method attending client data requests.
+void * worker (void * th_argv);
+
+//Dispatcher thread method distributing clients among a pool threads.
+void * dispatcher (void * th_argv);
+
 #endif
+

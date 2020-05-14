@@ -8,10 +8,16 @@
 #define CRC64_			4
 #define LOCAL_ 			5
 
+#define GET			6
+#define SET			7
+
+#include "imss.h"
+
 //Method specifying the policy.
-int32_t set_policy (const char * policy, int32_t blocks, int32_t matching_node_conn);
+int32_t set_policy  (dataset_info * dataset);
 
 //Method retrieving the server that will receive the following message attending a policy.
-int32_t find_server (int32_t n_servers, uint64_t n_msg, const char * fname);
+int32_t find_server (int32_t n_servers, int32_t n_msg, const char * fname, int32_t op_type);
 
 #endif
+

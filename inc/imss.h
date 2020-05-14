@@ -2,17 +2,104 @@
 #define IMSS_WRAP_
 
 #include <stdint.h>
-#include "imss_data.h"
+
+
+#define SET_DATASET	0
+#define GET_DATASET	1
+#define URI_		256
+#define REQ_MSG		272
+#define LINE_LENGTH	512
+#define KEY		512
+#define TIMEOUT_MS	10000
+#define MONITOR		1
+#define ELEMENTS	16
+#define IMSS		0
+#define DATASET		1
+
+
+
+
+
+//Structure storing all information related to a certain backend.
+typedef struct {
+
+	//IMSS URI.
+	char uri_[URI_];
+	//Byte specifying the type of structure.
+	char type = 'I';
+	//Set of ips comforming the IMSS.
+	char ** ips;
+	//Number of IMSS servers.
+	int32_t num_storages;
+	//Server's dispatcher thread connection port.
+	uint16_t conn_port;
+
+} imss_info;
+
+//Structure storing the required connection resources to the IMSS in the client side.
+typedef struct {
+
+	//Set of actual sockets.
+	void ** sockets_;
+	//ID that the client takes in the current connections.
+	int32_t c_id;
+	//Socket connecting the corresponding client to the server running in the same node.
+	int32_t matching_server;
+
+} imss_conn;
+
+//Structure merging the previous couple.
+typedef struct {
+
+	imss_info info;
+
+	imss_conn conns;
+
+} imss;
+
+//Structure storing all information related to a certain dataset.
+typedef struct {
+
+	//URI identifying a certain dataset.
+	char uri_[URI_];
+	//Byte specifying the type of structure.
+	char type = 'D';
+	//Policy that was followed in order to write the dataset.
+	char policy[8];
+	//Number of data elements conforming the dataset entity.
+	int32_t num_data_elem;
+	//Size of each data element (in KB).
+	int32_t data_entity_size;
+	//IMSS descriptor managing the dataset in the current client session.
+	int32_t imss_d;
+	//Connection to the IMSS server running in the same machine.
+	int32_t local_conn;
+
+
+	/*************** USED EXCLUSIVELY BY LOCAL DATASETS ***************/
+
+
+	//Vector of characters specifying the position of each data element.
+	uint16_t * data_locations;
+	//Number of blocks written by the client in the current session.
+	uint64_t * num_blocks_written;
+	//Actual blocks written by the client.
+	uint32_t * blocks_written;
+
+} dataset_info;
+
+
+
 
 
 /********************* METADATA SERVICE MANAGEMENT FUNCTIONS  *********************/
 
 
 // Method creating a connection to the metadata server.
-int32_t stat_init(char * ip, uint16_t port);
+int32_t stat_init(char * ip, uint16_t port, int32_t rank);
 
 //Method disabling connection resources to the metadata server.
-int32_t release_stat();
+int32_t stat_release();
 
 
 
@@ -20,16 +107,13 @@ int32_t release_stat();
 
 
 //Method deploying the storage system.
-int32_t init_imss(char * imss_uri, int32_t n_servers, int32_t buff_size, char * hostfile, uint16_t conn_port);
-
-//Method disabling all connection resources and tearing down all servers.
-int32_t release_imss(char * imss_uri);
+int32_t init_imss(char * imss_uri, char * hostfile, int32_t n_servers, uint16_t conn_port, int32_t buff_size);
 
 //Method creating the set of required connections with an existing IMSS.
 int32_t open_imss(char * imss_uri);
 
-//Method destroying the client's current session with a certain IMSS.
-int32_t close_imss(char * imss_uri);
+//Method disabling all connection resources.
+int32_t release_imss(char * imss_uri);
 
 //Method retrieving information related to a certain backend.
 int32_t stat_imss(char * imss_uri, imss_info * imss_info_);
@@ -57,19 +141,13 @@ unsigned char * get_dataset(char * dataset_uri, uint64_t * buff_length);
 //Method storing a whole dataset parallelizing the procedure.
 int32_t set_dataset(char * dataset_uri, unsigned char * buffer, uint64_t offset);
 
-//Method retrieving the location of the whole set of data elements composing the dataset.
-struct dataset_location get_dataset_location(char * dataset_uri);
-
-//Method releasing information allocated by 'get_dataset_location'.
-int32_t free_dataset_location(struct dataset_location * dataset_location_);
-
 
 
 /************************ DATA OBJECT MANAGEMENT FUNCTIONS ************************/
 
 
 //Method performing a retrieval operation of a specific object.
-int32_t get_data(int32_t datasetd, int32_t data_id, unsigned char * buffer, int64_t * buff_length);
+int32_t get_data(int32_t datasetd, int32_t data_id, unsigned char * buffer);
 
 //Method storing a specific data object.
 int32_t set_data(int32_t datasetd, int32_t data_id, unsigned char * buffer);
@@ -78,14 +156,19 @@ int32_t set_data(int32_t datasetd, int32_t data_id, unsigned char * buffer);
 int32_t setv_data(int32_t datasetd, int32_t data_id, unsigned char * buffer);
 
 //Method retrieving the location of a specific data object.
-int32_t get_data_location(int32_t datasetd, int32_t data_id);
+int32_t get_data_location(int32_t datasetd, int32_t data_id, int32_t op_type);
 
 
 
 /***************************** DATA RELEASE RESOURCES *****************************/
 
 
-//Method releasing typedef structures.
-int32_t free_(int32_t typedef_, void * typedef_ref_);
+//Method releasing an imss_info structure previously provided to the client.
+int32_t free_imss(imss_info * struct_);
+
+//Method releasing a dataset structure previously provided to the client.
+int32_t free_dataset(dataset_info * struct_);
+
 
 #endif
+

@@ -1,5 +1,5 @@
 .working_EX
-rafos.c
+.rafos.c
 MPI/
 crc16.c
 crc64.c
@@ -15,8 +15,9 @@ tst/tests.csv
 tst/debugging.txt
 tst/BUCKETS.csv
 tst/2_4_6_SERVERS_RESULTS.csv
-aux
+.aux
 kill_stat.sh
 build
 TODO
 Makefile
+.hello_glib.c

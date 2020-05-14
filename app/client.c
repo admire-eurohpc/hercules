@@ -43,7 +43,7 @@ int main (int argc, char **argv)
 		return -1;
 
 	char dataset_uri[] = "imss:/MYIMSS/mydataset";
-	char dataset_policy[] = "LOCAL";
+	char dataset_policy[] = "RR";
 
 	int32_t datasetd;
 
