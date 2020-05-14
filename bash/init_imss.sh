@@ -66,8 +66,6 @@ a successful deployment of the metadata server.
 
 function check_argument
 {
-	echo "WHAT: $1"
-
 	first_letter=$(echo $1 | head -c 1)
 
 	if [ $first_letter == "-" ]
