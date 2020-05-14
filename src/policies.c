@@ -1,54 +1,73 @@
-#include <stdlib.h>
-#include <string.h>
 #include <stdio.h>
 #include <stdint.h>
-#include "policies.h"
+#include <stdlib.h>
+#include <string.h>
 #include "crc.h"
+#include "policies.h"
+
 
 //Default session policy: ROUND ROBIN.
-int32_t session_plcy = ROUND_ROBIN_;
+int32_t    session_plcy = ROUND_ROBIN_;
 //Number of blocks to be sent.
-int32_t n_blocks;
+int32_t    n_blocks;
 //Socket connecting the client to the imss server running in the same node.
-int32_t matching_node_socket;
+int32_t    matching_node_socket;
 
-int32_t set_policy (const char * policy, int32_t blocks, int32_t matching_node_conn)
+
+	/********* LOCAL DATASET MANAGEMENT VARIABLES *********/
+
+
+//Vector of characters specifying the position of each data element in a LOCAL dataset.
+uint16_t * data_locations;
+//Number of blocks written by the client in the current session.
+uint64_t * num_blocks_written;
+//Actual blocks written by the client.
+uint32_t * blocks_written;
+
+
+int32_t
+set_policy (dataset_info * dataset)
 {
 	//Invalid number of blocks to be sent.
-	if (blocks <= 0)
+	if (dataset->num_data_elem <= 0)
 
 		return -1;
 
 	//Save the connection to the imss server running in the same node.
-	matching_node_socket = matching_node_conn;
+	matching_node_socket = dataset->local_conn;
 
 	//Set blocks to be sent.
-	n_blocks = blocks;
+	n_blocks = dataset->num_data_elem;
 
 	//Set the corresponding policy.
-	if (!strcmp(policy, "RR"))
+	if (!strcmp(dataset->policy, "RR"))
 	{
 		session_plcy = 0;
 	}
-	else if (!strcmp(policy, "BUCKETS"))
+	else if (!strcmp(dataset->policy, "BUCKETS"))
 	{
 		session_plcy = 1;
 	}
-	else if (!strcmp(policy, "HASH"))
+	else if (!strcmp(dataset->policy, "HASH"))
 	{ 
 		session_plcy = 2;
 	}
-	else if (!strcmp(policy, "CRC16b"))
+	else if (!strcmp(dataset->policy, "CRC16b"))
 	{
 		session_plcy = 3;
 	}
-	else if (!strcmp(policy, "CRC64b"))
+	else if (!strcmp(dataset->policy, "CRC64b"))
 	{
 		session_plcy = 4;
 	}
-	else if (!strcmp(policy, "LOCAL"))
+	else if (!strcmp(dataset->policy, "LOCAL"))
 	{
 		session_plcy = 5;
+
+		//Initialize variables hanlding LOCAL datasets.
+		data_locations 		= dataset->data_locations;
+		num_blocks_written 	= dataset->num_blocks_written;
+		blocks_written 		= dataset->blocks_written;
 	}
 	else
 	{
@@ -60,9 +79,13 @@ int32_t set_policy (const char * policy, int32_t blocks, int32_t matching_node_c
 }
 
 //Method retrieving the server that will receive the following message attending a policy.
-int32_t find_server (int32_t n_servers, uint64_t n_msg, const char * fname)
+int32_t
+find_server (int32_t 	  n_servers,
+	     int32_t 	  n_msg,
+	     const char * fname,
+	     int32_t 	  op_type)
 {
-	uint64_t next_server = -1;
+	int32_t next_server = -1;
 
 	switch (session_plcy)
 	{
@@ -87,6 +110,10 @@ int32_t find_server (int32_t n_servers, uint64_t n_msg, const char * fname)
 			//First server that received a block from the current file.
 			uint32_t initial_server = crc_ % n_servers;
 
+			if (n_blocks < n_servers)
+
+				n_blocks = n_servers;
+
 			//Number of the server from the first one receiving the current message.
 			next_server = (n_msg / (n_blocks / n_servers)) % n_servers;
 
@@ -100,7 +127,7 @@ int32_t find_server (int32_t n_servers, uint64_t n_msg, const char * fname)
 		{
 			//Key identifying the current to-be-sent file block.
 			char key[strlen(fname) + 64];
-			sprintf(key, "%s%c%lu", fname, '$', n_msg);
+			sprintf(key, "%s%c%d", fname, '$', n_msg);
 
 			uint32_t b    	= 378551;
 			uint32_t a    	= 63689;
@@ -124,7 +151,7 @@ int32_t find_server (int32_t n_servers, uint64_t n_msg, const char * fname)
 		{
 			//Key identifying the current to-be-sent file block.
 			char key[strlen(fname) + 64];
-			sprintf(key, "%s%c%lu", fname, '$', n_msg);
+			sprintf(key, "%s%c%d", fname, '$', n_msg);
 			next_server = crc16(key, strlen(key)) % n_servers;
 		}
 
@@ -135,16 +162,59 @@ int32_t find_server (int32_t n_servers, uint64_t n_msg, const char * fname)
 		{
 			//Key identifying the current to-be-sent file block.
 			char key[strlen(fname) + 64];
-			sprintf(key, "%s%c%lu", fname, '$', n_msg);
+			sprintf(key, "%s%c%d", fname, '$', n_msg);
 			next_server = crc64(0, (unsigned char *) key, strlen(key)) % n_servers;
 		}
 
 			break;
 
-		//Follow a locality distribution.
-		case LOCAL_:
+		//Follow a LOCAL distribution.
+		case LOCAL_:			//FIXME: improve the following case!
 		{
-			next_server = matching_node_socket;
+			//Operate in relation to the type of operation.
+			switch (op_type)
+			{
+				//Retrieve the socket connection number associated to the server storing the block.
+				case GET:
+				{
+					if (data_locations[n_msg])
+
+						next_server = (int32_t) (data_locations[n_msg] - 1);
+
+					break;
+				}
+				//Store the connection number associated to the server storing the data element.
+				case SET:
+				{
+					switch (data_locations[n_msg])
+					{
+						//If the block was not written yet, write it in the local IMSS server and save the storage event.
+						case 0:
+						{
+							next_server = matching_node_socket;
+
+							data_locations[n_msg] = (uint16_t) (next_server + 1);
+
+							//Save the block number that the client has written.
+
+							blocks_written[(*num_blocks_written)++] = n_msg;
+
+							break;
+						}
+						//If the block was already stored, retrieve the corresponding server storing it.
+						default:
+						{
+							next_server = (int32_t) (data_locations[n_msg] - 1);
+
+							break;
+						}
+					}
+
+					break;
+				}
+			}
+
+			break;
 		}
 
 		default:
@@ -154,3 +224,4 @@ int32_t find_server (int32_t n_servers, uint64_t n_msg, const char * fname)
 
 	return next_server;
 }
+
