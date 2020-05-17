@@ -58,7 +58,7 @@ server_conn(void ** router,
 	}
 
 	//Subscriber socket creation.
-	if ((*subscriber = zmq_socket (context, ZMQ_SUB)) == NULL)
+	if (!(*subscriber = zmq_socket (context, ZMQ_SUB)))
 	{
 		perror("ERRIMSS_THREAD_CRTSUB");
 		return -1;
@@ -70,7 +70,7 @@ server_conn(void ** router,
 		return -1;
 	}
 
-	//Subscribe to all incomming topics.
+	//Subscribe to publications associated with my IMSS uri.
 	if (zmq_setsockopt (*subscriber, ZMQ_SUBSCRIBE, imss_uri, strlen(imss_uri)) == -1)
 	{
 		perror("ERRIMSS_THREAD_SUBSCRIBE");
