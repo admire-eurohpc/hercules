@@ -11,6 +11,10 @@ ADD_EXECUTABLE( server
 				../src/memalloc.c
 )
 
+ADD_EXECUTABLE( release_imss 
+				../src/release_imss.c
+)
+
 ADD_LIBRARY( imss SHARED
 				../src/imss.c
 				../src/policies.c
@@ -26,6 +30,7 @@ SET(IMSS_LIB "-L${CMAKE_SOURCE_DIR}/build/app")
 #)
 
 TARGET_LINK_LIBRARIES(server ${CMAKE_THREAD_LIBS_INIT} zmq ${MPI_LIBRARIES} ${GLIB_LIBRARIES})
+TARGET_LINK_LIBRARIES(release_imss zmq ${MPI_LIBRARIES})
 #TARGET_LINK_LIBRARIES(imss zmq ${MPI_LIBRARIES} )
 #TARGET_LINK_LIBRARIES(client imss ${MPI_LIBRARIES} )
 
