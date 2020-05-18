@@ -33,8 +33,8 @@ The following options are available:
 		must be released (no arg required).
 
 	At least, one of the previous parameters must be
-	provided in addition to the following ones in or-
-	der to perform a successful release operation.
+	provided plus the following ones in order to per-
+	form a successful release operation.
 
 	-R	Address of the machine where the release
 		operation will take place.
