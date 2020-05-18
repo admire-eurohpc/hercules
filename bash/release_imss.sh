@@ -18,7 +18,7 @@ function usage
 	echo "
 
 The release_imss.sh script will release one or more IMSS
-instances. Also, the script is able to release the mata-
+instances. Also, the script is able to release the meta-
 data server.
 
 The following options are available:
@@ -36,11 +36,11 @@ The following options are available:
 	provided in addition to the following ones in or-
 	der to perform a successful release operation.
 
-	-a	Address of the machine where the release
+	-R	Address of the machine where the release
 		operation will take place.
-	-p	Port that will be used to perform the 
+	-r	Port that will be used to perform the 
 		previous release operation.
-	-X	Release binary executable location.
+	-x	Release binary executable location.
 	
 "
 
@@ -75,7 +75,7 @@ binary_location="-1"
 declare -a uris
 
 #GETOPTS loop parsing the set of arguments provided.
-while getopts "mu:ha:p:X:" opt
+while getopts "mu:hR:r:x:" opt
    do
 	case ${opt} in
 
@@ -95,15 +95,15 @@ while getopts "mu:ha:p:X:" opt
 		fi
 
 		;;
-	   a )
+	   R )
 		release_address=$OPTARG
 		check_argument "$release_address" "$opt"
 		;;
-	   p )
+	   r )
 		release_port=$OPTARG
 		check_argument "$release_port" "$opt"
 		;;
-	   X )
+	   x )
 		binary_location=$OPTARG
 		check_argument "$binary_location" "$opt"
 		;;
@@ -131,7 +131,7 @@ if [ "$release_address" == "-1" ]
 		echo -n "release_imss.sh ERROR: expected arguments not provided ("
 	   fi
 
-	echo -n " -a"
+	echo -n " -R"
 	arguments_remaining="Y"
    fi
 if [ "$release_port" == "-1" ]
@@ -141,7 +141,7 @@ if [ "$release_port" == "-1" ]
 		echo -n "release_imss.sh ERROR: expected arguments not provided ("
 	   fi
 
-	echo -n " -p"
+	echo -n " -r"
 	arguments_remaining="Y"
    fi
 if [ $num_uris -eq 0 ]
@@ -161,7 +161,7 @@ if [ "$binary_location" == "-1" ]
 		echo -n "release_imss.sh ERROR: expected arguments not provided ("
 	   fi
 
-	echo -n " -X"
+	echo -n " -x"
 	arguments_remaining="Y"
    fi
 
@@ -174,6 +174,18 @@ if [ "$arguments_remaining" == "Y" ]
    fi
 
 
-echo "SET OF URIs PROVIDED: $uris RELEASE ADDRESS: $release_address RELEASE PORT: $release_port BINARY: $binary_location"
 
-#./$binary_location $release_port $uris
+
+
+####################################################################
+############################ DEPLOYMENTS ###########################
+####################################################################
+
+
+release_deployfile="/tmp/IMSS_release_deployfile"
+
+#Create MPI deployment file for the metadata server.
+echo "$release_address" > $release_deployfile
+
+echo "mpirun -np 1 -f $release_deployfile $binary_location $release_port $uris &"
+
