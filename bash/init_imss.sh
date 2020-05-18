@@ -6,13 +6,6 @@
 ####################################################################
 
 
-
-
-#TODO: add release connection info.
-
-
-
-
 if [ "$#" -eq 0 ]
    then
 	echo "Please, execute \"./init_imss.sh -h\" for usage description."
@@ -42,7 +35,12 @@ The following options are available:
 		the metadata server is taking execution.
 	-P	Port within the previous machine that the
 		metadata server is listening to.
-	-X	Server executable location.
+	-x	Server executable location.
+
+	-R	Machine where the release operation will
+		take place.
+	-r	Port within the previous machine that will
+		be used to perform the release operation.
 
 The whole set of parameters must be provided in order to 
 perform a successful deployment of an IMSS instance.
@@ -56,6 +54,7 @@ following parameters must be included.
 		tadata server.
 	-F	File where the metadata server will read
 		and write IMSS-related structures.
+	-X	Metadata server executable.
 
 Again, all parameters must be provided in order to perform
 a successful deployment of the metadata server.
@@ -77,8 +76,6 @@ function check_argument
 }
 
 
-#Port assigned to the PUBLISHER socket performing the IMSS_RELEASE operation.
-release_port=44075
 
 metadata_deployment="N"
 
@@ -91,11 +88,14 @@ metadata_server_port="-1"
 metadata_server_address="-1"
 metadata_buffer_size="-1"
 metadata_file="-1"
-binary_location="-1"
+server_binary="-1"
+metadata_binary="-1"
+release_address="-1"
+release_port="-1"
 
 
 #GETOPTS loop parsing the set of arguments provided. Just those options requiring an argument must be followed by a semicolon.
-while getopts ":u:d:b:p:P:A:X:F:B:Mh" opt
+while getopts ":u:d:b:p:P:A:x:F:B:X:r:R:Mh" opt
    do
 	case ${opt} in
 
@@ -123,9 +123,9 @@ while getopts ":u:d:b:p:P:A:X:F:B:Mh" opt
 		metadata_server_address=$OPTARG
 		check_argument "$metadata_server_address" "$opt"
 		;;
-	   X )
-		binary_location=$OPTARG
-		check_argument "$binary_location" "$opt"
+	   x )
+		server_binary=$OPTARG
+		check_argument "$server_binary" "$opt"
 		;;
 	   F )
 		metadata_file=$OPTARG
@@ -137,6 +137,18 @@ while getopts ":u:d:b:p:P:A:X:F:B:Mh" opt
 		;;
 	   M )
 		metadata_deployment="Y"
+		;;
+	   X )
+		metadata_binary=$OPTARG
+		check_argument "$metadata_binary" "$opt"
+		;;
+	   r )
+		release_port=$OPTARG
+		check_argument "$release_port" "$opt"
+		;;
+	   R )
+		release_address=$OPTARG
+		check_argument "$release_address" "$opt"
 		;;
 
 	   #Print the usage options of the script.
@@ -168,9 +180,9 @@ expected_num_args=""
 
 if [ $metadata_deployment == "N" ]
    then
-	expected_num_args=14
+	expected_num_args=18
    else
-	expected_num_args=19
+	expected_num_args=25
 fi
 
 if [ "$#" -ne $expected_num_args ]
@@ -201,9 +213,17 @@ if [ "$#" -ne $expected_num_args ]
 	   then
 		echo -n " -A"
 	   fi
-	if [ "$binary_location" == "-1" ]
+	if [ "$server_binary" == "-1" ]
 	   then
-		echo -n " -X"
+		echo -n " -x"
+	   fi
+	if [ "$release_address" == "-1" ]
+	   then
+		echo -n " -R"
+	   fi
+	if [ "$release_port" == "-1" ]
+	   then
+		echo -n " -R"
 	   fi
 
 	if [ $metadata_deployment == "Y" ]
@@ -215,6 +235,10 @@ if [ "$#" -ne $expected_num_args ]
 		if [ "$metadata_file" == "-1" ]
 		   then
 			echo -n " -F"
+		   fi
+		if [ "$metadata_binary" == "-1" ]
+		   then
+			echo -n " -X"
 		   fi
 	   else
 		if [ "$metadata_file" != "-1" ] || [ "$metadata_buffer_size" != "-1" ]
@@ -230,7 +254,20 @@ if [ "$#" -ne $expected_num_args ]
 
 
 
-#Required if non-getopts additional arguments were provided.
-#shift $((OPTIND - 1))
+####################################################################
+############################ DEPLOYMENTS ###########################
+####################################################################
 
-echo "Arguments provided: LOCATION OF BINARY FILE $binary_location URI $imss_uri, HOSTFILE: $imss_hostfile, IMSS_BUFFER_SIZE: $imss_buffer_size, IMSS_PORT_NUMBER: $imss_port_number, METADATA_PORT: $metadata_server_port, METADATA_ADDRESS: $metadata_server_address"
+metadata_deployfile="/tmp/IMSS_metadata_deployfile"
+
+#Create MPI deployment file for the metadata server.
+echo "$metadata_server_address" > $metadata_deployfile
+
+if [ "$metadata_deployment" == "Y" ]
+   then
+	echo "mpirun -np 1 -f $metadata_deployfile $metadata_binary $metadata_file $metadata_server_port $metadata_buffer_size $release_address $release_port &"
+fi
+
+num_servers=$(cat $imss_hostfile | wc -l)
+
+echo "mpirun -np $num_servers -f $imss_hostfile $server_binary $imss_uri $imss_port_number $imss_buffer_size $release_address $release_port $metadata_server_address $metadata_server_port $num_servers $imss_hostfile &"
