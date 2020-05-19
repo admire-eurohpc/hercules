@@ -73,8 +73,13 @@ int32_t main(int32_t argc, char **argv)
 	}
 	//Metadata server.
 	else
+	{
 		//ARGV[1] = metadata file.
 		metadata_file	= argv[1];
+
+		imss_uri	= (char *) malloc(8*sizeof(char));
+		strcpy(imss_uri, "stat\0");
+	}
 
 
 	//Publisher address where the release will be triggered.
@@ -273,6 +278,8 @@ int32_t main(int32_t argc, char **argv)
 		if (metadata_write(metadata_file, buffer, &map, arguments, buffer_segment, bytes_written) == -1)
 
 			return -1;
+
+		free(imss_uri);
 	}
 
 	//Close context holding all sockets.

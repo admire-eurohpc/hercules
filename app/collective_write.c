@@ -8,11 +8,10 @@
 #include "imss.h"
 
 
-//argv[1] = SERVER_PORT_NUM	argv[2] = SERVER_BUFFER_SIZE (GB)
-//argv[3] = METADATA_PORT_NUM	argv[4] = METADATA_BUFFER_SIZE (GB)
-//argv[5] = METADATA_FILE	argv[6] = HOSTFILE
-//argv[7] = POLICY		argv[8] = DATASET_SIZE (KB)
-//argv[9] = BLOCK_SIZE (KB)
+//argv[1] = METADATA_PORT_NUM		argv[2] = POLICY
+//argv[3] = DATASET_SIZE (KB)		argv[4] = BLOCK_SIZE (KB)
+//argv[5] = STAT_IP			argv[6] = IMSS_URI
+//argv[7] = DATASET_NAME
 
 
 #define ITERATIONS 	1000
@@ -33,16 +32,14 @@ int32_t main (int32_t argc, char **argv)
 
 
 
-	uint16_t srv_port 	 = (uint16_t) atoi(argv[1]);
-	int32_t  srv_size_GB 	 = atoi(argv[2]);
 	int32_t  stat_port 	 = atoi(argv[3]);
-	int32_t  stat_size_GB	 = atoi(argv[4]);
-	char *   metadata_file	 = argv[5];
-	char *   hostfile	 = argv[6];
-	char *   policy		 = argv[7];
-	int32_t  dataset_size	 = atoi(argv[8]);
-	int32_t  dtset_blck_size = atoi(argv[9]);
+	char *   policy		 = argv[2];
+	int32_t  dataset_size	 = atoi(argv[3]);
+	int32_t  dtset_blck_size = atoi(argv[4]);
 	int32_t  num_blocks	 = (dataset_size/dtset_blck_size);
+	char *	 ip 	    	 = argv[5];
+	char *   imss_uri	 = argv[6];
+	char *   dataset_name 	 = argv[7];
 
 	int32_t  offset = num_blocks/world_size;
 	int32_t  init	= offset*rank;
@@ -50,9 +47,6 @@ int32_t main (int32_t argc, char **argv)
 
 
 
-	char ip[] 	    = "compute-11-8";
-	char imss_uri[]     = "imss:/MYIMSS";
-	char dataset_name[] = "imss:/MYIMSS/mydataset";
 
 	if (stat_init(ip, stat_port, rank) == -1)
 		return -1;
@@ -65,14 +59,8 @@ int32_t main (int32_t argc, char **argv)
 
 	auto t1 = clk::now();
 
-//		if (!rank)
-//				if (init_imss(imss_uri, hostfile, 4, srv_port, srv_size_GB))
-//					return -1;
-//
-//		MPI_Barrier(MPI_COMM_WORLD);
-//		if (rank)
-				if (open_imss(imss_uri) == -1)
-					return -1;
+		if (open_imss(imss_uri) == -1)
+			return -1;
 
 		if (!rank)
 				if ((datasetd = create_dataset(dataset_name, policy, num_blocks, dtset_blck_size)) < 0)
