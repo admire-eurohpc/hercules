@@ -54,7 +54,6 @@ following parameters must be included.
 		tadata server.
 	-F	File where the metadata server will read
 		and write IMSS-related structures.
-	-X	Metadata server executable.
 
 Again, all parameters must be provided in order to perform
 a successful deployment of the metadata server.
@@ -89,7 +88,6 @@ metadata_server_address="-1"
 metadata_buffer_size="-1"
 metadata_file="-1"
 server_binary="-1"
-metadata_binary="-1"
 release_address="-1"
 release_port="-1"
 
@@ -138,10 +136,6 @@ while getopts ":u:d:b:p:P:A:x:F:B:X:r:R:Mh" opt
 	   M )
 		metadata_deployment="Y"
 		;;
-	   X )
-		metadata_binary=$OPTARG
-		check_argument "$metadata_binary" "$opt"
-		;;
 	   r )
 		release_port=$OPTARG
 		check_argument "$release_port" "$opt"
@@ -182,7 +176,7 @@ if [ $metadata_deployment == "N" ]
    then
 	expected_num_args=18
    else
-	expected_num_args=25
+	expected_num_args=23
 fi
 
 if [ "$#" -ne $expected_num_args ]
@@ -236,10 +230,6 @@ if [ "$#" -ne $expected_num_args ]
 		   then
 			echo -n " -F"
 		   fi
-		if [ "$metadata_binary" == "-1" ]
-		   then
-			echo -n " -X"
-		   fi
 	   else
 		if [ "$metadata_file" != "-1" ] || [ "$metadata_buffer_size" != "-1" ]
 		   then
@@ -265,9 +255,9 @@ echo "$metadata_server_address" > $metadata_deployfile
 
 if [ "$metadata_deployment" == "Y" ]
    then
-	echo "mpirun -np 1 -f $metadata_deployfile $metadata_binary $metadata_file $metadata_server_port $metadata_buffer_size $release_address $release_port &"
+	mpirun -np 1 -f $metadata_deployfile $server_binary $metadata_file $metadata_server_port $metadata_buffer_size $release_address $release_port &
 fi
 
 num_servers=$(cat $imss_hostfile | wc -l)
 
-echo "mpirun -np $num_servers -f $imss_hostfile $server_binary $imss_uri $imss_port_number $imss_buffer_size $release_address $release_port $metadata_server_address $metadata_server_port $num_servers $imss_hostfile &"
+mpirun -np $num_servers -f $imss_hostfile $server_binary $imss_uri $imss_port_number $imss_buffer_size $release_address $release_port $metadata_server_address $metadata_server_port $num_servers $imss_hostfile &

@@ -63,6 +63,7 @@ server_conn(void ** router,
 		perror("ERRIMSS_THREAD_CRTSUB");
 		return -1;
 	}
+
 	//Connect to the INPROC endpoint.
 	if (zmq_connect(*subscriber, (const char *) pub_dir) == -1)
 	{
