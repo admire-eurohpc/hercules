@@ -54,7 +54,7 @@ int32_t main(int32_t argc, char **argv)
 
 	/* CHECK THIS OUT!
 	***************************************************
-	In relation to the number of arguments provided, an IMSS or a metadata server  will be deployed. */
+	In relation to the number of arguments provided, an IMSS or a metadata server will be deployed. */
 
 
 	//IMSS server.

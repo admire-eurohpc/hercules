@@ -2,6 +2,7 @@
 #include <zmq.h>
 #include <string.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 
 int32_t main(int32_t argc, char **argv)
@@ -36,6 +37,22 @@ int32_t main(int32_t argc, char **argv)
 		perror("ERRIMSSRLS_SOCK_BIND");
 		return -1;
 	}
+
+
+	/*
+		The following sleep is a crucial one in the current architecture:
+
+		... there's an important point to note here, for PUB/SUB - even if you connect() first
+		with your subscriber, that connection doesn't actually occur until after the publisher
+		has bind()-ed, so if you attempt to send messages with your publisher without waiting
+		for your subscriber to finish its connection, those messages will never make it to your
+		subscriber.
+
+		SOURCE: https://stackoverflow.com/questions/33254975/pub-sub-can-i-connect-before-i-bind
+	*/
+
+
+	sleep(5);
 
 	//Loop publishing release requests.
 	for (int i = 2; i < argc; i++)
