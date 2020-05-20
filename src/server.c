@@ -33,7 +33,7 @@ int32_t main(int32_t argc, char **argv)
         //Obtain the current number of processes in the group.
 	MPI_Comm_size(MPI_COMM_WORLD, &world_size);
 
-	uint16_t bind_port;
+	uint16_t bind_port, aux_bind_port;
 	char *   stat_add;
 	char *   metadata_file;
 	char *   release_add;
@@ -44,6 +44,7 @@ int32_t main(int32_t argc, char **argv)
 
 	//ARGV[2] = bind port number.
 	bind_port	= (uint16_t) atoi(argv[2]);
+	aux_bind_port	= bind_port;
 	//ARGV[3] = buffer size provided.
 	buffer_size	= atoi(argv[3]);
 	//ARGV[4] = release port.
@@ -173,7 +174,7 @@ int32_t main(int32_t argc, char **argv)
 		strcpy(my_imss.uri_, imss_uri);
 		my_imss.ips = (char **) malloc(num_servers*sizeof(char *));
 		my_imss.num_storages 	= num_servers;
-		my_imss.conn_port	= bind_port;
+		my_imss.conn_port	= aux_bind_port;
 
 		//FILE entity managing the IMSS deployfile.
 		FILE * svr_nodes;

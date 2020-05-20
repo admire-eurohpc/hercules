@@ -14,7 +14,6 @@
 //argv[7] = DATASET_NAME
 
 
-#define ITERATIONS 	1000
 #define KB		1024
 
 int32_t main (int32_t argc, char **argv) 
@@ -32,7 +31,7 @@ int32_t main (int32_t argc, char **argv)
 
 
 
-	int32_t  stat_port 	 = atoi(argv[3]);
+	int32_t  stat_port 	 = atoi(argv[1]);
 	char *   policy		 = argv[2];
 	int32_t  dataset_size	 = atoi(argv[3]);
 	int32_t  dtset_blck_size = atoi(argv[4]);
