@@ -1,12 +1,16 @@
 #include <zmq.h>
 #include <glib.h>
+#include <netdb.h> 
 #include <errno.h>
 #include <unistd.h>
 #include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
 #include <sys/wait.h>
-#include <sys/types.h>
+#include <sys/types.h> 
+#include <arpa/inet.h> 
+#include <sys/socket.h> 
+#include <netinet/in.h> 
 #include "imss.h"
 #include "comms.h"
 #include "policies.h"
@@ -43,6 +47,7 @@ int32_t 	tried_conn = 0;		//Flag specifying if a connection has been attempted.
 
 char 		client_node[512];	//Node name where the client is running.
 int32_t 	len_client_node;	//Length of the previous node name.
+char		client_ip[16];		//IP number of the node where the client is taking execution.
 
 dataset_info	empty_dataset;
 imss		empty_imss;
@@ -335,6 +340,15 @@ stat_init(char *   ip,
 	}
 	len_client_node = strlen(client_node);
 
+	struct hostent *host_entry; 
+	if ((host_entry = gethostbyname(client_node)) == NULL)
+	{
+		perror("ERRIMSS_GETHOSTBYNAME");
+		return -1;
+	}
+
+	strcpy(client_ip, inet_ntoa(*((struct in_addr*) host_entry->h_addr_list[0])));
+
 	//Create the connection to the metadata server dispatcher thread.
 	if (conn_crt_(&stat_client, ip, port, rank, 0, NULL) == -1)
 
@@ -507,7 +521,7 @@ init_imss(char *   imss_uri,
 		((new_imss.info.ips)[i])[n_chars - 1] = '\0';
 
 		//Save the current socket value when the IMSS ip matches the clients' one.
-		if (!strncmp((new_imss.info.ips)[i], client_node, len_client_node))
+		if (!strncmp((new_imss.info.ips)[i], client_node, len_client_node) || !strncmp((new_imss.info.ips)[i], client_ip, strlen(new_imss.info.ips[i])))
 
 			new_imss.conns.matching_server = i;
 
@@ -662,7 +676,7 @@ open_imss(char * imss_uri)
 			return -1;
 
 		//Save the current socket value when the IMSS ip matches the clients' one.
-		if (!strncmp((new_imss.info.ips)[i], client_node, len_client_node))
+		if (!strncmp((new_imss.info.ips)[i], client_node, len_client_node) || !strncmp((new_imss.info.ips)[i], client_ip, strlen(new_imss.info.ips[i])))
 
 			new_imss.conns.matching_server = i;
 
