@@ -187,5 +187,5 @@ release_deployfile="/tmp/IMSS_release_deployfile"
 #Create MPI deployment file for the metadata server.
 echo "$release_address" > $release_deployfile
 
-mpirun -np 1 -f $release_deployfile $binary_location $release_port $uris &
+mpirun -np 1 -f $release_deployfile $binary_location $release_port $uris
 
