@@ -41,10 +41,8 @@ typedef struct {
 
 	//Set of actual sockets.
 	void ** sockets_;
-	//ID that the client takes in the current connections.
-	int32_t c_id;
 	//Socket connecting the corresponding client to the server running in the same node.
-	int32_t matching_server;
+	int32_t matching_server = -2;
 
 } imss_conn;
 
@@ -152,11 +150,8 @@ int32_t get_data(int32_t datasetd, int32_t data_id, unsigned char * buffer);
 //Method storing a specific data object.
 int32_t set_data(int32_t datasetd, int32_t data_id, unsigned char * buffer);
 
-//Method storing a certain data object and checking that it has been correctly stored.
-int32_t setv_data(int32_t datasetd, int32_t data_id, unsigned char * buffer);
-
 //Method retrieving the location of a specific data object.
-int32_t get_data_location(int32_t datasetd, int32_t data_id, int32_t op_type);
+int32_t get_data_location(char * dataset, int32_t data_id);
 
 
 
