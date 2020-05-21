@@ -53,6 +53,7 @@ dataset_info	empty_dataset;
 imss		empty_imss;
 
 
+//TODO: add a global variable storing the position where a certain structure was found within a certain vector.
 
 
 /**********************************************************************************/
@@ -624,7 +625,13 @@ open_imss(char * imss_uri)
 		}
 	}
 
+	//TODO: add a flag indicating that the structure was found within the vector and shall be introduced into that exact same position instead of using GInsert.
+	//TODO: retrieve the structure in the position and check if imss.conns.matching_server == -2, then, the IMSS would not have been openned and the following
+	//instructions must be executed. Otherwise, return an error or whatever.
+
 	new_imss.conns.sockets_ = (void **) malloc(new_imss.info.num_storages*sizeof(void*));
+
+	new_imss.conns.matching_server = -1;
 
 	//Connect to the requested IMSS.
 	for  (int32_t i = 0; i < new_imss.info.num_storages; i++)
@@ -681,6 +688,8 @@ open_imss(char * imss_uri)
 			new_imss.conns.matching_server = i;
 
 	}
+
+	//TODO: Check if the IMSS was found within the vector uninitialized: erase the element in that position (freeing memeory) and add the new one.
 
 	//Add the created struture into the underlying IMSSs.
 	GInsert (&imssd_pos, &imssd_max_size, (char *) &new_imss, imssd, free_imssd);
@@ -904,6 +913,8 @@ open_dataset(char * dataset_uri)
 		}
 	}
 
+	//TODO: check if the local_conn field within the dataset structure has a value of -1 meaning that the dataset structure must be initialized. Otherwise, just return.
+
 	//Assign the associated IMSS descriptor to the new dataset structure.
 	new_dataset.imss_d 	= associated_imss_indx;
 	new_dataset.local_conn 	= associated_imss.conns.matching_server;
@@ -920,12 +931,16 @@ open_dataset(char * dataset_uri)
 		memset(new_dataset.blocks_written, '\0', new_dataset.num_data_elem*sizeof(uint32_t));
 	}
 
+	//TODO: maybe, the set_policy functions could be erased from the open_dataset & create_dataset ones as the previous is called in the set and get functions.
+
 	//Set the specified policy.
 	if (set_policy(&new_dataset) == -1)
 	{
 		perror("ERRIMSS_DATASET_SETPLCY");
 		return -1;
 	}
+
+	//TODO: add the corresponding dataset structure to the associated position within the vector.
 
 	//Add the created struture into the underlying IMSSs.
 	return (GInsert (&datasetd_pos, &datasetd_max_size, (char *) &new_dataset, datasetd, free_datasetd));
@@ -1066,6 +1081,43 @@ int32_t set_dataset(char * dataset_uri, unsigned char * buffer, uint64_t offset)
 /**********************************************************************************/
 
 
+//Method retrieving the location of a specific data object.
+int32_t
+get_data_location(int32_t dataset_id,
+		  int32_t data_id,
+		  int32_t op_type)
+{
+	//If the current dataset policy was not established yet.
+
+	if (current_dataset != dataset_id)
+	{
+		//Retrieve the corresponding dataset_info structure and the associated IMSS.
+
+		curr_dataset = g_array_index(datasetd, dataset_info, dataset_id);
+		curr_imss = g_array_index(imssd, imss, curr_dataset.imss_d);
+
+		//Set the corresponding.
+
+		if (set_policy(&curr_dataset) == -1)
+		{
+			perror("ERRIMSS_SET_POLICY");
+			return -1;
+		}
+
+		current_dataset = dataset_id;
+	}
+
+	int32_t server;
+	//Search for the server that is supposed to have the specified data element.
+	if ((server = find_server(curr_imss.info.num_storages, data_id, curr_dataset.uri_, op_type)) < 0)
+	{
+		perror("ERRIMSS_FIND_SERVER");
+		return -1;
+	}
+
+	return server;
+}
+
 //Method performing a retrieval operation of a specific data object.
 int32_t
 get_data(int32_t 	 dataset_id,
@@ -1138,30 +1190,32 @@ set_data(int32_t 	 dataset_id,
 	return 0;
 }
 
-
-/*
-//Method storing a certain data object and checking that it has been correctly stored.
-int32_t setv_data(int32_t datasetd, uint64_t data_id, unsigned char * buffer)
-{}
-*/
 //Method retrieving the location of a specific data object.
 int32_t
-get_data_location(int32_t dataset_id,
-		  int32_t data_id,
-		  int32_t op_type)
+get_data_location(char *  dataset,
+		  int32_t data_id)
 {
-	//If the current dataset policy was not established yet.
+/*
+	//Retrieve the corresponding dataset.
+	
+	//If the dataset structure was retrieved from the metadata server:
+	//Set the local_conn field within the retrieved dataset structure to -1 in case it was obtained from the metadata server
+	//indicating that it was retrieved but not initialized (the open_dataset function must still deal with it).
+	//Invoke GInsert. Save the position where it was stored.
+
+	//Deduce the IMSS entity name storing the concerned dataset.
+
+	//Declare an imss structure.
+	//Provide the info substructure of the previous to the stat_imss function retrieving it.
+	//If the structure was retrieved from the metadata server, add it to the GArray vector through a GInsert function.
+
+	//Once the previous structures where stored, retrieve the position of the requested data block.
 
 	if (current_dataset != dataset_id)
 	{
-		//Retrieve the corresponding dataset_info structure and the associated IMSS.
-
-		curr_dataset = g_array_index(datasetd, dataset_info, dataset_id);
-		curr_imss = g_array_index(imssd, imss, curr_dataset.imss_d);
-
 		//Set the corresponding.
 
-		if (set_policy(&curr_dataset) == -1)
+		if (set_policy(&concerned_dataset) == -1)
 		{
 			perror("ERRIMSS_SET_POLICY");
 			return -1;
@@ -1170,15 +1224,15 @@ get_data_location(int32_t dataset_id,
 		current_dataset = dataset_id;
 	}
 
-	int32_t server;
-	//Search for the server that is supposed to have the specified data element.
+	int server;
 	if ((server = find_server(curr_imss.info.num_storages, data_id, curr_dataset.uri_, op_type)) < 0)
 	{
 		perror("ERRIMSS_FIND_SERVER");
 		return -1;
 	}
 
-	return server;
+	return imss.info.ips[server];
+*/
 }
 
 
