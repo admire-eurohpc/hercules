@@ -52,8 +52,7 @@ char		client_ip[16];		//IP number of the node where the client is taking executi
 dataset_info	empty_dataset;
 imss		empty_imss;
 
-
-//TODO: add a global variable storing the position where a certain structure was found within a certain vector.
+int32_t		found_in;		//Variable storing the position where a certain structure was stored in a certain vector.
 
 
 /**********************************************************************************/
@@ -608,6 +607,8 @@ open_imss(char * imss_uri)
 	//New IMSS structure storing the entity to be created.
 	imss new_imss;
 
+	int32_t not_initialized = 0;
+
 	//Retrieve the actual information from the metadata server.
 	int32_t imss_existance = stat_imss(imss_uri, &new_imss.info);
 	//Check if the requested IMSS did not exist or was already stored in the local vector.
@@ -620,14 +621,17 @@ open_imss(char * imss_uri)
 		}
 		case 2:
 		{
-			perror("ERRIMSS_OPENIMSS_ALREADYSTORED");
-			return -1;
+			imss check_imss = g_array_index(imssd, imss, found_in);
+
+			if (check_imss.conns.matching_server != -2)
+			{
+				perror("ERRIMSS_OPENIMSS_ALREADYSTORED");
+				return -1;
+			}
+
+			not_initialized = 1;
 		}
 	}
-
-	//TODO: add a flag indicating that the structure was found within the vector and shall be introduced into that exact same position instead of using GInsert.
-	//TODO: retrieve the structure in the position and check if imss.conns.matching_server == -2, then, the IMSS would not have been openned and the following
-	//instructions must be executed. Otherwise, return an error or whatever.
 
 	new_imss.conns.sockets_ = (void **) malloc(new_imss.info.num_storages*sizeof(void*));
 
@@ -689,7 +693,14 @@ open_imss(char * imss_uri)
 
 	}
 
-	//TODO: Check if the IMSS was found within the vector uninitialized: erase the element in that position (freeing memeory) and add the new one.
+	//If the struct was found within the vector but uninitialized, once updated, store it in the same position.
+	if (not_initialized)
+	{
+		g_array_remove_index(imssd, found_in);
+		g_array_insert_val(imssd, found_in, new_imss);
+
+		return found_in;
+	}
 
 	//Add the created struture into the underlying IMSSs.
 	GInsert (&imssd_pos, &imssd_max_size, (char *) &new_imss, imssd, free_imssd);
@@ -756,6 +767,8 @@ stat_imss(char *      imss_uri,
 
 			strcpy(imss_info_->ips[i], searched_imss.info.ips[i]);
 		}
+
+		found_in = imss_found_in;
 
 		return 2;
 	}
@@ -867,12 +880,12 @@ create_dataset(char *  dataset_uri,
 		memset(new_dataset.blocks_written, 0, new_dataset.num_data_elem*sizeof(uint32_t));
 	}
 
-	//Set the specified policy.
-	if (set_policy(&new_dataset) == -1)
-	{
-		perror("ERRIMSS_DATASET_SETPLCY");
-		return -1;
-	}
+//	//Set the specified policy.
+//	if (set_policy(&new_dataset) == -1)
+//	{
+//		perror("ERRIMSS_DATASET_SETPLCY");
+//		return -1;
+//	}
 
 	//Add the created struture into the underlying IMSSs.
 	return (GInsert (&datasetd_pos, &datasetd_max_size, (char *) &new_dataset, datasetd, free_datasetd));
@@ -898,6 +911,8 @@ open_dataset(char * dataset_uri)
 	//Dataset metadata request.
 	int32_t stat_dataset_res = stat_dataset(dataset_uri, &new_dataset);
 
+	int32_t not_initialized = 0;
+
 	//Check if the requested dataset did not exist or was already stored in the local vector.
 	switch (stat_dataset_res)
 	{
@@ -908,12 +923,15 @@ open_dataset(char * dataset_uri)
 		}
 		case 2:
 		{
-			perror("ERRIMSS_OPENDATASET_ALREADYSTORED");
-			return -1;
+			if (new_dataset.local_conn != -2)
+			{
+				perror("ERRIMSS_OPENDATASET_ALREADYSTORED");
+				return -1;
+			}
+
+			not_initialized = 1;
 		}
 	}
-
-	//TODO: check if the local_conn field within the dataset structure has a value of -1 meaning that the dataset structure must be initialized. Otherwise, just return.
 
 	//Assign the associated IMSS descriptor to the new dataset structure.
 	new_dataset.imss_d 	= associated_imss_indx;
@@ -931,16 +949,21 @@ open_dataset(char * dataset_uri)
 		memset(new_dataset.blocks_written, '\0', new_dataset.num_data_elem*sizeof(uint32_t));
 	}
 
-	//TODO: maybe, the set_policy functions could be erased from the open_dataset & create_dataset ones as the previous is called in the set and get functions.
+//	//Set the specified policy.
+//	if (set_policy(&new_dataset) == -1)
+//	{
+//		perror("ERRIMSS_DATASET_SETPLCY");
+//		return -1;
+//	}
 
-	//Set the specified policy.
-	if (set_policy(&new_dataset) == -1)
+	//If the struct was found within the vector but uninitialized, once updated, store it in the same position.
+	if (not_initialized)
 	{
-		perror("ERRIMSS_DATASET_SETPLCY");
-		return -1;
-	}
+		g_array_remove_index(datasetd, found_in);
+		g_array_insert_val(datasetd, found_in, new_dataset);
 
-	//TODO: add the corresponding dataset structure to the associated position within the vector.
+		return found_in;
+	}
 
 	//Add the created struture into the underlying IMSSs.
 	return (GInsert (&datasetd_pos, &datasetd_max_size, (char *) &new_dataset, datasetd, free_datasetd));
@@ -1042,8 +1065,11 @@ stat_dataset(char * 	    dataset_uri,
 		*dataset_info_ = g_array_index(datasetd, dataset_info, i);
 
 		if (!strcmp(dataset_uri, dataset_info_->uri_))
-		
+		{		
+			found_in = i;
+
 			return 2;
+		}
 	}
 
 	//Formated dataset uri to be sent to the metadata server.
@@ -1190,49 +1216,103 @@ set_data(int32_t 	 dataset_id,
 	return 0;
 }
 
+//WARNING! This function allocates memory that must be released by the user.
 //Method retrieving the location of a specific data object.
-int32_t
+char *
 get_data_location(char *  dataset,
 		  int32_t data_id)
 {
-/*
-	//Retrieve the corresponding dataset.
-	
-	//If the dataset structure was retrieved from the metadata server:
-	//Set the local_conn field within the retrieved dataset structure to -1 in case it was obtained from the metadata server
-	//indicating that it was retrieved but not initialized (the open_dataset function must still deal with it).
-	//Invoke GInsert. Save the position where it was stored.
+	//Dataset structure of the one requested.
+	dataset_info where_dataset;
 
-	//Deduce the IMSS entity name storing the concerned dataset.
+	int32_t stat_dataset_res = stat_dataset(dataset, &where_dataset);
 
-	//Declare an imss structure.
-	//Provide the info substructure of the previous to the stat_imss function retrieving it.
-	//If the structure was retrieved from the metadata server, add it to the GArray vector through a GInsert function.
-
-	//Once the previous structures where stored, retrieve the position of the requested data block.
-
-	if (current_dataset != dataset_id)
+	//Check which resource was used to retrieve the concerned dataset.
+	switch (stat_dataset_res)
 	{
-		//Set the corresponding.
-
-		if (set_policy(&concerned_dataset) == -1)
+		//No dataset was found with the requested name.
+		case 0:
 		{
-			perror("ERRIMSS_SET_POLICY");
-			return -1;
+			perror("ERRIMSS_GETDATALOC_DATASETNOTEXISTS");
+			return NULL;
 		}
+		//The dataset was retrieved from the metadata server.
+		case 1:
+		{
+			//The dataset structure will not be stored if it is a LOCAL one as those are dynamically updated.
+			if (!strcmp(where_dataset.policy, "LOCAL"))
+			{
+				//Hint specifying that the dataset was retrieved but not initialized.
+				where_dataset.local_conn = -2;
 
-		current_dataset = dataset_id;
+				GInsert (&datasetd_pos, &datasetd_max_size, (char *) &where_dataset, datasetd, free_datasetd);
+			}
+		}
 	}
 
-	int server;
-	if ((server = find_server(curr_imss.info.num_storages, data_id, curr_dataset.uri_, op_type)) < 0)
+	int32_t dataset_name_length = strlen(dataset);
+
+	//Position where the first '/' character within the dataset name has been found.
+	int32_t end_imss_name;
+
+	for (end_imss_name = dataset_name_length; end_imss_name > 0; end_imss_name--)
 	{
-		perror("ERRIMSS_FIND_SERVER");
-		return -1;
+		if (dataset[end_imss_name] == '/')
+
+			break;
 	}
 
-	return imss.info.ips[server];
-*/
+	//Name of the IMSS entity managing the concerned dataset.
+	char imss_name[end_imss_name];
+
+	memcpy(imss_name, dataset, end_imss_name);
+
+	//IMSS structure storing the information related to the concerned IMSS entity.
+	imss where_imss;
+
+	int32_t imss_existance = stat_imss(imss_name, &where_imss.info);
+
+	//Check which resource was used to retrieve the concerned IMSS structure.
+	switch (imss_existance)
+	{
+		//No IMSS was found with the requested name.
+		case 0:
+		{
+			perror("ERRIMSS_GETDATALOC_IMSSNOTEXISTS");
+			return NULL;
+		}
+		//The IMSS was retrieved from the metadata server.
+		case 1:
+		{
+			//Hint specifying that the IMSS structure was retrieved but not initialized.
+			where_imss.conns.matching_server = -2;
+
+			GInsert (&imssd_pos, &imssd_max_size, (char *) &where_imss, imssd, free_imssd);
+		}
+	}
+
+	//Set the policy corresponding to the retrieved dataset.
+	if (set_policy(&where_dataset) == -1)
+	{
+		perror("ERRIMSS_GETDATALOC_SETPOLICY");
+		return NULL;
+	}
+
+	current_dataset = -1;
+
+	int32_t server;
+	//Find the server storing the corresponding block.
+	if ((server = find_server(where_imss.info.num_storages, data_id, where_dataset.uri_, GET)) < 0)
+	{
+		perror("ERRIMSS_GETDATALOC_FINDSERVER");
+		return NULL;
+	}
+
+	char * machine_name = (char *) malloc(strlen(where_imss.info.ips[server])*sizeof(char));
+
+	strcpy(machine_name, where_imss.info.ips[server]);
+
+	return machine_name;
 }
 
 

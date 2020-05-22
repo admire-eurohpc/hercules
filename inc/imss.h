@@ -151,7 +151,7 @@ int32_t get_data(int32_t datasetd, int32_t data_id, unsigned char * buffer);
 int32_t set_data(int32_t datasetd, int32_t data_id, unsigned char * buffer);
 
 //Method retrieving the location of a specific data object.
-int32_t get_data_location(char * dataset, int32_t data_id);
+char * get_data_location(char * dataset, int32_t data_id);
 
 
 
