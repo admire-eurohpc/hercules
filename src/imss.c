@@ -1225,10 +1225,8 @@ get_data_location(char *  dataset,
 	//Dataset structure of the one requested.
 	dataset_info where_dataset;
 
-	int32_t stat_dataset_res = stat_dataset(dataset, &where_dataset);
-
 	//Check which resource was used to retrieve the concerned dataset.
-	switch (stat_dataset_res)
+	switch (stat_dataset(dataset, &where_dataset))
 	{
 		//No dataset was found with the requested name.
 		case 0:
@@ -1270,10 +1268,8 @@ get_data_location(char *  dataset,
 	//IMSS structure storing the information related to the concerned IMSS entity.
 	imss where_imss;
 
-	int32_t imss_existance = stat_imss(imss_name, &where_imss.info);
-
 	//Check which resource was used to retrieve the concerned IMSS structure.
-	switch (imss_existance)
+	switch (stat_imss(imss_name, &where_imss.info))
 	{
 		//No IMSS was found with the requested name.
 		case 0:
