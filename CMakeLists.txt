@@ -24,8 +24,6 @@ include(FindPkgConfig)
 pkg_check_modules(GLIB glib-2.0 REQUIRED)
 include_directories(${GLIB_INCLUDE_DIRS})
 
-INCLUDE_DIRECTORIES("${CMAKE_SOURCE_DIR}/vendors/libzmq/include")
-LINK_DIRECTORIES("${CMAKE_SOURCE_DIR}/vendors/libzmq/lib")
 INCLUDE_DIRECTORIES( "${CMAKE_SOURCE_DIR}/inc" )
 LINK_DIRECTORIES("${CMAKE_SOURCE_DIR}/build/app")
 
