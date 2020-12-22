@@ -26,7 +26,7 @@ typedef struct {
 	//IMSS URI.
 	char uri_[URI_];
 	//Byte specifying the type of structure.
-	char type = 'I';
+	char type;
 	//Set of ips comforming the IMSS.
 	char ** ips;
 	//Number of IMSS servers.
@@ -42,7 +42,7 @@ typedef struct {
 	//Set of actual sockets.
 	void ** sockets_;
 	//Socket connecting the corresponding client to the server running in the same node.
-	int32_t matching_server = -2;
+	int32_t matching_server;
 
 } imss_conn;
 
@@ -61,7 +61,7 @@ typedef struct {
 	//URI identifying a certain dataset.
 	char uri_[URI_];
 	//Byte specifying the type of structure.
-	char type = 'D';
+	char type;
 	//Policy that was followed in order to write the dataset.
 	char policy[8];
 	//Number of data elements conforming the dataset entity.
@@ -105,7 +105,7 @@ int32_t stat_release();
 
 
 //Method deploying the storage system.
-int32_t init_imss(char * imss_uri, char * hostfile, int32_t n_servers, uint16_t conn_port, int32_t buff_size);
+int32_t init_imss(char *   imss_uri, int32_t  n_servers, int32_t  buff_size, char *   hostfile, uint16_t conn_port);
 
 //Method creating the set of required connections with an existing IMSS.
 int32_t open_imss(char * imss_uri);
@@ -147,12 +147,15 @@ int32_t set_dataset(char * dataset_uri, unsigned char * buffer, uint64_t offset)
 //Method performing a retrieval operation of a specific object.
 int32_t get_data(int32_t datasetd, int32_t data_id, unsigned char * buffer);
 
+//Method performing a retrieval operation of a specific object.
+int32_t get_ndata(int32_t datasetd, int32_t data_id, unsigned char * buffer, int64_t * size);
+
 //Method storing a specific data object.
 int32_t set_data(int32_t datasetd, int32_t data_id, unsigned char * buffer);
 
 //Method retrieving the location of a specific data object.
-char * get_data_location(char * dataset, int32_t data_id);
-
+int32_t get_data_location(int32_t dataset_id, int32_t data_id, int32_t op_type);
+char * get_data_location_host(char *  dataset, int32_t data_id);
 
 
 /***************************** DATA RELEASE RESOURCES *****************************/

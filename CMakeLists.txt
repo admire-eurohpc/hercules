@@ -38,3 +38,5 @@ SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS}")
 
 ADD_SUBDIRECTORY(app)
 
+ADD_LIBRARY(imss_library STATIC src/comms.c src/crc.c src/imss.c  src/memalloc.c  src/policies.c )
+
