@@ -1179,6 +1179,45 @@ get_data(int32_t 	 dataset_id,
 	return (!strncmp_ ? -1 : 0);
 }
 
+
+//Method performing a retrieval operation of a specific data object.
+int32_t
+get_ndata(int32_t     dataset_id,
+     int32_t     data_id,
+     unsigned char * buffer,
+	 int64_t  * size)
+{
+    //Server containing the corresponding data to be retrieved.
+    int32_t n_server;
+    if ((n_server = get_data_location(dataset_id, data_id, GET)) == -1)
+
+        return -1;
+
+    //Key related to the requested data element.
+    char key[KEY];
+    sprintf(key, "0 %s$%d",  curr_dataset.uri_, data_id);
+    //Send read request message specifying the block URI.
+    if (zmq_send(curr_imss.conns.sockets_[n_server], key, KEY, 0) < 0)
+    {
+        perror("ERRIMSS_GETDATA_REQ");
+        return -1;
+    }
+
+    //Receive data related to the previous read request directly into the buffer.
+    if (zmq_recv(curr_imss.conns.sockets_[n_server], buffer, curr_dataset.data_entity_size, 0) == -1)
+    {
+        perror("ERRIMSS_GETDATA_RECV");
+        return -1;
+    }
+
+    *size = curr_dataset.data_entity_size;
+
+    //Check if the requested key was correctly retrieved.
+    int32_t strncmp_ = strncmp((const char *) buffer, "$ERRIMSS_NO_KEY_AVAIL$", 22);
+
+    return (!strncmp_ ? -1 : 0);
+}
+
 //Method storing a specific data object.
 int32_t
 set_data(int32_t 	 dataset_id,
@@ -1218,9 +1257,7 @@ set_data(int32_t 	 dataset_id,
 
 //WARNING! This function allocates memory that must be released by the user.
 //Method retrieving the location of a specific data object.
-char *
-get_data_location(char *  dataset,
-		  int32_t data_id)
+char * get_data_location_host(char *  dataset, int32_t data_id)
 {
 	//Dataset structure of the one requested.
 	dataset_info where_dataset;

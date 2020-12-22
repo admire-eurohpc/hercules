@@ -32,7 +32,7 @@ int32_t main (int32_t argc, char **argv)
 	char * location;
 
 	// 2. Perform the actual get_data_location() operation.
-	if ((location = get_data_location(dataset_name, block_number)) == NULL)
+	if ((location = get_data_location_host(dataset_name, block_number)) == NULL)
 
 		return -1;
 
