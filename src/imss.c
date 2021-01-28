@@ -13,8 +13,8 @@
 #include <netinet/in.h> 
 #include "imss.h"
 #include "comms.h"
+#include "workers.h"
 #include "policies.h"
-
 
 
 
@@ -54,6 +54,8 @@ imss		empty_imss;
 
 int32_t		found_in;		//Variable storing the position where a certain structure was stored in a certain vector.
 
+extern uint16_t	connection_port; //FIXME
+
 
 /**********************************************************************************/
 /*********************** IMSS INTERNAL MANAGEMENT FUNCTIONS ***********************/
@@ -77,7 +79,8 @@ conn_crt_(void **  socket,
 	}
 
 	//Receive timeout in milliseconds.
-	int32_t rcvtimeo = TIMEOUT_MS;
+	//int32_t rcvtimeo = TIMEOUT_MS;
+	int32_t rcvtimeo = -1;
 
 	//Monitor the current socket if it was requested.
 	if (monitor)
@@ -156,24 +159,26 @@ conn_dstr_(void * socket)
 	return 0;
 }
 
-//Method stating if a socket has been connected to an endpoint.
-int32_t
-socket_connected(void ** monitor)
-{
-	zmq_msg_t event_msg;
-	zmq_msg_init (&event_msg);
-	//Message storing the event.
-	if (zmq_msg_recv(&event_msg, *monitor, 0) == -1)
 
-		return -1;
 
-	//Elements formalizing the retrieved data.
-	uint8_t * data = (uint8_t *) zmq_msg_data(&event_msg);
-	uint16_t event = *(uint16_t *) data;
-	zmq_msg_close(&event_msg);
-
-	return event == ZMQ_EVENT_CONNECTED;
-}
+////Method stating if a socket has been connected to an endpoint.
+//int32_t
+//socket_connected(void ** monitor)
+//{
+//	zmq_msg_t event_msg;
+//	zmq_msg_init (&event_msg);
+//	//Message storing the event.
+//	if (zmq_msg_recv(&event_msg, *monitor, 0) == -1)
+//
+//		return -1;
+//
+//	//Elements formalizing the retrieved data.
+//	uint8_t * data = (uint8_t *) zmq_msg_data(&event_msg);
+//	uint16_t event = *(uint16_t *) data;
+//	zmq_msg_close(&event_msg);
+//
+//	return event == ZMQ_EVENT_CONNECTED;
+//}
 
 //Method inserting an element into a certain control GArray vector.
 int32_t
@@ -261,15 +266,14 @@ find_imss(char * imss_uri,
 
 
 
-
 /**********************************************************************************/
 /********************* METADATA SERVICE MANAGEMENT FUNCTIONS  *********************/
 /**********************************************************************************/
 
 
-//Method creating a connection to the metadata server.
+//Method creating a communication channel with the IMSS metadata server. Besides, the stat_imss method initializes a set of elements that will be used through the session.
 int32_t
-stat_init(char *   ip,
+stat_init(char *   address,
 	  uint16_t port,
 	  int32_t  rank)
 {
@@ -329,9 +333,6 @@ stat_init(char *   ip,
 		return -1;
 	}
 
-	//TODO: check performance changing the number of threads.
-	//zmq_ctx_set(ctx, ZMQ_IO_THREADS, 4);
-
 	//Retrieve the hostname where the current process is running.
 	if (gethostname(client_node, 512) == -1)
 	{
@@ -350,7 +351,7 @@ stat_init(char *   ip,
 	strcpy(client_ip, inet_ntoa(*((struct in_addr*) host_entry->h_addr_list[0])));
 
 	//Create the connection to the metadata server dispatcher thread.
-	if (conn_crt_(&stat_client, ip, port, rank, 0, NULL) == -1)
+	if (conn_crt_(&stat_client, address, port, rank, 0, NULL) == -1)
 
 		return -1;
 
@@ -389,14 +390,14 @@ stat_init(char *   ip,
 	zmq_msg_close(&connection_info);
 
 	//Create the connection to the metadata server dispatcher thread.
-	if (conn_crt_(&stat_client, ip, stat_port, stat_id, 0, NULL) == -1)
+	if (conn_crt_(&stat_client, address, stat_port, stat_id, 0, NULL) == -1)
 
 		return -1;
 
 	return 0;
 }
 
-//Method disabling connection resources to the metadata server.
+//Method disabling the communication channel with the metadata server. Besides, the current method releases session-related elements previously initialized.
 int32_t stat_release()
 {
 	//Release the underlying set of vectors.
@@ -437,6 +438,68 @@ int32_t stat_release()
 	return 0;
 }
 
+//Method retrieving the whole set of elements contained by a specific URI.
+uint32_t
+get_dir(char * 	 requested_uri,
+	char **  buffer,
+	char *** items)
+{
+	//GETDIR request.
+	char getdir_req[strlen(requested_uri)+2];
+	sprintf(getdir_req, "%d %s%c", GETDIR, requested_uri, '\0');
+
+	//Send the request.
+	if (zmq_send(stat_client, getdir_req, strlen(getdir_req), 0)  == -1)
+	{
+		perror("ERRIMSS_GETDIR_REQ");
+		return -1;
+	}
+
+	//Retrieve the set of elements within the requested uri.
+	zmq_msg_t uri_elements;
+	if (zmq_msg_init(&uri_elements) != 0)
+	{
+		perror("ERRIMSS_GETDIR_MSGINIT");
+		return -1;
+	}
+	if (zmq_msg_recv(&uri_elements, stat_client, 0) == -1)
+	{
+		perror("ERRIMSS_GETDIR_RECV");
+		return -1;
+	}
+
+	char * elements = (char *) zmq_msg_data(&uri_elements);
+
+	if (!strncmp("$ERRIMSS_NO_KEY_AVAIL$", elements, 22))
+	{
+		zmq_msg_close(&uri_elements);
+		perror("ERRIMSS_GETDIR_NODIR");
+		return -1;
+	}
+
+	uint32_t elements_size = zmq_msg_size(&uri_elements);
+
+	*buffer = (char *) malloc(sizeof(char)*elements_size);
+	memcpy(*buffer, elements, elements_size);
+	elements = *buffer;
+
+	zmq_msg_close(&uri_elements);
+
+	uint32_t num_elements = elements_size/URI_;
+
+	*items = (char **) malloc(sizeof(char *) * num_elements);
+
+	//Identify each element within the buffer provided.
+	for (int32_t i = 0; i < num_elements; i++)
+	{
+		*items[i] = elements;
+
+		elements += URI_;
+	}
+
+	return num_elements;
+}
+
 
 
 
@@ -445,13 +508,15 @@ int32_t stat_release()
 /**********************************************************************************/
 
 
-//Method deploying the storage system.
+//Method initializing an IMSS deployment.
 int32_t
 init_imss(char *   imss_uri,
-	  int32_t  n_servers,
-	  int32_t  buff_size,
 	  char *   hostfile,
-	  uint16_t conn_port)
+	  int32_t  n_servers,
+	  uint16_t conn_port,
+	  uint64_t buff_size,
+	  uint32_t deployment,
+	  char *   binary_path)
 {
 	imss_info aux_imss;
 	//Check if the new IMSS uri has been already assigned.
@@ -463,23 +528,26 @@ init_imss(char *   imss_uri,
 		return -1;
 	}
 
-	//Final command to be executed.
-	char command[1024]; 
-        memset(command, 0, 1024);
-
-	//Path to the IMSS server binary.
-	char binary[] 	= "./buffer";
-	char mpirun_1[]	= "mpirun -np ";
-	char mpirun_2[]	= " -f ";
-
-	//Obtain the mpi deployment to be executed.
-	sprintf(command, "%s%d%s%s%c%s%c%d%c%d%c%c", mpirun_1, n_servers, mpirun_2, hostfile, ' ', binary, ' ', conn_port, ' ', buff_size, ' ', '&');
-
-	//Perform the deployment (FROM LINUX MAN PAGES: "system() returns after the command has been completed").
-	if (system(command) == -1)
+	//Once it has been notified that no other IMSS instance had the same URI, the deployment will be performed in case of a DETACHED instance.
+	if (deployment == DETACHED)
 	{
-		perror("ERRIMSS_INITIMSS_DEPLOY");
-		return -1;
+		if (!binary_path)
+		{
+			perror("ERRIMSS_INITIMSS_NOBINARY");
+			return -1;
+		}
+
+		char command[2048]; 
+		memset(command, 0, 2048);
+
+		sprintf(command, "mpirun -np %d -f %s %s %s %d %lu foo %d %d %s &", n_servers, hostfile, binary_path, imss_uri, conn_port, buff_size, 0, n_servers, "");
+
+		//Perform the deployment (FROM LINUX MAN PAGES: "system() returns after the command has been completed").
+		if (system(command) == -1)
+		{
+			perror("ERRIMSS_INITIMSS_DEPLOY");
+			return -1;
+		}
 	}
 
 	//IMSS creation.
@@ -487,6 +555,11 @@ init_imss(char *   imss_uri,
 	strcpy(new_imss.info.uri_, imss_uri);
 	new_imss.info.num_storages  = n_servers;
 	new_imss.info.conn_port     = conn_port;
+
+	if (deployment == ATTACHED)
+
+		new_imss.info.conn_port     = connection_port;
+
 	new_imss.info.ips           = (char **) malloc(n_servers * sizeof(char *));
 
 	//Resources required to connect to the corresponding IMSS.
@@ -531,8 +604,9 @@ init_imss(char *   imss_uri,
 			return -1;
 
 		char request[16];
+
 		//ZMQ message requesting a connection to the metadata server.
-		sprintf(request, "%s %d%c", "HELLO!", buff_size, '\0');
+		sprintf(request, "%s %ld%c", "HELLO!", buff_size, '\0');
 		//Send the IMSS server connection request.
 		if (zmq_send(new_imss.conns.sockets_[i], request, 16, 0)  != 16)
 		{
@@ -599,8 +673,7 @@ init_imss(char *   imss_uri,
 	return 0;
 }
 
-
-//Method creating the set of required connections with an existing IMSS.
+//Method initializing the required resources to make use of an existing IMSS.
 int32_t
 open_imss(char * imss_uri)
 {
@@ -629,7 +702,19 @@ open_imss(char * imss_uri)
 				return -1;
 			}
 
+			for (int32_t i = 0; i < check_imss.info.num_storages; i++)
+
+				free(check_imss.info.ips[i]);
+
+			free(check_imss.info.ips);
+
 			not_initialized = 1;
+
+			break;
+		}
+		case -1:
+		{
+			return -1;
 		}
 	}
 
@@ -647,7 +732,7 @@ open_imss(char * imss_uri)
 
 		//ZMQ message requesting a connection to the dispatcher thread.
 		char request[16];
-		sprintf(request, "%s", "HELLO!");
+		sprintf(request, "%s", "HELLO!JOIN");
 		//Send the IMSS server connection request.
 		if (zmq_send(new_imss.conns.sockets_[i], request, 16, 0)  != 16)
 		{
@@ -699,7 +784,7 @@ open_imss(char * imss_uri)
 		g_array_remove_index(imssd, found_in);
 		g_array_insert_val(imssd, found_in, new_imss);
 
-		return found_in;
+		return 0;
 	}
 
 	//Add the created struture into the underlying IMSSs.
@@ -708,9 +793,10 @@ open_imss(char * imss_uri)
 	return 0;
 }
 
-//Method disabling all connection resources.
+// Method releasing client-side and/or server-side resources related to a certain IMSS instance. 
 int32_t
-release_imss(char * imss_uri)
+release_imss(char *   imss_uri,
+	     uint32_t release_op)
 {
 	//Search for the requested IMSS.
 
@@ -718,7 +804,7 @@ release_imss(char * imss_uri)
 	int32_t imss_position;
 	if ((imss_position = find_imss(imss_uri, &imss_)) == -1)
 	{
-		perror("ERRIMSS_RELIMSS_NOTFOUND");
+		perror("ERRIMSS_RLSIMSS_NOTFOUND");
 		return -1;
 	}
 
@@ -726,9 +812,21 @@ release_imss(char * imss_uri)
 
 	for (int32_t i = 0; i < imss_.info.num_storages; i++)
 	{
+		//Request IMSS instance closure per server if the instance is a DETACHED one and the corresponding argumet was provided.
+		if (release_op == CLOSE_DETACHED)
+		{
+			char release_msg[] = "2 RELEASE\0";
+
+			if (zmq_send(imss_.conns.sockets_[i], release_msg, strlen(release_msg), 0) < 0)
+			{
+				perror("ERRIMSS_RLSIMSS_SENDREQ");
+				return -1;
+			}
+		}
+
 		if (conn_dstr_((imss_.conns.sockets_[i])) == -1)
 		{
-			perror("ERRIMSS_RELEASE_CONNDSTRY2");
+			perror("ERRIMSS_RLSIMSS_CONNDSTRY");
 			return -1;
 		}
 
@@ -745,7 +843,7 @@ release_imss(char * imss_uri)
 	return 0;
 }
 
-//Method retrieving information related to a certain backend.
+//Method retrieving information related to a certain IMSS instance.
 int32_t
 stat_imss(char *      imss_uri,
 	  imss_info * imss_info_)
@@ -767,8 +865,6 @@ stat_imss(char *      imss_uri,
 
 			strcpy(imss_info_->ips[i], searched_imss.info.ips[i]);
 		}
-
-		found_in = imss_found_in;
 
 		return 2;
 	}
@@ -802,7 +898,8 @@ int32_t
 create_dataset(char *  dataset_uri,
 	       char *  policy,
 	       int32_t num_data_elem,
-	       int32_t data_elem_size)
+	       int32_t data_elem_size,
+	       int32_t repl_factor)
 {
 	if ((dataset_uri == NULL) || (policy == NULL) || !num_data_elem || !data_elem_size)
 	{
@@ -810,11 +907,19 @@ create_dataset(char *  dataset_uri,
 		return -1;
 	}
 
+	if ((repl_factor < NONE) || (repl_factor > TRM))
+	{
+		perror("ERRIMSS_CRTDATASET_BADREPLFACTOR");
+		return -1;
+	}
+
 	int32_t associated_imss_indx;
 	//Check if the IMSS storing the dataset exists within the clients session.
 	if ((associated_imss_indx = imss_check(dataset_uri)) == -1)
-
+	{
+		perror("ERRIMSS_OPENDATA_IMSSNOTFOUND");
 		return -1;
+	}
 
 	imss associated_imss;
 	associated_imss = g_array_index(imssd, imss, associated_imss_indx);
@@ -834,6 +939,7 @@ create_dataset(char *  dataset_uri,
 	new_dataset.data_entity_size 	= data_elem_size*1024;
 	new_dataset.imss_d 		= associated_imss_indx;
 	new_dataset.local_conn 		= associated_imss.conns.matching_server;
+	new_dataset.repl_factor		= repl_factor;
 
 	//Size of the message to be sent.
 	uint64_t msg_size = sizeof(dataset_info);
@@ -891,7 +997,7 @@ create_dataset(char *  dataset_uri,
 	return (GInsert (&datasetd_pos, &datasetd_max_size, (char *) &new_dataset, datasetd, free_datasetd));
 }
 
-//Method retrieving an existing dataset.
+//Method creating the required resources in order to READ and WRITE an existing dataset.
 int32_t
 open_dataset(char * dataset_uri)
 {
@@ -930,6 +1036,12 @@ open_dataset(char * dataset_uri)
 			}
 
 			not_initialized = 1;
+
+			break;
+		}
+		case -1:
+		{
+			return -1;
 		}
 	}
 
@@ -969,7 +1081,7 @@ open_dataset(char * dataset_uri)
 	return (GInsert (&datasetd_pos, &datasetd_max_size, (char *) &new_dataset, datasetd, free_datasetd));
 }
 
-//Method releasing the storage resources.
+//Method releasing the set of resources required to deal with a dataset.
 int32_t
 release_dataset(int32_t dataset_id)
 {
@@ -1065,11 +1177,8 @@ stat_dataset(char * 	    dataset_uri,
 		*dataset_info_ = g_array_index(datasetd, dataset_info, i);
 
 		if (!strcmp(dataset_uri, dataset_info_->uri_))
-		{		
-			found_in = i;
-
+		
 			return 2;
-		}
 	}
 
 	//Formated dataset uri to be sent to the metadata server.
@@ -1087,7 +1196,6 @@ stat_dataset(char * 	    dataset_uri,
 	return recv_dynamic_struct(stat_client, dataset_info_, DATASET_INFO);
 }
 
-
 /*
 //Method retrieving a whole dataset parallelizing the procedure.
 unsigned char * get_dataset(char * dataset_uri, uint64_t * buff_length);
@@ -1096,9 +1204,7 @@ unsigned char * get_dataset(char * dataset_uri, uint64_t * buff_length);
 //Method storing a whole dataset parallelizing the procedure.
 int32_t set_dataset(char * dataset_uri, unsigned char * buffer, uint64_t offset)
 {}
-
 */
-
 
 
 
@@ -1144,120 +1250,145 @@ get_data_location(int32_t dataset_id,
 	return server;
 }
 
-//Method performing a retrieval operation of a specific data object.
+//Method retrieving a data element associated to a certain dataset.
 int32_t
 get_data(int32_t 	 dataset_id,
 	 int32_t 	 data_id,
 	 unsigned char * buffer)
 {
-	//Server containing the corresponding data to be retrieved.
 	int32_t n_server;
+	//Server containing the corresponding data to be retrieved.
 	if ((n_server = get_data_location(dataset_id, data_id, GET)) == -1)
 
 		return -1;
 
+	//Servers that the data block is going to be requested to.
+	int32_t repl_servers[curr_dataset.repl_factor];
+
+	int32_t curr_imss_storages = curr_imss.info.num_storages;
+
+	//Retrieve the corresponding connections to the previous servers.
+	for (int32_t i = 0; i < curr_dataset.repl_factor; i++)
+	{
+		//Server storing the current data block.
+		uint32_t n_server_ = (n_server + i*(curr_imss_storages/curr_dataset.repl_factor)) % curr_imss_storages;
+
+		repl_servers[i] = n_server_;
+
+		//Check if the current connection is the local one (if there is).
+		if (repl_servers[i] == curr_dataset.local_conn)
+		{
+			//Move the local connection to the first one to be requested.
+
+			int32_t aux_conn = repl_servers[0];
+
+			repl_servers[0] = repl_servers[i];
+
+			repl_servers[i] = aux_conn;
+		}
+	}
+
+	char key_[KEY];
 	//Key related to the requested data element.
-	char key[KEY];
-	sprintf(key, "0 %s$%d",  curr_dataset.uri_, data_id);
-	//Send read request message specifying the block URI.
-	if (zmq_send(curr_imss.conns.sockets_[n_server], key, KEY, 0) < 0)
+	sprintf(key_, "0 %s$%d",  curr_dataset.uri_, data_id);
+
+	int key_length = strlen(key_)+1;
+	char key[key_length];
+	memcpy((void *) key, (void *) key_, key_length);
+	key[key_length-1] = '\0';
+
+	//Request the concerned block to the involved servers.
+	for (int32_t i = 0; i < curr_dataset.repl_factor; i++)
 	{
-		perror("ERRIMSS_GETDATA_REQ");
-		return -1;
+		//printf("BLOCK %d ASKED TO %d SERVER with key: %s (%d)\n", data_id, repl_servers[i], key, key_length);
+
+		//Send read request message specifying the block URI.
+		//if (zmq_send(curr_imss.conns.sockets_[repl_servers[i]], key, KEY, 0) < 0)
+		if (zmq_send(curr_imss.conns.sockets_[repl_servers[i]], key, key_length, 0) != key_length)
+		{
+			perror("ERRIMSS_GETDATA_REQ");
+			return -1;
+		}
+
+		//Receive data related to the previous read request directly into the buffer.
+		if (zmq_recv(curr_imss.conns.sockets_[repl_servers[i]], buffer, curr_dataset.data_entity_size, 0) == -1)
+		{
+			if (errno != EAGAIN)
+			{
+				perror("ERRIMSS_GETDATA_RECV");
+				return -1;
+			}
+			else
+				break;
+		}
+
+		//Check if the requested key was correctly retrieved.
+		if (strncmp((const char *) buffer, "$ERRIMSS_NO_KEY_AVAIL$", 22))
+
+			return 0;
 	}
 
-	//Receive data related to the previous read request directly into the buffer.
-	if (zmq_recv(curr_imss.conns.sockets_[n_server], buffer, curr_dataset.data_entity_size, 0) == -1)
-	{
-		perror("ERRIMSS_GETDATA_RECV");
-		return -1;
-	}
-
-	//Check if the requested key was correctly retrieved.
-	int32_t strncmp_ = strncmp((const char *) buffer, "$ERRIMSS_NO_KEY_AVAIL$", 22);
-
-	return (!strncmp_ ? -1 : 0);
+	fprintf(stderr, "ERRIMSS_GETDATA_UNAVAIL\n");
+	return -1;
 }
 
-
-//Method performing a retrieval operation of a specific data object.
-int32_t
-get_ndata(int32_t     dataset_id,
-     int32_t     data_id,
-     unsigned char * buffer,
-	 int64_t  * size)
-{
-    //Server containing the corresponding data to be retrieved.
-    int32_t n_server;
-    if ((n_server = get_data_location(dataset_id, data_id, GET)) == -1)
-
-        return -1;
-
-    //Key related to the requested data element.
-    char key[KEY];
-    sprintf(key, "0 %s$%d",  curr_dataset.uri_, data_id);
-    //Send read request message specifying the block URI.
-    if (zmq_send(curr_imss.conns.sockets_[n_server], key, KEY, 0) < 0)
-    {
-        perror("ERRIMSS_GETDATA_REQ");
-        return -1;
-    }
-
-    //Receive data related to the previous read request directly into the buffer.
-    if (zmq_recv(curr_imss.conns.sockets_[n_server], buffer, curr_dataset.data_entity_size, 0) == -1)
-    {
-        perror("ERRIMSS_GETDATA_RECV");
-        return -1;
-    }
-
-    *size = curr_dataset.data_entity_size;
-
-    //Check if the requested key was correctly retrieved.
-    int32_t strncmp_ = strncmp((const char *) buffer, "$ERRIMSS_NO_KEY_AVAIL$", 22);
-
-    return (!strncmp_ ? -1 : 0);
-}
-
-//Method storing a specific data object.
+//Method storing a specific data element.
 int32_t
 set_data(int32_t 	 dataset_id,
 	 int32_t 	 data_id,
 	 unsigned char * buffer)
 {
-	//Server containing the corresponding data to be written.
 	int32_t n_server;
+	//Server containing the corresponding data to be written.
 	if ((n_server = get_data_location(dataset_id, data_id, SET)) == -1)
 
 		return -1;
 
+	char key_[KEY];
 	//Key related to the requested data element.
-	char key[KEY];
-	sprintf(key, "%d %s$%d", curr_dataset.data_entity_size, curr_dataset.uri_, data_id);
-	//Send read request message specifying the block URI.
-	if (zmq_send(curr_imss.conns.sockets_[n_server], key, KEY, ZMQ_SNDMORE) < 0)
-	{
-		perror("ERRIMSS_SETDATA_REQ");
-		return -1;
-	}
+	sprintf(key_, "%d %s$%d", curr_dataset.data_entity_size, curr_dataset.uri_, data_id);
 
-	//Message containing the data associated to the previous key.
-	zmq_msg_t content;
-	zmq_msg_init_data (&content, buffer, curr_dataset.data_entity_size, free_msg, NULL);
-	//Send read request message specifying the block data.
-	if (zmq_msg_send (&content, curr_imss.conns.sockets_[n_server], 0) != curr_dataset.data_entity_size)
-	{
-		perror("ERRIMSS_SETDATA_SEND");
-		return -1;
-	}
+	int key_length = strlen(key_)+1;
+	char key[key_length];
+	memcpy((void *) key, (void *) key_, key_length);
+	key[key_length-1] = '\0';
 
-	zmq_msg_close(&content);
+	int32_t curr_imss_storages = curr_imss.info.num_storages;
+
+	//Send the data block to every server implementing redundancy.
+	for (int32_t i = 0; i < curr_dataset.repl_factor; i++)
+	{
+		//Server receiving the current data block.
+		uint32_t n_server_ = (n_server + i*(curr_imss_storages/curr_dataset.repl_factor)) % curr_imss_storages;
+
+		//printf("BLOCK %d SENT TO %d SERVER with key: %s (%d)\n", data_id, n_server_, key, key_length);
+
+		//Send read request message specifying the block URI.
+		//if (zmq_send(curr_imss.conns.sockets_[n_server_], key, KEY, ZMQ_SNDMORE) < 0)
+		if (zmq_send(curr_imss.conns.sockets_[n_server_], key, key_length, ZMQ_SNDMORE) != key_length)
+		{
+			perror("ERRIMSS_SETDATA_REQ");
+			return -1;
+		}
+
+		//Send read request message specifying the block data.
+		if (zmq_send (curr_imss.conns.sockets_[n_server_], buffer, curr_dataset.data_entity_size, 0) != curr_dataset.data_entity_size)
+		{
+			perror("ERRIMSS_SETDATA_SEND");
+			return -1;
+		}
+	}
 
 	return 0;
 }
 
 //WARNING! This function allocates memory that must be released by the user.
+
 //Method retrieving the location of a specific data object.
-char * get_data_location_host(char *  dataset, int32_t data_id)
+char **
+get_dataloc(char *    dataset,
+	    int32_t   data_id,
+	    int32_t * num_storages)
 {
 	//Dataset structure of the one requested.
 	dataset_info where_dataset;
@@ -1275,13 +1406,15 @@ char * get_data_location_host(char *  dataset, int32_t data_id)
 		case 1:
 		{
 			//The dataset structure will not be stored if it is a LOCAL one as those are dynamically updated.
-			if (!strcmp(where_dataset.policy, "LOCAL"))
+			if (strcmp(where_dataset.policy, "LOCAL"))
 			{
 				//Hint specifying that the dataset was retrieved but not initialized.
 				where_dataset.local_conn = -2;
 
 				GInsert (&datasetd_pos, &datasetd_max_size, (char *) &where_dataset, datasetd, free_datasetd);
 			}
+
+			break;
 		}
 	}
 
@@ -1289,6 +1422,8 @@ char * get_data_location_host(char *  dataset, int32_t data_id)
 
 	//Position where the first '/' character within the dataset name has been found.
 	int32_t end_imss_name;
+
+	//TODO: retrieving the imss uri from the dataset one must be updated.
 
 	for (end_imss_name = dataset_name_length; end_imss_name > 0; end_imss_name--)
 	{
@@ -1305,8 +1440,10 @@ char * get_data_location_host(char *  dataset, int32_t data_id)
 	//IMSS structure storing the information related to the concerned IMSS entity.
 	imss where_imss;
 
+	int32_t found_imss_in = stat_imss(imss_name, &where_imss.info);
+
 	//Check which resource was used to retrieve the concerned IMSS structure.
-	switch (stat_imss(imss_name, &where_imss.info))
+	switch (found_imss_in)
 	{
 		//No IMSS was found with the requested name.
 		case 0:
@@ -1321,6 +1458,8 @@ char * get_data_location_host(char *  dataset, int32_t data_id)
 			where_imss.conns.matching_server = -2;
 
 			GInsert (&imssd_pos, &imssd_max_size, (char *) &where_imss, imssd, free_imssd);
+
+			break;
 		}
 	}
 
@@ -1341,13 +1480,34 @@ char * get_data_location_host(char *  dataset, int32_t data_id)
 		return NULL;
 	}
 
-	char * machine_name = (char *) malloc(strlen(where_imss.info.ips[server])*sizeof(char));
+	*num_storages = where_dataset.repl_factor;
 
-	strcpy(machine_name, where_imss.info.ips[server]);
+	char ** machines = (char **) malloc(*num_storages * sizeof(char *));
 
-	return machine_name;
+	for (int32_t i = 0; i < *num_storages; i++)
+	{
+		//Server storing the current data block.
+		uint32_t n_server_ = (server + i*(where_imss.info.num_storages/where_dataset.repl_factor)) % where_imss.info.num_storages;
+
+		machines[i] = (char *) malloc(strlen(where_imss.info.ips[n_server_])*sizeof(char));
+
+		strcpy(machines[i], where_imss.info.ips[n_server_]);
+
+		if (found_imss_in == 2)
+
+			free(where_imss.info.ips[i]);
+	}
+
+	if (found_imss_in == 2)
+
+		free(where_imss.info.ips);
+
+	if (!strcmp(where_dataset.policy, "LOCAL"))
+
+		free(where_dataset.data_locations);
+
+	return machines;
 }
-
 
 
 
@@ -1358,36 +1518,35 @@ char * get_data_location_host(char *  dataset, int32_t data_id)
 
 //Method releasing an imss_info structure previously provided to the client.
 int32_t
-free_imss(imss_info * struct_)
+free_imss(imss_info * imss_info_)
 {
-	for (int32_t i = 0; i < struct_->num_storages; i++)
+	for (int32_t i = 0; i < imss_info_->num_storages; i++)
 
-		free(struct_->ips[i]);
+		free(imss_info_->ips[i]);
 
-	free(struct_->ips);
+	free(imss_info_->ips);
 
 	return 0;
 }
 
 //Method releasing a dataset structure previously provided to the client.
 int32_t
-free_dataset(dataset_info * struct_)
+free_dataset(dataset_info * dataset_info_)
 {
-	if (!strcmp(struct_->policy, "LOCAL"))
+	if (!strcmp(dataset_info_->policy, "LOCAL"))
 	{
-		if (struct_->data_locations)				
+		if (dataset_info_->data_locations)				
 
-			free(struct_->data_locations);
+			free(dataset_info_->data_locations);
 
-		if (struct_->num_blocks_written)				
+		if (dataset_info_->num_blocks_written)				
 
-			free(struct_->num_blocks_written);
+			free(dataset_info_->num_blocks_written);
 
-		if (struct_->blocks_written)				
+		if (dataset_info_->blocks_written)				
 
-			free(struct_->blocks_written);
+			free(dataset_info_->blocks_written);
 	}
 
 	return 0;
 }
-

@@ -224,4 +224,3 @@ find_server (int32_t 	  n_servers,
 
 	return next_server;
 }
-

@@ -5,7 +5,7 @@
 #include <sys/types.h>
 #include "stat.h"
 #include "imss.h"
-
+#include "directory.h"
 
 
 //Method retrieving the set of dataset metadata structures stored in a metadata file.
@@ -54,7 +54,7 @@ metadata_read(char * 		metadata_file,
 	metadata_info -= OFFSET;
 
 	//Read into the buffer the remaining chunk of metadata bytes.
-	if ((*bytes_written = fread((void *) buffer, metadata_info, 1, meta_file)) < metadata_info)
+	if ((*bytes_written = fread((void *) buffer, 1, metadata_info, meta_file)) < metadata_info)
 	{
 		//Check if an error took place during the retrieval.
 		if (ferror(meta_file) != 0)
@@ -75,6 +75,8 @@ metadata_read(char * 		metadata_file,
 
 		//Character specifying the type of structure that will be managed.
 		char struct_type = *(buffer + URI_);
+
+		GTree_insert((char *) key.c_str());
 
 		//Operate depending to the type of structure to be sealt with.
 		switch (struct_type)
@@ -196,4 +198,3 @@ metadata_write(char * 		metadata_file,
 
 	return 0;
 }
-

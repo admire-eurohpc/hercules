@@ -6,7 +6,10 @@
 #define READ_OP			0
 #define WRITE_OP		1
 
-#define THREAD_POOL		4
+#define GETDIR			1
+#define RELEASE			2
+
+#define THREAD_POOL		2
 
 #define LOCAL_DATASET_UPDATE	0
 
@@ -27,10 +30,15 @@ typedef struct {
 
 
 //Thread method attending client data requests.
-void * worker (void * th_argv);
+void * srv_worker (void * th_argv);
 
-//Dispatcher thread method distributing clients among a pool threads.
+//Thread method attending client metadata requests.
+void * stat_worker (void * th_argv);
+
+//Dispatcher thread method distributing clients among the pool server threads.
+void * srv_attached_dispatcher (void * th_argv);
+
+//Dispatcher thread method distributing clients among the pool of metadata server threads.
 void * dispatcher (void * th_argv);
 
 #endif
-

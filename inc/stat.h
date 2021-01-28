@@ -16,4 +16,3 @@ unsigned char * metadata_read(char * metadata_file, map_records * map, unsigned 
 int32_t metadata_write(char * metadata_file, unsigned char * buffer, map_records * map, p_argv * regions, int64_t segment_size, uint64_t read_metadata);
 
 #endif
-

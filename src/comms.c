@@ -208,4 +208,3 @@ recv_dynamic_struct(void *  socket,
 
 	return 1;
 }
-
