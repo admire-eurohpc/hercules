@@ -14,4 +14,3 @@ int32_t send_dynamic_struct(void * socket, void * data_struct, int32_t data_type
 int32_t recv_dynamic_struct(void * socket, void * data_struct, int32_t data_type);
 
 #endif
-

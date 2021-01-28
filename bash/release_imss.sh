@@ -1,6 +1,9 @@
 #!/bin/bash
 
 
+#TODO: consider providing a set of default arguments.
+
+
 ####################################################################
 ######	SCRIPT PUBLISHING RELEASE MESSAGES TO IMSS INSTANCES  ######
 ####################################################################
@@ -23,89 +26,111 @@ data server.
 
 The following options are available:
 
-	-u	IMSS instance to be released. The next
-		semantic must be followed in order to
-		release multiple instances:
-
-		./release_imss.sh -u <URI> -u <URI> ...
-
-	-m	Flag specifying that the metadata server
-		must be released (no arg required).
-
-	At least, one of the previous parameters must be
-	provided plus the following ones in order to per-
-	form a successful release operation.
-
-	-R	Address of the machine where the release
-		operation will take place.
-	-r	Port that will be used to perform the 
-		previous release operation.
+	-d	MPI hostfile specifying the set of nodes
+		where an IMSS instance was deployed.
+	-A	Address (IP or DNS) of the machine where
+		the metadata server is taking execution.
+	-p	Port assigned to each server conforming
+		the IMSS deployment or to the metadata
+		one.
 	-x	Release binary executable location.
+
+	In order to release an IMSS instance, the infor-
+	mation representing the previous must be provi-
+	ded using a '-d [..] -p [..]' couple within the
+	arguments, for instance:
+
+	1. Multiple IMSS instances release:
+
+ ./release_imss.sh -d [..] -p [..] -d [..] -p [..] -x [..]
+
+	2. Release of an IMSS instance and the metadata
+	server:
+
+ ./release_imss.sh -d [..] -p [..] -A [..] -p [..] -x [..]
+
+	Notice that the metadata server is treated like
+	another IMSS instance within the arguments (the
+	'-d' argument just turns into the '-A' one).
+
 	
 "
 
 	exit
 }
 
-function check_argument
-{
-	first_letter=$(echo $1 | head -c 1)
 
-	if [ $first_letter == "-" ]
-	   then
-		echo "release_imss.sh ERROR: option -$2 requires an argument"
-
-		exit
-	   fi
-}
-
-
-#Flag specifying if the metadata server must be released.
-release_metadata_server="N"
-#Number of URIs provided to the "-u" option.
-num_uris=0
-#Address of the machine where the release operation will take place.
-release_address="-1"
-#Port number within the previous machine where the publish operation will be performed.
+#Path to the hostfile containing each machine where an IMSS server was deployed.
+release_file="-1"
+#Port assigned to each dispatcher thread within the IMSS instance.
 release_port="-1"
 #Path to the executable performing the release operation.
-binary_location="-1"
+binary="-1"
 
-#Set of URIs that must be released.
-declare -a uris
+counter=0
+
+metadata_srv_flag=0
+
+#Set of addresses that must be released.
+declare -a addresses
 
 #GETOPTS loop parsing the set of arguments provided.
-while getopts "mu:hR:r:x:" opt
+while getopts "d:A:p:x:h" opt
    do
 	case ${opt} in
 
-	   u )
-		check_argument "$OPTARG" "$opt"
-		#Add the current uri to those that must be released.
-		uris+="$OPTARG "
-		((num_uris=num_uris+1))
-		;;
+	   d )
+		((counter=counter+1))
 
-	   m )
-		if [ "$release_metadata_server" == "N" ]
+		if [ $counter != 1 ]
 		   then
-			uris+="stat "
-			((num_uris=num_uris+1))
-			release_metadata_server="Y"
+			echo "release_imss.sh ERROR: \"-d [..] -p [..]\" argument pattern not followed."
+
+			exit
+		   fi
+		
+		release_file=$OPTARG
+		;;
+	   A )
+		((counter=counter+1))
+
+		if [ $counter != 1 ]
+		   then
+			echo "release_imss.sh ERROR: \"-d [..] -p [..]\" argument pattern not followed."
+
+			exit
+		   fi
+
+		release_file=$OPTARG
+		metadata_srv_flag=1
+		;;
+	   p )
+		((counter=counter-1))
+
+		if [ $counter != 0 ]
+		   then
+			echo "release_imss.sh ERROR: \"-d [..] -p [..]\" argument pattern not followed."
+
+			exit
+		   fi
+
+		release_port=$OPTARG
+		((release_port=release_port+1))
+
+		if [ $metadata_srv_flag == 1 ]
+		   then
+			address=$(printf "tcp://%s:%d " "$release_file" "$release_port")
+
+			addresses+=$address
+
+			metadata_srv_flag=0
+		   else
+			addresses+=$(awk -v release_port="$release_port" '{printf("tcp://%s:%d ", $0, release_port)}' $release_file)
 		fi
 
 		;;
-	   R )
-		release_address=$OPTARG
-		check_argument "$release_address" "$opt"
-		;;
-	   r )
-		release_port=$OPTARG
-		check_argument "$release_port" "$opt"
-		;;
 	   x )
-		binary_location=$OPTARG
-		check_argument "$binary_location" "$opt"
+		binary=$OPTARG
 		;;
 
 	   #Print the usage options of the script.
@@ -122,70 +147,34 @@ while getopts "mu:hR:r:x:" opt
 	esac
    done
 
-arguments_remaining="N"
 
 if [ "$release_address" == "-1" ]
    then
-	if [ "$arguments_remaining" == "N" ]
-	   then
-		echo -n "release_imss.sh ERROR: expected arguments not provided ("
-	   fi
+	echo "release_imss.sh ERROR: -d or -A arguments not provided."
 
-	echo -n " -R"
-	arguments_remaining="Y"
-   fi
-if [ "$release_port" == "-1" ]
-   then
-	if [ "$arguments_remaining" == "N" ]
-	   then
-		echo -n "release_imss.sh ERROR: expected arguments not provided ("
-	   fi
-
-	echo -n " -r"
-	arguments_remaining="Y"
-   fi
-if [ $num_uris -eq 0 ]
-   then
-	if [ "$arguments_remaining" == "N" ]
-	   then
-		echo -n "release_imss.sh ERROR: expected arguments not provided ("
-	   fi
-
-	echo -n " -u -m"
-	arguments_remaining="Y"
-   fi
-if [ "$binary_location" == "-1" ]
-   then
-	if [ "$arguments_remaining" == "N" ]
-	   then
-		echo -n "release_imss.sh ERROR: expected arguments not provided ("
-	   fi
-
-	echo -n " -x"
-	arguments_remaining="Y"
+	exit
    fi
 
-
-if [ "$arguments_remaining" == "Y" ]
+if [ $counter == 1 ]
    then
-	echo " )"
+	echo "release_imss.sh ERROR: -p argument not provided."
+
+	exit
+   fi
+
+if [ "$binary" == "-1" ]
+   then
+	echo "release_imss.sh ERROR: -x argument not provided."
 
 	exit
    fi
 
 
 
-
-
 ####################################################################
-############################ DEPLOYMENTS ###########################
+############################ EXECUTIONS ############################
 ####################################################################
 
+./$binary $addresses
 
-release_deployfile="/tmp/IMSS_release_deployfile"
-
-#Create MPI deployment file for the metadata server.
-echo "$release_address" > $release_deployfile
-
-mpirun -np 1 -f $release_deployfile $binary_location $release_port $uris
 

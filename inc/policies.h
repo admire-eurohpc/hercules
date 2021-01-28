@@ -20,4 +20,3 @@ int32_t set_policy  (dataset_info * dataset);
 int32_t find_server (int32_t n_servers, int32_t n_msg, const char * fname, int32_t op_type);
 
 #endif
-

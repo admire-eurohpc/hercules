@@ -1,6 +1,9 @@
 #!/bin/bash
 
 
+#TODO: consider providing a set of default arguments.
+
+
 ####################################################################
 ######	SCRIPT PERFORMING THE DEPLOYMENT OF AN IMSS INSTANCE  ######
 ####################################################################
@@ -27,7 +30,7 @@ The following options are available:
 	-u	IMSS URI string identifying the deployment. 
 	-d	MPI hostfile specifying the set of nodes
 		where an IMSS server will be deployed.
-	-b	Buffer size (in GB) assigned to each ser-
+	-b	Buffer size (in KB) assigned to each ser-
 		ver conforming the IMSS deployment.
 	-p	Port assigned to each server conforming
 		the IMSS deployment.
@@ -35,12 +38,9 @@ The following options are available:
 		the metadata server is taking execution.
 	-P	Port within the previous machine that the
 		metadata server is listening to.
+	-t	Number of background I/O Threads assigned to
+		each server of the corresponding instance.
 	-x	Server executable location.
-
-	-R	Machine where the release operation will
-		take place.
-	-r	Port within the previous machine that will
-		be used to perform the release operation.
 
 The whole set of parameters must be provided in order to 
 perform a successful deployment of an IMSS instance.
@@ -49,8 +49,8 @@ If it is desired to deploy the metadata server, the
 following parameters must be included.
 
 	-M	Flag specifying that the metadata server
-		will be deployed (no arg required).
-	-B	Buffer size (in GB) assigned to the me-
+		will be deployed (NO ARG REQUIRED).
+	-B	Buffer size (in KB) assigned to the me-
 		tadata server.
 	-F	File where the metadata server will read
 		and write IMSS-related structures.
@@ -88,12 +88,11 @@ metadata_server_address="-1"
 metadata_buffer_size="-1"
 metadata_file="-1"
 server_binary="-1"
-release_address="-1"
-release_port="-1"
+io_threads="-1"
 
 
 #GETOPTS loop parsing the set of arguments provided. Just those options requiring an argument must be followed by a semicolon.
-while getopts ":u:d:b:p:P:A:x:F:B:X:r:R:Mh" opt
+while getopts ":u:d:b:p:P:A:x:F:B:t:Mh" opt
    do
 	case ${opt} in
 
@@ -133,16 +132,12 @@ while getopts ":u:d:b:p:P:A:x:F:B:X:r:R:Mh" opt
 		metadata_buffer_size=$OPTARG
 		check_argument "$metadata_buffer_size" "$opt"
 		;;
+	   t )
+		io_threads=$OPTARG
+		check_argument "$io_threads" "$opt"
+		;;
 	   M )
 		metadata_deployment="Y"
-		;;
-	   r )
-		release_port=$OPTARG
-		check_argument "$release_port" "$opt"
-		;;
-	   R )
-		release_address=$OPTARG
-		check_argument "$release_address" "$opt"
 		;;
 
 	   #Print the usage options of the script.
@@ -174,9 +169,9 @@ expected_num_args=""
 
 if [ $metadata_deployment == "N" ]
    then
-	expected_num_args=18
+	expected_num_args=16
    else
-	expected_num_args=23
+	expected_num_args=21
 fi
 
 if [ "$#" -ne $expected_num_args ]
@@ -211,13 +206,9 @@ if [ "$#" -ne $expected_num_args ]
 	   then
 		echo -n " -x"
 	   fi
-	if [ "$release_address" == "-1" ]
+	if [ "$io_threads" == "-1" ]
 	   then
-		echo -n " -R"
-	   fi
-	if [ "$release_port" == "-1" ]
-	   then
-		echo -n " -R"
+		echo -n " -t"
 	   fi
 
 	if [ $metadata_deployment == "Y" ]
@@ -255,9 +246,9 @@ echo "$metadata_server_address" > $metadata_deployfile
 
 if [ "$metadata_deployment" == "Y" ]
    then
-	mpirun -np 1 -f $metadata_deployfile $server_binary $metadata_file $metadata_server_port $metadata_buffer_size $release_address $release_port &
+	mpirun -np 1 -f $metadata_deployfile $server_binary $metadata_file $metadata_server_port $metadata_buffer_size &
 fi
 
 num_servers=$(cat $imss_hostfile | wc -l)
 
-mpirun -np $num_servers -f $imss_hostfile $server_binary $imss_uri $imss_port_number $imss_buffer_size $release_address $release_port $metadata_server_address $metadata_server_port $num_servers $imss_hostfile &
+mpirun -np $num_servers -f $imss_hostfile $server_binary $imss_uri $imss_port_number $imss_buffer_size $metadata_server_address $metadata_server_port $num_servers $imss_hostfile $io_threads &
