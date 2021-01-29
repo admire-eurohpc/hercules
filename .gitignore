@@ -21,3 +21,5 @@ build
 TODO
 Makefile
 .hello_glib.c
+bash/scripts
+prev_CMakes
