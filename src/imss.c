@@ -1168,7 +1168,7 @@ release_dataset(int32_t dataset_id)
 
 //Method retrieving information related to a certain dataset.
 int32_t
-stat_dataset(char * 	    dataset_uri,
+stat_dataset(const char * 	    dataset_uri,
 	     dataset_info * dataset_info_)
 {
 	//Search for the requested dataset in the local vector.
@@ -1472,7 +1472,7 @@ set_data(int32_t 	 dataset_id,
 
 //Method retrieving the location of a specific data object.
 char **
-get_dataloc(char *    dataset,
+get_dataloc(const char *    dataset,
 	    int32_t   data_id,
 	    int32_t * num_storages)
 {

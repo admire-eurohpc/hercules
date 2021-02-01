@@ -264,7 +264,7 @@ int32_t release_dataset(int32_t dataset_id);
 
 	The current function does not allocate memory.
 */
-int32_t stat_dataset(char * dataset_uri, dataset_info * dataset_info_);
+int32_t stat_dataset(const char * dataset_uri, dataset_info * dataset_info_);
 
 ////Method retrieving a whole dataset parallelizing the procedure.
 //unsigned char * get_dataset(char * dataset_uri, uint64_t * buff_length);
