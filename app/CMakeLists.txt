@@ -38,7 +38,7 @@ ADD_EXECUTABLE( release_imss
 #				./router_test.c
 #)
 
-ADD_LIBRARY( imss SHARED
+ADD_LIBRARY( imss STATIC
 				../src/crc.c
 				../src/stat.c
 				../src/imss.c
