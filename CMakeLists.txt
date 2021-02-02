@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.1)
 
 SET(PROJECT_NAME_STR IMSS)
-SET(ZMQ_INC "-I${CMAKE_SOURCE_DIR}/vendors/libzmq/include")
-SET(ZMQ_LIB "-L${CMAKE_SOURCE_DIR}/vendors/libzmq/lib")
+SET(ZMQ_INC "-I${PROJECT_SOURCE_DIR}/vendors/libzmq/include")
+SET(ZMQ_LIB "-L${PROJECT_SOURCE_DIR}/vendors/libzmq/lib")
 SET(CMAKE_CXX_STANDARD 17)
 SET(CMAKE_CXX_STANDARD_REQUIRED ON)
 SET(CMAKE_CXX_EXTENSIONS OFF)
