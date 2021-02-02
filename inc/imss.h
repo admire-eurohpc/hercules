@@ -264,7 +264,7 @@ int32_t release_dataset(int32_t dataset_id);
 
 	The current function does not allocate memory.
 */
-int32_t stat_dataset(char * dataset_uri, dataset_info * dataset_info_);
+int32_t stat_dataset(const char * dataset_uri, dataset_info * dataset_info_);
 
 ////Method retrieving a whole dataset parallelizing the procedure.
 //unsigned char * get_dataset(char * dataset_uri, uint64_t * buff_length);
@@ -291,6 +291,7 @@ int32_t stat_dataset(char * dataset_uri, dataset_info * dataset_info_);
 */
 int32_t get_data(int32_t dataset_id, int32_t data_id, unsigned char * buffer);
 
+int32_t get_ndata(int32_t dataset_id, int32_t data_id, unsigned char * buffer, int64_t * len);
 /* Method storing a specific data element.
 
 	RECEIVES:	dataset_id - Number identifying the concerned dataset among the client's session.
@@ -326,7 +327,7 @@ int32_t set_data(int32_t dataset_id, int32_t data_id, unsigned char * buffer);
 
 				free(locations);
 */
-char ** get_dataloc(char * dataset, int32_t data_id, int32_t * num_storages);
+char ** get_dataloc(const char * dataset, int32_t data_id, int32_t * num_storages);
 
 
 
