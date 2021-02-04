@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.1)
 
 SET(PROJECT_NAME_STR IMSS)
-SET(ZMQ_INC "-I${CMAKE_SOURCE_DIR}/vendors/libzmq/include")
-SET(ZMQ_LIB "-L${CMAKE_SOURCE_DIR}/vendors/libzmq/lib")
+SET(ZMQ_INC "-I${PROJECT_SOURCE_DIR}/vendors/libzmq/include")
+SET(ZMQ_LIB "-L${PROJECT_SOURCE_DIR}/vendors/libzmq/lib")
 SET(CMAKE_CXX_STANDARD 17)
 SET(CMAKE_CXX_STANDARD_REQUIRED ON)
 SET(CMAKE_CXX_EXTENSIONS OFF)
@@ -24,8 +24,8 @@ include(FindPkgConfig)
 pkg_check_modules(GLIB glib-2.0 REQUIRED)
 include_directories(${GLIB_INCLUDE_DIRS})
 
-INCLUDE_DIRECTORIES( "${CMAKE_SOURCE_DIR}/inc" )
-LINK_DIRECTORIES("${CMAKE_SOURCE_DIR}/build/app")
+INCLUDE_DIRECTORIES( "${PROJECT_SOURCE_DIR}/inc" )
+LINK_DIRECTORIES("${PROJECT_SOURCE_DIR}/build/app")
 
 FILE(GLOB HEADERS "inc/*")
 SOURCE_GROUP(include FILES ${HEADERS})

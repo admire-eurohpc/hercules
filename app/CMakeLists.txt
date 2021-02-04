@@ -17,7 +17,7 @@ ADD_EXECUTABLE( release_imss
 				./release_imss.c
 )
 
-ADD_LIBRARY( imss SHARED
+ADD_LIBRARY( imss STATIC
 				../src/crc.c
 				../src/stat.c
 				../src/imss.c
@@ -44,3 +44,4 @@ TARGET_LINK_LIBRARIES(imss ${CMAKE_THREAD_LIBS_INIT} zmq ${MPI_LIBRARIES} ${GLIB
 TARGET_LINK_LIBRARIES(server ${CMAKE_THREAD_LIBS_INIT} zmq ${MPI_LIBRARIES} ${GLIB_LIBRARIES})
 TARGET_LINK_LIBRARIES(dirr ${GLIB_LIBRARIES})
 TARGET_LINK_LIBRARIES(release_imss zmq)
+TARGET_LINK_LIBRARIES(imss zmq)

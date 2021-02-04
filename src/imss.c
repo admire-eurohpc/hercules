@@ -1168,7 +1168,7 @@ release_dataset(int32_t dataset_id)
 
 //Method retrieving information related to a certain dataset.
 int32_t
-stat_dataset(char * 	    dataset_uri,
+stat_dataset(const char * 	    dataset_uri,
 	     dataset_info * dataset_info_)
 {
 	//Search for the requested dataset in the local vector.
@@ -1332,6 +1332,92 @@ get_data(int32_t 	 dataset_id,
 	return -1;
 }
 
+
+//Method retrieving a data element associated to a certain dataset.
+int32_t
+get_ndata(int32_t 	 dataset_id,
+	 int32_t 	 data_id,
+	 unsigned char * buffer,
+	 int64_t  * len)
+{
+	int32_t n_server;
+	//Server containing the corresponding data to be retrieved.
+	if ((n_server = get_data_location(dataset_id, data_id, GET)) == -1)
+
+		return -1;
+
+	//Servers that the data block is going to be requested to.
+	int32_t repl_servers[curr_dataset.repl_factor];
+
+	int32_t curr_imss_storages = curr_imss.info.num_storages;
+
+	//Retrieve the corresponding connections to the previous servers.
+	for (int32_t i = 0; i < curr_dataset.repl_factor; i++)
+	{
+		//Server storing the current data block.
+		uint32_t n_server_ = (n_server + i*(curr_imss_storages/curr_dataset.repl_factor)) % curr_imss_storages;
+
+		repl_servers[i] = n_server_;
+
+		//Check if the current connection is the local one (if there is).
+		if (repl_servers[i] == curr_dataset.local_conn)
+		{
+			//Move the local connection to the first one to be requested.
+
+			int32_t aux_conn = repl_servers[0];
+
+			repl_servers[0] = repl_servers[i];
+
+			repl_servers[i] = aux_conn;
+		}
+	}
+
+	char key_[KEY];
+	//Key related to the requested data element.
+	sprintf(key_, "0 %s$%d",  curr_dataset.uri_, data_id);
+
+	int key_length = strlen(key_)+1;
+	char key[key_length];
+	memcpy((void *) key, (void *) key_, key_length);
+	key[key_length-1] = '\0';
+
+	//Request the concerned block to the involved servers.
+	for (int32_t i = 0; i < curr_dataset.repl_factor; i++)
+	{
+		//printf("BLOCK %d ASKED TO %d SERVER with key: %s (%d)\n", data_id, repl_servers[i], key, key_length);
+
+		//Send read request message specifying the block URI.
+		//if (zmq_send(curr_imss.conns.sockets_[repl_servers[i]], key, KEY, 0) < 0)
+		if (zmq_send(curr_imss.conns.sockets_[repl_servers[i]], key, key_length, 0) != key_length)
+		{
+			perror("ERRIMSS_GETDATA_REQ");
+			return -1;
+		}
+
+		//Receive data related to the previous read request directly into the buffer.
+		if (zmq_recv(curr_imss.conns.sockets_[repl_servers[i]], buffer, curr_dataset.data_entity_size, 0) == -1)
+		{
+			if (errno != EAGAIN)
+			{
+				perror("ERRIMSS_GETDATA_RECV");
+				return -1;
+			}
+			else
+				break;
+		}
+
+		//Check if the requested key was correctly retrieved.
+		if (strncmp((const char *) buffer, "$ERRIMSS_NO_KEY_AVAIL$", 22))
+			return 0;
+
+	    *len = curr_dataset.data_entity_size;
+	}
+
+	fprintf(stderr, "ERRIMSS_GETDATA_UNAVAIL\n");
+	return -1;
+}
+
+
 //Method storing a specific data element.
 int32_t
 set_data(int32_t 	 dataset_id,
@@ -1386,7 +1472,7 @@ set_data(int32_t 	 dataset_id,
 
 //Method retrieving the location of a specific data object.
 char **
-get_dataloc(char *    dataset,
+get_dataloc(const char *    dataset,
 	    int32_t   data_id,
 	    int32_t * num_storages)
 {
