@@ -4,10 +4,10 @@
 #include "records.hpp"
 
 #define READ_OP			0
+#define RELEASE			2
 #define WRITE_OP		1
 
 #define GETDIR			1
-#define RELEASE			2
 
 #define THREAD_POOL		2
 
