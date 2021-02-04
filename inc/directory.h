@@ -7,7 +7,7 @@
 int32_t GTree_search(GNode * parent_node, char * desired_data, GNode ** found_node);
 
 //Method retrieving a buffer with all the files within a directory.
-char * GTree_getdir(char * desired_dir, int32_t * numdir_elems);
+char *  GTree_getdir(char * desired_dir, int32_t * numdir_elems);
 
 //Method inserting a new path.
 int32_t GTree_insert(char * desired_data);
