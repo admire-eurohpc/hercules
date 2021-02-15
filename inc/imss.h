@@ -177,6 +177,7 @@ int32_t init_imss(char * imss_uri, char * hostfile, int32_t n_servers, uint16_t 
 
 	RETURNS:	 0 - Resources successfully initialized. Communication channels created.
 			-1 - In case of error.
+			-2 - The imss instance has been already opened or created.
 */
 int32_t open_imss(char * imss_uri);
 

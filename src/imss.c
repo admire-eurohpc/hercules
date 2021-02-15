@@ -689,7 +689,7 @@ open_imss(char * imss_uri)
 	{
 		case 0:
 		{
-			perror("ERRIMSS_OPENIMSS_NOTEXISTS");
+			fprintf(stderr, "ERRIMSS_OPENIMSS_NOTEXISTS");
 			return -1;
 		}
 		case 2:
@@ -698,8 +698,8 @@ open_imss(char * imss_uri)
 
 			if (check_imss.conns.matching_server != -2)
 			{
-				perror("ERRIMSS_OPENIMSS_ALREADYSTORED");
-				return -1;
+				fprintf(stderr, "ERRIMSS_OPENIMSS_ALREADYSTORED");
+				return -2;
 			}
 
 			for (int32_t i = 0; i < check_imss.info.num_storages; i++)
@@ -877,7 +877,7 @@ stat_imss(char *      imss_uri,
 	//Send the request.
 	if (zmq_send(stat_client, formated_uri, formated_uri_length, 0)  != formated_uri_length)
 	{
-		perror("ERRIMSS_DATASET_REQ");
+		fprintf(stderr, "ERRIMSS_IMSS_REQ");
 		return -1;
 	}
 
