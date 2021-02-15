@@ -697,10 +697,8 @@ open_imss(char * imss_uri)
 			imss check_imss = g_array_index(imssd, imss, found_in);
 
 			if (check_imss.conns.matching_server != -2)
-			{
-				fprintf(stderr, "ERRIMSS_OPENIMSS_ALREADYSTORED\n");
+
 				return -2;
-			}
 
 			for (int32_t i = 0; i < check_imss.info.num_storages; i++)
 
