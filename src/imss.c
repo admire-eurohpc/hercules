@@ -445,7 +445,7 @@ get_dir(char * 	 requested_uri,
 	char *** items)
 {
 	//GETDIR request.
-	char getdir_req[strlen(requested_uri)+2];
+	char getdir_req[strlen(requested_uri)+3];
 	sprintf(getdir_req, "%d %s%c", GETDIR, requested_uri, '\0');
 
 	//Send the request.
@@ -473,7 +473,7 @@ get_dir(char * 	 requested_uri,
 	if (!strncmp("$ERRIMSS_NO_KEY_AVAIL$", elements, 22))
 	{
 		zmq_msg_close(&uri_elements);
-		perror("ERRIMSS_GETDIR_NODIR");
+		fprintf(stderr, "ERRIMSS_GETDIR_NODIR\n");
 		return -1;
 	}
 
@@ -492,7 +492,7 @@ get_dir(char * 	 requested_uri,
 	//Identify each element within the buffer provided.
 	for (int32_t i = 0; i < num_elements; i++)
 	{
-		*items[i] = elements;
+		(*items)[i] = elements;
 
 		elements += URI_;
 	}
@@ -524,7 +524,7 @@ init_imss(char *   imss_uri,
 
 	if (existing_imss)
 	{
-		perror("ERRIMSS_INITIMSS_ALREADYEXISTS");
+		fprintf(stderr, "ERRIMSS_INITIMSS_ALREADYEXISTS\n");
 		return -1;
 	}
 
@@ -533,7 +533,7 @@ init_imss(char *   imss_uri,
 	{
 		if (!binary_path)
 		{
-			perror("ERRIMSS_INITIMSS_NOBINARY");
+			fprintf(stderr, "ERRIMSS_INITIMSS_NOBINARY\n");
 			return -1;
 		}
 
@@ -689,7 +689,7 @@ open_imss(char * imss_uri)
 	{
 		case 0:
 		{
-			perror("ERRIMSS_OPENIMSS_NOTEXISTS");
+			fprintf(stderr, "ERRIMSS_OPENIMSS_NOTEXISTS\n");
 			return -1;
 		}
 		case 2:
@@ -697,10 +697,8 @@ open_imss(char * imss_uri)
 			imss check_imss = g_array_index(imssd, imss, found_in);
 
 			if (check_imss.conns.matching_server != -2)
-			{
-				perror("ERRIMSS_OPENIMSS_ALREADYSTORED");
-				return -1;
-			}
+
+				return -2;
 
 			for (int32_t i = 0; i < check_imss.info.num_storages; i++)
 
@@ -804,7 +802,7 @@ release_imss(char *   imss_uri,
 	int32_t imss_position;
 	if ((imss_position = find_imss(imss_uri, &imss_)) == -1)
 	{
-		perror("ERRIMSS_RLSIMSS_NOTFOUND");
+		fprintf(stderr, "ERRIMSS_RLSIMSS_NOTFOUND\n");
 		return -1;
 	}
 
@@ -877,7 +875,7 @@ stat_imss(char *      imss_uri,
 	//Send the request.
 	if (zmq_send(stat_client, formated_uri, formated_uri_length, 0)  != formated_uri_length)
 	{
-		perror("ERRIMSS_DATASET_REQ");
+		fprintf(stderr, "ERRIMSS_IMSS_REQ\n");
 		return -1;
 	}
 
@@ -903,13 +901,13 @@ create_dataset(char *  dataset_uri,
 {
 	if ((dataset_uri == NULL) || (policy == NULL) || !num_data_elem || !data_elem_size)
 	{
-		perror("ERRIMSS_CRTDATASET_WRONGARG");
+		fprintf(stderr, "ERRIMSS_CRTDATASET_WRONGARG\n");
 		return -1;
 	}
 
 	if ((repl_factor < NONE) || (repl_factor > TRM))
 	{
-		perror("ERRIMSS_CRTDATASET_BADREPLFACTOR");
+		fprintf(stderr, "ERRIMSS_CRTDATASET_BADREPLFACTOR\n");
 		return -1;
 	}
 
@@ -917,7 +915,7 @@ create_dataset(char *  dataset_uri,
 	//Check if the IMSS storing the dataset exists within the clients session.
 	if ((associated_imss_indx = imss_check(dataset_uri)) == -1)
 	{
-		perror("ERRIMSS_OPENDATA_IMSSNOTFOUND");
+		fprintf(stderr, "ERRIMSS_OPENDATA_IMSSNOTFOUND\n");
 		return -1;
 	}
 
@@ -928,7 +926,7 @@ create_dataset(char *  dataset_uri,
 	//Dataset metadata request.
 	if (stat_dataset(dataset_uri, &new_dataset))
 	{
-		perror("ERRIMSS_CRTDATASET_ALREADYEXISTS");
+		fprintf(stderr, "ERRIMSS_CRTDATASET_ALREADYEXISTS\n");
 		return -1;
 	}
 
@@ -1006,7 +1004,7 @@ open_dataset(char * dataset_uri)
 	//Check if the IMSS storing the dataset exists within the clients session.
 	if ((associated_imss_indx = imss_check(dataset_uri)) == -1)
 	{
-		perror("ERRIMSS_OPENDATA_IMSSNOTFOUND");
+		fprintf(stderr, "ERRIMSS_OPENDATA_IMSSNOTFOUND\n");
 		return -1;
 	}
 
@@ -1024,14 +1022,14 @@ open_dataset(char * dataset_uri)
 	{
 		case 0:
 		{
-			perror("ERRIMSS_OPENDATASET_NOTEXISTS");
+			fprintf(stderr, "ERRIMSS_OPENDATASET_NOTEXISTS\n");
 			return -1;
 		}
 		case 2:
 		{
 			if (new_dataset.local_conn != -2)
 			{
-				perror("ERRIMSS_OPENDATASET_ALREADYSTORED");
+				fprintf(stderr, "ERRIMSS_OPENDATASET_ALREADYSTORED\n");
 				return -1;
 			}
 
@@ -1088,7 +1086,7 @@ release_dataset(int32_t dataset_id)
 	//Check if the provided descriptor corresponds to a position within the vector.
 	if ((dataset_id < 0) || (dataset_id >= datasetd_max_size))
 	{
-		perror("ERRIMSS_RELDATASET_BADDESCRIPTOR");
+		fprintf(stderr, "ERRIMSS_RELDATASET_BADDESCRIPTOR\n");
 		return -1;
 	}
 
@@ -1232,7 +1230,7 @@ get_data_location(int32_t dataset_id,
 
 		if (set_policy(&curr_dataset) == -1)
 		{
-			perror("ERRIMSS_SET_POLICY");
+			fprintf(stderr, "ERRIMSS_SET_POLICY\n");
 			return -1;
 		}
 
@@ -1243,7 +1241,7 @@ get_data_location(int32_t dataset_id,
 	//Search for the server that is supposed to have the specified data element.
 	if ((server = find_server(curr_imss.info.num_storages, data_id, curr_dataset.uri_, op_type)) < 0)
 	{
-		perror("ERRIMSS_FIND_SERVER");
+		fprintf(stderr, "ERRIMSS_FIND_SERVER\n");
 		return -1;
 	}
 
@@ -1485,7 +1483,7 @@ get_dataloc(const char *    dataset,
 		//No dataset was found with the requested name.
 		case 0:
 		{
-			perror("ERRIMSS_GETDATALOC_DATASETNOTEXISTS");
+			fprintf(stderr, "ERRIMSS_GETDATALOC_DATASETNOTEXISTS\n");
 			return NULL;
 		}
 		//The dataset was retrieved from the metadata server.
@@ -1534,7 +1532,7 @@ get_dataloc(const char *    dataset,
 		//No IMSS was found with the requested name.
 		case 0:
 		{
-			perror("ERRIMSS_GETDATALOC_IMSSNOTEXISTS");
+			fprintf(stderr, "ERRIMSS_GETDATALOC_IMSSNOTEXISTS\n");
 			return NULL;
 		}
 		//The IMSS was retrieved from the metadata server.
@@ -1552,7 +1550,7 @@ get_dataloc(const char *    dataset,
 	//Set the policy corresponding to the retrieved dataset.
 	if (set_policy(&where_dataset) == -1)
 	{
-		perror("ERRIMSS_GETDATALOC_SETPOLICY");
+		fprintf(stderr, "ERRIMSS_GETDATALOC_SETPOLICY\n");
 		return NULL;
 	}
 
@@ -1562,7 +1560,7 @@ get_dataloc(const char *    dataset,
 	//Find the server storing the corresponding block.
 	if ((server = find_server(where_imss.info.num_storages, data_id, where_dataset.uri_, GET)) < 0)
 	{
-		perror("ERRIMSS_GETDATALOC_FINDSERVER");
+		fprintf(stderr, "ERRIMSS_GETDATALOC_FINDSERVER\n");
 		return NULL;
 	}
 
