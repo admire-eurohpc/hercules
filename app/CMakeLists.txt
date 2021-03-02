@@ -38,7 +38,7 @@ ADD_EXECUTABLE( release_imss
 #				./router_test.c
 #)
 
-ADD_LIBRARY( imss STATIC
+ADD_LIBRARY( imss_static STATIC
 				../src/crc.c
 				../src/stat.c
 				../src/imss.c
@@ -47,6 +47,17 @@ ADD_LIBRARY( imss STATIC
 				../src/hercules.c
 				../src/policies.c
 				../src/directory.c
+)
+
+ADD_LIBRARY( imss_shared SHARED
+                ../src/crc.c
+                ../src/stat.c
+                ../src/imss.c
+                ../src/comms.c
+                ../src/workers.c
+                ../src/hercules.c
+                ../src/policies.c
+                ../src/directory.c
 )
 
 #ADD_EXECUTABLE( collective_write 
@@ -59,7 +70,7 @@ ADD_LIBRARY( imss STATIC
 SET(IMSS_INC "-I${CMAKE_SOURCE_DIR}/inc")
 SET(IMSS_LIB "-L${CMAKE_SOURCE_DIR}/build/app")
 
-target_include_directories(imss PUBLIC zmq ) #${ZeroMQ_INCLUDE_DIR})
+target_include_directories(imss_static PUBLIC zmq ) #${ZeroMQ_INCLUDE_DIR})
 target_include_directories(server PUBLIC  zmq ) #${ZeroMQ_INCLUDE_DIR})
 target_include_directories(release_imss PUBLIC  zmq ) #${ZeroMQ_INCLUDE_DIR})
 #target_include_directories(router_test PUBLIC  zmq ) #${ZeroMQ_INCLUDE_DIR})
