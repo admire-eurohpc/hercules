@@ -9,9 +9,14 @@ SET(CMAKE_CXX_EXTENSIONS OFF)
 
 PROJECT (${PROJECT_NAME_STR})
 
-FIND_PACKAGE(MPI REQUIRED)
 
-find_package(MPI REQUIRED)
+find_package(
+            MPI
+            COMPONENTS C
+            OPTIONAL_COMPONENTS
+            )
+
+
 if (MPI_FOUND)
     include_directories(SYSTEM ${MPI_INCLUDE_PATH})
 else (MPI_FOUND)
