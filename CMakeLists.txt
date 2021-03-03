@@ -7,8 +7,20 @@ SET(CMAKE_CXX_STANDARD 17)
 SET(CMAKE_CXX_STANDARD_REQUIRED ON)
 SET(CMAKE_CXX_EXTENSIONS OFF)
 
+
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/CMake)
+
 PROJECT (${PROJECT_NAME_STR})
 
+find_package(PCRE)
+
+include(FindPkgConfig)
+pkg_check_modules(GLIB glib-2.0 REQUIRED)
+include_directories(${GLIB_INCLUDE_DIRS})
+
+link_directories("/usr/lib/x86_64-linux-gnu/")
 
 find_package(
             MPI
@@ -25,9 +37,6 @@ endif (MPI_FOUND)
 
 FIND_PACKAGE(Threads REQUIRED)
 
-include(FindPkgConfig)
-pkg_check_modules(GLIB glib-2.0 REQUIRED)
-include_directories(${GLIB_INCLUDE_DIRS})
 
 INCLUDE_DIRECTORIES( "${PROJECT_SOURCE_DIR}/inc" )
 LINK_DIRECTORIES("${PROJECT_SOURCE_DIR}/build/app")
