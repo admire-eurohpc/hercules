@@ -8,7 +8,7 @@
 
 //Default session policy: ROUND ROBIN.
 int32_t    session_plcy = ROUND_ROBIN_;
-//Number of blocks to be sent.
+//Number of blocks conforming the handled dataset.
 int32_t    n_blocks;
 //Socket connecting the client to the imss server running in the same node.
 int32_t    matching_node_socket;
@@ -114,11 +114,26 @@ find_server (int32_t 	  n_servers,
 
 				n_blocks = n_servers;
 
-			//Number of the server from the first one receiving the current message.
-			next_server = (n_msg / (n_blocks / n_servers)) % n_servers;
+			//Number of servers that will be storing one additional block.
+			uint32_t one_more_block = n_blocks % n_servers;
 
-			//Actual server receiving the next message.
-			next_server = (next_server + initial_server) % n_servers;
+			//Number of blocks that these servers will be storing.
+			uint32_t blocks_srv = (n_blocks / n_servers) + 1;
+
+			//The block will be handled by those servers storing one more block.
+			if (n_msg < (blocks_srv * one_more_block))
+			{
+				next_server = n_msg / blocks_srv;
+
+				next_server = (next_server + initial_server) % n_servers;
+			}
+			//The block will be handled by those storing one block less.
+			else
+			{
+				next_server = (n_msg / (blocks_srv - 1));
+
+				next_server = (initial_server + one_more_block + next_server) % n_servers;
+			}
 		}
 			break;
 
