@@ -130,7 +130,7 @@ find_server (int32_t 	  n_servers,
 			//The block will be handled by those storing one block less.
 			else
 			{
-				next_server = (n_msg / (blocks_srv - 1));
+				next_server = (n_msg - (blocks_srv * one_more_block)) / (blocks_srv - 1);
 
 				next_server = (initial_server + one_more_block + next_server) % n_servers;
 			}
