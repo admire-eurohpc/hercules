@@ -213,7 +213,20 @@ int32_t release_imss(char * imss_uri, uint32_t release_op);
 */
 int32_t stat_imss(char * imss_uri, imss_info * imss_info_);
 
+/* Method providing the URI of the attached IMSS instance.
 
+	RETURNS:	 char * - Instance URI.
+                 NULL   - No instance was deployed.
+
+	WARNING:	The get_deployed function allocates memory (performs malloc operations).
+
+                The following function must be called over the provided char * element once done:
+
+                char * attached_deployment = get_deployed();
+
+                free(attached_deployment);
+*/
+char * get_deployed();
 
 
 
@@ -329,6 +342,17 @@ int32_t set_data(int32_t dataset_id, int32_t data_id, unsigned char * buffer);
 				free(locations);
 */
 char ** get_dataloc(const char * dataset, int32_t data_id, int32_t * num_storages);
+
+/* Method specifying the type (DATASET or IMSS INSTANCE) of a provided URI.
+
+	RECEIVES:	uri      - URI of the corresponding element.
+
+	RETURNS:	0 - No entity associated to the URI provided exists.
+                1 - The URI provided corresponds to an IMSS.
+                2 - The URI provided corresponds to a dataset.
+               -1 - In case of error.
+*/
+int32_t get_type(char * uri);
 
 
 

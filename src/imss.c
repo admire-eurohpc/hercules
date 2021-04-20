@@ -56,6 +56,8 @@ int32_t		found_in;		//Variable storing the position where a certain structure wa
 
 extern uint16_t	connection_port; //FIXME
 
+char        att_deployment[URI_]
+
 
 /**********************************************************************************/
 /*********************** IMSS INTERNAL MANAGEMENT FUNCTIONS ***********************/
@@ -292,6 +294,7 @@ stat_init(char *   address,
 
 	memset(&empty_dataset, 0, sizeof(dataset_info));
 	memset(&empty_imss, 0, sizeof(imss));
+	memset(&att_deployment, 0, URI_);
 
 	//Initialize the set of GArrays dealing with the underlying set of structures.
 
@@ -595,8 +598,13 @@ init_imss(char *   imss_uri,
 
 		//Save the current socket value when the IMSS ip matches the clients' one.
 		if (!strncmp((new_imss.info.ips)[i], client_node, len_client_node) || !strncmp((new_imss.info.ips)[i], client_ip, strlen(new_imss.info.ips[i])))
-
+        {
 			new_imss.conns.matching_server = i;
+
+            //Save the current URI as the IMSS attached deployment.
+            if (deployment == ATTACHED)
+                strcpy(att_deployment, imss_uri);
+        }
 
 		//Create the connection to the IMSS server dispatcher thread.
 		if (conn_crt_(&(new_imss.conns.sockets_[i]), (new_imss.info.ips)[i], new_imss.info.conn_port, process_rank, 0, NULL) == -1)
@@ -771,8 +779,13 @@ open_imss(char * imss_uri)
 
 		//Save the current socket value when the IMSS ip matches the clients' one.
 		if (!strncmp((new_imss.info.ips)[i], client_node, len_client_node) || !strncmp((new_imss.info.ips)[i], client_ip, strlen(new_imss.info.ips[i])))
-
+        {
 			new_imss.conns.matching_server = i;
+
+            //Save the current URI as the IMSS attached deployment.
+            if (deployment == ATTACHED)
+                strcpy(att_deployment, imss_uri);
+        }
 
 	}
 
@@ -881,6 +894,22 @@ stat_imss(char *      imss_uri,
 
 	//Receive the associated structure.
 	return recv_dynamic_struct(stat_client, imss_info_, IMSS_INFO);
+}
+
+//Method providing the URI of the attached IMSS instance.
+char *
+get_deployed()
+{
+    if (att_deplotment[0] != '\0')
+    {
+        char * att_dep_uri = (char *) malloc(URI_ * sizeof(char));
+
+        strcpy(att_dep_uri, att_deployment);
+
+        return att_dep_uri;
+    }
+
+    return NULL
 }
 
 
@@ -1593,6 +1622,48 @@ get_dataloc(const char *    dataset,
 	return machines;
 }
 
+//Method specifying the type (DATASET or IMSS INSTANCE) of a provided URI.
+int32_t
+get_type(char * uri)
+{
+	//Formated uri to be sent to the metadata server.
+	char formated_uri[strlen(uri)+1];
+	sprintf(formated_uri, "0 %s", uri);
+	size_t formated_uri_length = strlen(formated_uri);
+
+	//Send the request.
+	if (zmq_send(stat_client, formated_uri, formated_uri_length, 0) != formated_uri_length)
+	{
+		fprintf(stderr, "ERRIMSS_GETTYPE_REQ\n");
+		return -1;
+	}
+
+	zmq_msg_t entity_info;
+	zmq_msg_init (&entity_info);
+    //Receive the answer.
+	if (zmq_msg_recv(&entity_info, stat_client, 0) == -1)
+	{
+		fprintf(stderr, "ERRIMSS_GETTYPE_REQ\n");
+		return -1;
+	}
+
+    //Access the information received.
+	char * data = (uint8_t *) zmq_msg_data(&entity_info);
+    //Displace the pointer to the element after the URI.
+    data += URI_;
+
+    //Determine what was retrieved from the metadata server.
+    if (data[0] == 'I')
+
+        return 1;
+
+    else if (data[0] == 'D')
+
+        return 2;
+
+
+    return 0;
+}
 
 
 /**********************************************************************************/
