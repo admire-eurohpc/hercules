@@ -3,6 +3,7 @@ set_source_files_properties(../src/memalloc.c ../src/policies.c ../src/stat.c ..
 set_source_files_properties(./server.c ./release_imss.c PROPERTIES LANGUAGE CXX )
 set_source_files_properties(./dirr.c PROPERTIES LANGUAGE CXX )
 set_source_files_properties(./dummy.c PROPERTIES LANGUAGE CXX )
+set_source_files_properties(./gtype_gdeployed.c PROPERTIES LANGUAGE CXX )
 
 
 ADD_EXECUTABLE( server 
@@ -50,6 +51,10 @@ ADD_EXECUTABLE( dummy
 				./dummy.c
 )
 
+ADD_EXECUTABLE( gtype_gdeployed 
+				./gtype_gdeployed.c
+)
+
 ADD_EXECUTABLE (dirr
 				./dirr.c
 				../src/directory.c
@@ -68,3 +73,4 @@ TARGET_LINK_LIBRARIES(server ${CMAKE_THREAD_LIBS_INIT} zmq ${MPI_LIBRARIES} ${GL
 TARGET_LINK_LIBRARIES(dirr ${GLIB_LIBRARIES})
 TARGET_LINK_LIBRARIES(release_imss zmq ${GLIB_LIBRARIES})
 TARGET_LINK_LIBRARIES(dummy imss_static ${CMAKE_THREAD_LIBS_INIT} zmq ${MPI_LIBRARIES} ${GLIB_LIBRARIES})
+TARGET_LINK_LIBRARIES(gtype_gdeployed imss_static ${CMAKE_THREAD_LIBS_INIT} zmq ${MPI_LIBRARIES} ${GLIB_LIBRARIES})

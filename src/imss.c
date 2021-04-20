@@ -56,7 +56,7 @@ int32_t		found_in;		//Variable storing the position where a certain structure wa
 
 extern uint16_t	connection_port; //FIXME
 
-char        att_deployment[URI_]
+char        att_deployment[URI_];
 
 
 /**********************************************************************************/
@@ -598,13 +598,11 @@ init_imss(char *   imss_uri,
 
 		//Save the current socket value when the IMSS ip matches the clients' one.
 		if (!strncmp((new_imss.info.ips)[i], client_node, len_client_node) || !strncmp((new_imss.info.ips)[i], client_ip, strlen(new_imss.info.ips[i])))
-        {
+		{
 			new_imss.conns.matching_server = i;
 
-            //Save the current URI as the IMSS attached deployment.
-            if (deployment == ATTACHED)
-                strcpy(att_deployment, imss_uri);
-        }
+			strcpy(att_deployment, imss_uri);
+		}
 
 		//Create the connection to the IMSS server dispatcher thread.
 		if (conn_crt_(&(new_imss.conns.sockets_[i]), (new_imss.info.ips)[i], new_imss.info.conn_port, process_rank, 0, NULL) == -1)
@@ -779,13 +777,11 @@ open_imss(char * imss_uri)
 
 		//Save the current socket value when the IMSS ip matches the clients' one.
 		if (!strncmp((new_imss.info.ips)[i], client_node, len_client_node) || !strncmp((new_imss.info.ips)[i], client_ip, strlen(new_imss.info.ips[i])))
-        {
+		{
 			new_imss.conns.matching_server = i;
 
-            //Save the current URI as the IMSS attached deployment.
-            if (deployment == ATTACHED)
-                strcpy(att_deployment, imss_uri);
-        }
+			strcpy(att_deployment, imss_uri);
+		}
 
 	}
 
@@ -851,6 +847,10 @@ release_imss(char *   imss_uri,
 	//Add the released position to the set of free positions.
 	g_array_append_val(free_imssd, imss_position);
 
+	if (!memcmp(att_deployment, imss_uri, URI_))
+
+		memset(att_deployment, '\0', URI_);
+
 	return 0;
 }
 
@@ -900,7 +900,7 @@ stat_imss(char *      imss_uri,
 char *
 get_deployed()
 {
-    if (att_deplotment[0] != '\0')
+    if (att_deployment[0] != '\0')
     {
         char * att_dep_uri = (char *) malloc(URI_ * sizeof(char));
 
@@ -909,7 +909,7 @@ get_deployed()
         return att_dep_uri;
     }
 
-    return NULL
+    return NULL;
 }
 
 
@@ -985,6 +985,8 @@ create_dataset(char *  dataset_uri,
 		//Add additional bytes that will be sent.
 		msg_size += info_size;
 	}
+	else
+		new_dataset.type = 'D';
 
 	char formated_uri[REQ_MSG];
 	sprintf(formated_uri, "%lu %s", msg_size, new_dataset.uri_);
@@ -1640,29 +1642,28 @@ get_type(char * uri)
 
 	zmq_msg_t entity_info;
 	zmq_msg_init (&entity_info);
-    //Receive the answer.
+	//Receive the answer.
 	if (zmq_msg_recv(&entity_info, stat_client, 0) == -1)
 	{
 		fprintf(stderr, "ERRIMSS_GETTYPE_REQ\n");
 		return -1;
 	}
 
-    //Access the information received.
-	char * data = (uint8_t *) zmq_msg_data(&entity_info);
-    //Displace the pointer to the element after the URI.
-    data += URI_;
+	//Access the information received.
+	imss_info * data = (imss_info *) zmq_msg_data(&entity_info);
 
-    //Determine what was retrieved from the metadata server.
-    if (data[0] == 'I')
+	//Determine what was retrieved from the metadata server.
+	if (data->type == 'I')
 
-        return 1;
+		return 1;
 
-    else if (data[0] == 'D')
+	else if (data->type == 'D' || data->type == 'L')
 
-        return 2;
+		return 2;
 
+	zmq_msg_close(&entity_info);
 
-    return 0;
+	return 0;
 }
 
 
