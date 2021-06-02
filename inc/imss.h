@@ -216,7 +216,7 @@ int32_t stat_imss(char * imss_uri, imss_info * imss_info_);
 /* Method providing the URI of the attached IMSS instance.
 
 	RETURNS:	 char * - Instance URI.
-                 NULL   - No instance was deployed.
+			 NULL   - No instance was deployed.
 
 	WARNING:	The get_deployed function allocates memory (performs malloc operations).
 
@@ -228,6 +228,22 @@ int32_t stat_imss(char * imss_uri, imss_info * imss_info_);
 */
 char * get_deployed();
 
+/* Method providing the URI of the IMSS instance executing at some endpoint.
+
+	RECEIVES:	endpoint - string following a ip/DNS:port style.
+
+	RETURNS:	char * - Instance URI.
+			NULL   - No instance was deployed.
+
+	WARNING:	The get_deployed function allocates memory (performs malloc operations).
+
+                The following function must be called over the provided char * element once done:
+
+                char * deployment = get_deployed(uri);
+
+                free(deployment);
+*/
+char * get_deployed(char * endpoint);
 
 
 /****************************************************************************************************************************/

@@ -4,27 +4,33 @@
 #include <string.h>
 #include "hercules.h"
 
+#define NUM_DATASETS	100000
 
 int32_t main (int32_t argc, char **argv) 
 {
 	
 	int rank = 0;
 
+	char metadata[]  = "./metadata";
+	char localhost[] = "localhost";
+	char imss_test[] = "imss://test";
+	char hostfile[]	 = "./hostfile";
+
 	//Hercules init -- Attached deploy
-	if (hercules_init(rank, 2048, 5555, 5569, 1024, "./metadata") == -1) exit(-1);
+	if (hercules_init(rank, 2097152, 5555, 5569, 1048576, metadata) == -1) exit(-1);
 
 	//Metadata server
-	if (stat_init("localhost", 5569, rank) == -1) exit(-1);
+	if (stat_init(localhost, 5569, rank) == -1) exit(-1);
 
 	//Imss deploy
-	if (init_imss("imss://test", "./hostfile", 1, 5555, 1024, ATTACHED, NULL) == -1) exit(-1);
+	if (init_imss("imss://test", hostfile, 1, 5555, 1048576, ATTACHED, NULL) == -1) exit(-1);
 
 	//Dump data -- Remark: DATA MUST BE IN DYNAMIC MEMORY
-	for(int i = 0; i < 3; ++i){
+	for(int i = 0; i < NUM_DATASETS; ++i){
 
 		int datasetd_;
 		char dataset_uri[32];
-		sprintf(dataset_uri, "imss://test/%i", i);
+		sprintf(dataset_uri, "imss://test/%d", i);
 		//Create dataset, 1 Block of 1 Kbyte 
 		if ((datasetd_ = create_dataset(dataset_uri, "RR", 1, 1, NONE)) < 0) exit(-1);
 
@@ -41,11 +47,11 @@ int32_t main (int32_t argc, char **argv)
 		release_dataset(datasetd_);	
 	}
 
-	for(int i = 0; i < 3; ++i)
+	for(int i = 0; i < NUM_DATASETS; ++i)
 	{
 		int datasetd_;
 		char dataset_uri[32];
-		sprintf(dataset_uri, "imss://test/%i", i);
+		sprintf(dataset_uri, "imss://test/%d", i);
 
 		datasetd_ = open_dataset(dataset_uri);
 
@@ -53,29 +59,29 @@ int32_t main (int32_t argc, char **argv)
 
 		get_data(datasetd_, 0, (unsigned char*)buffer);
 
-		printf("DATA %s: %s\n", dataset_uri, buffer);
+		//printf("DATA %s: %s\n", dataset_uri, buffer);
 		free(buffer);
 		release_dataset(datasetd_);	
 	}
 
 	release_imss("imss://test", CLOSE_ATTACHED);
 
-	char * buffer;
-	char ** it;
-	int num_elems;
-
-	if ((num_elems = get_dir("imss://test", &buffer, &it)) == -1)
-	{
-		fprintf(stderr, "GET_DIR failed\n");
-		return -1;
-	}
-
-	printf("\n%d ELEMS in DIR\n", num_elems);
-	for (int i = 0; i < num_elems; i++)
-		printf("ELEMENT %d: %s\n", i, it[i]);
-
-	free(buffer);
-	free(it);
+//	char * buffer;
+//	char ** it;
+//	int num_elems;
+//
+//	if ((num_elems = get_dir("imss://test", &buffer, &it)) == -1)
+//	{
+//		fprintf(stderr, "GET_DIR failed\n");
+//		return -1;
+//	}
+//
+//	printf("\n%d ELEMS in DIR\n", num_elems);
+//	for (int i = 0; i < num_elems; i++)
+//		printf("ELEMENT %d: %s\n", i, it[i]);
+//
+//	free(buffer);
+//	free(it);
 	stat_release();
 	hercules_release(0);
 

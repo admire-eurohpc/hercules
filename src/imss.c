@@ -917,10 +917,24 @@ get_deployed()
 char *
 get_deployed(char * endpoint)
 {
-    //Socket used for the request.
-    void * probe_socket;
+	//Context used for the request.
+	void * probe_ctx;
+	//Socket used for the request.
+	void * probe_socket;
 
-    uint32_t timeout = 500;
+	if ((probe_ctx = zmq_ctx_new()) == NULL)
+	{
+		perror("ERRIMSS_GETDEPLOYED_CTXCREATE");
+		return NULL;
+	}
+
+	if ((probe_socket = zmq_socket(probe_ctx, ZMQ_DEALER)) == NULL)
+	{
+		perror("ERRIMSS_GETDEPLOYED_SOCKETCRT");
+		return NULL;
+	}
+
+	uint32_t timeout = 500;
 	//Set a timeout to receive the requested URI.
 	if (zmq_setsockopt(probe_socket, ZMQ_RCVTIMEO, &timeout, sizeof(uint32_t)) == -1)
 	{
@@ -942,6 +956,8 @@ get_deployed(char * endpoint)
 	sprintf(who_request, "%d blabla", WHO);
 	size_t who_request_length = strlen(who_request);
 
+	printf("REQUEST SENT: %s (%lu)\n", who_request, who_request_length);
+
 	//Send the request.
 	if (zmq_send(probe_socket, who_request, who_request_length, 0) != who_request_length)
 	{
@@ -949,18 +965,19 @@ get_deployed(char * endpoint)
 		return NULL;
 	}
 
-    char * deployed_uri = (char *) malloc(URI_ * sizeof(char));
-    if (zmq_recv(probe_socket, deployed_uri, URI_, 0) == -1)
+	char * deployed_uri = (char *) malloc(URI_ * sizeof(char));
+	if (zmq_recv(probe_socket, deployed_uri, URI_, 0) == -1)
 	{
-        if (errno != EAGAIN)
-            fprintf(stderr, "ERRIMSS_GETDEPLOYED_RESP\n");
+	if (errno != EAGAIN)
+	    fprintf(stderr, "ERRIMSS_GETDEPLOYED_RESP\n");
 
 		return NULL;
 	}
 
-    zmq_close(probe_socket);
+	zmq_close(probe_socket);
+	zmq_ctx_destroy(probe_ctx);
 
-    return deployed_uri;
+	return deployed_uri;
 }
 
 

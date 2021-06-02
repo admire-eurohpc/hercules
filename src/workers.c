@@ -63,6 +63,7 @@ server_conn(void ** router,
 		perror("ERRIMSS_THREAD_RCVTIMEO");
 		return -1;
 	}
+	printf("WORKER BINDED to: %s\n", (const char *) router_endpoint);
 	//Connect the router socket to a certain endpoint.
 	if (zmq_bind(*router, (const char *) router_endpoint) == -1)
 	{
@@ -288,7 +289,7 @@ srv_worker (void * th_argv)
                     case WHO:
                     {
                         //Provide the uri of this instance.
-                        if (zmq_send(socket, arguments->my_uri, strlen(arguments->my_uri)) < 0)
+                        if (zmq_send(socket, arguments->my_uri, strlen(arguments->my_uri), 0) < 0)
 						{
 							perror("ERRIMSS_WHOREQUEST");
 							pthread_exit(NULL);
@@ -745,13 +746,15 @@ srv_attached_dispatcher(void * th_argv)
 		//Save the request to be served.
 		zmq_msg_recv(&client_req, socket, 0);
 
-        int32_t c_id = *((int32_t *) zmq_msg_data(&client_id));
-        //Specify client to answered to.
-        if (zmq_send(socket, &c_id, sizeof(int32_t), ZMQ_SNDMORE) < 0)
-        {
-            perror("ERRIMSS_SRVDISP_SENDCLIENTID");
-            pthread_exit(NULL);
-        }
+		int32_t c_id = *((int32_t *) zmq_msg_data(&client_id));
+		//Specify client to answered to.
+		if (zmq_send(socket, &c_id, sizeof(int32_t), ZMQ_SNDMORE) < 0)
+		{
+		    perror("ERRIMSS_SRVDISP_SENDCLIENTID");
+		    pthread_exit(NULL);
+		}
+
+		printf("REQUEST RECEIVED: %s\n", (char *) zmq_msg_data(&client_req));
 
 		//Check if the client is requesting connection resources.
 		if (!strncmp((char *) zmq_msg_data(&client_req), "HELLO!", 6))
@@ -762,7 +765,9 @@ srv_attached_dispatcher(void * th_argv)
 				//Retrieve the buffer size that will be asigned to the current server process.
 				char buff[6];
 				sscanf((char *) zmq_msg_data(&client_req), "%s %ld %s", buff, &buffer_KB, att_imss_uri);
-                strcpy(arguments->my_uri, att_imss_uri);
+				strcpy(arguments->my_uri, att_imss_uri);
+
+				printf("MU URI: %s\n", att_imss_uri);
 
 				//Notify that the value has been received.
 				pthread_mutex_lock(&buff_size_mut);
@@ -785,18 +790,18 @@ srv_attached_dispatcher(void * th_argv)
 				pthread_exit(NULL);
 			}
 
-            continue;
+			continue;
 		}
-        //Check if someone is requesting identity resources.
+		//Check if someone is requesting identity resources.
 		else if (*((int32_t *) zmq_msg_data(&client_req)) == WHO)
-        {
-            //Provide the uri of this instance.
-            if (zmq_send(socket, arguments->my_uri, strlen(arguments->my_uri)) < 0)
-            {
-                perror("ERRIMSS_WHOREQUEST");
-                pthread_exit(NULL);
-            }
-        }
+		{
+		    //Provide the uri of this instance.
+		    if (zmq_send(socket, arguments->my_uri, strlen(arguments->my_uri), 0) < 0)
+		    {
+			perror("ERRIMSS_WHOREQUEST");
+			pthread_exit(NULL);
+		    }
+		}
 	}
 	
 	pthread_exit(NULL);
@@ -903,7 +908,7 @@ dispatcher(void * th_argv)
 		else if (*((int32_t *) zmq_msg_data(&client_req)) == WHO)
         {
             //Provide the uri of this instance.
-            if (zmq_send(socket, arguments->my_uri, strlen(arguments->my_uri)) < 0)
+            if (zmq_send(socket, arguments->my_uri, strlen(arguments->my_uri), 0) < 0)
             {
                 perror("ERRIMSS_WHOREQUEST");
                 pthread_exit(NULL);

@@ -1,6 +1,7 @@
 #ifndef WORKER_H
 #define WORKER_H
 
+#include "imss.h"
 #include "records.hpp"
 
 #define READ_OP			0
