@@ -86,6 +86,9 @@ extern pthread_mutex_t 	tree_mut;
 uint64_t		backend_buffer_size;
 pthread_mutex_t 	backend_buff_mut;
 
+//URI of the attached deployment.
+extern char att_imss_uri[URI_];
+
 uint16_t		connection_port; //FIXME
 
 
@@ -183,6 +186,8 @@ imss_server(void * arg_)
 			arguments[i].map = &buffer_map;
 			//Specify the address used by each thread to write inside the buffer.
 			arguments[i].pt = (unsigned char *) ((i-1)*buffer_segment + buffer_address);
+            //URI of the corresponding IMSS instance.
+            strcpy(arguments[i].my_uri, att_imss_uri);
 
 			//Throw thread with the corresponding function and arguments.
 			if (pthread_create(&threads[i], NULL, srv_worker, (void *) &arguments[i]) == -1)

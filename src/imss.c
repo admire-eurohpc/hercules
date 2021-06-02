@@ -609,12 +609,13 @@ init_imss(char *   imss_uri,
 
 			return -1;
 
-		char request[16];
+        uint32_t request_size = 16 + URI_;
+		char     request[request_size];
 
 		//ZMQ message requesting a connection to the metadata server.
-		sprintf(request, "%s %ld%c", "HELLO!", buff_size, '\0');
+		sprintf(request, "%s %ld %s%c", "HELLO!", buff_size, imss_uri, '\0');
 		//Send the IMSS server connection request.
-		if (zmq_send(new_imss.conns.sockets_[i], request, 16, 0)  != 16)
+		if (zmq_send(new_imss.conns.sockets_[i], request, request_size, 0)  != request_size)
 		{
 			perror("ERRIMSS_INITIMSS_HELLO");
 			return -1;
@@ -912,6 +913,55 @@ get_deployed()
     return NULL;
 }
 
+//Method providing the URI of the instance deployed in some endpoint.
+char *
+get_deployed(char * endpoint)
+{
+    //Socket used for the request.
+    void * probe_socket;
+
+    uint32_t timeout = 500;
+	//Set a timeout to receive the requested URI.
+	if (zmq_setsockopt(probe_socket, ZMQ_RCVTIMEO, &timeout, sizeof(uint32_t)) == -1)
+	{
+		perror("ERRIMSS_GETDEPLOYED_SETRCVTIMEO");
+		return NULL;
+	}
+
+	//Connection address.
+	char addr_[LINE_LENGTH]; 
+	sprintf(addr_, "tcp://%s", endpoint);
+	//Connect to the specified endpoint.
+	if (zmq_connect(probe_socket, (const char *) addr_) == -1)
+	{
+		perror("ERRIMSS_GETDEPLOYED_CONNECT");
+		return NULL;
+	}
+
+	char who_request[16];
+	sprintf(who_request, "%d blabla", WHO);
+	size_t who_request_length = strlen(who_request);
+
+	//Send the request.
+	if (zmq_send(probe_socket, who_request, who_request_length, 0) != who_request_length)
+	{
+		fprintf(stderr, "ERRIMSS_GETDEPLOYED_REQ\n");
+		return NULL;
+	}
+
+    char * deployed_uri = (char *) malloc(URI_ * sizeof(char));
+    if (zmq_recv(probe_socket, deployed_uri, URI_, 0) == -1)
+	{
+        if (errno != EAGAIN)
+            fprintf(stderr, "ERRIMSS_GETDEPLOYED_RESP\n");
+
+		return NULL;
+	}
+
+    zmq_close(probe_socket);
+
+    return deployed_uri;
+}
 
 
 

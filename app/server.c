@@ -269,6 +269,8 @@ int32_t main(int32_t argc, char **argv)
 	{
 		//Add port number to thread arguments.
 		arguments[i].port = (bind_port)++;
+        //Add the instance URI to the thread arguments.
+        strcpy(arguments[i].my_uri, imss_uri);
 
 		//Deploy all dispatcher + service threads.
 		if (!i)

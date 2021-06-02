@@ -38,6 +38,9 @@ pthread_mutex_t buff_size_mut;
 pthread_cond_t 	buff_size_cond;
 int32_t 	copied;
 
+//URI of the attached deployment.
+char att_imss_uri[URI_];
+
 
 pthread_mutex_t tree_mut;
 
@@ -281,6 +284,18 @@ srv_worker (void * th_argv)
 
 						break;
 					}
+
+                    case WHO:
+                    {
+                        //Provide the uri of this instance.
+                        if (zmq_send(socket, arguments->my_uri, strlen(arguments->my_uri)) < 0)
+						{
+							perror("ERRIMSS_WHOREQUEST");
+							pthread_exit(NULL);
+						}
+
+                        break;
+                    }
 
 					default:
 
@@ -730,6 +745,14 @@ srv_attached_dispatcher(void * th_argv)
 		//Save the request to be served.
 		zmq_msg_recv(&client_req, socket, 0);
 
+        int32_t c_id = *((int32_t *) zmq_msg_data(&client_id));
+        //Specify client to answered to.
+        if (zmq_send(socket, &c_id, sizeof(int32_t), ZMQ_SNDMORE) < 0)
+        {
+            perror("ERRIMSS_SRVDISP_SENDCLIENTID");
+            pthread_exit(NULL);
+        }
+
 		//Check if the client is requesting connection resources.
 		if (!strncmp((char *) zmq_msg_data(&client_req), "HELLO!", 6))
 		{
@@ -738,7 +761,8 @@ srv_attached_dispatcher(void * th_argv)
 			{
 				//Retrieve the buffer size that will be asigned to the current server process.
 				char buff[6];
-				sscanf((char *) zmq_msg_data(&client_req), "%s %ld", buff, &buffer_KB);
+				sscanf((char *) zmq_msg_data(&client_req), "%s %ld %s", buff, &buffer_KB, att_imss_uri);
+                strcpy(arguments->my_uri, att_imss_uri);
 
 				//Notify that the value has been received.
 				pthread_mutex_lock(&buff_size_mut);
@@ -754,21 +778,25 @@ srv_attached_dispatcher(void * th_argv)
 			//Wrap the previous info into the ZMQ message.
 			sprintf(response_, "%d%c%d", port_, '-', client_id_++);
 
-			int32_t c_id = *((int32_t *) zmq_msg_data(&client_id));
-			//Specify client to answered to.
-			if (zmq_send(socket, &c_id, sizeof(int32_t), ZMQ_SNDMORE) < 0)
-			{
-				perror("ERRIMSS_SRVDISP_SENDCLIENTID");
-				pthread_exit(NULL);
-			}
-
 			//Send communication specifications.
 			if (zmq_send(socket, response_, strlen(response_), 0) < 0)
 			{
 				perror("ERRIMSS_SRVDISP_SENDBLOCK");
 				pthread_exit(NULL);
 			}
+
+            continue;
 		}
+        //Check if someone is requesting identity resources.
+		else if (*((int32_t *) zmq_msg_data(&client_req)) == WHO)
+        {
+            //Provide the uri of this instance.
+            if (zmq_send(socket, arguments->my_uri, strlen(arguments->my_uri)) < 0)
+            {
+                perror("ERRIMSS_WHOREQUEST");
+                pthread_exit(NULL);
+            }
+        }
 	}
 	
 	pthread_exit(NULL);
@@ -843,28 +871,44 @@ dispatcher(void * th_argv)
 		//Save the request to be served.
 		zmq_msg_recv(&client_req, socket, 0);
 
-		//Message containing the client's communication ID plus its connection port.
-		char response_[32]; memset(response_, '\0', 32);
-		//Port that the new client will be forwarded to.
-		int32_t port_ = arguments->port + 1 + (client_id_ % THREAD_POOL);
-		//Wrap the previous info into the ZMQ message.
-		sprintf(response_, "%d%c%d", port_, '-', client_id_++);
+        int32_t c_id = *((int32_t *) zmq_msg_data(&client_id));
 
-		int32_t c_id = *((int32_t *) zmq_msg_data(&client_id));
+        //Specify client to answered to.
+        if (zmq_send(socket, &c_id, sizeof(int32_t), ZMQ_SNDMORE) < 0)
+        {
+            perror("ERRIMSS_STATDISP_SENDCLIENTID");
+            pthread_exit(NULL);
+        }
 
-		//Specify client to answered to.
-		if (zmq_send(socket, &c_id, sizeof(int32_t), ZMQ_SNDMORE) < 0)
+		//Check if the client is requesting connection resources.
+		if (!strncmp((char *) zmq_msg_data(&client_req), "HELLO!", 6))
 		{
-			perror("ERRIMSS_STATDISP_SENDCLIENTID");
-			pthread_exit(NULL);
-		}
+            //Message containing the client's communication ID plus its connection port.
+            char response_[32]; memset(response_, '\0', 32);
+            //Port that the new client will be forwarded to.
+            int32_t port_ = arguments->port + 1 + (client_id_ % THREAD_POOL);
+            //Wrap the previous info into the ZMQ message.
+            sprintf(response_, "%d%c%d", port_, '-', client_id_++);
 
-		//Send communication specifications.
-		if (zmq_send(socket, response_, strlen(response_), 0) < 0)
-		{
-			perror("ERRIMSS_STATDISP_SENDBLOCK");
-			pthread_exit(NULL);
-		}
+            //Send communication specifications.
+            if (zmq_send(socket, response_, strlen(response_), 0) < 0)
+            {
+                perror("ERRIMSS_STATDISP_SENDBLOCK");
+                pthread_exit(NULL);
+            }
+
+            continue;
+        }
+        //Check if someone is requesting identity resources.
+		else if (*((int32_t *) zmq_msg_data(&client_req)) == WHO)
+        {
+            //Provide the uri of this instance.
+            if (zmq_send(socket, arguments->my_uri, strlen(arguments->my_uri)) < 0)
+            {
+                perror("ERRIMSS_WHOREQUEST");
+                pthread_exit(NULL);
+            }
+        }
 	}
 	
 	pthread_exit(NULL);

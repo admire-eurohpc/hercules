@@ -5,6 +5,7 @@
 
 #define READ_OP			0
 #define RELEASE			2
+#define WHO			    3
 #define WRITE_OP		1
 
 #define GETDIR			1
@@ -25,6 +26,8 @@ typedef struct {
 	unsigned char * pt;
 	//Integer specifying the port that a certain thread will listen to.
 	uint16_t port;
+    //URI assigned to the current IMSS instance.
+    char my_uri[URI_];
 
 } p_argv;
 
