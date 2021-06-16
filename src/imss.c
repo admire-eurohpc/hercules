@@ -934,7 +934,15 @@ get_deployed(char * endpoint)
 		return NULL;
 	}
 
-	uint32_t timeout = 500;
+    int32_t ident_ = 9999999;
+    //Set communication id.
+    if (zmq_setsockopt(probe_socket, ZMQ_IDENTITY, &ident_, sizeof(int32_t)) == -1)
+    {
+        perror("ERRIMSS_GETDEPLOYED_SETIDEN");
+        return NULL;
+    }
+
+	uint32_t timeout = 1000;
 	//Set a timeout to receive the requested URI.
 	if (zmq_setsockopt(probe_socket, ZMQ_RCVTIMEO, &timeout, sizeof(uint32_t)) == -1)
 	{
