@@ -4,7 +4,7 @@
 #include <string.h>
 #include "hercules.h"
 
-#define NUM_DATASETS	100000
+#define NUM_DATASETS	10000
 
 int32_t main (int32_t argc, char **argv) 
 {
@@ -13,7 +13,7 @@ int32_t main (int32_t argc, char **argv)
 
 	char metadata[]  = "./metadata";
 	char localhost[] = "localhost";
-	char imss_test[] = "imss://test";
+	char imss_test[] = "imss://berries";
 	char hostfile[]	 = "./hostfile";
 
 	//Hercules init -- Attached deploy
@@ -23,14 +23,14 @@ int32_t main (int32_t argc, char **argv)
 	if (stat_init(localhost, 5569, rank) == -1) exit(-1);
 
 	//Imss deploy
-	if (init_imss("imss://test", hostfile, 1, 5555, 1048576, ATTACHED, NULL) == -1) exit(-1);
+	if (init_imss("imss://berries", hostfile, 1, 5555, 1048576, ATTACHED, NULL) == -1) exit(-1);
 
 	//Dump data -- Remark: DATA MUST BE IN DYNAMIC MEMORY
 	for(int i = 0; i < NUM_DATASETS; ++i){
 
 		int datasetd_;
 		char dataset_uri[32];
-		sprintf(dataset_uri, "imss://test/%d", i);
+		sprintf(dataset_uri, "imss://berries/%d", i);
 		//Create dataset, 1 Block of 1 Kbyte 
 		if ((datasetd_ = create_dataset(dataset_uri, "RR", 1, 1, NONE)) < 0) exit(-1);
 
@@ -51,7 +51,7 @@ int32_t main (int32_t argc, char **argv)
 	{
 		int datasetd_;
 		char dataset_uri[32];
-		sprintf(dataset_uri, "imss://test/%d", i);
+		sprintf(dataset_uri, "imss://berries/%d", i);
 
 		datasetd_ = open_dataset(dataset_uri);
 
@@ -64,7 +64,7 @@ int32_t main (int32_t argc, char **argv)
 		release_dataset(datasetd_);	
 	}
 
-	release_imss("imss://test", CLOSE_ATTACHED);
+	release_imss("imss://berries", CLOSE_ATTACHED);
 
 //	char * buffer;
 //	char ** it;

@@ -84,6 +84,8 @@ int32_t main (int32_t argc, char **argv)
 
 	printf("Discovered IMSS: %s\n", discovered_uri);
 
+	free(discovered_uri);
+
 	return 0;
 }
 
