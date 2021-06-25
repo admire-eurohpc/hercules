@@ -17,18 +17,18 @@
 #define TIMEOUT_MS	10000
 
 //Replication factor assigned to each dataset in creation time.
-#define NONE		1
-#define DRM		2
-#define TRM		3
+const int NONE = 1;
+const int DRM = 2;
+const int TRM = 3;
 
 //Type of IMSS instance to be deployed.
-#define DETACHED	0
-#define ATTACHED 	1
+const int DETACHED	= 0;
+const int ATTACHED 	= 1;
 
 //IMSS release operation possibilities.
-#define DISCONNECT	0
-#define CLOSE_DETACHED	1
-#define CLOSE_ATTACHED	2
+const int DISCONNEC = 0;
+const int CLOSE_DETACHED = 1;
+const int CLOSE_ATTACHED = 2;
 
 
 
