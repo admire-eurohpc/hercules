@@ -57,6 +57,15 @@ int32_t main (int32_t argc, char **argv)
 
 		datasetd_ = open_dataset(dataset_uri);
 
+		/*********************************************/
+		/****** STAT_DATASET after OPEN_DATASET ******/
+		/*********************************************/
+
+		dataset_info metadata;
+		stat_dataset(dataset_uri, &metadata);
+		printf("DATASET URI from STAT_DATASET: %s\n", metadata.uri_);
+		free_dataset(&metadata);
+
 		char * buffer = (char *) malloc(1024 * 1024 * sizeof(char));
 
 		get_data(datasetd_, 0, (unsigned char*)buffer);
