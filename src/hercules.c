@@ -91,6 +91,8 @@ extern char att_imss_uri[URI_];
 
 uint16_t		connection_port; //FIXME
 
+//Metadata deployment flag.
+uint32_t        metadata_server_deployed;
 
 /***************************************************************************
 *******************************  FUNCTIONS  ********************************
@@ -354,13 +356,14 @@ imss_metadata(void * arg_)
 
 
 //Method initializing an instance of the HERCULES in-memory storage system.
-int32_t
-hercules_init(int32_t  rank,
-	      uint64_t backend_strg_size,
-	      uint16_t server_port_num,
-	      uint16_t metadata_port_num,
-	      uint64_t metadata_buff_size,
-	      char *   metadata_file)
+int32_t 
+hercules_init(uint32_t rank,
+              uint64_t backend_strg_size,
+              uint16_t server_port_num,
+              int32_t  deploy_metadata,
+              uint16_t metadata_port_num,
+              uint64_t metadata_buff_size,
+              char *   metadata_file)
 {
 	//Save the total number of bytes that were assigned to the backend storage.
 	backend_buffer_size = backend_strg_size;
@@ -434,9 +437,15 @@ hercules_init(int32_t  rank,
 
 	not_copied = 1;
 
+    //No metadata server is deployed by default.
+    metadata_server_deployed = 0;
+
 	//The rank zero process will be also deploying the metadata server.
-	if (!rank)
+	if (deploy_metadata)
 	{
+        //A metadata server has been deployed in the current process.
+        metadata_server_deployed = 1;
+
 		//Set of arguments provided to the metadata server.
 		metadata_arg metadata_arg;
 		metadata_arg.port 		= metadata_port_num;
@@ -479,7 +488,7 @@ hercules_init(int32_t  rank,
 
 //Method releasing an instance of the HERCULES in-memory storage system.
 int32_t
-hercules_release(int32_t rank)
+hercules_release()
 {
 	//Publish RELEASE message to all worker threads.
 	zmq_msg_t release_rsc;
@@ -493,7 +502,7 @@ hercules_release(int32_t rank)
 	}
 
 	//Join threads.
-	if (!rank)
+	if (metadata_server_deployed)
 	{
 		if (pthread_join(metadata_th, NULL) != 0)
 		{

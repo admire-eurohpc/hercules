@@ -26,8 +26,9 @@ int32_t 	process_rank;		//Process identifier within the deployment.
 
 void * 		ctx;			//Applications' comms context.
 
-void * 		stat_client;		//Metadata server socket.
-void * 		stat_mon;		//Metadata monitoring socket.
+uint32_t    n_stat_servers;     //Number of metadata servers available.
+void ** 	stat_client;		//Metadata server sockets.
+void * 		stat_mon;		    //Metadata monitoring socket.
 
 int32_t		current_dataset;	//Dataset whose policy has been set last.
 dataset_info	curr_dataset;		//Currently managed dataset.
@@ -275,10 +276,15 @@ find_imss(char * imss_uri,
 
 //Method creating a communication channel with the IMSS metadata server. Besides, the stat_imss method initializes a set of elements that will be used through the session.
 int32_t
-stat_init(char *   address,
-	  uint16_t port,
-	  int32_t  rank)
+stat_init(char *   stat_hostfile,
+          uint16_t port,
+          int32_t  num_stat_servers,
+          int32_t  rank)
 {
+    //Number of metadata servers to connect to.
+    n_stat_servers = num_stat_servers;
+    //Initialize memory required to deal with metadata sockets.
+    stat_client = (void **) malloc(n_stat_servers * sizeof(void *));
 	//Dataset whose policy was set last.
 	current_dataset = -1;
 	//Rank of the current process.
@@ -353,49 +359,80 @@ stat_init(char *   address,
 
 	strcpy(client_ip, inet_ntoa(*((struct in_addr*) host_entry->h_addr_list[0])));
 
-	//Create the connection to the metadata server dispatcher thread.
-	if (conn_crt_(&stat_client, address, port, rank, 0, NULL) == -1)
+	//FILE entity managing the IMSS metadata hostfile.
+	FILE * stat_nodes;
+	//Number of characters successfully read from the line.
+	int n_chars;
 
-		return -1;
-
-	//ZMQ message requesting a connection to the metadata server.
-	char request[] = "HELLO!\0";
-	//Send the metadata server connection request.
-	if (zmq_send(stat_client, request, 7, 0)  != 7)
+	//Open the file containing the IMSS metadata server nodes.
+	if ((stat_nodes = fopen(stat_hostfile, "r+")) == NULL)
 	{
-		perror("ERRIMSS_STAT_HELLO");
+		perror("ERRIMSS_OPEN_STATFILE");
 		return -1;
 	}
 
-	//ZMQ message retrieving the connection information.
-	zmq_msg_t connection_info;
-	zmq_msg_init (&connection_info);
-	if (zmq_msg_recv(&connection_info, stat_client, 0) == -1)
+	//Connect to all servers.
+	for (int i = 0; i < n_stat_servers; i++)
 	{
-		perror("ERRIMSS_STAT_ACK");
+        char stat_node[LINE_LENGTH];
+		size_t l_size = LINE_LENGTH;
+
+		//Save IMSS metadata deployment.
+		n_chars = getline(stat_node, &l_size, stat_nodes);
+		//Erase the new line character ('\n') from the string.
+		stat_node[n_chars - 1] = '\0';
+
+        //Create the connection to the metadata server dispatcher thread.
+        if (conn_crt_(stat_client + i, stat_node, port, rank, 0, NULL) == -1)
+
+            return -1;
+
+        //ZMQ message requesting a connection to the metadata server.
+        char request[] = "HELLO!\0";
+        //Send the metadata server connection request.
+        if (zmq_send(stat_client[i], request, 7, 0)  != 7)
+        {
+            perror("ERRIMSS_STAT_HELLO");
+            return -1;
+        }
+
+        //ZMQ message retrieving the connection information.
+        zmq_msg_t connection_info;
+        zmq_msg_init (&connection_info);
+        if (zmq_msg_recv(&connection_info, stat_client[i], 0) == -1)
+        {
+            perror("ERRIMSS_STAT_ACK");
+            return -1;
+        }
+
+        //Close the previous connection.
+        if (conn_dstr_(stat_client[i]) == -1)
+
+            return -1;
+
+        //Port that the new client must connect to.
+        int32_t stat_port;
+        //ID that the new client must take.
+        int32_t stat_id;
+        //Separator.
+        char sep_;
+
+        //Read the previous information from the message received.
+        sscanf((const char *) zmq_msg_data(&connection_info), "%d%c%d", &stat_port, &sep_, &stat_id);
+        zmq_msg_close(&connection_info);
+
+        //Create the connection to the metadata server dispatcher thread.
+        if (conn_crt_(stat_client + i, address, stat_port, stat_id, 0, NULL) == -1)
+
+            return -1;
+    }
+
+	//Close the file.
+	if (fclose(stat_nodes) != 0)
+	{
+		perror("ERR_CLOSE_STATFILE");
 		return -1;
 	}
-
-	//Close the previous connection.
-	if (conn_dstr_(stat_client) == -1)
-
-		return -1;
-
-	//Port that the new client must connect to.
-	int32_t stat_port;
-	//ID that the new client must take.
-	int32_t stat_id;
-	//Separator.
-	char sep_;
-
-	//Read the previous information from the message received.
-	sscanf((const char *) zmq_msg_data(&connection_info), "%d%c%d", &stat_port, &sep_, &stat_id);
-	zmq_msg_close(&connection_info);
-
-	//Create the connection to the metadata server dispatcher thread.
-	if (conn_crt_(&stat_client, address, stat_port, stat_id, 0, NULL) == -1)
-
-		return -1;
 
 	return 0;
 }
@@ -426,11 +463,15 @@ int32_t stat_release()
 
 	//WARNING! zmq_ctx_destroy will block unless all associated sockets have been released.
 
-	if (conn_dstr_(stat_client) == -1)
-	{
-		perror("ERRIMSS_CLOSE_SOCKET");
-		return -1;
-	}
+	//Disconnect from all metadata servers.
+	for (int i = 0; i < n_stat_servers; i++)
+    {
+        if (conn_dstr_(stat_client[i]) == -1)
+        {
+            perror("ERRIMSS_CLOSE_SOCKET");
+            return -1;
+        }
+    }
 
 	if (zmq_ctx_destroy(ctx) == -1)
 	{
@@ -441,18 +482,33 @@ int32_t stat_release()
 	return 0;
 }
 
+//Method discovering which metadata server is in charge of a certain URI.
+uint32_t
+discover_stat_srv(char * _uri)
+{
+    //Calculate a crc from the provided URI.
+    uint64_t crc_ = crc64(0, (unsigned char *) _uri, strlen(_uri));
+
+    //Return the metadata server within the set that shall deal with the former entity.
+    return crc_ % n_stat_servers;
+}
+
+//FIXME: fix implementation for multiple servers.
 //Method retrieving the whole set of elements contained by a specific URI.
 uint32_t
 get_dir(char * 	 requested_uri,
 	char **  buffer,
 	char *** items)
 {
+    //Discover the metadata server that shall deal with the former URI.
+    uint32_t m_srv = discover_stat_srv(requested_uri);
+
 	//GETDIR request.
 	char getdir_req[strlen(requested_uri)+3];
 	sprintf(getdir_req, "%d %s%c", GETDIR, requested_uri, '\0');
 
 	//Send the request.
-	if (zmq_send(stat_client, getdir_req, strlen(getdir_req), 0)  == -1)
+	if (zmq_send(stat_client[m_srv], getdir_req, strlen(getdir_req), 0)  == -1)
 	{
 		perror("ERRIMSS_GETDIR_REQ");
 		return -1;
@@ -465,7 +521,7 @@ get_dir(char * 	 requested_uri,
 		perror("ERRIMSS_GETDIR_MSGINIT");
 		return -1;
 	}
-	if (zmq_msg_recv(&uri_elements, stat_client, 0) == -1)
+	if (zmq_msg_recv(&uri_elements, stat_client[m_srv], 0) == -1)
 	{
 		perror("ERRIMSS_GETDIR_RECV");
 		return -1;
@@ -659,18 +715,21 @@ init_imss(char *   imss_uri,
 		return -1;
 	}
 
+    //Discover the metadata server that shall deal with the new IMSS instance.
+    uint32_t m_srv = discover_stat_srv(new_imss.info.uri_);
+
 	//Send the created structure to the metadata server.
 	char key_plus_size[KEY+16];
 	sprintf(key_plus_size, "%lu %s", (sizeof(imss_info)+new_imss.info.num_storages*LINE_LENGTH), new_imss.info.uri_);
 
-	if (zmq_send(stat_client, key_plus_size, KEY+16, ZMQ_SNDMORE) != (KEY+16))
+	if (zmq_send(stat_client[m_srv], key_plus_size, KEY+16, ZMQ_SNDMORE) != (KEY+16))
 	{
 		perror("ERRIMSS_INITIMSS_SENDKEY");
 		return -1;
 	}
 
 	//Send the new IMSS metadata structure to the metadata server entity.
-	if (send_dynamic_struct(stat_client, (void *) &new_imss.info, IMSS_INFO) == -1)
+	if (send_dynamic_struct(stat_client[m_srv], (void *) &new_imss.info, IMSS_INFO) == -1)
 
 		return -1;
 
@@ -886,15 +945,18 @@ stat_imss(char *      imss_uri,
 	sprintf(formated_uri, "0 %s%c", imss_uri, '\0');
 	size_t formated_uri_length = strlen(formated_uri);
 
+    //Discover the metadata server that handles the IMSS instance.
+    uint32_t m_srv = discover_stat_srv(imss_uri);
+
 	//Send the request.
-	if (zmq_send(stat_client, formated_uri, formated_uri_length, 0)  != formated_uri_length)
+	if (zmq_send(stat_client[m_srv], formated_uri, formated_uri_length, 0)  != formated_uri_length)
 	{
 		fprintf(stderr, "ERRIMSS_IMSS_REQ\n");
 		return -1;
 	}
 
 	//Receive the associated structure.
-	return recv_dynamic_struct(stat_client, imss_info_, IMSS_INFO);
+	return recv_dynamic_struct(stat_client[m_srv], imss_info_, IMSS_INFO);
 }
 
 //Method providing the URI of the attached IMSS instance.
@@ -1063,18 +1125,21 @@ create_dataset(char *  dataset_uri,
 	else
 		new_dataset.type = 'D';
 
+    //Discover the metadata server that handle the new dataset.
+    uint32_t m_srv = discover_stat_srv(new_dataset.uri_);
+
 	char formated_uri[REQ_MSG];
 	sprintf(formated_uri, "%lu %s", msg_size, new_dataset.uri_);
 
 	//Send the dataset URI associated to the dataset metadata structure to be sent.
-	if (zmq_send(stat_client, formated_uri, REQ_MSG, ZMQ_SNDMORE) < 0)
+	if (zmq_send(stat_client[m_srv], formated_uri, REQ_MSG, ZMQ_SNDMORE) < 0)
 	{
 		perror("ERRIMSS_DATASET_SNDURI");
 		return -1;
 	}
 
 	//Send the new dataset metadata structure to the metadata server entity.
-	if (send_dynamic_struct(stat_client, (void *) &new_dataset, DATASET_INFO) == -1)
+	if (send_dynamic_struct(stat_client[m_srv], (void *) &new_dataset, DATASET_INFO) == -1)
 
 		return -1;
 
@@ -1202,11 +1267,14 @@ release_dataset(int32_t dataset_id)
 	//If the dataset is a LOCAL one, the position of the data elements must be updated.
 	if (!strcmp(release_dataset.policy, "LOCAL"))
 	{
+        //Discover the metadata server that handles the dataset.
+        uint32_t m_srv = discover_stat_srv(release_dataset.uri_);
+        
 		//Formated dataset uri to be sent to the metadata server.
 		char formated_uri[REQ_MSG];
 		sprintf(formated_uri, "0 %s", release_dataset.uri_);
 		//Send the LOCAL dataset positions update.
-		if (zmq_send(stat_client, formated_uri, REQ_MSG, ZMQ_SNDMORE) < 0)
+		if (zmq_send(stat_client[m_srv], formated_uri, REQ_MSG, ZMQ_SNDMORE) < 0)
 		{
 			perror("ERRIMSS_RELDATASET_SENDURI");
 			return -1;
@@ -1225,7 +1293,7 @@ release_dataset(int32_t dataset_id)
 		memcpy((update_msg+blocks_written_size), &update_value, sizeof(uint16_t));
 
 		//Send the list of servers storing the data elements.
-		if (zmq_send(stat_client, update_msg, update_msg_size, 0) < 0)
+		if (zmq_send(stat_client[m_srv], update_msg, update_msg_size, 0) < 0)
 		{
 			perror("ERRIMSS_RELDATASET_SENDPOSITIONS");
 			return -1;
@@ -1239,7 +1307,7 @@ release_dataset(int32_t dataset_id)
 			return -1;
 		}
 
-		if (zmq_msg_recv(&update_result, stat_client, 0) == -1)
+		if (zmq_msg_recv(&update_result, stat_client[m_srv], 0) == -1)
 		{
 			perror("ERRIMSS_RELDATASET_RECVUPDATERES");
 			return -1;
@@ -1289,15 +1357,18 @@ stat_dataset(const char * 	    dataset_uri,
 	char formated_uri[REQ_MSG];
 	sprintf(formated_uri, "0 %s", dataset_uri);
 
+    //Discover the metadata server that handles the dataset.
+    uint32_t m_srv = discover_stat_srv(dataset_uri);
+
 	//Send the request.
-	if (zmq_send(stat_client, formated_uri, REQ_MSG, 0) < 0)
+	if (zmq_send(stat_client[m_srv], formated_uri, REQ_MSG, 0) < 0)
 	{
 		perror("ERRIMSS_DATASET_REQ");
 		return -1;
 	}
 
 	//Receive the associated structure.
-	return recv_dynamic_struct(stat_client, dataset_info_, DATASET_INFO);
+	return recv_dynamic_struct(stat_client[m_srv], dataset_info_, DATASET_INFO);
 }
 
 /*
@@ -1708,8 +1779,11 @@ get_type(char * uri)
 	sprintf(formated_uri, "0 %s", uri);
 	size_t formated_uri_length = strlen(formated_uri);
 
+    //Discover the metadata server that handles the entity.
+    uint32_t m_srv = discover_stat_srv(uri);
+
 	//Send the request.
-	if (zmq_send(stat_client, formated_uri, formated_uri_length, 0) != formated_uri_length)
+	if (zmq_send(stat_client[m_uri], formated_uri, formated_uri_length, 0) != formated_uri_length)
 	{
 		fprintf(stderr, "ERRIMSS_GETTYPE_REQ\n");
 		return -1;
@@ -1718,7 +1792,7 @@ get_type(char * uri)
 	zmq_msg_t entity_info;
 	zmq_msg_init (&entity_info);
 	//Receive the answer.
-	if (zmq_msg_recv(&entity_info, stat_client, 0) == -1)
+	if (zmq_msg_recv(&entity_info, stat_client[m_srv], 0) == -1)
 	{
 		fprintf(stderr, "ERRIMSS_GETTYPE_REQ\n");
 		return -1;

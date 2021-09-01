@@ -120,19 +120,20 @@ typedef struct {
 
 /* Method creating a communication channel with the IMSS metadata server. Besides, the stat_imss method initializes a set of elements that will be used through the session.
 
-	RECEIVES:	address - IP sequence or DNS of the machine where the metadata server is running (or where the 0 ranked application process is running).
-			port    - Port number which the metadata server is listening to within the previous machine.
-			rank	- Application process identifier used as communications ID in the concerned metadata server-client channel.
+	RECEIVES:	stat_hostfile    - File containing an IP sequence (or DNS) per line where an IMSS metadata server has been deployed.
+                port             - Port number which the metadata server is listening to within the previous machine.
+                num_stat_servers - Number of metadata servers to connect to.
+                rank	         - Application process identifier used as communications ID in the concerned metadata server-client channel.
 
 	RETURNS:	 0 - Communication channel and initializations performed successfully.
-			-1 - In case of error.
+                -1 - In case of error.
 */
-int32_t stat_init(char * address, uint16_t port, int32_t rank);
+int32_t stat_init(char * stat_hostfile, uint16_t port, int32_t num_stat_servers, int32_t rank);
 
 /* Method disabling the communication channel with the metadata server. Besides, the current method releases session-related elements previously initialized.
 
 	RETURNS:	 0 - Release operations were successfully performed.
-			-1 - In case of error.
+                -1 - In case of error.
 */
 int32_t stat_release();
 
@@ -147,6 +148,7 @@ int32_t stat_release();
 
 	WARNING:	The get_dir function allocates memory (performs malloc operations). Therefore, the provided pointers (*buffer & *items) MUST BE FREED once done.
 */
+//FIXME: fix implementation for multiple servers.
 uint32_t get_dir(char * requested_uri, char ** buffer, char *** items);
 
 
