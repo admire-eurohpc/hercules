@@ -1028,7 +1028,7 @@ get_deployed(char * endpoint)
 	sprintf(who_request, "%d blabla", WHO);
 	size_t who_request_length = strlen(who_request);
 
-	printf("REQUEST SENT: %s (%lu)\n", who_request, who_request_length);
+	//printf("REQUEST SENT: %s (%lu)\n", who_request, who_request_length);
 
 	//Send the request.
 	if (zmq_send(probe_socket, who_request, who_request_length, 0) != who_request_length)

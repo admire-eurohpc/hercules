@@ -63,7 +63,7 @@ server_conn(void ** router,
 		perror("ERRIMSS_THREAD_RCVTIMEO");
 		return -1;
 	}
-	printf("WORKER BINDED to: %s\n", (const char *) router_endpoint);
+	//printf("WORKER BINDED to: %s\n", (const char *) router_endpoint);
 	//Connect the router socket to a certain endpoint.
 	if (zmq_bind(*router, (const char *) router_endpoint) == -1)
 	{
@@ -754,7 +754,7 @@ srv_attached_dispatcher(void * th_argv)
 		    pthread_exit(NULL);
 		}
 
-		printf("REQUEST RECEIVED: %s\n", (char *) zmq_msg_data(&client_req));
+		//printf("REQUEST RECEIVED: %s\n", (char *) zmq_msg_data(&client_req));
 
 		//Check if the client is requesting connection resources.
 		if (!strncmp((char *) zmq_msg_data(&client_req), "HELLO!", 6))
@@ -767,7 +767,7 @@ srv_attached_dispatcher(void * th_argv)
 				sscanf((char *) zmq_msg_data(&client_req), "%s %ld %s", buff, &buffer_KB, att_imss_uri);
 				strcpy(arguments->my_uri, att_imss_uri);
 
-				printf("MU URI: %s\n", att_imss_uri);
+				//printf("MU URI: %s\n", att_imss_uri);
 
 				//Notify that the value has been received.
 				pthread_mutex_lock(&buff_size_mut);
