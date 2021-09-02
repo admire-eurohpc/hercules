@@ -26,7 +26,7 @@ const int DETACHED	= 0;
 const int ATTACHED 	= 1;
 
 //IMSS release operation possibilities.
-const int DISCONNEC = 0;
+const int DISCONNECT = 0;
 const int CLOSE_DETACHED = 1;
 const int CLOSE_ATTACHED = 2;
 
