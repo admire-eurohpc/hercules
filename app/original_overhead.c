@@ -88,7 +88,6 @@ int32_t main (int32_t argc, char **argv)
 		t1 = clk::now();
 		get_data(datasetd_, 0, (unsigned char*) rcv_buffer);
 		t2 = clk::now();
-		get_data_time = get_data_time + std::chrono::duration_cast<std::chrono::nanoseconds>(t2-t1);
 
 		if (!i)
 			get_data_time = std::chrono::duration_cast<std::chrono::nanoseconds>(t2-t1);
