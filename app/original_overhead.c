@@ -14,10 +14,10 @@ int32_t main (int32_t argc, char **argv)
 
 	using clk = std::chrono::high_resolution_clock;
 
-	char metadata[]      = "./metadata";
-	char localhost[]     = "./stat_init_file";
+	char metadata[]      = "./module_metadata";
+	char localhost[]     = "./module_stat_hostfile";
 	char imss_test[]     = "imss://berries";
-	char hostfile[]	     = "./hostfile";
+	char hostfile[]	     = "./module_hostfile";
 	char policy[]        = "LOCAL";
 	char dataset_uri[]   = "imss://berries/dataset";
 	uint32_t iterations  = atoi(argv[1]);
