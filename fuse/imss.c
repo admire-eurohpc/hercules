@@ -17,9 +17,6 @@
 #include <fcntl.h>
 #include "imss.h"
 
-static const char *imss_str = "Hello World!\n";
-static const char *imss_path = "/imss";
-
 static int imss_getattr(const char *path, struct stat *stbuf)
 {
 	int res = 0;
@@ -56,11 +53,18 @@ static int imss_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 
 static int imss_open(const char *path, struct fuse_file_info *fi)
 {
-	if (strcmp(path, imss_path) != 0)
-		return -ENOENT;
+	//TODO -> Access control
+	
+	//ONLY OPENING IF ALREADY EXISTS
+	int32_t file_desc = open_dataset(path);
+	//File does not exist	
+	if(file_desc < 0) return -ENOENT;
 
-	if ((fi->flags & 3) != O_RDONLY)
-		return -EACCES;
+	//Assign file descriptor
+	fi->fh = file_desc;
+
+	/*if ((fi->flags & 3) != O_RDONLY)
+		return -EACCES;*/
 
 	return 0;
 }
@@ -155,7 +159,7 @@ static int imss_read(const char *path, char *buf, size_t size, off_t offset,
 
  */
 
-static void imss_write(const char *path, const char *buf, size_t size,
+static int imss_write(const char *path, const char *buf, size_t size,
 			  off_t off, struct fuse_file_info *fi)
 {
 
@@ -227,6 +231,17 @@ static void imss_write(const char *path, const char *buf, size_t size,
 
 }
 
+static int imss_close(const char * path, struct fuse_file_info *fi)
+{
+	//Release resources
+	return release_dataset(fi->fh);
+}
+
+static int imss_create(const char * path, mode_t mode, struct fuse_file_info * fi)
+{
+	
+}
+
 static struct fuse_operations imss_oper = {
 	.getattr	= imss_getattr,
 	.readdir	= imss_readdir,
@@ -234,6 +249,7 @@ static struct fuse_operations imss_oper = {
 	.read		= imss_read, //
 	.write		= imss_write, 
 	.close		= imss_close,
+	.create		= imss_create,
 };
 
 int main(int argc, char *argv[])
