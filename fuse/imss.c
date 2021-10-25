@@ -19,7 +19,24 @@
 
 static int imss_getattr(const char *path, struct stat *stbuf)
 {
-	int res = 0;
+	//Get metadata from IMSS
+	//FIXME!! -> Esto solo vale para datasets, ¿Qué hacemos para distinguir directorios? ¿Si de error intentamos de nuevo?
+	dataset_info * metadata;
+	if(stat_dataset(path, metadata) == -1){
+		fprintf(stderr, "[IMSS-FUSE]	Cannot get dataset metadata.");
+		return -ENOENT;
+	}
+
+	//Copy metadata
+	//TODO
+
+	//Release metadata
+	free_dataset(metadata);
+
+	//¿Hacer aquí si es directorio? 
+
+
+	/*
 
 	memset(stbuf, 0, sizeof(struct stat));
 	if (strcmp(path, "/") == 0) {
@@ -30,7 +47,7 @@ static int imss_getattr(const char *path, struct stat *stbuf)
 		stbuf->st_nlink = 1;
 		stbuf->st_size = strlen(imss_str);
 	} else
-		res = -ENOENT;
+		res = -ENOENT;*/
 
 	return res;
 }
@@ -197,7 +214,7 @@ static int imss_write(const char *path, const char *buf, size_t size,
 
 		//Write and update variables
 		if(set_data(fi->fh, curr_blk, (unsigned char *)to_write) < 0){
-			LOG4CXX_ERROR(fli_logger, "[IMSS-FUSE]->	Error writing to imss.\n");
+			fprintf(stderr, "[IMSS-FUSE]->	Error writing to imss.\n");
 			return -1;
 		}
 
@@ -218,7 +235,7 @@ static int imss_write(const char *path, const char *buf, size_t size,
 
 		//Write and update variables
 		if(set_data(fi->fh, curr_blk, (unsigned char *)to_write) < 0){
-			LOG4CXX_ERROR(fli_logger, "[IMSS-FUSE]->	Error writing to imss.\n");
+			fprintf(stderr, "[IMSS-FUSE]	Error writing to imss.\n");
 			return -1;
 		}
 
@@ -239,7 +256,16 @@ static int imss_close(const char * path, struct fuse_file_info *fi)
 
 static int imss_create(const char * path, mode_t mode, struct fuse_file_info * fi)
 {
-	
+	//TODO check mode
+
+	//Check if already created!
+
+	//Fixed things to define at creation???!!!!!
+	int32_t creat = create_dataset(path, "RR", int32_t num_data_elem, int32_t data_elem_size, int32_t repl_factor);
+	if(creat < 0) {
+		fprintf(stderr, "[IMSS-FUSE]	Cannot create new dataset.\n")
+	}
+
 }
 
 static struct fuse_operations imss_oper = {
