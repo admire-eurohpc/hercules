@@ -52,10 +52,44 @@ static int imss_getattr(const char *path, struct stat *stbuf)
 	return res;
 }
 
+/*
+ 	Read directory
+
+The filesystem may choose between two modes of operation:
+
+-->	1) The readdir implementation ignores the offset parameter, and passes zero to the filler function's offset. 
+		The filler function will not return '1' (unless an error happens), so the whole directory is read in a single readdir operation.
+
+	2) The readdir implementation keeps track of the offsets of the directory entries. It uses the offset parameter
+		 and always passes non-zero offset to the filler function. When the buffer is full (or an error happens) the filler function will return '1'. 
+*/
 static int imss_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 			 off_t offset, struct fuse_file_info *fi)
 {
-	(void) offset;
+	
+	//Needed variables for the call
+	char * buffer;
+	char ** refs;
+	int n_ent;
+
+	//Call IMSS to get metadata
+	if((n_ent = get_dir(path, &buffer, &refs)) < 0){
+		//In case of error
+		fprintf(stderr, "[IMSS-FUSE]->	Error retrieving directories for URI=%s", path);
+		return -ENOENT
+	}
+
+	//Fill buffer
+	//TODO: Check if subdirectory
+	for(int i = 0; i < n_ent; ++i) filler(buf, refs[i], NULL, 0);
+	
+	//Free resources
+	free(buffer);
+	free(refs);
+
+	return 0;
+
+	/*(void) offset;
 	(void) fi;
 
 	if (strcmp(path, "/") != 0)
@@ -65,7 +99,7 @@ static int imss_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 	filler(buf, "..", NULL, 0);
 	filler(buf, imss_path + 1, NULL, 0);
 
-	return 0;
+	return 0;*/
 }
 
 static int imss_open(const char *path, struct fuse_file_info *fi)
