@@ -17,6 +17,37 @@
 #include <fcntl.h>
 #include "imss.h"
 
+/*
+	-----------	IMSS Global variables, filled at the beggining or by default -----------
+*/
+
+ uint16_t IMSS_SRV_PORT = 1; //Not default, 1 will fail
+ uint16_t METADATA_PORT = 1; //Not default, 1 will fail
+ int32_t N_SERVERS = 1; //Default 1
+ int32_t N_BLKS = 1; //Default 1
+ char * METADATA_FILE = ""; //Not default, "" will fail
+ char * IMSS_HOSTFILE = ""; //Not default, "" will fail
+ char * IMSS_ROOT = ""; //Not default, "" will fail
+ char * IMSS_SRV_ADDR = ""; //Not default, "" will fail 
+ char * POLICY = "RR"; //Default RR
+ uint64_t STORAGE_SIZE = 2048; //In Kb, Default 2 MB
+ uint64_t META_BUFFSIZE = 1024; //In Kb, Default 1 MB
+ uint64_t IMSS_BUFFSIZE = 1024; //In Kb, Default 1 MB
+ uint64_t IMSS_BLKSIZE = 1024; //In Kb, Default 1 MB
+ int32_t REPL_FACTOR = NONE; //Default none (*)
+
+/*
+  	(*) Mapping for REPL_FACTOR values:
+  		NONE = 1;
+		DRM = 2;
+		TRM = 3;
+*/
+
+ /*
+	-----------	FUSE IMSS implementation -----------
+*/
+
+
 static int imss_getattr(const char *path, struct stat *stbuf)
 {
 	//Get metadata from IMSS
@@ -75,7 +106,7 @@ static int imss_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 	//Call IMSS to get metadata
 	if((n_ent = get_dir(path, &buffer, &refs)) < 0){
 		//In case of error
-		fprintf(stderr, "[IMSS-FUSE]->	Error retrieving directories for URI=%s", path);
+		fprintf(stderr, "[IMSS-FUSE]	Error retrieving directories for URI=%s", path);
 		return -ENOENT
 	}
 
@@ -157,7 +188,7 @@ static int imss_read(const char *path, char *buf, size_t size, off_t offset,
 		//Read the st block
 		if(get_ndata(fi->fh, curr_blk, (unsigned char*)aux, &rbytes) == -1){
 			//Notify error and stop loop
-			fprintf(stderr, "[IMSS-FUSE]->	Error reding from imss.\n");
+			fprintf(stderr, "[IMSS-FUSE]	Error reding from imss.\n");
 			break;
 		}
 		//Copy
@@ -175,7 +206,7 @@ static int imss_read(const char *path, char *buf, size_t size, off_t offset,
 		if(curr_blk == end_blk && end_offset){
 			if(get_ndata(fi->fh, curr_blk, (unsigned char*)aux, &rbytes) == -1){
 				//Notify error and stop loop
-				fprintf(stderr, "[IMSS-FUSE]->	Error reding from imss.\n");
+				fprintf(stderr, "[IMSS-FUSE]	Error reding from imss.\n");
 				break;
 			}
 			//Copy
@@ -189,7 +220,7 @@ static int imss_read(const char *path, char *buf, size_t size, off_t offset,
 
 			if(get_ndata(fi->fh, curr_blk, (unsigned char*)(buf+byte_count), &rbytes) == -1){
 				//Notify error and stop loop
-				fprintf(stderr, "[IMSS-FUSE]->	Error reding from imss.\n");
+				fprintf(stderr, "[IMSS-FUSE]	Error reding from imss.\n");
 				break;
 			}
 			//Update buffer offset and byte count
@@ -205,10 +236,6 @@ static int imss_read(const char *path, char *buf, size_t size, off_t offset,
 
 }
 
-/*
- 		Behaviour
-
- */
 
 static int imss_write(const char *path, const char *buf, size_t size,
 			  off_t off, struct fuse_file_info *fi)
@@ -234,7 +261,7 @@ static int imss_write(const char *path, const char *buf, size_t size,
 		//Read previous block
 		if(get_ndata(fi->fh, curr_blk, (unsigned char*)aux, &wbytes) == -1){
 			//Notify error and stop loop
-			fprintf(stderr, "[IMSS-FUSE]->	Error reding from imss.\n");
+			fprintf(stderr, "[IMSS-FUSE]	Error reding from imss.\n");
 			break;
 		}
 
@@ -248,7 +275,7 @@ static int imss_write(const char *path, const char *buf, size_t size,
 
 		//Write and update variables
 		if(set_data(fi->fh, curr_blk, (unsigned char *)to_write) < 0){
-			fprintf(stderr, "[IMSS-FUSE]->	Error writing to imss.\n");
+			fprintf(stderr, "[IMSS-FUSE]	Error writing to imss.\n");
 			return -1;
 		}
 
@@ -294,11 +321,12 @@ static int imss_create(const char * path, mode_t mode, struct fuse_file_info * f
 
 	//Check if already created!
 
-	//Fixed things to define at creation???!!!!!
-	int32_t creat = create_dataset(path, "RR", int32_t num_data_elem, int32_t data_elem_size, int32_t repl_factor);
+	int32_t creat = create_dataset(path, POLICY,  N_BLKS, IMSS_BLKSIZE, REPL_FACTOR);
 	if(creat < 0) {
 		fprintf(stderr, "[IMSS-FUSE]	Cannot create new dataset.\n")
 	}
+
+	return 1; //FIXME check return value!
 
 }
 
@@ -312,8 +340,91 @@ static struct fuse_operations imss_oper = {
 	.create		= imss_create,
 };
 
+/*
+ 	----------- Parsing arguments and help functions -----------
+ */
+
+void print_help(){
+
+	printf("IMSS FUSE HELP\n\n");
+
+	printf("\t-p	IMSS port (*).\n");
+	printf("\t-m	Metadata port (*).\n");
+	printf("\t-s	Number of servers (1 default).\n");
+	printf("\t-b	Number of blocks (1 default).\n");
+	printf("\t-M	Metada file path (*).\n");
+	printf("\t-h	Host file path(*).\n");
+	printf("\t-r	IMSS root path (*).\n");
+	printf("\t-a	IMSS server adderss (*).\n");
+	printf("\t-P	IMSS policy (RR by default).\n");
+	printf("\t-S	IMSS storage size in KB (by default 2048).\n");
+	printf("\t-B	IMSS buffer size in KB (by default 1024).\n");
+	printf("\t-e	Metadata buffer size in KB (by default 1024).\n");
+	printf("\t-o	IMSS block size in KB (by default 1024).\n");
+	printf("\t-R	Replication factor (by default NONE).\n");
+
+	printf("\t-H	Print this message.\n");
+
+	printf("\n\n(*) Argument is compulsory.\n");
+
+}
+
+int parse_args(char ** argv){
+
+	//optstring -> "p:m:s:b:M:h:r:a:P:S:B:e:o:R"
+	int option;
+	//EXAMPLE -->
+	while((opt = getopt(argc, argv, “:if:lrx”)) != -1){ 
+        switch(opt) { 
+            case ‘i’: 
+            case ‘l’: 
+            case ‘r’: 
+                printf(“option: %c\n”, opt); 
+                break; 
+            case ‘f’: 
+                printf(“filename: %s\n”, optarg); 
+                break; 
+            case ‘:’: 
+                printf(“option needs a value\n”); 
+                break; 
+            case ‘?’: 
+                printf(“unknown option: %c\n”, optopt);
+                break; 
+        } 
+    } 
+}
+
+/*
+ 	----------- MAIN -----------
+ */
+
 int main(int argc, char *argv[])
-{
+{	
+	//Parse input arguments
+	int parse = parse_args(argv);
+
+	//Hercules init -- Attached deploy
+	if (hercules_init(0, STORAGE_SIZE, IMSS_SRV_PORT, METADATA_PORT, META_BUFFSIZE, METADATA_FILE) == -1){
+		//In case of error notify and exit
+		fprintf(stderr, "[IMSS-FUSE]	Hercules init failed, cannot deploy IMSS.\n");
+		return -1;
+	} 
+
+	//Metadata server
+	if (stat_init( IMSS_SRV_ADDR, METADATA_PORT, rank) == -1){
+		//In case of error notify and exit
+		fprintf(stderr, "[IMSS-FUSE]	Stat init failed, cannot connect to Metadata server.\n");
+		return -1;
+	} 
+
+	//Initialize the IMSS servers
+	if(init_imss(IMSS_ROOT, IMSS_HOSTFILE, N_SERVERS, IMSS_SRV_PORT, IMSS_BUFFSIZE, ATTACHED, NULL) < 0) {
+		//Notify error and exit
+		fprintf(stderr, "[IMSS-FUSE]	IMSS init failed, cannot create servers.\n");
+		return -1;
+	}
+
+
 	return fuse_main(argc, argv, &imss_oper, NULL);
 }
 
