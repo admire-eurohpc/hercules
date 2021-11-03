@@ -14,8 +14,11 @@
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
+#include <unistd.h>
 #include <fcntl.h>
 #include "imss.h"
+
+#define MAX_LEN 1024
 
 /*
 	-----------	IMSS Global variables, filled at the beggining or by default -----------
@@ -25,16 +28,16 @@
  uint16_t METADATA_PORT = 1; //Not default, 1 will fail
  int32_t N_SERVERS = 1; //Default 1
  int32_t N_BLKS = 1; //Default 1
- char * METADATA_FILE = ""; //Not default, "" will fail
- char * IMSS_HOSTFILE = ""; //Not default, "" will fail
- char * IMSS_ROOT = ""; //Not default, "" will fail
- char * IMSS_SRV_ADDR = ""; //Not default, "" will fail 
+ char * METADATA_FILE = NULL //Not default
+ char * IMSS_HOSTFILE = NULL //Not default
+ char * IMSS_ROOT = NULL//Not default
+ char * IMSS_SRV_ADDR = NULL; //Not default 
  char * POLICY = "RR"; //Default RR
  uint64_t STORAGE_SIZE = 2048; //In Kb, Default 2 MB
  uint64_t META_BUFFSIZE = 1024; //In Kb, Default 1 MB
  uint64_t IMSS_BUFFSIZE = 1024; //In Kb, Default 1 MB
  uint64_t IMSS_BLKSIZE = 1024; //In Kb, Default 1 MB
- int32_t REPL_FACTOR = NONE; //Default none (*)
+ int32_t REPL_FACTOR = NONE; //Default none
 
 /*
   	(*) Mapping for REPL_FACTOR values:
@@ -46,6 +49,8 @@
  /*
 	-----------	FUSE IMSS implementation -----------
 */
+
+ char * DEF_POL = "RR";
 
 
 static int imss_getattr(const char *path, struct stat *stbuf)
@@ -363,35 +368,123 @@ void print_help(){
 	printf("\t-o	IMSS block size in KB (by default 1024).\n");
 	printf("\t-R	Replication factor (by default NONE).\n");
 
-	printf("\t-H	Print this message.\n");
+	printf("\n\t-H	Print this message.\n");
 
-	printf("\n\n(*) Argument is compulsory.\n");
+	printf("\n(*) Argument is compulsory.\n");
 
 }
 
+//Function checking arguments, return 1 if everything is filled, 0 otherwise
+int check_args(){
+
+	//Check all non optional parameters
+	return IMSS_SRV_PORT != 1 &&
+ 	METADATA_PORT != 1 &&
+	METADATA_FILE &&
+	IMSS_HOSTFILE &&
+	IMSS_ROOT &&
+	IMSS_SRV_ADDR;
+}
+
+/**
+ *	Parse arguments function.
+ *	Returns 1 if the parsing was correct, 0 otherwise.
+ */
 int parse_args(char ** argv){
 
-	//optstring -> "p:m:s:b:M:h:r:a:P:S:B:e:o:R"
-	int option;
-	//EXAMPLE -->
-	while((opt = getopt(argc, argv, “:if:lrx”)) != -1){ 
+	int opt;
+
+	while((opt = getopt(argc, argv, "p:m:s:b:M:h:r:a:P:S:B:e:o:R")) != -1){ 
         switch(opt) { 
-            case ‘i’: 
-            case ‘l’: 
-            case ‘r’: 
-                printf(“option: %c\n”, opt); 
-                break; 
-            case ‘f’: 
-                printf(“filename: %s\n”, optarg); 
-                break; 
-            case ‘:’: 
-                printf(“option needs a value\n”); 
-                break; 
-            case ‘?’: 
-                printf(“unknown option: %c\n”, optopt);
-                break; 
+            case 'p':
+            	if(!sscanf(optarg, "%" SCNu16, &IMSS_SRV_PORT)){
+            		print_help();
+            		return 0;
+            	}
+            	break;
+            case 'm':
+            	if(!sscanf(optarg, "%" SCNu16, &METADATA_PORT)){
+            		print_help();
+            		return 0;
+            	}
+            	break;
+            case 's':
+            	if(!sscanf(optarg, "%" SCNu32, &N_SERVERS)){
+            		print_help();
+            		return 0;
+            	}
+            	break;
+            case 'b':
+            	if(!sscanf(optarg, "%" SCNu32, &N_BLKS)){
+            		print_help();
+            		return 0;
+            	}
+            	break;
+            case 'M':
+				METADATA_FILE = optarg;            	
+            	break;
+            case 'h':
+				IMSS_HOSTFILE = optarg;
+            	break;
+            case 'r':
+				IMSS_ROOT = optarg;
+            	break;
+            case 'a':
+				IMSS_SRV_ADDR = optarg;
+            	break;
+            case 'P':
+				POLICY = optarg; //We lost "RR", but not significative
+            	break;
+            case 'S':
+            	if(!sscanf(optarg, "%" SCNu64, &STORAGE_SIZE)){
+            		print_help();
+            		return 0;
+            	}
+            	break;
+            case 'B':
+            	if(!sscanf(optarg, "%" SCNu64, &IMSS_BUFFSIZE)){
+            		print_help();
+            		return 0;
+            	}
+            	break;
+            case 'e':
+            	if(!sscanf(optarg, "%" SCNu64, &META_BUFFSIZE)){
+            		print_help();
+            		return 0;
+            	}
+            	break;
+            case 'o':
+            	if(!sscanf(optarg, "%" SCNu64, &IMSS_BLKSIZE)){
+            		print_help();
+            		return 0;
+            	}
+            	break;
+            case 'R':
+            	if(!sscanf(optarg, "%" SCNu32, &REPL_FACTOR)){
+            		print_help();
+            		return 0;
+            	}
+            	break;
+            case 'H':
+            	print_help();
+            	return 0;
+            case ':':
+            	fprintf(stderr, "[IMSS-FUSE]	Option %s requires value\n", optarg);
+            	return 0;
+            case '?':
+            	print_help();
+            	return 0;
         } 
     } 
+
+    //Check if all compulsory args are filled
+    if(!check_args()) {
+    	fprintf(stderr, "[IMSS-FUSE]	Please, fill all the mandatory arguments.\n");
+    	print_help();
+    	return 0;
+    }
+
+    return 1;
 }
 
 /*
