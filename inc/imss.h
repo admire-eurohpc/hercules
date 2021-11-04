@@ -49,7 +49,7 @@ typedef struct {
 	//IMSS URI.
 	char uri_[URI_];
 	//Byte specifying the type of structure.
-	char type = 'I';
+	char type;// = 'I';
 	//Set of ips comforming the IMSS.
 	char ** ips;
 	//Number of IMSS servers.
@@ -84,7 +84,7 @@ typedef struct {
 	//URI identifying a certain dataset.
 	char uri_[URI_];
 	//Byte specifying the type of structure.
-	char type = 'D';
+	char type;// = 'D';
 	//Policy that was followed in order to write the dataset.
 	char policy[8];
 	//Number of data elements conforming the dataset entity.
@@ -111,9 +111,9 @@ typedef struct {
 
 } dataset_info;
 
-
-
-
+#ifndef FUSE
+extern "C" {
+#endif
 /****************************************************************************************************************************/
 /****************************************** METADATA SERVICE MANAGEMENT FUNCTIONS  ******************************************/
 
@@ -245,7 +245,7 @@ char * get_deployed();
 
                 free(deployment);
 */
-char * get_deployed(char * endpoint);
+char * get_deployed_(char * endpoint);
 
 
 /****************************************************************************************************************************/
@@ -396,5 +396,8 @@ int32_t free_imss(imss_info * imss_info_);
 */
 int32_t free_dataset(dataset_info * dataset_info_);
 
+#ifndef FUSE
+}
+#endif
 
 #endif
