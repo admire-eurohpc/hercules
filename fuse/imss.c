@@ -41,6 +41,7 @@
  uint64_t IMSS_BUFFSIZE = 1024; //In Kb, Default 1 MB
  uint64_t IMSS_BLKSIZE = 1024; //In Kb, Default 1 MB
  int32_t REPL_FACTOR = 1; //Default none
+ char * MOUNTPOINT[2] = {"f", NULL}; // {"f", mountpoint} Not default ({"f", NULL})
 
 /*
   	(*) Mapping for REPL_FACTOR values:
@@ -48,6 +49,18 @@
 		DRM = 2;
 		TRM = 3;
 */
+
+  /*
+	-----------	Auxiliar Functions -----------
+*/
+
+void get_iuri(const char * path, /*output*/ char * uri){
+
+ 	//Copying protocol
+ 	memcpy(uri, "imss://", 7);
+ 	//Copying path
+ 	strcpy(uri+7, path);
+}
 
  /*
 	-----------	FUSE IMSS implementation -----------
@@ -141,6 +154,10 @@ static int imss_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 static int imss_open(const char *path, struct fuse_file_info *fi)
 {
 	//TODO -> Access control
+	//DEBUG
+	FILE * log = fopen("/home/pbrox/imss/build/log.o", "a");
+	fprintf(log, "%s\n", path);
+	fclose(log);
 	
 	//ONLY OPENING IF ALREADY EXISTS
 	int32_t file_desc = open_dataset((char*)path);
@@ -323,10 +340,14 @@ static int imss_close(const char * path, struct fuse_file_info *fi)
 static int imss_create(const char * path, mode_t mode, struct fuse_file_info * fi)
 {
 	//TODO check mode
+	//DEBUG
+	printf("%s\n", path);
 
 	//Check if already created!
+	char rpath[strlen(path)+8];
+	get_iuri(path, rpath);
 
-	int32_t creat = create_dataset((char*)path, POLICY,  N_BLKS, IMSS_BLKSIZE, REPL_FACTOR);
+	int32_t creat = create_dataset((char*)rpath, POLICY,  N_BLKS, IMSS_BLKSIZE, REPL_FACTOR);
 	if(creat < 0) {
 		fprintf(stderr, "[IMSS-FUSE]	Cannot create new dataset.\n");
 	}
@@ -367,7 +388,9 @@ void print_help(){
 	printf("\t-e	Metadata buffer size in KB (by default 1024).\n");
 	printf("\t-o	IMSS block size in KB (by default 1024).\n");
 	printf("\t-R	Replication factor (by default NONE).\n");
-	printf("\t-x	Metadate server number (by default 1).\n");
+	printf("\t-x	Metadata server number (by default 1).\n");
+
+	printf("\n\t-l	Mountpoint (*).\n");
 
 	printf("\n\t-H	Print this message.\n");
 
@@ -384,7 +407,8 @@ int check_args(){
 	METADATA_FILE &&
 	IMSS_HOSTFILE &&
 	IMSS_ROOT &&
-	META_HOSTFILE;
+	META_HOSTFILE &&
+	MOUNTPOINT[1];
 }
 
 /**
@@ -395,7 +419,7 @@ int parse_args(int argc, char ** argv){
 
 	int opt;
 
-	while((opt = getopt(argc, argv, "p:m:s:b:M:h:r:a:P:S:B:e:o:R:x:")) != -1){ 
+	while((opt = getopt(argc, argv, "p:m:s:b:M:h:r:a:P:S:B:e:o:R:x:Hl:")) != -1){ 
         switch(opt) { 
             case 'p':
             	if(!sscanf(optarg, "%" SCNu16, &IMSS_SRV_PORT)){
@@ -466,6 +490,9 @@ int parse_args(int argc, char ** argv){
             		return 0;
             	}
             	break;
+            case 'l':
+            	MOUNTPOINT[1] = optarg; //We lost "RR", but not significative
+            	break;
            	case 'x':
            		if(!sscanf(optarg, "%" SCNu32, &N_META_SERVERS)){
             		print_help();
@@ -476,7 +503,6 @@ int parse_args(int argc, char ** argv){
             	print_help();
             	return 0;
             case ':':
-            	fprintf(stderr, "[IMSS-FUSE]	Option %s requires value\n", optarg);
             	return 0;
             case '?':
             	print_help();
@@ -501,7 +527,7 @@ int parse_args(int argc, char ** argv){
 int main(int argc, char *argv[])
 {	
 	//Parse input arguments
-	int parse = parse_args(argc, argv);
+	if(!parse_args(argc, argv)) return -1;
 
 	//Hercules init -- Attached deploy
 	if (hercules_init(0, STORAGE_SIZE, IMSS_SRV_PORT, 1, METADATA_PORT, META_BUFFSIZE, METADATA_FILE) == -1){
@@ -523,7 +549,6 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "[IMSS-FUSE]	IMSS init failed, cannot create servers.\n");
 		return -1;
 	}
-
-	return fuse_main(argc, argv, &imss_oper, NULL);
+	return fuse_main(2, MOUNTPOINT, &imss_oper, NULL);
 }
 
