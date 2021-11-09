@@ -57,9 +57,9 @@
 void get_iuri(const char * path, /*output*/ char * uri){
 
  	//Copying protocol
- 	memcpy(uri, "imss://", 7);
+ 	memcpy(uri, "imss:/", 6);
  	//Copying path
- 	strcpy(uri+7, path);
+ 	strcpy(uri+6, path);
 }
 
  /*
@@ -68,21 +68,41 @@ void get_iuri(const char * path, /*output*/ char * uri){
 
 static int imss_getattr(const char *path, struct stat *stbuf)
 {
+	FILE * log = fopen("/home/pbrox/imss/build/log.o", "a");
+	fprintf(log, "GET_ATT:	%s\n", path);
+	fclose(log);
+
+	//Needed variables for the call
+	char * buffer;
+	char ** refs;
+	int n_ent;
+	char imss_path[256] = {0};
+
+	get_iuri(path, imss_path);
+
+    memset(stbuf, 0, sizeof(struct stat));
+
+	//Call IMSS to get metadata
+	if((n_ent = get_dir((char*)imss_path, &buffer, &refs)) == 0){
+       stbuf->st_size = 4;
+       stbuf->st_mode = S_IFDIR;
+
+	   //Free resources
+	   free(buffer);
+	   free(refs);
+       
+       return 0;
+	} 
+    
 	//Get metadata from IMSS
-	//FIXME!! -> Esto solo vale para datasets, ¿Qué hacemos para distinguir directorios? ¿Si de error intentamos de nuevo?
 	dataset_info * metadata;
-	if(stat_dataset(path, metadata) == -1){
+	if(stat_dataset(imss_path, metadata) == -1){
 		fprintf(stderr, "[IMSS-FUSE]	Cannot get dataset metadata.");
 		return -ENOENT;
 	}
 
-	//Copy metadata
-	//TODO
-
-	//Release metadata
-	free_dataset(metadata);
-
-	//¿Hacer aquí si es directorio? 
+	stbuf->st_size = metadata->num_data_elem * metadata->data_entity_size;
+    stbuf->st_mode = S_IFREG;
 
 
 	/*
@@ -115,6 +135,9 @@ The filesystem may choose between two modes of operation:
 static int imss_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 			 off_t offset, struct fuse_file_info *fi)
 {
+	FILE * log = fopen("/home/pbrox/imss/build/log.o", "a");
+	fprintf(log, "READDIR: %s\n", path);
+	fclose(log);
 	
 	//Needed variables for the call
 	char * buffer;
@@ -156,7 +179,7 @@ static int imss_open(const char *path, struct fuse_file_info *fi)
 	//TODO -> Access control
 	//DEBUG
 	FILE * log = fopen("/home/pbrox/imss/build/log.o", "a");
-	fprintf(log, "%s\n", path);
+	fprintf(log, "OPEN:		%s\n", path);
 	fclose(log);
 	
 	//ONLY OPENING IF ALREADY EXISTS
@@ -176,6 +199,9 @@ static int imss_open(const char *path, struct fuse_file_info *fi)
 static int imss_read(const char *path, char *buf, size_t size, off_t offset,
 		      struct fuse_file_info *fi)
 {
+	FILE * log = fopen("/home/pbrox/imss/build/log.o", "a");
+	fprintf(log, "READ:		%s\n", path);
+	fclose(log);
 	/*size_t len;
 	(void) fi;
 	if(strcmp(path, imss_path) != 0)
@@ -264,7 +290,9 @@ static int imss_write(const char *path, const char *buf, size_t size,
 {
 
 	//TODO -- Previous checks
-
+	FILE * log = fopen("/home/pbrox/imss/build/log.o", "a");
+	fprintf(log, "WRITE:	%s\n", path);
+	fclose(log);
 
 	//Compute offsets to write
 	int64_t curr_blk, end_blk, start_offset, end_offset;
@@ -333,6 +361,9 @@ static int imss_write(const char *path, const char *buf, size_t size,
 
 static int imss_close(const char * path, struct fuse_file_info *fi)
 {
+	FILE * log = fopen("/home/pbrox/imss/build/log.o", "a");
+	fprintf(log, "CLOSE 	%s\n", path);
+	fclose(log);
 	//Release resources
 	return release_dataset(fi->fh);
 }
@@ -341,7 +372,9 @@ static int imss_create(const char * path, mode_t mode, struct fuse_file_info * f
 {
 	//TODO check mode
 	//DEBUG
-	printf("%s\n", path);
+	FILE * log = fopen("/home/pbrox/imss/build/log.o", "a");
+	fprintf(log, "CREAT:	%s\n", path);
+	fclose(log);
 
 	//Check if already created!
 	char rpath[strlen(path)+8];
@@ -549,6 +582,7 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "[IMSS-FUSE]	IMSS init failed, cannot create servers.\n");
 		return -1;
 	}
+	printf("Hello!\n");
 	return fuse_main(2, MOUNTPOINT, &imss_oper, NULL);
 }
 
