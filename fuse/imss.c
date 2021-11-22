@@ -28,8 +28,8 @@
 
  uint16_t IMSS_SRV_PORT = 1; //Not default, 1 will fail
  uint16_t METADATA_PORT = 1; //Not default, 1 will fail
- int32_t N_SERVERS = 1; //Default 1
- int32_t N_META_SERVERS = 1; //Default 1
+ int32_t N_SERVERS = 1; //Default
+ int32_t N_META_SERVERS = 1; //Default 1 1
  int32_t N_BLKS = 1; //Default 1
  char * METADATA_FILE = NULL; //Not default
  char * IMSS_HOSTFILE = NULL; //Not default
@@ -41,7 +41,7 @@
  uint64_t IMSS_BUFFSIZE = 1024; //In Kb, Default 1 MB
  uint64_t IMSS_BLKSIZE = 1024; //In Kb, Default 1 MB
  int32_t REPL_FACTOR = 1; //Default none
- char * MOUNTPOINT[2] = {"f", NULL}; // {"f", mountpoint} Not default ({"f", NULL})
+ char * MOUNTPOINT[3] = {"f", "-d", NULL}; // {"f", mountpoint} Not default ({"f", NULL})
 
 /*
   	(*) Mapping for REPL_FACTOR values:
@@ -58,6 +58,7 @@ void get_iuri(const char * path, /*output*/ char * uri){
 
  	//Copying protocol
  	memcpy(uri, "imss:/", 6);
+ 	//memcpy(uri, "imss://fuse", 11);
  	//Copying path
  	strcpy(uri+6, path);
 }
@@ -77,33 +78,44 @@ static int imss_getattr(const char *path, struct stat *stbuf)
 	char ** refs;
 	int n_ent;
 	char imss_path[256] = {0};
+	dataset_info  metadata;
 
 	get_iuri(path, imss_path);
 
     memset(stbuf, 0, sizeof(struct stat));
 
-	//Call IMSS to get metadata
-	if((n_ent = get_dir((char*)imss_path, &buffer, &refs)) == 0){
-       stbuf->st_size = 4;
-       stbuf->st_mode = S_IFDIR;
+    uint32_t type = get_type(imss_path);
 
-	   //Free resources
-	   free(buffer);
-	   free(refs);
-       
-       return 0;
-	} 
-    
-	//Get metadata from IMSS
-	dataset_info * metadata;
-	if(stat_dataset(imss_path, metadata) == -1){
-		fprintf(stderr, "[IMSS-FUSE]	Cannot get dataset metadata.");
-		return -ENOENT;
+    switch(type){
+
+    	case 0:
+    		return -ENOENT;
+    	case 1:
+	    	if((n_ent = get_dir((char*)imss_path, &buffer, &refs)) != -1){
+		       stbuf->st_size = 4;
+		       stbuf->st_nlink = 2;
+		       stbuf->st_mode = S_IFDIR | 0755;
+
+			   //Free resources
+			   free(buffer);
+			   free(refs);
+		       
+		       return 0;
+			} 
+			else return -ENOENT;
+
+		case 2:
+			if(stat_dataset(imss_path, &metadata) == -1){
+				fprintf(stderr, "[IMSS-FUSE]	Cannot get dataset metadata.");
+				return -ENOENT;
+			}
+			stbuf->st_size = metadata.num_data_elem * metadata.data_entity_size;
+		    stbuf->st_mode = S_IFREG | 0444;
+		    return 0;
+		default:
+			return -1;
 	}
-
-	stbuf->st_size = metadata->num_data_elem * metadata->data_entity_size;
-    stbuf->st_mode = S_IFREG;
-
+		    
 
 	/*
 
@@ -118,7 +130,6 @@ static int imss_getattr(const char *path, struct stat *stbuf)
 	} else
 		res = -ENOENT;*/
 
-	return 0;
 }
 
 /*
@@ -144,8 +155,12 @@ static int imss_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 	char ** refs;
 	int n_ent;
 
+	char imss_path[256] = {0};
+
+	get_iuri(path, imss_path);
+
 	//Call IMSS to get metadata
-	if((n_ent = get_dir((char*)path, &buffer, &refs)) < 0){
+	if((n_ent = get_dir((char*)imss_path, &buffer, &refs)) < 0){
 		//In case of error
 		fprintf(stderr, "[IMSS-FUSE]	Error retrieving directories for URI=%s", path);
 		return -ENOENT;
@@ -153,8 +168,16 @@ static int imss_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 
 	//Fill buffer
 	//TODO: Check if subdirectory
-	for(int i = 0; i < n_ent; ++i) filler(buf, refs[i], NULL, 0);
-	
+	for(int i = 0; i < n_ent; ++i) {
+		if (i == 0) {
+	            filler(buf, ".", NULL, 0);
+	            filler(buf, "..", NULL, 0);
+		} else {
+	            struct stat stbuf;
+	            imss_getattr(refs[i]+6, &stbuf); 
+		    filler(buf, refs[i]+6,  &stbuf, 0); 
+		}
+        }
 	//Free resources
 	free(buffer);
 	free(refs);
@@ -389,6 +412,13 @@ static int imss_create(const char * path, mode_t mode, struct fuse_file_info * f
 
 }
 
+//Does nothing
+int imss_opendir(const char * path, struct fuse_file_info * fi){return 0;}
+
+//Does nothing
+int imss_releasedir(const char * path, struct fuse_file_info * fi){return 0;}
+
+
 static struct fuse_operations imss_oper = {
 	.getattr	= imss_getattr,
 	.readdir	= imss_readdir,
@@ -397,6 +427,8 @@ static struct fuse_operations imss_oper = {
 	.write		= imss_write, 
 	.release		= imss_close,
 	.create		= imss_create,
+	.opendir 	= imss_opendir,
+	.releasedir = imss_releasedir
 };
 
 /*
@@ -431,6 +463,7 @@ void print_help(){
 
 }
 
+
 //Function checking arguments, return 1 if everything is filled, 0 otherwise
 int check_args(){
 
@@ -441,8 +474,9 @@ int check_args(){
 	IMSS_HOSTFILE &&
 	IMSS_ROOT &&
 	META_HOSTFILE &&
-	MOUNTPOINT[1];
+	MOUNTPOINT[2];
 }
+
 
 /**
  *	Parse arguments function.
@@ -524,7 +558,7 @@ int parse_args(int argc, char ** argv){
             	}
             	break;
             case 'l':
-            	MOUNTPOINT[1] = optarg; //We lost "RR", but not significative
+            	MOUNTPOINT[2] = optarg; //We lost "RR", but not significative
             	break;
            	case 'x':
            		if(!sscanf(optarg, "%" SCNu32, &N_META_SERVERS)){
@@ -552,6 +586,7 @@ int parse_args(int argc, char ** argv){
 
     return 1;
 }
+
 
 /*
  	----------- MAIN -----------
@@ -582,7 +617,14 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "[IMSS-FUSE]	IMSS init failed, cannot create servers.\n");
 		return -1;
 	}
+
+	if(create_dataset("imss://fuse/", POLICY,  N_BLKS, IMSS_BLKSIZE, REPL_FACTOR) < 0) {
+		fprintf(stderr, "[IMSS-FUSE]	IMSS init failed, cannot create servers.\n");
+		return -1;
+		}
 	printf("Hello!\n");
-	return fuse_main(2, MOUNTPOINT, &imss_oper, NULL);
+	char * test = get_deployed();
+	if(test) {printf("%s\n", test); free(test);}
+	return fuse_main(3, MOUNTPOINT, &imss_oper, NULL);
 }
 

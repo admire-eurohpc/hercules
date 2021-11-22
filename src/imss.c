@@ -506,7 +506,7 @@ get_dir(char * 	 requested_uri,
     uint32_t m_srv = discover_stat_srv(requested_uri);
 
 	//GETDIR request.
-	char getdir_req[strlen(requested_uri)+3];
+	char getdir_req[256];
 	sprintf(getdir_req, "%d %s%c", GETDIR, requested_uri, '\0');
 
 	//Send the request.
@@ -616,6 +616,7 @@ init_imss(char *   imss_uri,
 	strcpy(new_imss.info.uri_, imss_uri);
 	new_imss.info.num_storages  = n_servers;
 	new_imss.info.conn_port     = conn_port;
+	new_imss.info.type     = 'I';
 
 	if (deployment == ATTACHED)
 
