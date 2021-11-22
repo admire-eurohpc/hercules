@@ -19,6 +19,7 @@
 #include <fcntl.h>
 #include <inttypes.h>
 #include <stdlib.h>
+#include <time.h>
 
 #define KB 1024
 
@@ -69,9 +70,9 @@ void get_iuri(const char * path, /*output*/ char * uri){
 
 static int imss_getattr(const char *path, struct stat *stbuf)
 {
-	FILE * log = fopen("/home/pbrox/imss/build/log.o", "a");
-	fprintf(log, "GET_ATT:	%s\n", path);
-	fclose(log);
+
+	struct fuse_context * ctx;
+	ctx = fuse_get_context();
 
 	//Needed variables for the call
 	char * buffer;
@@ -79,10 +80,19 @@ static int imss_getattr(const char *path, struct stat *stbuf)
 	int n_ent;
 	char imss_path[256] = {0};
 	dataset_info  metadata;
-
+	struct timespec spec;
+    
 	get_iuri(path, imss_path);
 
     memset(stbuf, 0, sizeof(struct stat));
+    clock_gettime(CLOCK_REALTIME, &spec);
+
+    stbuf->st_uid = ctx->uid;
+    stbuf->st_gid = ctx->gid;
+    stbuf->st_blksize = IMSS_BLKSIZE;
+    stbuf->st_atim	= spec;
+    stbuf->st_mtime	= spec.tv_sec;
+    stbuf->st_ctime	= spec.tv_sec;
 
     uint32_t type = get_type(imss_path);
 
@@ -93,7 +103,7 @@ static int imss_getattr(const char *path, struct stat *stbuf)
     	case 1:
 	    	if((n_ent = get_dir((char*)imss_path, &buffer, &refs)) != -1){
 		       stbuf->st_size = 4;
-		       stbuf->st_nlink = 2;
+		       stbuf->st_nlink = 1;
 		       stbuf->st_mode = S_IFDIR | 0755;
 
 			   //Free resources
@@ -174,8 +184,9 @@ static int imss_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 	            filler(buf, "..", NULL, 0);
 		} else {
 	            struct stat stbuf;
+	            refs[i][strlen(refs[i])-1] = '\0';
 	            imss_getattr(refs[i]+6, &stbuf); 
-		    filler(buf, refs[i]+6,  &stbuf, 0); 
+		    			filler(buf, refs[i]+6,  &stbuf, 0); 
 		}
         }
 	//Free resources
