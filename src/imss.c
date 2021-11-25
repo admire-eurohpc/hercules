@@ -1107,6 +1107,7 @@ create_dataset(char *  dataset_uri,
 	new_dataset.imss_d 		= associated_imss_indx;
 	new_dataset.local_conn 		= associated_imss.conns.matching_server;
 	new_dataset.repl_factor		= repl_factor;
+	new_dataset.size 			= 0;
 
 	//Size of the message to be sent.
 	uint64_t msg_size = sizeof(dataset_info);
@@ -1519,6 +1520,8 @@ get_ndata(int32_t 	 dataset_id,
 	 int64_t  * len)
 {
 	int32_t n_server;
+
+	*len = 0;
 	//Server containing the corresponding data to be retrieved.
 	if ((n_server = get_data_location(dataset_id, data_id, GET)) == -1)
 
@@ -1585,10 +1588,12 @@ get_ndata(int32_t 	 dataset_id,
 		}
 
 		//Check if the requested key was correctly retrieved.
-		if (strncmp((const char *) buffer, "$ERRIMSS_NO_KEY_AVAIL$", 22))
-			return 0;
+		if (!strncmp((const char *) buffer, "$ERRIMSS_NO_KEY_AVAIL$", 22))
+			continue;
 
 	    *len = curr_dataset.data_entity_size;
+
+	    return 0;
 	}
 
 	fprintf(stderr, "ERRIMSS_GETDATA_UNAVAIL\n");
@@ -1637,6 +1642,57 @@ set_data(int32_t 	 dataset_id,
 
 		//Send read request message specifying the block data.
 		if (zmq_send (curr_imss.conns.sockets_[n_server_], buffer, curr_dataset.data_entity_size, 0) != curr_dataset.data_entity_size)
+		{
+			perror("ERRIMSS_SETDATA_SEND");
+			return -1;
+		}
+	}
+
+	return 0;
+}
+
+//Method storing a specific data element.
+int32_t
+set_ndata(int32_t 	 dataset_id,
+	 int32_t 	 data_id,
+	 unsigned char * buffer,
+	 uint32_t size)
+{
+	int32_t n_server;
+	//Server containing the corresponding data to be written.
+	if ((n_server = get_data_location(dataset_id, data_id, SET)) == -1)
+
+		return -1;
+
+	char key_[KEY];
+	//Key related to the requested data element.
+	sprintf(key_, "%d %s$%d", size, curr_dataset.uri_, data_id);
+
+	int key_length = strlen(key_)+1;
+	char key[key_length];
+	memcpy((void *) key, (void *) key_, key_length);
+	key[key_length-1] = '\0';
+
+	int32_t curr_imss_storages = curr_imss.info.num_storages;
+
+	//Send the data block to every server implementing redundancy.
+	for (int32_t i = 0; i < curr_dataset.repl_factor; i++)
+	{
+		//Server receiving the current data block.
+		uint32_t n_server_ = (n_server + i*(curr_imss_storages/curr_dataset.repl_factor)) % curr_imss_storages;
+
+		//printf("BLOCK %d SENT TO %d SERVER with key: %s (%d)\n", data_id, n_server_, key, key_length);
+
+		//Send read request message specifying the block URI.
+		//if (zmq_send(curr_imss.conns.sockets_[n_server_], key, KEY, ZMQ_SNDMORE) < 0)
+		if (zmq_send(curr_imss.conns.sockets_[n_server_], key, key_length, ZMQ_SNDMORE) != key_length)
+		{
+			perror("ERRIMSS_SETDATA_REQ");
+			return -1;
+		}
+
+		//Send read request message specifying the block data.
+		if (zmq_send (curr_imss.conns.sockets_[n_server_], buffer, size, 0) != size)
 		{
 			perror("ERRIMSS_SETDATA_SEND");
 			return -1;

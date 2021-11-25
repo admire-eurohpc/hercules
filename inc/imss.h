@@ -97,6 +97,8 @@ typedef struct {
 	int32_t imss_d;
 	//Connection to the IMSS server running in the same machine.
 	int32_t local_conn;
+	//Actual size
+	int64_t size;
 
 
 	/*************** USED EXCLUSIVELY BY LOCAL DATASETS ***************/
@@ -359,6 +361,13 @@ int32_t set_data(int32_t dataset_id, int32_t data_id, unsigned char * buffer);
 
 				free(locations);
 */
+
+int32_t
+set_ndata(int32_t 	 dataset_id,
+	 int32_t 	 data_id,
+	 unsigned char * buffer,
+	 uint32_t size);
+
 char ** get_dataloc(const char * dataset, int32_t data_id, int32_t * num_storages);
 
 /* Method specifying the type (DATASET or IMSS INSTANCE) of a provided URI.
