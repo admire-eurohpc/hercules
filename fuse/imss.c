@@ -434,9 +434,8 @@ static int imss_write(const char *path, const char *buf, size_t size,
 		//Last Block
 		else if(curr_blk == end_blk){
 			to_copy = end_offset;
-
 			//Only if last block has contents
-			if(curr_blk <= header.st_size){
+			if(curr_blk <= header.st_blocks){
 				if(get_data(fi->fh, curr_blk, (unsigned char *)aux) < 0){
 					fprintf(stderr, "[IMSS-FUSE]	Error reading from imss.\n");
 					return -1;
@@ -478,6 +477,7 @@ static int imss_write(const char *path, const char *buf, size_t size,
 	//Update header count if the file has become bigger
 	if(size + off > header.st_size){
 		header.st_size = size + off;
+		header.st_blocks = curr_blk-1;
 		memcpy(aux1, &header, sizeof(struct stat));
 		set_data(fi->fh, 0, (unsigned char*)aux1);
 	}
@@ -801,6 +801,7 @@ int main(int argc, char *argv[])
 	ds_stat.st_atime = spec.tv_sec;
 	ds_stat.st_mtime = spec.tv_sec;
 	ds_stat.st_ctime = spec.tv_sec;
+	ds_stat.st_blocks = -1;
 	//Write initial block
 	char * buff = malloc(IMSS_BLKSIZE*KB);
 	memcpy(buff, &ds_stat, sizeof(struct stat));
