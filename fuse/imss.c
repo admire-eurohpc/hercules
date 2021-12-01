@@ -28,6 +28,17 @@ gcc -Wall imss.c `pkg-config fuse --cflags --libs` -o imss
 //Macro to compute real offsets
 #define IMSS_DATA_BSIZE (IMSS_BLKSIZE*KB-sizeof(uint32_t))
 
+//Struct for first block dataset metadata
+typedef struct {
+
+	int32_t last_block; /*	Last block with data, -1 if none block used */
+	struct timespec st_atim;  /* Time of last access */
+	struct timespec st_mtim;  /* Time of last modification */
+	struct timespec st_ctim;  /* Time of last status change */
+
+} dataset_header;
+
+
 /*
    -----------	IMSS Global variables, filled at the beggining or by default -----------
    */
@@ -44,10 +55,13 @@ char * META_HOSTFILE = NULL; //Not default
 char * POLICY = "RR"; //Default RR
 uint64_t STORAGE_SIZE = 2048; //In Kb, Default 2 MB
 uint64_t META_BUFFSIZE = 1024; //In Kb, Default 1 MB
-uint64_t IMSS_BUFFSIZE = 1024; //In Kb, Default 1 MB
 uint64_t IMSS_BLKSIZE = 1024; //In Kb, Default 1 MB
+uint64_t IMSS_BUFFSIZE = 1024*2048; //In Kb, Default 2Gb
 int32_t REPL_FACTOR = 1; //Default none
 char * MOUNTPOINT[4] = {"f", "-d", "-s", NULL}; // {"f", mountpoint} Not default ({"f", NULL})
+
+
+char fd_table[255][256]; 
 
 
 pthread_mutex_t lock;
@@ -62,6 +76,15 @@ pthread_mutex_t lock;
 /*
    -----------	Auxiliar Functions -----------
    */
+
+
+int fd_lookup(const char * path) {
+   for (int i = 0; i < 256; ++i) {
+       if (!strcmp( fd_table[i] , path))
+       	return i;
+   }
+   return -1;
+}
 
 void get_iuri(const char * path, /*output*/ char * uri){
 
@@ -95,9 +118,10 @@ static int imss_getattr(const char *path, struct stat *stbuf)
 	//Needed variables for the call
 	char * buffer;
 	char ** refs;
+	char head[IMSS_BLKSIZE*KB];
 	int n_ent;
 	char imss_path[256] = {0};
-	dataset_info  metadata;
+	dataset_info metadata;
 	struct timespec spec;
 
 	get_iuri(path, imss_path);
@@ -108,9 +132,7 @@ static int imss_getattr(const char *path, struct stat *stbuf)
 	stbuf->st_uid = ctx->uid;
 	stbuf->st_gid = ctx->gid;
 	stbuf->st_blksize = IMSS_BLKSIZE;
-	stbuf->st_atim	= spec;
-	stbuf->st_mtime	= spec.tv_sec;
-	stbuf->st_ctime	= spec.tv_sec;
+
 
 	uint32_t type = get_type(imss_path);
 
@@ -132,15 +154,43 @@ static int imss_getattr(const char *path, struct stat *stbuf)
 			} 
 			else return -ENOENT;
 
-		case 2:
+		case 2: //Case file
 			if(stat_dataset(imss_path, &metadata) == -1){
 				fprintf(stderr, "[IMSS-FUSE]	Cannot get dataset metadata.");
 				return -ENOENT;
 			}
-			stbuf->st_size = 200;//metadata.size;
 			stbuf->st_mode = S_IFREG | 0666;
 			stbuf->st_nlink = 1;
+
+			//Get header
+			//FIXME! Not always possible!!!!
+			//
+			//
+			uint32_t ds;
+
+			int fd = fd_lookup(imss_path);
+
+			if (fd != -1) 
+			   ds = fd;
+			else 
+			   ds = open_dataset(imss_path);
+
+			
+			get_data(ds, 0, head);
+
+				//Read header
+				struct stat header;
+			memcpy(&header, head, sizeof(struct stat));
+			stbuf->st_atim = header.st_atim; 
+			stbuf->st_mtim = header.st_mtim;
+			stbuf->st_ctim = header.st_ctim;
+			stbuf->st_size = header.st_size;
+			
+			if (fd < 0)	
+				//Release dataset
+				release_dataset(ds);
 			return 0;
+
 		default:
 			return -1;
 	}
@@ -238,6 +288,8 @@ static int imss_open(const char *path, struct fuse_file_info *fi)
 	//Assign file descriptor
 	fi->fh = file_desc;
 
+	strcpy(fd_table[file_desc], imss_path);
+
 	/*if ((fi->flags & 3) != O_RDONLY)
 	  return -EACCES;*/
 
@@ -269,15 +321,20 @@ static int imss_read(const char *path, char *buf, size_t size, off_t offset,
 	//Compute current block and offsets
 	int64_t curr_blk, end_blk, start_offset, end_offset;
 	int64_t first = 0; 
-	curr_blk = offset / IMSS_DATA_BSIZE;
-	start_offset = offset / IMSS_DATA_BSIZE;
-	end_blk = (offset+size) / IMSS_DATA_BSIZE;
+	curr_blk = offset / IMSS_DATA_BSIZE +1; //Plus one to skip the header (0) block
+	start_offset = offset % IMSS_DATA_BSIZE;
+	end_blk = (offset+size) / IMSS_DATA_BSIZE +1; //Plus one to skip the header (0) block
 	end_offset = (offset+size) % IMSS_DATA_BSIZE;
 
 	//Needed variables
 	size_t byte_count = 0;
 	int64_t rbytes;
 	char aux[(IMSS_BLKSIZE*KB)];
+	dataset_header header;
+
+	//Read header
+	get_data(fi->fh, 0, (unsigned char*)aux);
+	memcpy(&header, aux, sizeof(dataset_header));
 
 	memset(buf, 0, size);
 	//Read remaining blocks
@@ -290,35 +347,35 @@ static int imss_read(const char *path, char *buf, size_t size, off_t offset,
 		}
 
 		//if (rbytes) {
-			//Parse data
-			uint32_t filled;
-			memcpy (&filled, aux, sizeof(uint32_t));
+		//Parse data
+		uint32_t filled;
+		memcpy (&filled, aux, sizeof(uint32_t));
 
-			//Parse buffer
+		//Parse buffer
 
-			//First block case
-			if (first == 0) {
-				//Check if offset is bigger than filled, return 0 because is EOF case
-				if(start_offset > filled) 
-					return 0; 
-				memcpy(buf, aux + HEADER + start_offset, filled - start_offset);
-				byte_count += filled - start_offset;
+		//First block case
+		if (first == 0) {
+			//Check if offset is bigger than filled, return 0 because is EOF case
+			if(start_offset > filled) 
+				return 0; 
+			memcpy(buf, aux + HEADER + start_offset, filled - start_offset);
+			byte_count += filled - start_offset;
 
-				//Middle block case
-			} else if (curr_blk != end_blk) {
+			//Middle block case
+		} else if (curr_blk != end_blk) {
 
-				//Read only filled
-				memcpy(buf + byte_count, aux + HEADER, filled);
-				byte_count += filled;
+			//Read only filled
+			memcpy(buf + byte_count, aux + HEADER, filled);
+			byte_count += filled;
 
-				//End block case
-			}  else {
+			//End block case
+		}  else {
 
-				//Read the minimum between end_offset and filled (read_ = min(end_offset, filled))
-				int64_t read_ = (filled >= end_offset) ? end_offset : filled;
-				memcpy(buf + byte_count, aux + sizeof(uint32_t), read_);
-				byte_count += read_;
-			} 
+			//Read the minimum between end_offset and filled (read_ = min(end_offset, filled))
+			int64_t read_ = (filled >= end_offset) ? end_offset : filled;
+			memcpy(buf + byte_count, aux + sizeof(uint32_t), read_);
+			byte_count += read_;
+		} 
 		//}
 		++first;
 		++curr_blk;
@@ -331,36 +388,38 @@ static int imss_read(const char *path, char *buf, size_t size, off_t offset,
 static int imss_write(const char *path, const char *buf, size_t size,
 		off_t off, struct fuse_file_info *fi)
 {
-
-	//TODO -- Previous checks
-
 	//Compute offsets to write
 	int64_t curr_blk, end_blk, start_offset, end_offset;
-	curr_blk = off / IMSS_DATA_BSIZE;
-    start_offset = off / IMSS_DATA_BSIZE;
-    end_blk = (off+size) / IMSS_DATA_BSIZE;
-    end_offset = (off+size) % IMSS_DATA_BSIZE;
+	curr_blk = off / IMSS_DATA_BSIZE + 1; //Add one to skip block 0
+	start_offset = off % IMSS_DATA_BSIZE;
+	end_blk = (off+size) / IMSS_DATA_BSIZE + 1; //Add one to skip block 0
+	end_offset = (off+size) % IMSS_DATA_BSIZE; 
 
 	//Needed variables
 	size_t byte_count = 0;
 	int64_t wbytes;
 	int first = 0;
-	char aux[(IMSS_BLKSIZE*KB)];
-    int64_t to_copy;
-    uint32_t filled;
+	char * aux1 = malloc(IMSS_BLKSIZE*KB);//[(IMSS_BLKSIZE*KB)];
+	int64_t to_copy;
+	uint32_t filled;
+	struct stat header;
+
+	//Read header
+	get_data(fi->fh, 0, (unsigned char*)aux1);
+	memcpy(&header, aux1, sizeof(struct stat));
+
 	//For the rest of blocks
 	while(curr_blk <= end_blk){
-
+		char *aux = malloc(IMSS_BLKSIZE*KB);
 		//Fisr block
-        if (first==0 && start_offset) {
-        	//Get previous block
-        	if(get_data(fi->fh, curr_blk, (unsigned char *)aux) < 0){
+		if (first==0 && start_offset && header.st_size != 0) {
+			//Get previous block
+			if(get_data(fi->fh, curr_blk, (unsigned char *)aux) < 0){
 				fprintf(stderr, "[IMSS-FUSE]	Error writing to imss.\n");
 				return -1;
 			}
 			//Bytes to write are the minimum between the size parameter and the remaining space in the block (BLOCKSIZE-start_offset)
 			to_copy = (size < IMSS_DATA_BSIZE-start_offset) ? size : IMSS_DATA_BSIZE-start_offset;
-			
 
 			memcpy(&filled, aux, sizeof(uint32_t));
 			memcpy(aux + HEADER + start_offset, buf + byte_count, to_copy);
@@ -371,22 +430,25 @@ static int imss_write(const char *path, const char *buf, size_t size,
 				filled = start_offset + to_copy;
 				memcpy(aux, &filled, sizeof(uint32_t));
 			} 
-        }
-        //Last Block
-        else if(curr_blk == end_blk){
-        	
-        	to_copy = end_offset;
+		}
+		//Last Block
+		else if(curr_blk == end_blk){
+			to_copy = end_offset;
 
-        	if(get_data(fi->fh, curr_blk, (unsigned char *)aux) < 0){
-				//If block does not exist set to 0 and update filled
+			//Only if last block has contents
+			if(curr_blk <= header.st_size){
+				if(get_data(fi->fh, curr_blk, (unsigned char *)aux) < 0){
+					fprintf(stderr, "[IMSS-FUSE]	Error reading from imss.\n");
+					return -1;
+				}
+				memcpy(&filled, aux, sizeof(uint32_t));
+			}
+			else{
 				memset(aux, 0, IMSS_BLKSIZE*KB);
 				filled = to_copy;
 				memcpy(aux, &filled, sizeof(uint32_t));
 			}
-			else{
-				memcpy(&filled, aux, sizeof(uint32_t));
-			}
-			
+
 			memcpy(aux + HEADER, buf + byte_count, to_copy);
 
 			//When copied bytes exceed offset, update filled 
@@ -394,23 +456,13 @@ static int imss_write(const char *path, const char *buf, size_t size,
 				filled = to_copy;
 				memcpy(aux, &filled, sizeof(uint32_t));
 			}
-
-        }
-        //middle block
-        else{
-        	to_copy = IMSS_DATA_BSIZE;
-        	memcpy(aux, &to_copy, sizeof(uint32_t));
+		}
+		//middle block
+		else{
+			to_copy = IMSS_DATA_BSIZE;
+			memcpy(aux, &to_copy, sizeof(uint32_t));
 			memcpy(aux + HEADER, buf + byte_count, to_copy);
-        }
-
-
-        /*if (size > IMSS_DATA_BSIZE)
-		    to_copy = IMSS_DATA_BSIZE;
-		else
-		    to_copy = size%IMSS_DATA_BSIZE;*/ 
-
-		//Create block, calloc -> padded with 0's
-        
+		}
 
 		//Write and update variables
 		if(set_data(fi->fh, curr_blk, (unsigned char *)aux) < 0){
@@ -423,31 +475,73 @@ static int imss_write(const char *path, const char *buf, size_t size,
 		++first;
 	}
 
+	//Update header count if the file has become bigger
+	if(size + off > header.st_size){
+		header.st_size = size + off;
+		memcpy(aux1, &header, sizeof(struct stat));
+		set_data(fi->fh, 0, (unsigned char*)aux1);
+	}
+
 	return byte_count;
 }
 
 static int imss_release(const char * path, struct fuse_file_info *fi)
 {
+	//Update dates
+	char head[IMSS_BLKSIZE*KB];
+	get_data(fi->fh, 0, head);
+	struct stat header;
+	memcpy(&header, head, sizeof(struct stat));
+
+	//Get time
+	struct timespec spec;
+	clock_gettime(CLOCK_REALTIME, &spec);
+
+	//Update time
+	header.st_mtim = spec;
+	header.st_ctim = spec;
+
+	//write metadata
+	memcpy(head, &header, sizeof(struct stat));
+	set_data(fi->fh, 0, head);
+
+	strcpy(fd_table[fi->fh], "");
+
 	//Release resources
 	return release_dataset(fi->fh);
 }
 
 static int imss_create(const char * path, mode_t mode, struct fuse_file_info * fi)
 {
+	struct timespec spec;
+
+	clock_gettime(CLOCK_REALTIME, &spec);
+
 	//TODO check mode
-	//DEBUG
+	struct stat ds_stat;
 
 	//Check if already created!
 	char rpath[strlen(path)+8];
 	get_iuri(path, rpath);
 
-	int32_t creat = create_dataset((char*)rpath, POLICY,  N_BLKS, IMSS_BLKSIZE, REPL_FACTOR);
-	if(creat < 0) {
+	//Assing file handler and create dataset
+	fi->fh = create_dataset((char*)rpath, POLICY,  N_BLKS, IMSS_BLKSIZE, REPL_FACTOR);
+	if(fi->fh < 0) {
 		fprintf(stderr, "[IMSS-FUSE]	Cannot create new dataset.\n");
 	}
 
-	release_dataset(creat);
-	return 0; //FIXME check return value!
+	//Create initial block
+	ds_stat.st_size = 0;
+	ds_stat.st_atime = spec.tv_sec;
+	ds_stat.st_mtime = spec.tv_sec;
+	ds_stat.st_ctime = spec.tv_sec;
+
+	//Write initial block
+	char *buff = malloc(IMSS_BLKSIZE*KB);//[IMSS_BLKSIZE*KB];
+	memcpy(buff, &ds_stat, sizeof(struct stat));
+	set_data(fi->fh, 0, (unsigned char *)buff);
+
+	return 0; 
 
 }
 
@@ -462,13 +556,40 @@ int imss_releasedir(const char * path, struct fuse_file_info * fi) {
 }
 
 static int imss_utimens(const char * path, const struct timespec tv[2]) {
-    return 0;
+	struct stat ds_stat;
+	struct timespec spec;
+	clock_gettime(CLOCK_REALTIME, &spec);
+
+	char rpath[strlen(path)+8];
+	get_iuri(path, rpath);
+
+	//Assing file handler and create dataset
+	int32_t file_desc = open_dataset(rpath);
+	if(file_desc < 0) {
+		fprintf(stderr, "[IMSS-FUSE]    Cannot open dataset.\n");
+	}
+
+
+	char *buff = malloc(IMSS_BLKSIZE*KB);
+	get_data(file_desc, 0, (unsigned char *)buff);
+
+	memcpy(&ds_stat, buff, sizeof(struct stat));
+
+	ds_stat.st_mtime = spec.tv_sec;
+
+	//Write initial block
+	memcpy(buff, &ds_stat, sizeof(struct stat));
+	set_data(file_desc, 0, (unsigned char *)buff);
+
+	release_dataset(file_desc);
+
+	return 0;
 }
 
 static struct fuse_operations imss_oper = {
 	.getattr	= imss_getattr,
 	.truncate	= imss_truncate,
-    .utimens    = imss_utimens,
+	.utimens    = imss_utimens,
 	.readdir	= imss_readdir,
 	.open		= imss_open,
 	.read		= imss_read, //
@@ -669,6 +790,22 @@ int main(int argc, char *argv[])
 	} 
 
 	int ds = create_dataset("imss://fuse/", POLICY,  N_BLKS, IMSS_BLKSIZE, REPL_FACTOR);
+
+	//Create initial block
+	struct timespec spec;
+	clock_gettime(CLOCK_REALTIME, &spec);
+
+	struct stat ds_stat;
+	//Create initial block
+	ds_stat.st_size = 0;
+	ds_stat.st_atime = spec.tv_sec;
+	ds_stat.st_mtime = spec.tv_sec;
+	ds_stat.st_ctime = spec.tv_sec;
+	//Write initial block
+	char * buff = malloc(IMSS_BLKSIZE*KB);
+	memcpy(buff, &ds_stat, sizeof(struct stat));
+	set_data(ds, 0, (unsigned char *)buff);
+
 
 	if(ds < 0) {
 		fprintf(stderr, "[IMSS-FUSE]	IMSS init failed, cannot create servers.\n");

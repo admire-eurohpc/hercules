@@ -279,7 +279,6 @@ imss_metadata(void * arg_)
 	uint64_t bytes_written;
 	
 	if ((offset = metadata_read(arg.metadata_file, &metadata_map, pt_met, &bytes_written)) == NULL)
-
 		pthread_exit(NULL);
 
 	//Obtain the remaining free amount of data reserved to the buffer after the metadata read operation.
@@ -337,7 +336,6 @@ imss_metadata(void * arg_)
 
 	//Save the current metadata information into a file.
 	if (metadata_write(arg.metadata_file, pt_met, &metadata_map, arguments, buffer_segment_, bytes_written) == -1)
-
 		pthread_exit(NULL);
 
 	//Freeing all resources of the tree structure.

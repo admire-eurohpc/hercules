@@ -312,7 +312,8 @@ srv_worker (void * th_argv)
 				if (!map->get(key, &address_, &block_size_rtvd))
 				{
 					//Receive the block into the buffer.
-					zmq_recv(socket, arguments->pt, block_size_recv, 0);
+					int err = zmq_recv(socket, arguments->pt, block_size_recv, 0);
+					printf("%d\n", err);
 
 					//Include the new record in the tracking structure.
 					if (map->put(key, arguments->pt, block_size_recv) != 0)
