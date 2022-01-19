@@ -192,8 +192,8 @@ int32_t main(int32_t argc, char **argv)
 		//strcpy(imss_uri, "stat\0");
 
 		//Create the tree_root node.
-		char * root_data = (char *) malloc(1);
-		root_data[0] = '/';
+		char * root_data = (char *) malloc(8);
+		strcpy(root_data,"imss://");
 		tree_root = g_node_new((void *) root_data);
 
 		if (pthread_mutex_init(&tree_mut, NULL) != 0)

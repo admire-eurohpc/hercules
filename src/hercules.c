@@ -268,8 +268,8 @@ imss_metadata(void * arg_)
 	}
 
 	//Create the tree_root node.
-	char * root_data = (char *) malloc(1);
-	root_data[0] = '/';
+	char * root_data = (char *) malloc(8);
+	strcpy(root_data,"imss://");
 	tree_root = g_node_new((void *) root_data);
 
 	//Address pointing to the end of the last metadata record.

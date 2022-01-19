@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <directory.h>
+#include <stdio.h>
 
 //Pointer to the tree's root node.
 GNode * tree_root;
@@ -97,14 +98,15 @@ GTree_insert(char * desired_data)
 
 		if ((desired_data[new_position] == '/') || (i == (more_chars-1)))
 		{
-			if ((i == (more_chars-1)))
-
+			if (i == (more_chars-1))
 				new_position++;
 
+            //if (i == 0 && desired_data[new_position+1] == '/')
+       
 			//String that will be introduced as a new node.
-			char * new_data = (char *) malloc(new_position);
-			strncpy(new_data, desired_data, (new_position));
-
+			char * new_data = (char *) malloc(new_position+1);
+			strcpy(new_data, desired_data);
+            printf("__________________   %s\n",new_data);
 			//New node to be introduced.
 			GNode * new_node = g_node_new((void *) new_data);
 

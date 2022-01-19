@@ -540,9 +540,9 @@ get_dir(char * 	 requested_uri,
 
 	uint32_t elements_size = zmq_msg_size(&uri_elements);
 
-	*buffer = (char *) malloc(sizeof(char)*elements_size);
-	memcpy(*buffer, elements, elements_size);
-	elements = *buffer;
+	//*buffer = (char *) malloc(sizeof(char)*elements_size);
+	//memcpy(*buffer, elements, elements_size);
+	//elements = *buffer;
 
 	zmq_msg_close(&uri_elements);
 
@@ -553,7 +553,9 @@ get_dir(char * 	 requested_uri,
 	//Identify each element within the buffer provided.
 	for (int32_t i = 0; i < num_elements; i++)
 	{
-		(*items)[i] = elements;
+		(*items)[i] = (char *) malloc (URI_);
+		memcpy((*items)[i], elements, URI_);
+		//(*items)[i] = elements;
 
 		elements += URI_;
 	}
@@ -1092,6 +1094,7 @@ create_dataset(char *  dataset_uri,
 	associated_imss = g_array_index(imssd, imss, associated_imss_indx);
 
 	dataset_info new_dataset;
+
 	//Dataset metadata request.
 	if (stat_dataset(dataset_uri, &new_dataset))
 	{
@@ -1133,6 +1136,7 @@ create_dataset(char *  dataset_uri,
     uint32_t m_srv = discover_stat_srv(new_dataset.uri_);
 
 	char formated_uri[REQ_MSG];
+	bzero(formated_uri,REQ_MSG);
 	sprintf(formated_uri, "%lu %s", msg_size, new_dataset.uri_);
 
 	//Send the dataset URI associated to the dataset metadata structure to be sent.
@@ -1351,7 +1355,6 @@ stat_dataset(const char * 	    dataset_uri,
 	for (int32_t i = 0; i < datasetd->len; i++)
 	{
 		*dataset_info_ = g_array_index(datasetd, dataset_info, i);
-
 		if (!strcmp(dataset_uri, dataset_info_->uri_))
 		
 			return 2;
