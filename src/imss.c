@@ -184,6 +184,7 @@ conn_dstr_(void * socket)
 //	return event == ZMQ_EVENT_CONNECTED;
 //}
 
+
 //Method inserting an element into a certain control GArray vector.
 int32_t
 GInsert (int32_t * pos,
@@ -1061,7 +1062,6 @@ get_deployed(char * endpoint)
 /************************** DATASET MANAGEMENT FUNCTIONS **************************/
 /**********************************************************************************/
 
-
 //Method creating a dataset and the environment enabling READ or WRITE operations over it.
 int32_t
 create_dataset(char *  dataset_uri,
@@ -1106,7 +1106,7 @@ create_dataset(char *  dataset_uri,
 	strcpy(new_dataset.uri_, 	dataset_uri);
 	strcpy(new_dataset.policy, 	policy);
 	new_dataset.num_data_elem 	= num_data_elem;
-	new_dataset.data_entity_size 	= data_elem_size*1024;
+	new_dataset.data_entity_size 	= data_elem_size*1024;//dataset in kilobytes
 	new_dataset.imss_d 		= associated_imss_indx;
 	new_dataset.local_conn 		= associated_imss.conns.matching_server;
 	new_dataset.repl_factor		= repl_factor;
@@ -1268,7 +1268,7 @@ release_dataset(int32_t dataset_id)
 		fprintf(stderr, "ERRIMSS_RELDATASET_BADDESCRIPTOR\n");
 		return -1;
 	}
-
+	
 	//Dataset to be released.
 	dataset_info release_dataset = g_array_index(datasetd, dataset_info, dataset_id);
 
@@ -1337,7 +1337,7 @@ release_dataset(int32_t dataset_id)
 		free(release_dataset.num_blocks_written);
 
 	}
-
+    
 	g_array_remove_index(datasetd, dataset_id);
 	g_array_insert_val(datasetd, dataset_id, empty_dataset);
 	//Add the index to the set of free positions within the dataset vector.
@@ -1414,7 +1414,6 @@ get_data_location(int32_t dataset_id,
 
 		if (set_policy(&curr_dataset) == -1)
 		{
-			fprintf(stderr, "ERRIMSS_SET_POLICY\n");
 			return -1;
 		}
 
@@ -1503,6 +1502,7 @@ get_data(int32_t 	 dataset_id,
 			else
 				break;
 		}
+
 
 		//Check if the requested key was correctly retrieved.
 		if (strncmp((const char *) buffer, "$ERRIMSS_NO_KEY_AVAIL$", 22))
@@ -1612,9 +1612,10 @@ set_data(int32_t 	 dataset_id,
 {
 	int32_t n_server;
 	//Server containing the corresponding data to be written.
-	if ((n_server = get_data_location(dataset_id, data_id, SET)) == -1)
-
+	if ((n_server = get_data_location(dataset_id, data_id, SET)) == -1) {
+        perror("ERRIMSS_GET_DATA_LOCATION");
 		return -1;
+	}
 
 	char key_[KEY];
 	//Key related to the requested data element.
@@ -1787,11 +1788,12 @@ get_dataloc(const char *    dataset,
 	}
 
 	//Set the policy corresponding to the retrieved dataset.
-	if (set_policy(&where_dataset) == -1)
+	/* if (set_policy(&where_dataset) == -1)
 	{
 		fprintf(stderr, "ERRIMSS_GETDATALOC_SETPOLICY\n");
 		return NULL;
 	}
+	*/
 
 	current_dataset = -1;
 

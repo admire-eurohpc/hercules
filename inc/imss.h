@@ -38,7 +38,7 @@ const int CLOSE_ATTACHED = 2;
 #define REQ_MSG		272
 #define KEY		512
 #define MONITOR		1
-#define ELEMENTS	1024
+#define ELEMENTS	4096
 #define IMSS		0
 #define DATASET		1
 
@@ -252,7 +252,6 @@ char * get_deployed_(char * endpoint);
 
 /****************************************************************************************************************************/
 /*********************************************** DATASET MANAGEMENT FUNCTIONS ***********************************************/
-
 
 /* Method creating a dataset and the environment enabling READ and WRITE operations over it.
 

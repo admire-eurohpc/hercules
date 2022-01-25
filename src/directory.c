@@ -26,7 +26,8 @@ GTree_search_(GNode * 	parent_node,
 	for (int32_t i = 0; i < num_children; i++)
 	{
 		//Search for a directory antecesor of the desired node.
-		if (!strncmp((char *) child->data, desired_data, strlen((char *) child->data)))
+		//if (!strncmp((char *) child->data, desired_data, strlen((char *) child->data)))
+		if (!strcmp((char *) child->data, desired_data))
 		{
 			//Check if the compared node is the requested one.
 			if (!strcmp((char *) child->data, desired_data))
@@ -106,7 +107,6 @@ GTree_insert(char * desired_data)
 			//String that will be introduced as a new node.
 			char * new_data = (char *) malloc(new_position+1);
 			strcpy(new_data, desired_data);
-            printf("__________________   %s\n",new_data);
 			//New node to be introduced.
 			GNode * new_node = g_node_new((void *) new_data);
 

@@ -1,7 +1,7 @@
 find_package(FUSE REQUIRED)
 
 add_executable(imssfs
-    imss.c
+    imssfs.c
     )
 
 set(CMAKE_C_FLAGS "-D_FILE_OFFSET_BITS=64 -lulockmgr -DFUSE")
