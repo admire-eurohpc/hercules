@@ -21,6 +21,9 @@ char *	pub_dir;
 void * 	pub;
 
 
+//Lock dealing when cleaning blocks
+pthread_mutex_t mutex_garbage;
+
 //Initial buffer address.
 unsigned char *   buffer_address;
 //Set of locks dealing with the memory buffer access.
@@ -349,6 +352,27 @@ srv_worker (void * th_argv)
 		}
 	}   
 	
+	pthread_exit(NULL);
+}
+
+//Thread method searching and cleaning nodes with st_nlink=0
+void *
+garbage_collector (void * th_argv)
+{
+	//Cast from generic pointer type to p_argv struct type pointer.
+	p_argv * arguments = (p_argv *) th_argv;
+	//Obtain the current map class element from the set of arguments.
+	map_records * map = arguments->map;
+	
+
+	for (;;)
+	{
+	//Gnodetraverse_garbage_collector(map);//Future
+	sleep(30);
+	pthread_mutex_lock(&mutex_garbage);
+	map->cleaning();
+	pthread_mutex_unlock(&mutex_garbage);
+	}
 	pthread_exit(NULL);
 }
 

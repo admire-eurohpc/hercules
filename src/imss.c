@@ -586,10 +586,10 @@ init_imss(char *   imss_uri,
 	//Check if the new IMSS uri has been already assigned.
 	int32_t existing_imss = stat_imss(imss_uri, &aux_imss);
 
-	if (existing_imss)
+	if (existing_imss) 
 	{
 		fprintf(stderr, "ERRIMSS_INITIMSS_ALREADYEXISTS\n");
-		return -1;
+///		return -1;
 	}
 
 	//Once it has been notified that no other IMSS instance had the same URI, the deployment will be performed in case of a DETACHED instance.

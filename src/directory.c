@@ -5,6 +5,7 @@
 #include <string.h>
 #include <directory.h>
 #include <stdio.h>
+#include "records.hpp"
 
 //Pointer to the tree's root node.
 GNode * tree_root;
@@ -198,4 +199,36 @@ gnodetraverse (GNode * 	node,
 
 	return 0;
 }
+
+//Method that will be called for each tree node freeing if st_nlink=0 the associated data element.
+int32_t
+gnodetraverse_garbage_collector (GNode * 	node,//dont delete maybe usefull in the future
+	       void * 	data)
+{
+	char * key = (char *) data;
+	//Check if there was an associated block to the key.
+	/*if (!(map->get(key, &address_, &block_size_rtvd)))
+	{
+		printf("ERROR NO BLOCK");
+	}*/
+	//g_tree_destroy
+	//free(node->data);
+
+	return 0;
+}
+
+//Method that will be called for each tree node..
+int32_t
+Gnodetraverse_garbage_collector (map_records * map)//dont delete maybe usefull in the future
+{
+	//Freeing all resources of the tree structure.
+	g_node_traverse(tree_root, G_PRE_ORDER, G_TRAVERSE_ALL, -1, gnodetraverse_garbage_collector, NULL);
+	
+
+	return 0;
+}
+
+
+
+	
 

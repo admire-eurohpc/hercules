@@ -5,7 +5,19 @@
 #include <mutex>
 #include <string>
 #include <utility>
+#include <iostream>
+#include <cassert>
+#include <string.h> 
+#include <stdio.h>
+#include <vector>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
+using std::map;
+using std::pair;
+using std::make_pair;
+using std::string;
 //In-memory structure storing key-address couples.
 class map_records
 {
@@ -36,16 +48,71 @@ class map_records
 			//Search for the address related to the key.
 			it = buffer.find(key);
 			//Check if the value did exist within the map.
-			if (it == buffer.end())
-
-				return 0;
+			it == buffer.end();
 
 			//Assign the values obtained to the provided references.
+			
 			*(add_) = it->second.first;
 			*(size_) = it->second.second;
 
 			//Return the address associated to the record.
 			return 1;
+		}
+		//Method retrieving the address associated to a certain record.
+		int32_t cleaning()
+		{
+			std::vector<string> vec;
+
+			for(const auto & it : buffer) {
+				string key = it.first;
+				int found = key.find("$0");
+			
+				/*std::cout << key << " => " << it->second.first << '\n';
+				std::cout << "numero " << it->second.second << '\n';
+				std::cout << "Period found at:" << found << " " << key.size() << '\n';*/
+			
+				if(found != std::string::npos){
+		
+					//comprobar la estructura st_ulink
+					struct stat * st_p = (struct stat *) it.second.first;
+					
+					if(st_p->st_nlink == 0){
+						
+						//borrar todos los bloques con mismo path/key
+						for(const auto & it2 : buffer){
+							
+							string partner_key = it2.first;
+							if(partner_key.compare(key) != 0){//para no borrar el actual con el que estoy comparando
+								int pos = key.find('$');
+								string path = key.substr(0,pos);
+								
+								//std::cout << path <<'\n';
+								int found_partner = partner_key.find(path);
+								if(found_partner !=std::string::npos){
+									//mapping.erase (partner_key);
+									vec.insert(vec.begin(),partner_key);
+								}
+							}
+						}
+						vec.insert(vec.begin(),key);
+					}	    
+					
+				}
+				
+			}
+			std::vector<string>::iterator i;
+			for (i=vec.begin(); i<vec.end(); i++){
+				std::cout << "Deleting partners  " << *i << "\n";
+				buffer.erase (*i);//borro la clave actual despues de eliminar sus otros bloques
+			}
+			
+
+			
+			for(const auto & it : buffer){
+				string key = it.first;
+				std::cout <<"After " << key << " => " << it.second.first << '\n';
+			}
+			return 0;
 		}
 
 		//Method retrieving a map::begin iterator referencing the first element in the map container.

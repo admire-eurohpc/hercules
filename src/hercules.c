@@ -135,10 +135,24 @@ imss_server(void * arg_)
 
 	region_locks = (pthread_mutex_t *) malloc(THREAD_POOL * sizeof(pthread_mutex_t));
 
+	//Special independent thread as a garbage collector
+	pthread_t thread_garbage_collector;
+
 	//Initialize pool of threads.
 	pthread_t threads[(THREAD_POOL+1)];
 	//Thread arguments.
 	p_argv arguments[(THREAD_POOL+1)];
+
+	//Add the reference to the map into the set of thread arguments.
+	p_argv arguments_garbage;
+	arguments_garbage.map = &buffer_map;
+
+	//Deploy a thread distributing incomming clients among all ports.
+	if (pthread_create(&thread_garbage_collector, NULL, garbage_collector, (void *) &arguments_garbage) == -1)
+	{
+		perror("ERRIMSS_GARBAGECOLLECTOR_DEPLOY");
+		pthread_exit(NULL);
+	}
 
 	//Execute all threads.
 	for (int32_t i = 0; i < (THREAD_POOL+1); i++)
@@ -199,6 +213,13 @@ imss_server(void * arg_)
 			}
 		}
 	}
+
+		//Wait for the threads to conclude.
+	if (pthread_join(thread_garbage_collector, NULL) != 0)
+		{
+			perror("ERRIMSS_METADISPATCHER_JOIN");
+			pthread_exit(NULL);
+		}
 
 	//Release communication resources.
 	if (pthread_mutex_destroy(&buff_size_mut) != 0)
@@ -287,10 +308,13 @@ imss_metadata(void * arg_)
 	//Buffer segment size assigned to each thread.
 	int64_t buffer_segment_ = data_reserved/THREAD_POOL;
 
+	
+
 	//Initialize pool of threads.
 	pthread_t threads[(THREAD_POOL+1)];
 	//Thread arguments.
 	p_argv arguments[(THREAD_POOL+1)];
+
 
 	//Execute all threads.
 	for (int32_t i = 0; i < (THREAD_POOL+1); i++)

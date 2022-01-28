@@ -36,6 +36,9 @@ typedef struct {
 //Thread method attending client data requests.
 void * srv_worker (void * th_argv);
 
+//Thread method searching and cleaning nodes with st_nlink=0
+void * garbage_collector (void * th_argv);
+
 //Thread method attending client metadata requests.
 void * stat_worker (void * th_argv);
 
