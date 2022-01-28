@@ -24,6 +24,9 @@ void * 	pub;
 //Lock dealing when cleaning blocks
 pthread_mutex_t mutex_garbage;
 
+//Lock dealing when cleaning blocks
+pthread_mutex_t mutex_insert;
+
 //Initial buffer address.
 unsigned char *   buffer_address;
 //Set of locks dealing with the memory buffer access.
@@ -318,8 +321,13 @@ srv_worker (void * th_argv)
 					int err = zmq_recv(socket, arguments->pt, block_size_recv, 0);
 					printf("%d\n", err);
 
+					int32_t insert_successful;
 					//Include the new record in the tracking structure.
-					if (map->put(key, arguments->pt, block_size_recv) != 0)
+					pthread_mutex_lock(&mutex_insert);
+					insert_successful=map->put(key, arguments->pt, block_size_recv);
+					pthread_mutex_unlock(&mutex_insert);
+					//Include the new record in the tracking structure.
+					if (insert_successful != 0)
 					{
 						perror("ERRIMSS_WORKER_MAPPUT");
 						pthread_exit(NULL);
@@ -587,14 +595,20 @@ stat_worker (void * th_argv)
 					//Receive the block into the buffer.
 					zmq_recv(socket, arguments->pt, block_size_recv, 0);
 
+					int32_t insert_successful;
 					//Include the new record in the tracking structure.
-					if (map->put(key, arguments->pt, block_size_recv) != 0)
+					pthread_mutex_lock(&mutex_insert);
+					insert_successful=map->put(key, arguments->pt, block_size_recv);
+					pthread_mutex_unlock(&mutex_insert);
+					if (insert_successful != 0)
 					{
 						perror("ERRIMSS_WORKER_MAPPUT");
 						pthread_exit(NULL);
 					}
+					
+					
 
-					int32_t insert_successful;
+					
 					//Insert the received uri into the directory tree.
 					pthread_mutex_lock(&tree_mut);
 					insert_successful = GTree_insert((char *) key.c_str());

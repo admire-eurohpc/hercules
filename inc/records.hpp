@@ -48,7 +48,9 @@ class map_records
 			//Search for the address related to the key.
 			it = buffer.find(key);
 			//Check if the value did exist within the map.
-			it == buffer.end();
+			if(it == buffer.end()){
+				return 0;
+			}
 
 			//Assign the values obtained to the provided references.
 			
@@ -103,6 +105,7 @@ class map_records
 			std::vector<string>::iterator i;
 			for (i=vec.begin(); i<vec.end(); i++){
 				std::cout << "Deleting partners  " << *i << "\n";
+				
 				buffer.erase (*i);//borro la clave actual despues de eliminar sus otros bloques
 			}
 			

@@ -589,7 +589,7 @@ init_imss(char *   imss_uri,
 	if (existing_imss) 
 	{
 		fprintf(stderr, "ERRIMSS_INITIMSS_ALREADYEXISTS\n");
-///		return -1;
+		return -1;
 	}
 
 	//Once it has been notified that no other IMSS instance had the same URI, the deployment will be performed in case of a DETACHED instance.
