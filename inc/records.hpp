@@ -105,8 +105,8 @@ class map_records
 			std::vector<string>::iterator i;
 			for (i=vec.begin(); i<vec.end(); i++){
 				std::cout << "Deleting partners  " << *i << "\n";
-				
 				buffer.erase (*i);//borro la clave actual despues de eliminar sus otros bloques
+				
 			}
 			
 
