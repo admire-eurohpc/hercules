@@ -57,8 +57,9 @@ char * IMSS_ROOT = NULL;//Not default
 char * META_HOSTFILE = NULL; //Not default 
 char * POLICY = "RR"; //Default RR
 uint64_t STORAGE_SIZE = 2048; //In Kb, Default 2 MB
-uint64_t META_BUFFSIZE = 1024; //In Kb, Default 1 MB
-uint64_t IMSS_BLKSIZE = 1024; //In Kb, Default 1 MB
+uint64_t META_BUFFSIZE = 2048; //In Kb, Default 2 MB+
+//uint64_t IMSS_BLKSIZE = 1024; //In Kb, Default 1 MB
+uint64_t IMSS_BLKSIZE = 4;
 uint64_t IMSS_BUFFSIZE = 1024*2048; //In Kb, Default 2Gb
 int32_t REPL_FACTOR = 1; //Default none
 char * MOUNTPOINT[4] = {"f", "-d", "-s", NULL}; // {"f", mountpoint} Not default ({"f", NULL})
@@ -675,10 +676,15 @@ static int imss_create(const char * path, mode_t mode, struct fuse_file_info * f
 	get_iuri(path, rpath);
 
 	//Assing file handler and create dataset
-	fi->fh = create_dataset((char*)rpath, POLICY,  N_BLKS, IMSS_BLKSIZE, REPL_FACTOR);
-	if(fi->fh < 0) {
+	int res = 0;
+
+
+	res = create_dataset((char*)rpath, POLICY,  N_BLKS, IMSS_BLKSIZE, REPL_FACTOR);
+	if(res < 0) {
 		fprintf(stderr, "[IMSS-FUSE]	Cannot create new dataset.\n");
-	}
+		return -1;
+	} else
+	    fi->fh = res;
 
 	clock_gettime(CLOCK_REALTIME, &spec);
 

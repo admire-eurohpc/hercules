@@ -30,6 +30,7 @@ typedef struct {
     //URI assigned to the current IMSS instance.
     char my_uri[URI_];
 
+	int64_t total_size;
 } p_argv;
 
 

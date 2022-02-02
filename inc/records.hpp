@@ -22,8 +22,19 @@ using std::string;
 class map_records
 {
 	public:
+	   
+		map_records()  {
+			total_size = 0;
+		}
+	
+		map_records(uint64_t nsize)  {
+			total_size = nsize;
+		}
 
-		map_records() {}
+
+		void set_size(uint64_t nsize)  {
+			total_size = nsize;
+		}
 
 		//Method storing a new record.
 		int32_t put(std::string key, unsigned char * address, uint64_t length)
@@ -33,6 +44,11 @@ class map_records
 			//Block the access to the map structure.
 			std::unique_lock<std::mutex> lock(mut);
 			//Add a new couple to the map.
+			if (quatity_occupied + length > total_size) { //out of space
+			  fprintf(stderr, "[Map record] Out of space  %ld/%ld.\n",quatity_occupied + length, total_size);
+			  return -1;
+			}
+			quatity_occupied = quatity_occupied + length;
 			buffer.insert({key, value});
 
 			return 0;
@@ -104,8 +120,8 @@ class map_records
 			}
 			std::vector<string>::iterator i;
 			for (i=vec.begin(); i<vec.end(); i++){
-				std::cout << "Deleting partners  " << *i << "\n";
-				buffer.erase (*i);//borro la clave actual despues de eliminar sus otros bloques
+				std::cout << "Garbage Collector: Deleting " << *i << "\n";
+				buffer.erase (*i);
 				
 			}
 			
@@ -113,7 +129,7 @@ class map_records
 			
 			for(const auto & it : buffer){
 				string key = it.first;
-				std::cout <<"After " << key << " => " << it.second.first << '\n';
+				std::cout <<"Garbage Collector: Exist " << key << '\n';
 			}
 			return 0;
 		}
@@ -141,6 +157,8 @@ class map_records
 		//Map structure tracking stored records (by default sorts keys with '<' op).
 		std::map <std::string, std::pair<unsigned char *, uint64_t>> buffer;
 		//Mutex restricting access to structure.
+        uint64_t total_size;
+		uint64_t quatity_occupied;
 		std::mutex mut;
 };
 

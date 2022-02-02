@@ -1839,7 +1839,7 @@ int32_t
 get_type(char * uri)
 {
 	//Formated uri to be sent to the metadata server.
-	char formated_uri[strlen(uri)+1];
+	char formated_uri[256];
 	sprintf(formated_uri, "0 %s", uri);
 	size_t formated_uri_length = strlen(formated_uri);
 

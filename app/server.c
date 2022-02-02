@@ -225,7 +225,7 @@ int32_t main(int32_t argc, char **argv)
 
 
 	//Map tracking saved records.
-	map_records map;
+	map_records map(buffer_size*KB);
 
 	int64_t data_reserved;
 	//Pointer to the allocated buffer memory.

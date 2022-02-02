@@ -127,9 +127,6 @@ imss_server(void * arg_)
 		pthread_exit(NULL);
 	}
 
-	//Map tracking saved records.
-	map_records buffer_map;
-
 	//Amount of memory enabled for execution.
 	uint64_t data_reserved;
 
@@ -143,28 +140,15 @@ imss_server(void * arg_)
 	//Thread arguments.
 	p_argv arguments[(THREAD_POOL+1)];
 
-	//Add the reference to the map into the set of thread arguments.
-	p_argv arguments_garbage;
-	arguments_garbage.map = &buffer_map;
 
-	//Deploy a thread distributing incomming clients among all ports.
-	if (pthread_create(&thread_garbage_collector, NULL, garbage_collector, (void *) &arguments_garbage) == -1)
-	{
-		perror("ERRIMSS_GARBAGECOLLECTOR_DEPLOY");
-		pthread_exit(NULL);
-	}
 
-	//Execute all threads.
-	for (int32_t i = 0; i < (THREAD_POOL+1); i++)
-	{
+
 		//Add port number to thread arguments.
-		arguments[i].port = (arg.port)++;
+	arguments[0].port = (arg.port)++;
 
-		//Deploy all dispatcher + service threads.
-		if (!i)
-		{
+	
 			//Deploy a thread distributing incomming clients among all ports.
-			if (pthread_create(&threads[i], NULL, srv_attached_dispatcher, (void *) &arguments[i]) == -1)
+			if (pthread_create(&threads[0], NULL, srv_attached_dispatcher, (void *) &arguments[0]) == -1)
 			{
 				perror("ERRIMSS_SRVDISPATCHER_DEPLOY");
 				pthread_exit(NULL);
@@ -181,6 +165,7 @@ imss_server(void * arg_)
 			pthread_mutex_unlock(&buff_size_mut);
 
 			pthread_mutex_lock(&backend_buff_mut);
+			
 			//Check if there is enough space to create a new IMSS server entity within the backend storage.
 			if (buffer_KB > backend_buffer_size)
 			{
@@ -188,16 +173,21 @@ imss_server(void * arg_)
 				pthread_exit(NULL);
 			}
 			backend_buffer_size -= buffer_KB;
+			    	//Map tracking saved records.
+        	
 			pthread_mutex_unlock(&backend_buff_mut);
 
 			data_reserved = buffer_KB * KB;
-
+            map_records buffer_map(data_reserved);
 			buffer_address = (unsigned char *) malloc(sizeof(char)*data_reserved);
 
 			buffer_segment = data_reserved/THREAD_POOL;
-		}
-		else
+	
+
+
+		for (int32_t i = 1; i < (THREAD_POOL+1); i++)
 		{
+			arguments[i].port = (arg.port)++;
 			//Add the reference to the map into the set of thread arguments.
 			arguments[i].map = &buffer_map;
 			//Specify the address used by each thread to write inside the buffer.
@@ -212,6 +202,13 @@ imss_server(void * arg_)
 				pthread_exit(NULL);
 			}
 		}
+	
+
+    	//Deploy a thread distributing incomming clients among all ports.
+	if (pthread_create(&thread_garbage_collector, NULL, garbage_collector, (void *) &buffer_map) == -1)
+	{
+		perror("ERRIMSS_GARBAGECOLLECTOR_DEPLOY");
+		pthread_exit(NULL);
 	}
 
 		//Wait for the threads to conclude.
@@ -265,7 +262,7 @@ imss_metadata(void * arg_)
 	pthread_mutex_unlock(&comms_mut);
 
 	//Map tracking metadata saved records.
-	map_records metadata_map;
+	map_records metadata_map(arg.buffer_size * KB);
 	//Pointer to the allocated metadata buffer memory.
 	unsigned char * pt_met;
 
@@ -338,7 +335,7 @@ imss_metadata(void * arg_)
 			arguments[i].map = &metadata_map;
 			//Specify the address used by each thread to write inside the buffer.
 			arguments[i].pt = (unsigned char *) ((i-1)*(buffer_segment_) + offset);
-
+            arguments[i].total_size = buffer_segment_;
 			//Throw thread with the corresponding function and arguments.
 			if (pthread_create(&threads[i], NULL, stat_worker, (void *) &arguments[i]) == -1)
 			{

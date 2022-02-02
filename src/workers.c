@@ -11,6 +11,7 @@
 #include "directory.h"
 #include "records.hpp"
 
+#define GARBAGE_COLLECTOR_PERIOD 120
 
 
 //ZeroMQ context entity conforming all sockets.
@@ -20,12 +21,8 @@ char *	pub_dir;
 //Publisher socket.
 void * 	pub;
 
-
 //Lock dealing when cleaning blocks
 pthread_mutex_t mutex_garbage;
-
-//Lock dealing when cleaning blocks
-pthread_mutex_t mutex_insert;
 
 //Initial buffer address.
 unsigned char *   buffer_address;
@@ -319,13 +316,10 @@ srv_worker (void * th_argv)
 				{
 					//Receive the block into the buffer.
 					int err = zmq_recv(socket, arguments->pt, block_size_recv, 0);
-					printf("%d\n", err);
-
+				
 					int32_t insert_successful;
 					//Include the new record in the tracking structure.
-					pthread_mutex_lock(&mutex_insert);
 					insert_successful=map->put(key, arguments->pt, block_size_recv);
-					pthread_mutex_unlock(&mutex_insert);
 					//Include the new record in the tracking structure.
 					if (insert_successful != 0)
 					{
@@ -367,16 +361,14 @@ srv_worker (void * th_argv)
 void *
 garbage_collector (void * th_argv)
 {
-	//Cast from generic pointer type to p_argv struct type pointer.
-	p_argv * arguments = (p_argv *) th_argv;
 	//Obtain the current map class element from the set of arguments.
-	map_records * map = arguments->map;
+	map_records * map = (map_records *)th_argv;
 	
 
 	for (;;)
 	{
 	//Gnodetraverse_garbage_collector(map);//Future
-	sleep(30);
+	sleep(GARBAGE_COLLECTOR_PERIOD);
 	pthread_mutex_lock(&mutex_garbage);
 	map->cleaning();
 	pthread_mutex_unlock(&mutex_garbage);
@@ -392,6 +384,9 @@ stat_worker (void * th_argv)
 	p_argv * arguments = (p_argv *) th_argv;
 	//Obtain the current map class element from the set of arguments.
 	map_records * map = arguments->map;
+
+    uint16_t current_offset = 0;
+
 
 	//Format socket endpoint.
 	char endpoint[24];
@@ -597,18 +592,14 @@ stat_worker (void * th_argv)
 
 					int32_t insert_successful;
 					//Include the new record in the tracking structure.
-					pthread_mutex_lock(&mutex_insert);
 					insert_successful=map->put(key, arguments->pt, block_size_recv);
-					pthread_mutex_unlock(&mutex_insert);
 					if (insert_successful != 0)
 					{
 						perror("ERRIMSS_WORKER_MAPPUT");
 						pthread_exit(NULL);
 					}
 					
-					
-
-					
+									
 					//Insert the received uri into the directory tree.
 					pthread_mutex_lock(&tree_mut);
 					insert_successful = GTree_insert((char *) key.c_str());
@@ -619,9 +610,9 @@ stat_worker (void * th_argv)
 						perror("ERRIMSS_STATWORKER_GTREEINSERT");
 						pthread_exit(NULL);
 					}
-
-					//Update the pointer.
+                   //Update the pointer.
 					arguments->pt += block_size_recv;
+					 
 				}
 				//If was already stored:
 				else
