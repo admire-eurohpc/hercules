@@ -11,7 +11,7 @@
 #include "directory.h"
 #include "records.hpp"
 
-#define GARBAGE_COLLECTOR_PERIOD 120
+#define GARBAGE_COLLECTOR_PERIOD 10
 
 
 //ZeroMQ context entity conforming all sockets.

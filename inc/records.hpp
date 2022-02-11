@@ -113,9 +113,12 @@ class map_records
 								int pos = key.find('$');
 								string path = key.substr(0,pos);
 								
+								int pos_partner = partner_key.find('$');
+								string partner_path = partner_key.substr(0,pos_partner);
+								
 								//std::cout << path <<'\n';
-								int found_partner = partner_key.find(path);
-								if(found_partner !=std::string::npos){
+								int found_partner = partner_path.compare(path);
+								if(found_partner == 0){
 									//mapping.erase (partner_key);
 									vec.insert(vec.begin(),partner_key);
 								}
