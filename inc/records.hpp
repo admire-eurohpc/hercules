@@ -36,6 +36,13 @@ class map_records
 			total_size = nsize;
 		}
 
+		//Used in stat_worker threads
+		//Method deleting a record.
+		int32_t delete_metadata_stat_worker(std::string key)
+		{
+			return buffer.erase(key);
+		}
+		
 		//Method storing a new record.
 		int32_t put(std::string key, unsigned char * address, uint64_t length)
 		{
@@ -44,11 +51,11 @@ class map_records
 			//Block the access to the map structure.
 			std::unique_lock<std::mutex> lock(mut);
 			//Add a new couple to the map.
-			if (quatity_occupied + length > total_size) { //out of space
-			  fprintf(stderr, "[Map record] Out of space  %ld/%ld.\n",quatity_occupied + length, total_size);
+			if (quantity_occupied + length > total_size) { //out of space
+			  fprintf(stderr, "[Map record] Out of space  %ld/%ld.\n",quantity_occupied + length, total_size);
 			  return -1;
 			}
-			quatity_occupied = quatity_occupied + length;
+			quantity_occupied = quantity_occupied + length;
 			buffer.insert({key, value});
 
 			return 0;
@@ -76,6 +83,8 @@ class map_records
 			//Return the address associated to the record.
 			return 1;
 		}
+
+		//Used in str_worker threads
 		//Method retrieving the address associated to a certain record.
 		int32_t cleaning()
 		{
@@ -118,9 +127,14 @@ class map_records
 				}
 				
 			}
+
+			//Block the access to the map structure.
+			std::unique_lock<std::mutex> lock(mut);
 			std::vector<string>::iterator i;
 			for (i=vec.begin(); i<vec.end(); i++){
-				std::cout << "Garbage Collector: Deleting " << *i << "\n";
+				//std::cout << "Garbage Collector: Deleting " << *i << "\n";
+				auto item = buffer.find(*i);
+				free(item->second.first);
 				buffer.erase (*i);
 				
 			}
@@ -129,7 +143,7 @@ class map_records
 			
 			for(const auto & it : buffer){
 				string key = it.first;
-				std::cout <<"Garbage Collector: Exist " << key << '\n';
+				//std::cout <<"Garbage Collector: Exist " << key << '\n';
 			}
 			return 0;
 		}
@@ -158,7 +172,7 @@ class map_records
 		std::map <std::string, std::pair<unsigned char *, uint64_t>> buffer;
 		//Mutex restricting access to structure.
         uint64_t total_size;
-		uint64_t quatity_occupied;
+		uint64_t quantity_occupied;
 		std::mutex mut;
 };
 

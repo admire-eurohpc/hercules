@@ -269,6 +269,21 @@ find_imss(char * imss_uri,
 	return -1;
 }
 
+//Method deleting a certains IMSS in the vector
+int32_t
+delete_imss(char * imss_uri,
+	  imss * imss_)
+{
+	int32_t pos = find_imss(imss_uri, imss_);
+	if(pos != -1){
+		g_array_remove_index(imssd,pos);
+		return 0;
+	}else{
+		return -1;
+	}
+}
+
+
 
 
 /**********************************************************************************/
@@ -531,7 +546,7 @@ get_dir(char * 	 requested_uri,
 	}
 
 	char * elements = (char *) zmq_msg_data(&uri_elements);
-
+	//printf("requested_uri=%s\n",requested_uri);
 	if (!strncmp("$ERRIMSS_NO_KEY_AVAIL$", elements, 22))
 	{
 		zmq_msg_close(&uri_elements);
@@ -1346,6 +1361,53 @@ release_dataset(int32_t dataset_id)
 	return 0;
 }
 
+//Method deleting a dataset.
+int32_t
+delete_dataset(const char * 	    dataset_uri)
+{
+	
+	//Formated dataset uri to be sent to the metadata server.
+	char formated_uri[REQ_MSG];
+	sprintf(formated_uri, "4 %s", dataset_uri); // delete
+
+	//Discover the metadata server that handles the dataset.
+	uint32_t m_srv = discover_stat_srv((char *) dataset_uri);
+
+	//Send the request.
+	if (zmq_send(stat_client[m_srv], formated_uri, REQ_MSG, 0) < 0)
+	{
+		perror("ERRIMSS_DATASET_REQ");
+		return -1;
+	}
+
+
+	zmq_msg_t msg_struct;
+
+	if (zmq_msg_init(&msg_struct) != 0)
+	{
+		perror("ERRIMSS_RECVDYNAMSTRUCT_INIT");
+		return -1;
+	}
+
+	if (zmq_msg_recv(&msg_struct, stat_client[m_srv], 0) == -1)
+	{
+		perror("ERRIMSS_RECVDYNAMSTRUCT_RECV");
+		return -1;
+	}
+	
+
+	//Actual message content plus message size.
+
+	unsigned char * msg_data = (unsigned char *) zmq_msg_data(&msg_struct);
+
+	zmq_msg_close(&msg_struct);
+
+	printf("delete_dataset_recv %s\n",msg_data);
+
+	
+	return 1;
+}
+
 //Method retrieving information related to a certain dataset.
 int32_t
 stat_dataset(const char * 	    dataset_uri,
@@ -1864,6 +1926,8 @@ get_type(char * uri)
 
 	//Access the information received.
 	imss_info * data = (imss_info *) zmq_msg_data(&entity_info);
+
+	//printf("get_type path =%s, type =%c \n",uri,data->type);
 
 	//Determine what was retrieved from the metadata server.
 	if (data->type == 'I')

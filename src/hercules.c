@@ -179,7 +179,7 @@ imss_server(void * arg_)
 
 			data_reserved = buffer_KB * KB;
             map_records buffer_map(data_reserved);
-			buffer_address = (unsigned char *) malloc(sizeof(char)*data_reserved);
+			//buffer_address = (unsigned char *) malloc(sizeof(char)*data_reserved );
 
 			buffer_segment = data_reserved/THREAD_POOL;
 	

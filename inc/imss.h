@@ -38,7 +38,7 @@ const int CLOSE_ATTACHED = 2;
 #define REQ_MSG		272
 #define KEY		512
 #define MONITOR		1
-#define ELEMENTS	4096
+#define ELEMENTS	5120
 #define IMSS		0
 #define DATASET		1
 
@@ -274,6 +274,11 @@ int32_t create_dataset(char * dataset_uri, char * policy, int32_t num_data_elem,
 			 -1 - In case of error.
 */
 int32_t open_dataset(char * dataset_uri);
+
+
+//Method deleting a dataset.
+int32_t delete_dataset(const char * dataset_uri);
+
 
 /* Method releasing the set of resources required to deal with a dataset.
 

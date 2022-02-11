@@ -8,10 +8,11 @@
 #define RELEASE			2
 #define WHO			    3
 #define WRITE_OP		1
+#define DELETE_OP		4
 
 #define GETDIR			1
 
-#define THREAD_POOL		3
+#define THREAD_POOL		1
 
 #define LOCAL_DATASET_UPDATE	0
 

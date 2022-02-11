@@ -314,12 +314,14 @@ srv_worker (void * th_argv)
 				//If the record was not already stored, add the block.
 				if (!map->get(key, &address_, &block_size_rtvd))
 				{
+					
+					unsigned char * buffer = (unsigned char *) malloc(block_size_recv);
 					//Receive the block into the buffer.
-					int err = zmq_recv(socket, arguments->pt, block_size_recv, 0);
+					int err = zmq_recv(socket, buffer, block_size_recv, 0);
 				
 					int32_t insert_successful;
 					//Include the new record in the tracking structure.
-					insert_successful=map->put(key, arguments->pt, block_size_recv);
+					insert_successful=map->put(key, buffer, block_size_recv);
 					//Include the new record in the tracking structure.
 					if (insert_successful != 0)
 					{
@@ -420,6 +422,9 @@ stat_worker (void * th_argv)
 		//Save the identity of the requesting client.
 		zmq_msg_recv(&client_id, socket, 0);
 
+
+
+
 		//Check if a timeout was triggered in the previous receive operation.
 		if ((errno == EAGAIN) && !zmq_msg_size(&client_id))
 		{
@@ -453,6 +458,8 @@ stat_worker (void * th_argv)
 			continue;
 		}
 
+		
+
 		//Save the request to be served.
 		zmq_msg_recv(&client_req, socket, 0);
 
@@ -471,6 +478,8 @@ stat_worker (void * th_argv)
 		memcpy((void*) raw_msg,(void*) zmq_msg_data(&client_req), req_size);
 		raw_msg[req_size] = '\0';
 
+		//printf("*********worker_metadata raw_msg %s\n",raw_msg);
+
 		//Reference to the client request.
 		char number[16];
 		sscanf(raw_msg, "%s", number);
@@ -487,6 +496,8 @@ stat_worker (void * th_argv)
 		unsigned char * address_;
 		uint64_t block_size_rtvd;
 
+
+  
 		//Differentiate between READ and WRITE operations. 
 		switch (more)
 		{
@@ -572,6 +583,29 @@ stat_worker (void * th_argv)
 
 						break;
 					}
+					case DELETE_OP:
+					{
+			            std::cout << key <<"\n";
+						int32_t result = map->delete_metadata_stat_worker(key);
+						if(result == 0){
+							printf("0 elements delete from stat_worker\n");
+						}else{
+							printf("%d elements with key  %s delete from stat_worker\n",result,uri_);
+						}
+
+
+						char release_msg[] = "DELETE\0";
+
+						if (zmq_send(socket, release_msg, strlen(release_msg), 0) < 0)
+						{
+							perror("ERRIMSS_PUBLISH_RELEASEMSG");
+							pthread_exit(NULL);
+						}
+
+
+			            break;
+					}
+
 
 					default:
 
@@ -588,11 +622,12 @@ stat_worker (void * th_argv)
 				{
 
 					//Receive the block into the buffer.
-					zmq_recv(socket, arguments->pt, block_size_recv, 0);
+					unsigned char * buffer = (unsigned char *) malloc (block_size_recv);
+					zmq_recv(socket, buffer, block_size_recv, 0);
 
 					int32_t insert_successful;
 					//Include the new record in the tracking structure.
-					insert_successful=map->put(key, arguments->pt, block_size_recv);
+					insert_successful=map->put(key, buffer, block_size_recv);
 					if (insert_successful != 0)
 					{
 						perror("ERRIMSS_WORKER_MAPPUT");
@@ -696,6 +731,7 @@ stat_worker (void * th_argv)
 				break;
 			}
 
+			
 			default:
 
 				break;
