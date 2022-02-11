@@ -30,11 +30,22 @@ GTree_search_(GNode * 	parent_node,
 
 		//HAVE TO CHECK IF IT IS A DIRECTORY OR A FILE
 		//For this i check if it has at the end /
-
-		//if (!strcmp((char *) child->data, desired_data))
-		//if (!strncmp((char *) child->data, desired_data, strlen((char *) child->data)))
-		if (!strcmp((char *) child->data, desired_data))
-		{
+		
+		if(desired_data[strlen(desired_data)-1]=='/'&&!strncmp((char *) child->data, desired_data, strlen((char *) child->data))){
+			//Check if the compared node is the requested one.
+			int a = 1;
+			if (!strcmp((char *) child->data, desired_data))
+			{
+				*found_node = child;
+				
+				//The desired data was found.
+				return 1;
+			}
+			else{
+				//Check within the new node.
+				return GTree_search_(child, desired_data, found_node);
+			}
+		}else if(desired_data[strlen(desired_data)-1]!='/'&&!strncmp((char *) child->data, desired_data, strlen((char *) child->data))){
 			//Check if the compared node is the requested one.
 			if (!strcmp((char *) child->data, desired_data))
 			{
@@ -43,21 +54,34 @@ GTree_search_(GNode * 	parent_node,
 				//The desired data was found.
 				return 1;
 			}
-			else
-				//Check within the new node.
-				return GTree_search_(child, desired_data, found_node);
-		}else if(desired_data[strlen(desired_data)-1]=='/'&&!strncmp((char *) child->data, desired_data, strlen((char *) child->data))){
-			//Check if the compared node is the requested one.
-			if (!strcmp((char *) child->data, desired_data))
-			{
-				*found_node = child;
+			else{
+				//SPECIAL CASE EXAMPLE PRUEBA_1 CREATED AND WANT TO ADD PRUEBA_11
+				//CHECK THE NUMBERS OF '/' IN THE PATHS TO SEE IF WE ARRIVE TO THE DIRECTORY
+				int amount = 0;
+				for (int32_t j = 0; j < strlen(desired_data)-1; j++)
+				{
+					if(desired_data[j]=='/'){
+						amount = amount + 1;
+					}
+				}
+				int amount_child = 0;
+				char * path_child = (char *)child->data;
+				for (int32_t j = 0; j < strlen(path_child)-1; j++)
+				{
+					if(path_child[j]=='/'){
+						amount_child = amount_child + 1;
+					}
+				}
 
-				//The desired data was found.
-				return 1;
-			}
-			else
+				if(amount==amount_child){
+					//Move on to the following child.
+					child = child->next;
+					continue;
+				}
+
 				//Check within the new node.
 				return GTree_search_(child, desired_data, found_node);
+			}
 		}
 
 		//Move on to the following child.
