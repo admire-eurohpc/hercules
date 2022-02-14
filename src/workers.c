@@ -11,7 +11,7 @@
 #include "directory.h"
 #include "records.hpp"
 
-#define GARBAGE_COLLECTOR_PERIOD 10
+#define GARBAGE_COLLECTOR_PERIOD 120
 
 
 //ZeroMQ context entity conforming all sockets.
@@ -587,6 +587,7 @@ stat_worker (void * th_argv)
 					{
 			            std::cout << key <<"\n";
 						int32_t result = map->delete_metadata_stat_worker(key);
+						GTree_delete((char *) key.c_str());
 						if(result == 0){
 							printf("0 elements delete from stat_worker\n");
 						}else{
@@ -638,6 +639,7 @@ stat_worker (void * th_argv)
 					//Insert the received uri into the directory tree.
 					pthread_mutex_lock(&tree_mut);
 					insert_successful = GTree_insert((char *) key.c_str());
+					//printf("Insert Tree: %s\n",(char *) key.c_str());
 					pthread_mutex_unlock(&tree_mut);
 
 					if (insert_successful == -1)

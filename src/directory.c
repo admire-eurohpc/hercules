@@ -108,6 +108,31 @@ GTree_search(GNode * 	parent_node,
 	return GTree_search_(parent_node, desired_data, found_node);
 }
 
+//Method deleting a new path.
+int32_t
+GTree_delete(char * desired_data)
+{
+	//Closest node to the one requested (or even the requested one itself).
+	GNode * closest_node;
+
+	//Check if the node has been already inserted.
+	if (GTree_search(tree_root, desired_data, &closest_node)==1){
+		//printf("Entro a borrar: %s\n",closest_node->data);
+		if(strcmp(desired_data,(char *)closest_node->data)==0){
+			//printf("g_node_destroy: %s\n",closest_node->data);
+			g_node_destroy(closest_node);//Delete Node
+		}
+		
+	}else{
+		//printf("Delete Error not found:\n");
+		return 0;
+	}
+
+		
+
+	return 1;
+}
+
 //Method inserting a new path.
 int32_t
 GTree_insert(char * desired_data)
@@ -174,7 +199,7 @@ serialize_dir(GNode * 	visited_node,
 	*buffer += URI_;
 
 	GNode * child = visited_node->children;
-	printf("node=%s  num_children=%d\n",(char *) visited_node->data,num_children);
+	//printf("node=%s  num_children=%d\n",(char *) visited_node->data,num_children);
 	for (int32_t i = 0; i < num_children; i++)
 	{ 
 		//Number of children of the current child node.

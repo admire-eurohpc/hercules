@@ -721,6 +721,39 @@ int imss_opendir(const char * path, struct fuse_file_info * fi) {
 
 //Does nothing
 int imss_releasedir(const char * path, struct fuse_file_info * fi) {
+	//printf("-----------Release_dir %s\n",path);
+	return 0;
+}
+
+//Remove directory
+int imss_rmdir(const char * path){
+	
+	//Needed variables for the call
+	char * buffer;
+	char ** refs;
+	int n_ent = 0;
+	char imss_path[MAX_PATH] = {0};
+	bzero(imss_path, MAX_PATH);
+	get_iuri(path, imss_path);
+
+	//printf("-----------Remove dir %s\n",imss_path);
+	strcat(imss_path,"/");
+	if((n_ent = get_dir((char*)imss_path, &buffer, &refs)) > 0){
+		
+		if(n_ent > 1){
+			//printf("Tiene %d hijos no puedo borrar\n",n_ent-1);
+			return -EPERM;
+		}
+	}else{
+		return -ENOENT;
+	}
+
+	if(n_ent==1){
+		//printf("puedo borrar\n");
+		strcat(path,"/");
+		imss_unlink(path);
+	}
+
 	return 0;
 }
 
@@ -748,7 +781,8 @@ int imss_unlink(const char * path){
 	memcpy(&header, buff, sizeof(struct stat));
 
 	//header.st_blocks = INT32_MAX;
-	header.st_nlink = 0;
+	//header.st_nlink = 0;
+	header.st_nlink = header.st_nlink - 1 ;
 
 	//Write initial block
 	memcpy(buff, &header, sizeof(struct stat));
@@ -761,7 +795,6 @@ int imss_unlink(const char * path){
 	pthread_mutex_unlock(&lock_fileopen);		
 
     delete_dataset(imss_path);
-	//Delete metadata from client from GArray
 
 	release_dataset(ds);
 	free (buff);
@@ -866,13 +899,14 @@ static struct fuse_operations imss_oper = {
 	.utimens        = imss_utimens,
 	.readdir	= imss_readdir,
 	.open		= imss_open,
-	.read		= imss_read, //
+	.read		= imss_read, 
 	.write		= imss_write, 
 	.release	= imss_release,
 	.create		= imss_create,
 	.mkdir		= imss_mkdir,
 	.opendir 	= imss_opendir,
 	.releasedir     = imss_releasedir,
+	.rmdir		= imss_rmdir,
 	.unlink		= imss_unlink,
 	.access		= imss_access
 };
