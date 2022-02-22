@@ -52,7 +52,7 @@ class map_records
 			std::unique_lock<std::mutex> lock(mut);
 			//Add a new couple to the map.
 			if (quantity_occupied + length > total_size) { //out of space
-			  fprintf(stderr, "[Map record] Out of space  %ld/%ld.\n",quantity_occupied + length, total_size);
+			  fprintf(stderr, "[Map record] Out of space  %ld/%ld.\n",quantity_occupied + length, total_size);			  
 			  return -1;
 			}
 			quantity_occupied = quantity_occupied + length;
@@ -79,6 +79,52 @@ class map_records
 			
 			*(add_) = it->second.first;
 			*(size_) = it->second.second;
+
+			//Return the address associated to the record.
+			return 1;
+		}
+
+		//Method retrieving the address associated to a certain record.
+		int32_t rename_metadata_stat_worker(std::string old_key, std::string new_key)
+		{
+			//Map iterator that will be searching for the key.
+			std::map <std::string, std::pair<unsigned char *, uint64_t>>::iterator it;
+			//Block the access to the map structure.
+			std::unique_lock<std::mutex> lock(mut);
+			
+			//Search for the address related to the key.
+			it = buffer.find(old_key);
+			//Check if the value did exist within the map.
+			if(it == buffer.end()){
+				return 0;
+			}else{
+				uint64_t length = it->second.second;
+				unsigned char * address = (unsigned char *) malloc (length);
+				//memcpy(address,it->second.first,length);
+				strcpy((char *)address,new_key.c_str());
+				printf("already save is %s\n",it->second.first);
+				printf("address copy is %s\n",address);
+				buffer.erase(old_key);
+				//Construct a pair object storing the couple of values associated to a key.
+				std::pair<unsigned char *, uint64_t> value(address, length);
+				buffer.insert({new_key,value});
+			}
+
+			it = buffer.find(old_key);
+			if(it == buffer.end()){
+				printf("No encontrado %s\n",old_key.c_str());
+			}else{
+				printf("Existe aun%s\n",old_key.c_str());
+			}	
+
+			it = buffer.find(new_key);
+			if(it == buffer.end()){
+				printf("No encontrado%s\n",new_key.c_str());
+			}else{
+				printf("Existe%s\n",new_key.c_str());
+				printf("New has buffer= %s\n",it->second.first);
+			}
+
 
 			//Return the address associated to the record.
 			return 1;

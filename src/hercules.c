@@ -167,9 +167,9 @@ imss_server(void * arg_)
 			pthread_mutex_lock(&backend_buff_mut);
 			
 			//Check if there is enough space to create a new IMSS server entity within the backend storage.
-			if (buffer_KB > backend_buffer_size)
+			if (buffer_KB > backend_buffer_size)//Total storage size include data server . Then must be lagger
 			{
-				perror("ERRIMSS_BUFFTOOBIG");
+				perror("ERRIMSS_BUFFTOOBIG. Total storage size overpass when allocating a new imss_server_data_buffer");
 				pthread_exit(NULL);
 			}
 			backend_buffer_size -= buffer_KB;
@@ -191,7 +191,7 @@ imss_server(void * arg_)
 			//Add the reference to the map into the set of thread arguments.
 			arguments[i].map = &buffer_map;
 			//Specify the address used by each thread to write inside the buffer.
-			arguments[i].pt = (unsigned char *) ((i-1)*buffer_segment + buffer_address);
+			arguments[i].pt = 0;
             //URI of the corresponding IMSS instance.
             strcpy(arguments[i].my_uri, att_imss_uri);
 
@@ -261,15 +261,17 @@ imss_metadata(void * arg_)
 	pthread_cond_signal(&comms_cond);
 	pthread_mutex_unlock(&comms_mut);
 
+	
 	//Map tracking metadata saved records.
+	printf("Metadata:arg.buffer_size=%d\n",arg.buffer_size);
 	map_records metadata_map(arg.buffer_size * KB);
 	//Pointer to the allocated metadata buffer memory.
 	unsigned char * pt_met;
 
 	pthread_mutex_lock(&backend_buff_mut);
-	if (backend_buffer_size < arg.buffer_size)
+	if (backend_buffer_size < arg.buffer_size)//Total storage size inclue metadata. Then must be lagger
 	{
-		perror("ERRIMSS_BUFFTOOBIG");
+		perror("ERRIMSS_BUFFTOOBIG. Total storage size overpass when allocating a new imss_server_metadata_buffer.");
 		pthread_exit(NULL);
 	}
 	backend_buffer_size -= arg.buffer_size;
@@ -334,8 +336,8 @@ imss_metadata(void * arg_)
 			//Add the reference to the map into the set of thread arguments.
 			arguments[i].map = &metadata_map;
 			//Specify the address used by each thread to write inside the buffer.
-			arguments[i].pt = (unsigned char *) ((i-1)*(buffer_segment_) + offset);
-            arguments[i].total_size = buffer_segment_;
+			arguments[i].pt = 0;
+            //arguments[i].total_size = buffer_segment_;
 			//Throw thread with the corresponding function and arguments.
 			if (pthread_create(&threads[i], NULL, stat_worker, (void *) &arguments[i]) == -1)
 			{

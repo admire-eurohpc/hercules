@@ -620,7 +620,7 @@ init_imss(char *   imss_uri,
 		memset(command, 0, 2048);
 
 		sprintf(command, "mpirun -np %d -f %s %s %s %d %lu foo %d %d %s &", n_servers, hostfile, binary_path, imss_uri, conn_port, buff_size, 0, n_servers, "");
-
+		printf("*****buffsize=%d\n",buff_size);
 		//Perform the deployment (FROM LINUX MAN PAGES: "system() returns after the command has been completed").
 		if (system(command) == -1)
 		{
@@ -1088,13 +1088,13 @@ create_dataset(char *  dataset_uri,
 	if ((dataset_uri == NULL) || (policy == NULL) || !num_data_elem || !data_elem_size)
 	{
 		fprintf(stderr, "ERRIMSS_CRTDATASET_WRONGARG\n");
-		return -1;
+		return -EINVAL;
 	}
 
 	if ((repl_factor < NONE) || (repl_factor > TRM))
 	{
 		fprintf(stderr, "ERRIMSS_CRTDATASET_BADREPLFACTOR\n");
-		return -1;
+		return -EINVAL;
 	}
 
 	int32_t associated_imss_indx;
@@ -1102,7 +1102,7 @@ create_dataset(char *  dataset_uri,
 	if ((associated_imss_indx = imss_check(dataset_uri)) == -1)
 	{
 		fprintf(stderr, "ERRIMSS_OPENDATA_IMSSNOTFOUND\n");
-		return -1;
+		return -ENOENT;
 	}
 
 	imss associated_imss;
@@ -1114,7 +1114,7 @@ create_dataset(char *  dataset_uri,
 	if (stat_dataset(dataset_uri, &new_dataset))
 	{
 		fprintf(stderr, "ERRIMSS_CRTDATASET_ALREADYEXISTS\n");
-		return -1;
+		return -EEXIST;
 	}
 
 	//Save the associated metadata of the current dataset.
@@ -1408,6 +1408,81 @@ delete_dataset(const char * 	    dataset_uri)
 	return 1;
 }
 
+int32_t 
+rename_dataset(char * old_dataset_uri, char * new_dataset_uri){
+	
+	printf("*****Rename Dataset\n");
+	
+	
+	/*********RENAME GARRAY DATASET*******/
+	dataset_info dataset_info_;
+	printf("datasetd.length=%d\n",datasetd->len);
+	//Search for the requested dataset in the local vector.
+	for (int32_t i = 0; i < datasetd->len; i++)
+	{
+		dataset_info_ = g_array_index(datasetd, dataset_info, i);
+		printf("Before uri[%d]=%s\n",i,dataset_info_.uri_);
+		
+	}
+	for (int32_t i = 0; i < datasetd->len; i++)
+	{
+		dataset_info_ = g_array_index(datasetd, dataset_info, i);
+		if (!strcmp(old_dataset_uri, dataset_info_.uri_)){
+			strcpy(dataset_info_.uri_,new_dataset_uri);
+			g_array_remove_index(datasetd,i);
+			g_array_insert_val(datasetd,i,dataset_info_);
+		}
+		
+	}
+	for (int32_t i = 0; i < datasetd->len; i++)
+	{
+		dataset_info_ = g_array_index(datasetd, dataset_info, i);
+		printf("Later uri[%d]=%s\n",i,dataset_info_.uri_);
+		
+	}
+
+
+	/*********RENAME METADATA*******/
+	//Formated dataset uri to be sent to the metadata server.
+	char formated_uri[REQ_MSG];
+	sprintf(formated_uri, "5 %s %s", old_dataset_uri,new_dataset_uri);
+
+	//Discover the metadata server that handles the dataset.
+	uint32_t m_srv = discover_stat_srv((char *) old_dataset_uri);
+
+	//Send the request.
+	if (zmq_send(stat_client[m_srv], formated_uri, REQ_MSG, 0) < 0)
+	{
+		perror("ERRIMSS_DATASET_REQ");
+		return -1;
+	}
+
+
+	zmq_msg_t msg_struct;
+
+	if (zmq_msg_init(&msg_struct) != 0)
+	{
+		perror("ERRIMSS_RECVDYNAMSTRUCT_INIT");
+		return -1;
+	}
+
+	if (zmq_msg_recv(&msg_struct, stat_client[m_srv], 0) == -1)
+	{
+		perror("ERRIMSS_RECVDYNAMSTRUCT_RECV");
+		return -1;
+	}
+	
+
+	//Actual message content plus message size.
+
+	unsigned char * msg_data = (unsigned char *) zmq_msg_data(&msg_struct);
+
+	zmq_msg_close(&msg_struct);
+
+	printf("rename_dataset_recv %s\n",msg_data);
+	return 0;
+}
+
 //Method retrieving information related to a certain dataset.
 int32_t
 stat_dataset(const char * 	    dataset_uri,
@@ -1567,9 +1642,10 @@ get_data(int32_t 	 dataset_id,
 
 
 		//Check if the requested key was correctly retrieved.
-		if (strncmp((const char *) buffer, "$ERRIMSS_NO_KEY_AVAIL$", 22))
-
+		if (strncmp((const char *) buffer, "$ERRIMSS_NO_KEY_AVAIL$", 22)){
 			return 0;
+		}
+			
 	}
 
 	fprintf(stderr, "ERRIMSS_GETDATA_UNAVAIL\n");

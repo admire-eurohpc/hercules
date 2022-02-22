@@ -276,8 +276,17 @@ int32_t create_dataset(char * dataset_uri, char * policy, int32_t num_data_elem,
 int32_t open_dataset(char * dataset_uri);
 
 
-//Method deleting a dataset.
+/*Method deleting a dataset.
+
+	RETURNS:	 0 - Release operation took place successfully.
+				-1 - In case of error.*/
 int32_t delete_dataset(const char * dataset_uri);
+
+/*Method renaming a dataset.
+
+	RETURNS:	 0 - Release operation took place successfully.
+				-1 - In case of error.*/
+int32_t rename_dataset(char * old_dataset_uri, char * new_dataset_uri);
 
 
 /* Method releasing the set of resources required to deal with a dataset.

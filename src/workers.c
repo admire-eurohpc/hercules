@@ -258,9 +258,8 @@ srv_worker (void * th_argv)
 						}
 						else
 						{
-							int32_t lock = (address_ - buffer_address) / buffer_segment;
-
-							pthread_mutex_lock(&region_locks[lock]);
+							/*int32_t lock = (address_ - buffer_address) / buffer_segment;
+							pthread_mutex_lock(&region_locks[lock]);*/
 
 							//Send the requested block.
 							if (zmq_send(socket, address_, block_size_rtvd, 0) < 0)
@@ -269,7 +268,7 @@ srv_worker (void * th_argv)
 								pthread_exit(NULL);
 							}
 
-							pthread_mutex_unlock(&region_locks[lock]);
+							//pthread_mutex_unlock(&region_locks[lock]);
 						}
 
 						break;
@@ -315,36 +314,43 @@ srv_worker (void * th_argv)
 				if (!map->get(key, &address_, &block_size_rtvd))
 				{
 					
+					//printf("***address=%s\n",address_);
 					unsigned char * buffer = (unsigned char *) malloc(block_size_recv);
 					//Receive the block into the buffer.
 					int err = zmq_recv(socket, buffer, block_size_recv, 0);
 				
 					int32_t insert_successful;
 					//Include the new record in the tracking structure.
+					printf("srv_worker put lenght=%d\n",block_size_recv);
 					insert_successful=map->put(key, buffer, block_size_recv);
 					//Include the new record in the tracking structure.
 					if (insert_successful != 0)
 					{
 						perror("ERRIMSS_WORKER_MAPPUT");
-						pthread_exit(NULL);
+						//pthread_exit(NULL);
+						continue;
 					}
 
 					//Update the pointer.
+					printf("Insert Map srv_worker: %s\n",(char *) key.c_str());
 					arguments->pt += block_size_recv;
+					
 				}
 				//If was already stored:
 				else
 				{
-					int32_t lock = (address_ - buffer_address) / buffer_segment;
+					//printf("Rewrite block %s\n",(char *) key.c_str());
+					/*int32_t lock = (address_ - buffer_address) / buffer_segment;
 
-					pthread_mutex_lock(&region_locks[lock]);
+					pthread_mutex_lock(&region_locks[lock]);*/
 
-					//Clear the corresponding memory region.
-					memset(address_, '\0', block_size_rtvd);
 					//Receive the block into the buffer.
+					
 					zmq_recv(socket, address_, block_size_rtvd, 0);
+					/*struct stat * st_p2 = (struct stat *) address_;
+					printf("REWRITEst_p_NLINK=%d\n",st_p2->st_nlink);*/
 
-					pthread_mutex_unlock(&region_locks[lock]);
+					//pthread_mutex_unlock(&region_locks[lock]);
 				}
 
 				break;
@@ -599,11 +605,42 @@ stat_worker (void * th_argv)
 
 						if (zmq_send(socket, release_msg, strlen(release_msg), 0) < 0)
 						{
-							perror("ERRIMSS_PUBLISH_RELEASEMSG");
+							perror("ERRIMSS_PUBLISH_DELETEMSG");
 							pthread_exit(NULL);
 						}
 
 
+			            break;
+					}
+					case RENAME_OP:
+					{
+						std::size_t found = key.find(' ');
+						if (found!=std::string::npos){
+							string old_key = key.substr(0,found);
+							std::cout << "old key " << old_key << '\n';
+							string new_key = key.substr(found+1,key.length());
+							std::cout << "new key " << new_key << '\n';
+							
+							//RENAME MAP
+							int32_t result = map->rename_metadata_stat_worker(old_key,new_key);
+							if(result == 0){
+							printf("0 elements rename from stat_worker\n");
+							break;
+							}
+
+							//RENAME TREE
+							
+
+						}
+							
+
+						char release_msg[] = "RENAME\0";
+
+						if (zmq_send(socket, release_msg, strlen(release_msg), 0) < 0)
+						{
+							perror("ERRIMSS_PUBLISH_RENAMEMSG");
+							pthread_exit(NULL);
+						}
 			            break;
 					}
 
@@ -628,18 +665,21 @@ stat_worker (void * th_argv)
 
 					int32_t insert_successful;
 					//Include the new record in the tracking structure.
+					printf("stat_worker put lenght=%d\n",block_size_recv);
 					insert_successful=map->put(key, buffer, block_size_recv);
 					if (insert_successful != 0)
 					{
 						perror("ERRIMSS_WORKER_MAPPUT");
-						pthread_exit(NULL);
+						//pthread_exit(NULL);
+						continue;
 					}
 					
 									
 					//Insert the received uri into the directory tree.
 					pthread_mutex_lock(&tree_mut);
 					insert_successful = GTree_insert((char *) key.c_str());
-					//printf("Insert Tree: %s\n",(char *) key.c_str());
+					printf("Insert Map stat_worker: %s\n",(char *) key.c_str());
+					printf("Insert Tree: %s\n",(char *) key.c_str());
 					pthread_mutex_unlock(&tree_mut);
 
 					if (insert_successful == -1)
