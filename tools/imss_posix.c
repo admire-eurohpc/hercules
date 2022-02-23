@@ -16,18 +16,24 @@
 #include <string.h>
 
 #include "imss.h"
+#include "map.hpp"
 
-char IMSS_HOSTFILE[512]; //Not default
-char META_HOSTFILE[512];
+#define KB 1024
+
+char     IMSS_HOSTFILE[512]; //Not default
+char     META_HOSTFILE[512];
 uint16_t IMSS_SRV_PORT = 1; //Not default, 1 will fail
 uint16_t METADATA_PORT = 1; //Not default, 1 will fail
-char IMSS_ROOT[32];
-int32_t N_SERVERS = 1; //Default
-int32_t N_META_SERVERS = 1;
+char     IMSS_ROOT[32];
+int32_t  N_SERVERS = 1; //Default
+int32_t  N_META_SERVERS = 1;
 uint64_t IMSS_BUFFSIZE = 1024*2048; //In Kb, Default 2Gb
-int32_t IMSS_DEBUG = 0;
+int32_t  IMSS_DEBUG = 0;
+uint64_t IMSS_BLKSIZE = 0;
 
+uint64_t IMSS_DATA_BSIZE;
 
+void * map;
 
 static int (*real_open)(const char *pathname, int flags, ...) = NULL;
 static int (*real_write)(const char *pathname, int flags, ...) = NULL;
@@ -72,6 +78,10 @@ imss_posix_init(void)
         N_META_SERVERS = atoi(getenv("IMSS_META_SERVERS"));
     }
 
+	if (getenv("IMSS_BLKSIZE") != NULL) {
+        IMSS_BLKSIZE = atoi(getenv("IMSS_BLKSIZE"));
+    }
+
     if (getenv("IMSS_DEBUG") != NULL) {
         IMSS_DEBUG = 1;
     }
@@ -83,6 +93,10 @@ imss_posix_init(void)
     fprintf(stderr," -- Buffer size: %ld\n", IMSS_BUFFSIZE );
 
     fprintf(stderr, "Metadata connection starting.\n");
+
+     map = map_create();
+
+    IMSS_DATA_BSIZE = IMSS_BLKSIZE*KB-sizeof(uint32_t);
 
     //Metadata server
     if (stat_init(META_HOSTFILE, METADATA_PORT, N_META_SERVERS,1) == -1){

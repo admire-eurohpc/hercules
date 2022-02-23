@@ -18,7 +18,7 @@ void map_erase(void* map, char* k) {
   m->erase(std::string(k));
 }
 
-int map_search(void* map, char* k, int *v) {
+int map_search(void* map, const char* k, int *v) {
     Map* m = reinterpret_cast<Map*> (map);
     auto search = m->find(std::string(k));
      
