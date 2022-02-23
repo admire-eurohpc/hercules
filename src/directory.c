@@ -119,9 +119,14 @@ GTree_rename(char * old_desired_data,char * new_desired_data)
 	if (GTree_search(tree_root, old_desired_data, &closest_node)==1){
 		printf("TREE Exist found:%s\n",old_desired_data);
 		if(strcmp(old_desired_data,(char *)closest_node->data)==0){
-			printf("Data rename Tree Before: %s\n",closest_node->data);
-			memcpy(closest_node->data,new_desired_data,strlen(new_desired_data)+1);
-			printf("Data rename Tree: %s\n",closest_node->data);
+			printf("TREE Data rename Tree Before: %s\n",closest_node->data);
+			//memcpy(closest_node->data,new_desired_data,strlen(new_desired_data)+1);
+			g_node_destroy(closest_node);
+			GTree_insert(new_desired_data);
+
+			//printf("TREE Data rename Tree After: %s\n",closest_node->data);
+
+
 		}
 		
 	}else{

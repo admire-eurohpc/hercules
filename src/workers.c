@@ -297,7 +297,7 @@ srv_worker (void * th_argv)
 							std::cout << "srv_worker: new key " << new_key << '\n';
 							
 							//RENAME MAP
-							int32_t result = map->rename_metadata_srv_worker(old_key,new_key);
+							int32_t result = map->rename_data_srv_worker(old_key,new_key);
 							if(result == 0){
 							printf("0 elements rename from stat_worker\n");
 							break;

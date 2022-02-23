@@ -118,17 +118,14 @@ class map_records
 				return 0;
 			}else{
 				uint64_t length = it->second.second;
-				unsigned char * address = (unsigned char *) malloc (length);
-				//memcpy(address,it->second.first,length);
 
-				imss_info_ * data = (imss_info_ *) it->second.first;
-				strcpy(data->uri_,new_key.c_str());
-				//printf("RENAME_OP data->uri=%s\n",data->uri_);
-				//printf("RENAME_OP data->type=%c\n",data->type);
+				unsigned char * buffer_mv = (unsigned char *) malloc(length);
+				memcpy(buffer_mv,it->second.first,length);
+
 				free(it->second.first);
 				buffer.erase(old_key);
 				//Construct a pair object storing the couple of values associated to a key.
-				std::pair<unsigned char *, uint64_t> value((unsigned char *)data, length);
+				std::pair<unsigned char *, uint64_t> value(buffer_mv, length);
 				buffer.insert({new_key,value});
 			}
 
@@ -137,26 +134,56 @@ class map_records
 		}
 
 		//Method renaming from srv_worker
-		int32_t rename_metadata_srv_worker(std::string old_key, std::string new_key)
+		int32_t rename_data_srv_worker(std::string old_key, std::string new_key)
 		{
 			//Map iterator that will be searching for the key.
 			std::map <std::string, std::pair<unsigned char *, uint64_t>>::iterator it;
 			//Block the access to the map structure.
 			std::unique_lock<std::mutex> lock(mut);
 			
+			//save partners for later deletion and new insertion of news paths
+			std::vector<string> vec;
+
 			printf("***RENAME SRV_WORKER\n");
 			for(const auto & it : buffer) {
 				string key = it.first;
-				std::cout <<"Exist " << key << '\n';
+				std::cout <<"Exist map srv worker" << key << '\n';
 				
 				int pos = key.find('$');
 				string path = key.substr(0,pos);
+				string block = key.substr(pos,key.length()+1);
 				
-				//printf("path=%s\n",path);
 				std::cout <<"path= " << path << '\n';
+				std::cout <<"block= " << block << '\n';
 				if(path.compare(old_key) == 0){
-					std::cout <<"DETECTADO CAMBIO" << '\n';
+					std::cout <<"DETECTADO CAMBIO" << path << old_key << '\n';
+					vec.insert(vec.begin(),key);
 				}
+			}
+
+			std::vector<string>::iterator i;
+			for (i=vec.begin(); i<vec.end(); i++){
+				auto item = buffer.find(*i);
+
+				
+				string key = *i;
+				std::cout <<"VEC=" << key << '\n';
+				int pos = key.find('$');
+				string block = key.substr(pos,key.length()+1);
+				std::cout <<"block= " << block << '\n';
+				uint64_t length = item->second.second;
+
+				unsigned char * buffer_mv = (unsigned char *) malloc(length);
+				memcpy(buffer_mv,item->second.first,length);
+				//Construct a pair object storing the couple of values associated to a key.
+				std::pair<unsigned char *, uint64_t> value(buffer_mv, length);
+
+				free(item->second.first);
+				buffer.erase (key);
+				string new_path=new_key+block;
+				std::cout <<"add new_key=" << new_path << '\n';
+				buffer.insert({new_path,value});
+				
 			}
 
 			//Return the address associated to the record.
@@ -198,7 +225,6 @@ class map_records
 								//std::cout << path <<'\n';
 								int found_partner = partner_path.compare(path);
 								if(found_partner == 0){
-									//mapping.erase (partner_key);
 									vec.insert(vec.begin(),partner_key);
 								}
 							}
