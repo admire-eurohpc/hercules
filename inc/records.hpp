@@ -18,13 +18,48 @@ using std::map;
 using std::pair;
 using std::make_pair;
 using std::string;
+
+//Structure storing all information related to a certain IMSS.
+typedef struct {
+
+	//IMSS URI.
+	char uri_[256];
+	//Byte specifying the type of structure.
+	char type;// = 'I';
+	//Set of ips comforming the IMSS.
+	char ** ips;
+	//Number of IMSS servers.
+	int32_t num_storages;
+	//Server's dispatcher thread connection port.
+	uint16_t conn_port;
+
+} imss_info_;
+
 //In-memory structure storing key-address couples.
 class map_records
 {
 	public:
+	   
+		map_records()  {
+			total_size = 0;
+		}
+	
+		map_records(uint64_t nsize)  {
+			total_size = nsize;
+		}
 
-		map_records() {}
 
+		void set_size(uint64_t nsize)  {
+			total_size = nsize;
+		}
+
+		//Used in stat_worker threads
+		//Method deleting a record.
+		int32_t delete_metadata_stat_worker(std::string key)
+		{
+			return buffer.erase(key);
+		}
+		
 		//Method storing a new record.
 		int32_t put(std::string key, unsigned char * address, uint64_t length)
 		{
@@ -33,6 +68,11 @@ class map_records
 			//Block the access to the map structure.
 			std::unique_lock<std::mutex> lock(mut);
 			//Add a new couple to the map.
+			if (quantity_occupied + length > total_size) { //out of space
+			  fprintf(stderr, "[Map record] Out of space  %ld/%ld.\n",quantity_occupied + length, total_size);			  
+			  return -1;
+			}
+			quantity_occupied = quantity_occupied + length;
 			buffer.insert({key, value});
 
 			return 0;
@@ -48,7 +88,9 @@ class map_records
 			//Search for the address related to the key.
 			it = buffer.find(key);
 			//Check if the value did exist within the map.
-			it == buffer.end();
+			if(it == buffer.end()){
+				return 0;
+			}
 
 			//Assign the values obtained to the provided references.
 			
@@ -58,6 +100,70 @@ class map_records
 			//Return the address associated to the record.
 			return 1;
 		}
+
+		
+
+		//Method renaming from stat_worker
+		int32_t rename_metadata_stat_worker(std::string old_key, std::string new_key)
+		{
+			//Map iterator that will be searching for the key.
+			std::map <std::string, std::pair<unsigned char *, uint64_t>>::iterator it;
+			//Block the access to the map structure.
+			std::unique_lock<std::mutex> lock(mut);
+			
+			//Search for the address related to the key.
+			it = buffer.find(old_key);
+			//Check if the value did exist within the map.
+			if(it == buffer.end()){
+				return 0;
+			}else{
+				uint64_t length = it->second.second;
+				unsigned char * address = (unsigned char *) malloc (length);
+				//memcpy(address,it->second.first,length);
+
+				imss_info_ * data = (imss_info_ *) it->second.first;
+				strcpy(data->uri_,new_key.c_str());
+				//printf("RENAME_OP data->uri=%s\n",data->uri_);
+				//printf("RENAME_OP data->type=%c\n",data->type);
+				free(it->second.first);
+				buffer.erase(old_key);
+				//Construct a pair object storing the couple of values associated to a key.
+				std::pair<unsigned char *, uint64_t> value((unsigned char *)data, length);
+				buffer.insert({new_key,value});
+			}
+
+			//Return the address associated to the record.
+			return 1;
+		}
+
+		//Method renaming from srv_worker
+		int32_t rename_metadata_srv_worker(std::string old_key, std::string new_key)
+		{
+			//Map iterator that will be searching for the key.
+			std::map <std::string, std::pair<unsigned char *, uint64_t>>::iterator it;
+			//Block the access to the map structure.
+			std::unique_lock<std::mutex> lock(mut);
+			
+			printf("***RENAME SRV_WORKER\n");
+			for(const auto & it : buffer) {
+				string key = it.first;
+				std::cout <<"Exist " << key << '\n';
+				
+				int pos = key.find('$');
+				string path = key.substr(0,pos);
+				
+				//printf("path=%s\n",path);
+				std::cout <<"path= " << path << '\n';
+				if(path.compare(old_key) == 0){
+					std::cout <<"DETECTADO CAMBIO" << '\n';
+				}
+			}
+
+			//Return the address associated to the record.
+			return 1;
+		}
+
+		//Used in str_worker threads
 		//Method retrieving the address associated to a certain record.
 		int32_t cleaning()
 		{
@@ -86,9 +192,12 @@ class map_records
 								int pos = key.find('$');
 								string path = key.substr(0,pos);
 								
+								int pos_partner = partner_key.find('$');
+								string partner_path = partner_key.substr(0,pos_partner);
+								
 								//std::cout << path <<'\n';
-								int found_partner = partner_key.find(path);
-								if(found_partner !=std::string::npos){
+								int found_partner = partner_path.compare(path);
+								if(found_partner == 0){
 									//mapping.erase (partner_key);
 									vec.insert(vec.begin(),partner_key);
 								}
@@ -100,18 +209,24 @@ class map_records
 				}
 				
 			}
+
+			//Block the access to the map structure.
+			std::unique_lock<std::mutex> lock(mut);
 			std::vector<string>::iterator i;
 			for (i=vec.begin(); i<vec.end(); i++){
-				std::cout << "Deleting partners  " << *i << "\n";
-				buffer.erase (*i);//borro la clave actual despues de eliminar sus otros bloques
+				//std::cout << "Garbage Collector: Deleting " << *i << "\n";
+				auto item = buffer.find(*i);
+				free(item->second.first);
+				buffer.erase (*i);
+				
 			}
 			
 
 			
-			for(const auto & it : buffer){
+			/*for(const auto & it : buffer){
 				string key = it.first;
-				std::cout <<"After " << key << " => " << it.second.first << '\n';
-			}
+				std::cout <<"Garbage Collector: Exist " << key << '\n';
+			}*/
 			return 0;
 		}
 
@@ -138,6 +253,8 @@ class map_records
 		//Map structure tracking stored records (by default sorts keys with '<' op).
 		std::map <std::string, std::pair<unsigned char *, uint64_t>> buffer;
 		//Mutex restricting access to structure.
+        uint64_t total_size;
+		uint64_t quantity_occupied;
 		std::mutex mut;
 };
 

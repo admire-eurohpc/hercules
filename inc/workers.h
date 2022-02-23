@@ -8,10 +8,12 @@
 #define RELEASE			2
 #define WHO			    3
 #define WRITE_OP		1
+#define DELETE_OP		4
+#define RENAME_OP		5
 
 #define GETDIR			1
 
-#define THREAD_POOL		3
+#define THREAD_POOL		1
 
 #define LOCAL_DATASET_UPDATE	0
 
@@ -30,6 +32,7 @@ typedef struct {
     //URI assigned to the current IMSS instance.
     char my_uri[URI_];
 
+	int64_t total_size;
 } p_argv;
 
 

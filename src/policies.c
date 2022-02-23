@@ -25,7 +25,7 @@ uint64_t * num_blocks_written;
 uint32_t * blocks_written;
 
 
-int32_t
+int32_t  
 set_policy (dataset_info * dataset)
 {
 	//Invalid number of blocks to be sent.

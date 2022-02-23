@@ -11,6 +11,7 @@
 #include "directory.h"
 #include "records.hpp"
 
+#define GARBAGE_COLLECTOR_PERIOD 120
 
 
 //ZeroMQ context entity conforming all sockets.
@@ -19,7 +20,6 @@ void *	context;
 char *	pub_dir;
 //Publisher socket.
 void * 	pub;
-
 
 //Lock dealing when cleaning blocks
 pthread_mutex_t mutex_garbage;
@@ -247,7 +247,7 @@ srv_worker (void * th_argv)
 						//Check if there was an associated block to the key.
 						if (!(map->get(key, &address_, &block_size_rtvd)))
 						{
-							//printf("ERROR: %s (%ld)\n", key.c_str(), block_size_recv);
+							printf("ERROR: %s (%ld)\n", key.c_str(), block_size_recv);
 							
 							//Send the error code block.
 							if (zmq_send(socket, err_code, strlen(err_code), 0) < 0)
@@ -258,9 +258,8 @@ srv_worker (void * th_argv)
 						}
 						else
 						{
-							int32_t lock = (address_ - buffer_address) / buffer_segment;
-
-							pthread_mutex_lock(&region_locks[lock]);
+							/*int32_t lock = (address_ - buffer_address) / buffer_segment;
+							pthread_mutex_lock(&region_locks[lock]);*/
 
 							//Send the requested block.
 							if (zmq_send(socket, address_, block_size_rtvd, 0) < 0)
@@ -269,7 +268,7 @@ srv_worker (void * th_argv)
 								pthread_exit(NULL);
 							}
 
-							pthread_mutex_unlock(&region_locks[lock]);
+							//pthread_mutex_unlock(&region_locks[lock]);
 						}
 
 						break;
@@ -287,6 +286,33 @@ srv_worker (void * th_argv)
 						}
 
 						break;
+					}
+					case RENAME_OP:
+					{
+						std::size_t found = key.find(' ');
+						if (found!=std::string::npos){
+							string old_key = key.substr(0,found);
+							std::cout << "srv_worker: old key " << old_key << '\n';
+							string new_key = key.substr(found+1,key.length());
+							std::cout << "srv_worker: new key " << new_key << '\n';
+							
+							//RENAME MAP
+							int32_t result = map->rename_metadata_srv_worker(old_key,new_key);
+							if(result == 0){
+							printf("0 elements rename from stat_worker\n");
+							break;
+							}
+						}
+							
+
+						char release_msg[] = "RENAME\0";
+
+						if (zmq_send(socket, release_msg, strlen(release_msg), 0) < 0)
+						{
+							perror("ERRIMSS_PUBLISH_RENAMEMSG");
+							pthread_exit(NULL);
+						}
+			            break;
 					}
 
                     case WHO:
@@ -314,33 +340,44 @@ srv_worker (void * th_argv)
 				//If the record was not already stored, add the block.
 				if (!map->get(key, &address_, &block_size_rtvd))
 				{
+					
+					//printf("***address=%s\n",address_);
+					unsigned char * buffer = (unsigned char *) malloc(block_size_recv);
 					//Receive the block into the buffer.
-					int err = zmq_recv(socket, arguments->pt, block_size_recv, 0);
-					printf("%d\n", err);
-
+					int err = zmq_recv(socket, buffer, block_size_recv, 0);
+				
+					int32_t insert_successful;
 					//Include the new record in the tracking structure.
-					if (map->put(key, arguments->pt, block_size_recv) != 0)
+					printf("srv_worker put lenght=%d\n",block_size_recv);
+					insert_successful=map->put(key, buffer, block_size_recv);
+					//Include the new record in the tracking structure.
+					if (insert_successful != 0)
 					{
 						perror("ERRIMSS_WORKER_MAPPUT");
-						pthread_exit(NULL);
+						//pthread_exit(NULL);
+						continue;
 					}
 
 					//Update the pointer.
+					printf("Insert Map srv_worker: %s\n",(char *) key.c_str());
 					arguments->pt += block_size_recv;
+					
 				}
 				//If was already stored:
 				else
 				{
-					int32_t lock = (address_ - buffer_address) / buffer_segment;
+					//printf("Rewrite block %s\n",(char *) key.c_str());
+					/*int32_t lock = (address_ - buffer_address) / buffer_segment;
 
-					pthread_mutex_lock(&region_locks[lock]);
+					pthread_mutex_lock(&region_locks[lock]);*/
 
-					//Clear the corresponding memory region.
-					memset(address_, '\0', block_size_rtvd);
 					//Receive the block into the buffer.
+					
 					zmq_recv(socket, address_, block_size_rtvd, 0);
+					/*struct stat * st_p2 = (struct stat *) address_;
+					printf("REWRITEst_p_NLINK=%d\n",st_p2->st_nlink);*/
 
-					pthread_mutex_unlock(&region_locks[lock]);
+					//pthread_mutex_unlock(&region_locks[lock]);
 				}
 
 				break;
@@ -359,16 +396,14 @@ srv_worker (void * th_argv)
 void *
 garbage_collector (void * th_argv)
 {
-	//Cast from generic pointer type to p_argv struct type pointer.
-	p_argv * arguments = (p_argv *) th_argv;
 	//Obtain the current map class element from the set of arguments.
-	map_records * map = arguments->map;
+	map_records * map = (map_records *)th_argv;
 	
 
 	for (;;)
 	{
 	//Gnodetraverse_garbage_collector(map);//Future
-	sleep(30);
+	sleep(GARBAGE_COLLECTOR_PERIOD);
 	pthread_mutex_lock(&mutex_garbage);
 	map->cleaning();
 	pthread_mutex_unlock(&mutex_garbage);
@@ -384,6 +419,9 @@ stat_worker (void * th_argv)
 	p_argv * arguments = (p_argv *) th_argv;
 	//Obtain the current map class element from the set of arguments.
 	map_records * map = arguments->map;
+
+    uint16_t current_offset = 0;
+
 
 	//Format socket endpoint.
 	char endpoint[24];
@@ -416,6 +454,9 @@ stat_worker (void * th_argv)
 
 		//Save the identity of the requesting client.
 		zmq_msg_recv(&client_id, socket, 0);
+
+
+
 
 		//Check if a timeout was triggered in the previous receive operation.
 		if ((errno == EAGAIN) && !zmq_msg_size(&client_id))
@@ -450,6 +491,8 @@ stat_worker (void * th_argv)
 			continue;
 		}
 
+		
+
 		//Save the request to be served.
 		zmq_msg_recv(&client_req, socket, 0);
 
@@ -468,6 +511,8 @@ stat_worker (void * th_argv)
 		memcpy((void*) raw_msg,(void*) zmq_msg_data(&client_req), req_size);
 		raw_msg[req_size] = '\0';
 
+		//printf("*********worker_metadata raw_msg %s\n",raw_msg);
+
 		//Reference to the client request.
 		char number[16];
 		sscanf(raw_msg, "%s", number);
@@ -484,6 +529,8 @@ stat_worker (void * th_argv)
 		unsigned char * address_;
 		uint64_t block_size_rtvd;
 
+
+  
 		//Differentiate between READ and WRITE operations. 
 		switch (more)
 		{
@@ -545,6 +592,8 @@ stat_worker (void * th_argv)
 						}
 						else
 						{
+							imss_info * data = (imss_info *) address_;
+							//printf("READ_OP SEND data->type=%c\n",data->type);
 							//Send the requested block.
 							if (zmq_send(socket, address_, block_size_rtvd, 0) < 0)
 							{
@@ -569,6 +618,60 @@ stat_worker (void * th_argv)
 
 						break;
 					}
+					case DELETE_OP:
+					{
+			            std::cout << key <<"\n";
+						int32_t result = map->delete_metadata_stat_worker(key);
+						GTree_delete((char *) key.c_str());
+						if(result == 0){
+							printf("0 elements delete from stat_worker\n");
+						}else{
+							printf("%d elements with key  %s delete from stat_worker\n",result,uri_);
+						}
+
+
+						char release_msg[] = "DELETE\0";
+
+						if (zmq_send(socket, release_msg, strlen(release_msg), 0) < 0)
+						{
+							perror("ERRIMSS_PUBLISH_DELETEMSG");
+							pthread_exit(NULL);
+						}
+
+
+			            break;
+					}
+					case RENAME_OP:
+					{
+						std::size_t found = key.find(' ');
+						if (found!=std::string::npos){
+							string old_key = key.substr(0,found);
+							//std::cout << "old key " << old_key << '\n';
+							string new_key = key.substr(found+1,key.length());
+							//std::cout << "new key " << new_key << '\n';
+							
+							//RENAME MAP
+							int32_t result = map->rename_metadata_stat_worker(old_key,new_key);
+							if(result == 0){
+							printf("0 elements rename from stat_worker\n");
+							break;
+							}
+
+							//RENAME TREE
+							GTree_rename((char *)old_key.c_str(),(char *)new_key.c_str());
+						}
+							
+
+						char release_msg[] = "RENAME\0";
+
+						if (zmq_send(socket, release_msg, strlen(release_msg), 0) < 0)
+						{
+							perror("ERRIMSS_PUBLISH_RENAMEMSG");
+							pthread_exit(NULL);
+						}
+			            break;
+					}
+
 
 					default:
 
@@ -585,19 +688,27 @@ stat_worker (void * th_argv)
 				{
 
 					//Receive the block into the buffer.
-					zmq_recv(socket, arguments->pt, block_size_recv, 0);
-
-					//Include the new record in the tracking structure.
-					if (map->put(key, arguments->pt, block_size_recv) != 0)
-					{
-						perror("ERRIMSS_WORKER_MAPPUT");
-						pthread_exit(NULL);
-					}
+					unsigned char * buffer = (unsigned char *) malloc (block_size_recv);
+					zmq_recv(socket, buffer, block_size_recv, 0);
 
 					int32_t insert_successful;
+					//Include the new record in the tracking structure.
+					printf("stat_worker put lenght=%d\n",block_size_recv);
+					printf("buffer insert stat=%s\n",buffer);
+					insert_successful=map->put(key, buffer, block_size_recv);
+					if (insert_successful != 0)
+					{
+						perror("ERRIMSS_WORKER_MAPPUT");
+						//pthread_exit(NULL);
+						continue;
+					}
+					
+									
 					//Insert the received uri into the directory tree.
 					pthread_mutex_lock(&tree_mut);
 					insert_successful = GTree_insert((char *) key.c_str());
+					printf("Insert Map stat_worker: %s\n",(char *) key.c_str());
+					printf("Insert Tree: %s\n",(char *) key.c_str());
 					pthread_mutex_unlock(&tree_mut);
 
 					if (insert_successful == -1)
@@ -605,9 +716,9 @@ stat_worker (void * th_argv)
 						perror("ERRIMSS_STATWORKER_GTREEINSERT");
 						pthread_exit(NULL);
 					}
-
-					//Update the pointer.
+                   //Update the pointer.
 					arguments->pt += block_size_recv;
+					 
 				}
 				//If was already stored:
 				else
@@ -691,6 +802,7 @@ stat_worker (void * th_argv)
 				break;
 			}
 
+			
 			default:
 
 				break;

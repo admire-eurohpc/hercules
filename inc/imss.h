@@ -38,7 +38,7 @@ const int CLOSE_ATTACHED = 2;
 #define REQ_MSG		272
 #define KEY		512
 #define MONITOR		1
-#define ELEMENTS	4096
+#define ELEMENTS	5120
 #define IMSS		0
 #define DATASET		1
 
@@ -274,6 +274,27 @@ int32_t create_dataset(char * dataset_uri, char * policy, int32_t num_data_elem,
 			 -1 - In case of error.
 */
 int32_t open_dataset(char * dataset_uri);
+
+
+/*Method deleting a dataset.
+
+	RETURNS:	 0 - Release operation took place successfully.
+				-1 - In case of error.*/
+int32_t delete_dataset(const char * dataset_uri);
+
+/*Method renaming a dataset in metadata.
+
+	RETURNS:	 0 - Release operation took place successfully.
+				-1 - In case of error.*/
+int32_t rename_dataset_metadata(char * old_dataset_uri, char * new_dataset_uri);
+
+/*Method renaming a dataset in srv_worker.
+
+	RETURNS:	 0 - Release operation took place successfully.
+				-1 - In case of error.*/
+int32_t rename_dataset_srv_worker(char * old_dataset_uri, char * new_dataset_uri,int32_t 	 dataset_id,
+	 int32_t 	 data_id);
+
 
 /* Method releasing the set of resources required to deal with a dataset.
 
