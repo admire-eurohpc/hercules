@@ -1409,21 +1409,14 @@ delete_dataset(const char * 	    dataset_uri)
 }
 
 int32_t 
-rename_dataset(char * old_dataset_uri, char * new_dataset_uri){
+rename_dataset_metadata(char * old_dataset_uri, char * new_dataset_uri){
 	
 	printf("*****Rename Dataset\n");
 	
 	
 	/*********RENAME GARRAY DATASET*******/
 	dataset_info dataset_info_;
-	printf("datasetd.length=%d\n",datasetd->len);
-	//Search for the requested dataset in the local vector.
-	for (int32_t i = 0; i < datasetd->len; i++)
-	{
-		dataset_info_ = g_array_index(datasetd, dataset_info, i);
-		printf("Before uri[%d]=%s\n",i,dataset_info_.uri_);
-		
-	}
+
 	for (int32_t i = 0; i < datasetd->len; i++)
 	{
 		dataset_info_ = g_array_index(datasetd, dataset_info, i);
@@ -1434,13 +1427,6 @@ rename_dataset(char * old_dataset_uri, char * new_dataset_uri){
 		}
 		
 	}
-	for (int32_t i = 0; i < datasetd->len; i++)
-	{
-		dataset_info_ = g_array_index(datasetd, dataset_info, i);
-		printf("Later uri[%d]=%s\n",i,dataset_info_.uri_);
-		
-	}
-
 
 	/*********RENAME METADATA*******/
 	//Formated dataset uri to be sent to the metadata server.
@@ -1479,7 +1465,9 @@ rename_dataset(char * old_dataset_uri, char * new_dataset_uri){
 
 	zmq_msg_close(&msg_struct);
 
-	printf("rename_dataset_recv %s\n",msg_data);
+	/*********RENAME SRV_WORKER DATA*******/
+
+
 	return 0;
 }
 
@@ -1566,6 +1554,90 @@ get_data_location(int32_t dataset_id,
 	}
 
 	return server;
+}
+
+//Method retrieving a data element associated to a certain dataset.
+int32_t
+rename_dataset_srv_worker(char * old_dataset_uri, char * new_dataset_uri,
+int32_t 	 dataset_id,	 int32_t 	 data_id)
+{
+	int32_t n_server;
+	//Server containing the corresponding data to be retrieved.
+	if ((n_server = get_data_location(dataset_id, data_id, GET)) == -1)
+
+		return -1;
+
+	//Servers that the data block is going to be requested to.
+	int32_t repl_servers[curr_dataset.repl_factor];
+
+	int32_t curr_imss_storages = curr_imss.info.num_storages;
+
+	//Retrieve the corresponding connections to the previous servers.
+	for (int32_t i = 0; i < curr_dataset.repl_factor; i++)
+	{
+		//Server storing the current data block.
+		uint32_t n_server_ = (n_server + i*(curr_imss_storages/curr_dataset.repl_factor)) % curr_imss_storages;
+
+		repl_servers[i] = n_server_;
+
+		//Check if the current connection is the local one (if there is).
+		if (repl_servers[i] == curr_dataset.local_conn)
+		{
+			//Move the local connection to the first one to be requested.
+
+			int32_t aux_conn = repl_servers[0];
+
+			repl_servers[0] = repl_servers[i];
+
+			repl_servers[i] = aux_conn;
+		}
+	}
+
+	char key_[KEY];
+	//Key related to the requested data element.
+	sprintf(key_, "5 %s %s",  old_dataset_uri, new_dataset_uri);
+
+	int key_length = strlen(key_)+1;
+	char key[key_length];
+	memcpy((void *) key, (void *) key_, key_length);
+	key[key_length-1] = '\0';
+
+	//Request the concerned block to the involved servers.
+	for (int32_t i = 0; i < curr_dataset.repl_factor; i++)
+	{
+		//printf("BLOCK %d ASKED TO %d SERVER with key: %s (%d)\n", data_id, repl_servers[i], key, key_length);
+
+		//Send read request message specifying the block URI.
+		//if (zmq_send(curr_imss.conns.sockets_[repl_servers[i]], key, KEY, 0) < 0)
+		if (zmq_send(curr_imss.conns.sockets_[repl_servers[i]], key, key_length, 0) != key_length)
+		{
+			perror("ERRIMSS_GETDATA_REQ");
+			return -1;
+		}	
+		zmq_msg_t msg_struct;
+
+		if (zmq_msg_init(&msg_struct) != 0)
+		{
+			perror("ERRIMSS_RECVDYNAMSTRUCT_INIT");
+			return -1;
+		}
+
+		if (zmq_msg_recv(&msg_struct, curr_imss.conns.sockets_[repl_servers[i]], 0) == -1)
+		{
+			perror("ERRIMSS_RECVDYNAMSTRUCT_RECV");
+			return -1;
+		}
+		
+
+		//Actual message content plus message size.
+
+		unsigned char * msg_data = (unsigned char *) zmq_msg_data(&msg_struct);
+
+		zmq_msg_close(&msg_struct);		
+		}
+
+	fprintf(stderr, "ERRIMSS_GETDATA_UNAVAIL\n");
+	return -1;
 }
 
 //Method retrieving a data element associated to a certain dataset.

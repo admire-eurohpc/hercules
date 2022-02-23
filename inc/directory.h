@@ -13,6 +13,9 @@ char *  GTree_getdir(char * desired_dir, int32_t * numdir_elems);
 //Method deleting a new path.
 int32_t GTree_delete(char * desired_data);
 
+//Method deleting a new path.
+int32_t GTree_rename(char * old_desired_data,char * new_desired_data);
+
 //Method inserting a new path.
 int32_t GTree_insert(char * desired_data);
 

@@ -110,6 +110,30 @@ GTree_search(GNode * 	parent_node,
 
 //Method deleting a new path.
 int32_t
+GTree_rename(char * old_desired_data,char * new_desired_data)
+{
+	//Closest node to the one requested (or even the requested one itself).
+	GNode * closest_node;
+
+	//Check if the node has been already inserted.
+	if (GTree_search(tree_root, old_desired_data, &closest_node)==1){
+		printf("TREE Exist found:%s\n",old_desired_data);
+		if(strcmp(old_desired_data,(char *)closest_node->data)==0){
+			printf("Data rename Tree Before: %s\n",closest_node->data);
+			memcpy(closest_node->data,new_desired_data,strlen(new_desired_data)+1);
+			printf("Data rename Tree: %s\n",closest_node->data);
+		}
+		
+	}else{
+		printf("Rename Error not found:%s\n",old_desired_data);
+		return 0;
+	}
+		
+	return 1;
+}
+
+//Method deleting a new path.
+int32_t
 GTree_delete(char * desired_data)
 {
 	//Closest node to the one requested (or even the requested one itself).
@@ -210,6 +234,7 @@ serialize_dir(GNode * 	visited_node,
 		/*if (!num_grandchildren)
 		{*/
 			//Add the child's uri to the buffer.
+			printf("serialize_dir add:%s\n",child->data);
 			memcpy(*buffer, (char *) child->data, URI_);
 			*buffer += URI_;
 		/*}

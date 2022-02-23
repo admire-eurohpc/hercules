@@ -18,6 +18,23 @@ using std::map;
 using std::pair;
 using std::make_pair;
 using std::string;
+
+//Structure storing all information related to a certain IMSS.
+typedef struct {
+
+	//IMSS URI.
+	char uri_[256];
+	//Byte specifying the type of structure.
+	char type;// = 'I';
+	//Set of ips comforming the IMSS.
+	char ** ips;
+	//Number of IMSS servers.
+	int32_t num_storages;
+	//Server's dispatcher thread connection port.
+	uint16_t conn_port;
+
+} imss_info_;
+
 //In-memory structure storing key-address couples.
 class map_records
 {
@@ -84,7 +101,9 @@ class map_records
 			return 1;
 		}
 
-		//Method retrieving the address associated to a certain record.
+		
+
+		//Method renaming from stat_worker
 		int32_t rename_metadata_stat_worker(std::string old_key, std::string new_key)
 		{
 			//Map iterator that will be searching for the key.
@@ -101,30 +120,44 @@ class map_records
 				uint64_t length = it->second.second;
 				unsigned char * address = (unsigned char *) malloc (length);
 				//memcpy(address,it->second.first,length);
-				strcpy((char *)address,new_key.c_str());
-				printf("already save is %s\n",it->second.first);
-				printf("address copy is %s\n",address);
+
+				imss_info_ * data = (imss_info_ *) it->second.first;
+				strcpy(data->uri_,new_key.c_str());
+				//printf("RENAME_OP data->uri=%s\n",data->uri_);
+				//printf("RENAME_OP data->type=%c\n",data->type);
+				free(it->second.first);
 				buffer.erase(old_key);
 				//Construct a pair object storing the couple of values associated to a key.
-				std::pair<unsigned char *, uint64_t> value(address, length);
+				std::pair<unsigned char *, uint64_t> value((unsigned char *)data, length);
 				buffer.insert({new_key,value});
 			}
 
-			it = buffer.find(old_key);
-			if(it == buffer.end()){
-				printf("No encontrado %s\n",old_key.c_str());
-			}else{
-				printf("Existe aun%s\n",old_key.c_str());
-			}	
+			//Return the address associated to the record.
+			return 1;
+		}
 
-			it = buffer.find(new_key);
-			if(it == buffer.end()){
-				printf("No encontrado%s\n",new_key.c_str());
-			}else{
-				printf("Existe%s\n",new_key.c_str());
-				printf("New has buffer= %s\n",it->second.first);
+		//Method renaming from srv_worker
+		int32_t rename_metadata_srv_worker(std::string old_key, std::string new_key)
+		{
+			//Map iterator that will be searching for the key.
+			std::map <std::string, std::pair<unsigned char *, uint64_t>>::iterator it;
+			//Block the access to the map structure.
+			std::unique_lock<std::mutex> lock(mut);
+			
+			printf("***RENAME SRV_WORKER\n");
+			for(const auto & it : buffer) {
+				string key = it.first;
+				std::cout <<"Exist " << key << '\n';
+				
+				int pos = key.find('$');
+				string path = key.substr(0,pos);
+				
+				//printf("path=%s\n",path);
+				std::cout <<"path= " << path << '\n';
+				if(path.compare(old_key) == 0){
+					std::cout <<"DETECTADO CAMBIO" << '\n';
+				}
 			}
-
 
 			//Return the address associated to the record.
 			return 1;
@@ -190,10 +223,10 @@ class map_records
 			
 
 			
-			for(const auto & it : buffer){
+			/*for(const auto & it : buffer){
 				string key = it.first;
-				//std::cout <<"Garbage Collector: Exist " << key << '\n';
-			}
+				std::cout <<"Garbage Collector: Exist " << key << '\n';
+			}*/
 			return 0;
 		}
 

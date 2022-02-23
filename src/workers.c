@@ -247,7 +247,7 @@ srv_worker (void * th_argv)
 						//Check if there was an associated block to the key.
 						if (!(map->get(key, &address_, &block_size_rtvd)))
 						{
-							//printf("ERROR: %s (%ld)\n", key.c_str(), block_size_recv);
+							printf("ERROR: %s (%ld)\n", key.c_str(), block_size_recv);
 							
 							//Send the error code block.
 							if (zmq_send(socket, err_code, strlen(err_code), 0) < 0)
@@ -286,6 +286,33 @@ srv_worker (void * th_argv)
 						}
 
 						break;
+					}
+					case RENAME_OP:
+					{
+						std::size_t found = key.find(' ');
+						if (found!=std::string::npos){
+							string old_key = key.substr(0,found);
+							std::cout << "srv_worker: old key " << old_key << '\n';
+							string new_key = key.substr(found+1,key.length());
+							std::cout << "srv_worker: new key " << new_key << '\n';
+							
+							//RENAME MAP
+							int32_t result = map->rename_metadata_srv_worker(old_key,new_key);
+							if(result == 0){
+							printf("0 elements rename from stat_worker\n");
+							break;
+							}
+						}
+							
+
+						char release_msg[] = "RENAME\0";
+
+						if (zmq_send(socket, release_msg, strlen(release_msg), 0) < 0)
+						{
+							perror("ERRIMSS_PUBLISH_RENAMEMSG");
+							pthread_exit(NULL);
+						}
+			            break;
 					}
 
                     case WHO:
@@ -565,6 +592,8 @@ stat_worker (void * th_argv)
 						}
 						else
 						{
+							imss_info * data = (imss_info *) address_;
+							//printf("READ_OP SEND data->type=%c\n",data->type);
 							//Send the requested block.
 							if (zmq_send(socket, address_, block_size_rtvd, 0) < 0)
 							{
@@ -617,9 +646,9 @@ stat_worker (void * th_argv)
 						std::size_t found = key.find(' ');
 						if (found!=std::string::npos){
 							string old_key = key.substr(0,found);
-							std::cout << "old key " << old_key << '\n';
+							//std::cout << "old key " << old_key << '\n';
 							string new_key = key.substr(found+1,key.length());
-							std::cout << "new key " << new_key << '\n';
+							//std::cout << "new key " << new_key << '\n';
 							
 							//RENAME MAP
 							int32_t result = map->rename_metadata_stat_worker(old_key,new_key);
@@ -629,8 +658,7 @@ stat_worker (void * th_argv)
 							}
 
 							//RENAME TREE
-							
-
+							GTree_rename((char *)old_key.c_str(),(char *)new_key.c_str());
 						}
 							
 
@@ -666,6 +694,7 @@ stat_worker (void * th_argv)
 					int32_t insert_successful;
 					//Include the new record in the tracking structure.
 					printf("stat_worker put lenght=%d\n",block_size_recv);
+					printf("buffer insert stat=%s\n",buffer);
 					insert_successful=map->put(key, buffer, block_size_recv);
 					if (insert_successful != 0)
 					{

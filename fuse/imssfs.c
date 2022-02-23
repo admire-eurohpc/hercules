@@ -1077,8 +1077,10 @@ static int imss_rename(const char *old_path, const char *new_path){
 		return -ENOENT;
 	}
 
-	//RENAME LOCAL_IMSS(GARRAY), SRV_STAT(MAP & TREE) AND SRV_WORKER(MAP)
-	rename_dataset(old_rpath,new_rpath);
+	//RENAME LOCAL_IMSS(GARRAY), SRV_STAT(MAP & TREE)
+	rename_dataset_metadata(old_rpath,new_rpath);
+	//RENAME SRV_WORKER(MAP)
+	rename_dataset_srv_worker(old_rpath,new_rpath,fd,0);
 
 
 	return 0;

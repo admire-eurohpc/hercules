@@ -282,11 +282,18 @@ int32_t open_dataset(char * dataset_uri);
 				-1 - In case of error.*/
 int32_t delete_dataset(const char * dataset_uri);
 
-/*Method renaming a dataset.
+/*Method renaming a dataset in metadata.
 
 	RETURNS:	 0 - Release operation took place successfully.
 				-1 - In case of error.*/
-int32_t rename_dataset(char * old_dataset_uri, char * new_dataset_uri);
+int32_t rename_dataset_metadata(char * old_dataset_uri, char * new_dataset_uri);
+
+/*Method renaming a dataset in srv_worker.
+
+	RETURNS:	 0 - Release operation took place successfully.
+				-1 - In case of error.*/
+int32_t rename_dataset_srv_worker(char * old_dataset_uri, char * new_dataset_uri,int32_t 	 dataset_id,
+	 int32_t 	 data_id);
 
 
 /* Method releasing the set of resources required to deal with a dataset.
