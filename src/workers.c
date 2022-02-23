@@ -247,7 +247,7 @@ srv_worker (void * th_argv)
 						//Check if there was an associated block to the key.
 						if (!(map->get(key, &address_, &block_size_rtvd)))
 						{
-							printf("ERROR: %s (%ld)\n", key.c_str(), block_size_recv);
+							printf("ERROR2: %s (%ld)\n", key.c_str(), block_size_recv);
 							
 							//Send the error code block.
 							if (zmq_send(socket, err_code, strlen(err_code), 0) < 0)

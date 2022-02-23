@@ -1,4 +1,5 @@
 #include <map>
+#include <iostream>
 
 typedef std::map<std::string, int> Map;
 
@@ -29,6 +30,16 @@ int map_search(void* map, const char* k, int *v) {
         return -1;
     }
 }
-// etc...
+
+int map_rename(void* map, const char * oldname, const char * newname) {
+    Map* m = reinterpret_cast<Map*> (map);
+    std::cout << "holaaaaaa\n";
+    auto node = m->extract(oldname);
+    std::cout << "clave" <<  node.key() << "\n";
+		node.key() = newname;
+		m->insert(std::move(node));
+
+    return 1;
+}
 
 } // extern "C"

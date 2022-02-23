@@ -117,8 +117,19 @@ class map_records
 			if(it == buffer.end()){
 				return 0;
 			}else{
-				uint64_t length = it->second.second;
-
+				
+				imss_info_ * data = (imss_info_*) it->second.first;
+				printf("BEFORE data->uri=%s\n",data->uri_);
+				printf("BEFORE it->second.first=%s\n",it->second.first);
+				strcpy(data->uri_,new_key.c_str());
+				printf("LATER it->second.first=%s\n",it->second.first);
+				printf("LATER data->uri=%s\n",data->uri_);
+				//memcpy(it->second.first,data,sizeof(imss_info_));
+				auto node = buffer.extract(old_key);
+				node.key()=new_key;
+				buffer.insert(std::move(node));
+				
+				/*uint64_t length = it->second.second;
 				unsigned char * buffer_mv = (unsigned char *) malloc(length);
 				memcpy(buffer_mv,it->second.first,length);
 
@@ -126,7 +137,7 @@ class map_records
 				buffer.erase(old_key);
 				//Construct a pair object storing the couple of values associated to a key.
 				std::pair<unsigned char *, uint64_t> value(buffer_mv, length);
-				buffer.insert({new_key,value});
+				buffer.insert({new_key,value});*/
 			}
 
 			//Return the address associated to the record.
@@ -165,12 +176,21 @@ class map_records
 			for (i=vec.begin(); i<vec.end(); i++){
 				auto item = buffer.find(*i);
 
-				
 				string key = *i;
 				std::cout <<"VEC=" << key << '\n';
 				int pos = key.find('$');
 				string block = key.substr(pos,key.length()+1);
 				std::cout <<"block= " << block << '\n';
+
+				
+				string new_path=new_key+block;
+				std::cout <<"add new_key=" << new_path << '\n';
+				auto node = buffer.extract(key);
+				node.key()=new_path;
+				buffer.insert(std::move(node));
+
+				/*
+				
 				uint64_t length = item->second.second;
 
 				unsigned char * buffer_mv = (unsigned char *) malloc(length);
@@ -180,9 +200,9 @@ class map_records
 
 				free(item->second.first);
 				buffer.erase (key);
-				string new_path=new_key+block;
-				std::cout <<"add new_key=" << new_path << '\n';
-				buffer.insert({new_path,value});
+				
+				
+				buffer.insert({new_path,value});*/
 				
 			}
 

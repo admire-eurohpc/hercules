@@ -1627,7 +1627,8 @@ int32_t 	 dataset_id,	 int32_t 	 data_id)
 			perror("ERRIMSS_RECVDYNAMSTRUCT_RECV");
 			return -1;
 		}
-		
+		//Important to update
+		strcpy(curr_dataset.uri_,new_dataset_uri);
 
 		//Actual message content plus message size.
 

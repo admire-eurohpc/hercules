@@ -64,6 +64,8 @@ pthread_mutex_t lock_fileopen = PTHREAD_MUTEX_INITIALIZER;
  */
 
 
+
+
 long fd_lookup(const char * path) {
 	pthread_mutex_lock(&lock_fileopen);
 	int fd = -1;
@@ -149,7 +151,7 @@ int imss_getattr(const char *path, struct stat *stbuf)
 			else return -ENOENT;
 
 		case 2: //Case file
-			//printf("GetAttribute: path %s\n", imss_path);
+			printf("GetAttribute: path %s\n", imss_path);
 			if(stat_dataset(imss_path, &metadata) == -1){
 				fprintf(stderr, "[IMSS-FUSE]	Cannot get dataset metadata.");
 				return -ENOENT;
@@ -1014,8 +1016,10 @@ int imss_chown(const char *path, uid_t uid, gid_t gid) {
 }
 
 int imss_rename(const char *old_path, const char *new_path){
+	struct stat ds_stat_n;
 	printf("old_path=%s, new_path=%s\n",old_path, new_path);
-	int fd=0;
+	int file_desc_o, file_desc_n;
+
 	char old_rpath[MAX_PATH];
 	bzero(old_rpath, MAX_PATH);
 	get_iuri(old_path, old_rpath);
@@ -1024,22 +1028,47 @@ int imss_rename(const char *old_path, const char *new_path){
 	bzero(new_rpath, MAX_PATH);
 	get_iuri(new_path, new_rpath);
 
-	//SI EXISTE EL NUEVO QUE HAGO LO ELIMINO, NO HAGO NADA VER
-	//DANGER EJEMPLO CREAR PRUEBA1 Y PRUEBA2 Y HACER MV PRUEBA1 PRUEBA2
+    //Assing file handler and create dataset
+	int fd = fd_lookup(old_rpath);
 
-	//RENAME IN LOCAL MAP
-	int found=map_search(map,old_rpath,&fd);
-	if(found!=-1){
-		map_erase(map,old_rpath);
-		map_put(map,new_rpath,fd);
+	if (fd >= 0) 
+		file_desc_o = fd;
+	else if (fd == -2)
+		return -ENOENT;
+	else 
+		file_desc_o = open_dataset(old_rpath);
 
-		found=map_search(map,new_rpath,&fd);
-		if(found!=-1){
-			printf("añadido %s\n",new_rpath);
-		}
-	}else{
+	if(file_desc_o < 0) {
+		fprintf(stderr, "[IMSS-FUSE]    Cannot open dataset.\n");
 		return -ENOENT;
 	}
+	
+    int res = imss_getattr(new_rpath, &ds_stat_n);
+
+    if (res > 0) {
+		if (S_ISDIR(ds_stat_n.st_mode)) {
+			if (new_rpath[strlen(new_rpath) -1] != '/')
+			    strcat(new_rpath, "/");
+			char * p = old_rpath;
+			for (int c = 0; c < strlen(old_rpath); ++c) {
+				if (old_rpath[c] == '/') {
+					if (c + 1 < strlen(old_rpath))
+					   p = old_rpath + c + 1;
+				}
+			}
+			strcat(new_rpath, p);
+		}
+	}
+	printf("old_rpath=%s, new_rpath=%s\n",old_rpath, new_rpath);
+
+	map_rename(map, old_rpath,new_rpath);
+	/*map_erase(map,old_rpath);
+	map_put(map,new_rpath,fd);
+
+	found=map_search(map,new_rpath,&fd);
+	if(found!=-1){
+		printf("añadido %s\n",new_rpath);
+	}*/
 
 	//RENAME LOCAL_IMSS(GARRAY), SRV_STAT(MAP & TREE)
 	rename_dataset_metadata(old_rpath,new_rpath);
