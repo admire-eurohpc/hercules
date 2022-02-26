@@ -297,11 +297,36 @@ srv_worker (void * th_argv)
 							std::cout << "srv_worker: new key " << new_key << '\n';
 							
 							//RENAME MAP
+							map->cleaning_specific(new_key);
 							int32_t result = map->rename_data_srv_worker(old_key,new_key);
 							if(result == 0){
 							printf("0 elements rename from stat_worker\n");
 							break;
 							}
+						}
+							
+
+						char release_msg[] = "RENAME\0";
+
+						if (zmq_send(socket, release_msg, strlen(release_msg), 0) < 0)
+						{
+							perror("ERRIMSS_PUBLISH_RENAMEMSG");
+							pthread_exit(NULL);
+						}
+			            break;
+					}
+					case RENAME_DIR_DIR_OP:
+					{
+						std::size_t found = key.find(' ');
+						if (found!=std::string::npos){
+							string old_dir = key.substr(0,found);
+							std::cout << "old_dir: " << old_dir << '\n';
+							string rdir_dest = key.substr(found+1,key.length());
+							std::cout << "rdir_dest: " << rdir_dest << '\n';
+							
+							//RENAME MAP
+							map->rename_data_dir_dir_srv_worker(old_dir,rdir_dest);
+						
 						}
 							
 
@@ -659,6 +684,33 @@ stat_worker (void * th_argv)
 
 							//RENAME TREE
 							GTree_rename((char *)old_key.c_str(),(char *)new_key.c_str());
+						}
+							
+
+						char release_msg[] = "RENAME\0";
+
+						if (zmq_send(socket, release_msg, strlen(release_msg), 0) < 0)
+						{
+							perror("ERRIMSS_PUBLISH_RENAMEMSG");
+							pthread_exit(NULL);
+						}
+			            break;
+					}
+					case RENAME_DIR_DIR_OP:
+					{
+						std::size_t found = key.find(' ');
+						if (found!=std::string::npos){
+							string old_dir = key.substr(0,found);
+							std::cout << "old_dir: " << old_dir << '\n';
+							string rdir_dest = key.substr(found+1,key.length());
+							std::cout << "rdir_dest: " << rdir_dest << '\n';
+							
+							//RENAME MAP
+							map->rename_metadata_dir_dir_stat_worker(old_dir,rdir_dest);
+
+							//RENAME TREE
+							GTree_rename_dir_dir((char *)old_dir.c_str(),(char *)rdir_dest.c_str());
+						
 						}
 							
 

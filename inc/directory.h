@@ -13,8 +13,20 @@ char *  GTree_getdir(char * desired_dir, int32_t * numdir_elems);
 //Method deleting a new path.
 int32_t GTree_delete(char * desired_data);
 
-//Method deleting a new path.
+//Method renaming a new path.
 int32_t GTree_rename(char * old_desired_data,char * new_desired_data);
+
+//Method serializing the number of elements within a directory into a buffer.
+int32_t
+serialize_dir(GNode * 	visited_node,uint32_t 	num_nodes,char ** 	buffer);
+
+//Method serializing the number of childrens within a directory into a buffer.
+int32_t
+serialize_dir_childrens(GNode * 	visited_node,uint32_t 	num_children,char ** 	buffer);
+
+//Method renaming dir to dir.
+int32_t
+GTree_rename_dir_dir(char * old_dir,char * rdir_dest);
 
 //Method inserting a new path.
 int32_t GTree_insert(char * desired_data);

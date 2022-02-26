@@ -86,6 +86,12 @@ class map_records
 			//Block the access to the map structure.
 			std::unique_lock<std::mutex> lock(mut);
 			//Search for the address related to the key.
+			//std::cout <<"IN SERVER MAP: START" << '\n';
+			for(const auto & iterator : buffer){
+				string key = iterator.first;
+				//std::cout <<"IN SERVER MAP: Exist " << key << '\n';
+			}
+			//std::cout <<"IN SERVER MAP: END " << '\n';
 			it = buffer.find(key);
 			//Check if the value did exist within the map.
 			if(it == buffer.end()){
@@ -102,7 +108,6 @@ class map_records
 		}
 
 		
-
 		//Method renaming from stat_worker
 		int32_t rename_metadata_stat_worker(std::string old_key, std::string new_key)
 		{
@@ -119,25 +124,15 @@ class map_records
 			}else{
 				
 				imss_info_ * data = (imss_info_*) it->second.first;
-				printf("BEFORE data->uri=%s\n",data->uri_);
-				printf("BEFORE it->second.first=%s\n",it->second.first);
+				/*printf("BEFORE data->uri=%s\n",data->uri_);
+				printf("BEFORE it->second.first=%s\n",it->second.first);*/
 				strcpy(data->uri_,new_key.c_str());
-				printf("LATER it->second.first=%s\n",it->second.first);
-				printf("LATER data->uri=%s\n",data->uri_);
-				//memcpy(it->second.first,data,sizeof(imss_info_));
+				/*printf("LATER it->second.first=%s\n",it->second.first);
+				printf("LATER data->uri=%s\n",data->uri_);*/
 				auto node = buffer.extract(old_key);
 				node.key()=new_key;
 				buffer.insert(std::move(node));
 				
-				/*uint64_t length = it->second.second;
-				unsigned char * buffer_mv = (unsigned char *) malloc(length);
-				memcpy(buffer_mv,it->second.first,length);
-
-				free(it->second.first);
-				buffer.erase(old_key);
-				//Construct a pair object storing the couple of values associated to a key.
-				std::pair<unsigned char *, uint64_t> value(buffer_mv, length);
-				buffer.insert({new_key,value});*/
 			}
 
 			//Return the address associated to the record.
@@ -154,7 +149,8 @@ class map_records
 			
 			//save partners for later deletion and new insertion of news paths
 			std::vector<string> vec;
-
+			
+			
 			printf("***RENAME SRV_WORKER\n");
 			for(const auto & it : buffer) {
 				string key = it.first;
@@ -167,7 +163,7 @@ class map_records
 				std::cout <<"path= " << path << '\n';
 				std::cout <<"block= " << block << '\n';
 				if(path.compare(old_key) == 0){
-					std::cout <<"DETECTADO CAMBIO" << path << old_key << '\n';
+					printf("COINCIDE\n");
 					vec.insert(vec.begin(),key);
 				}
 			}
@@ -189,26 +185,105 @@ class map_records
 				node.key()=new_path;
 				buffer.insert(std::move(node));
 
-				/*
-				
-				uint64_t length = item->second.second;
-
-				unsigned char * buffer_mv = (unsigned char *) malloc(length);
-				memcpy(buffer_mv,item->second.first,length);
-				//Construct a pair object storing the couple of values associated to a key.
-				std::pair<unsigned char *, uint64_t> value(buffer_mv, length);
-
-				free(item->second.first);
-				buffer.erase (key);
-				
-				
-				buffer.insert({new_path,value});*/
 				
 			}
 
 			//Return the address associated to the record.
 			return 1;
 		}
+
+		//Method renaming from srv_worker
+		int32_t rename_data_dir_dir_srv_worker(std::string old_dir, std::string rdir_dest)
+		{
+			//Map iterator that will be searching for the key.
+			std::map <std::string, std::pair<unsigned char *, uint64_t>>::iterator it;
+			//Block the access to the map structure.
+			std::unique_lock<std::mutex> lock(mut);
+			std::vector<string> vec;
+			
+			for(const auto & it : buffer) {
+				string key = it.first;
+				//std::cout << "DATA key: " << key << '\n';
+				int found = key.find(old_dir);
+				if (found!=std::string::npos){
+					vec.insert(vec.begin(),key);
+
+					key.erase(0,old_dir.length()-1);
+					
+					string new_path=rdir_dest;
+					new_path.append(key);
+				}
+			}
+
+			std::vector<string>::iterator i;
+			for (i=vec.begin(); i<vec.end(); i++){
+			string key = *i;
+			key.erase(0,old_dir.length()-1);
+			
+			string new_path=rdir_dest;
+			new_path.append(key);
+			//std::cout << "DATA new_path: " << new_path<< '\n';
+
+			
+			auto node = buffer.extract(*i);
+			node.key() = new_path;
+			buffer.insert(std::move(node));
+
+			}
+
+			return 1;
+		}
+
+		//Method renaming from stat_worker
+		int32_t rename_metadata_dir_dir_stat_worker(std::string old_dir, std::string rdir_dest)
+		{
+			//Map iterator that will be searching for the key.
+			std::map <std::string, std::pair<unsigned char *, uint64_t>>::iterator it;
+			//Block the access to the map structure.
+			std::unique_lock<std::mutex> lock(mut);
+			std::vector<string> vec;
+			
+			for(const auto & it : buffer) {
+				string key = it.first;
+				//std::cout << "METADATA key: " << key << '\n';
+				int found = key.find(old_dir);
+				if (found!=std::string::npos){
+					vec.insert(vec.begin(),key);
+
+					key.erase(0,old_dir.length()-1);
+					
+					string new_path=rdir_dest;
+					new_path.append(key);
+					
+					imss_info_ * data = (imss_info_*) it.second.first;
+					//printf("BEFORE data->uri=%s\n",data->uri_);
+					//printf("BEFORE it->second.first=%s\n",it.second.first);
+					strcpy(data->uri_,new_path.c_str());
+					//printf("LATER it->second.first=%s\n",it.second.first);
+					//printf("LATER data->uri=%s\n",data->uri_);
+				}
+			}
+
+			std::vector<string>::iterator i;
+			for (i=vec.begin(); i<vec.end(); i++){
+			string key = *i;
+			key.erase(0,old_dir.length()-1);
+			
+			string new_path=rdir_dest;
+			new_path.append(key);
+			//std::cout << "METADATA new_path: " << new_path<< '\n';
+
+			
+			auto node = buffer.extract(*i);
+			node.key() = new_path;
+			buffer.insert(std::move(node));
+
+			}
+
+
+			return 1;
+		}
+
 
 		//Used in str_worker threads
 		//Method retrieving the address associated to a certain record.
@@ -219,10 +294,6 @@ class map_records
 			for(const auto & it : buffer) {
 				string key = it.first;
 				int found = key.find("$0");
-			
-				/*std::cout << key << " => " << it->second.first << '\n';
-				std::cout << "numero " << it->second.second << '\n';
-				std::cout << "Period found at:" << found << " " << key.size() << '\n';*/
 			
 				if(found != std::string::npos){
 		
@@ -255,6 +326,50 @@ class map_records
 				}
 				
 			}
+
+			//Block the access to the map structure.
+			std::unique_lock<std::mutex> lock(mut);
+			std::vector<string>::iterator i;
+			for (i=vec.begin(); i<vec.end(); i++){
+				std::cout << "Garbage Collector: Deleting " << *i << "\n";
+				auto item = buffer.find(*i);
+				free(item->second.first);
+				buffer.erase (*i);
+				
+			}
+			
+
+			
+			/*for(const auto & it : buffer){
+				string key = it.first;
+				std::cout <<"Garbage Collector: Exist " << key << '\n';
+			}*/
+			return 0;
+		}
+
+		int32_t cleaning_specific(std::string new_key)
+		{
+			std::vector<string> vec;
+
+		
+					
+				
+				//borrar todos los bloques con mismo path/key
+				for(const auto & it2 : buffer){
+					
+					string partner_key = it2.first;
+
+						
+						int pos_partner = partner_key.find('$');
+						string partner_path = partner_key.substr(0,pos_partner);
+						
+						int found_partner = partner_path.compare(new_key);
+						if(found_partner == 0){
+							vec.insert(vec.begin(),partner_key);
+						}
+					
+				}
+				    
 
 			//Block the access to the map structure.
 			std::unique_lock<std::mutex> lock(mut);
@@ -300,7 +415,7 @@ class map_records
 		std::map <std::string, std::pair<unsigned char *, uint64_t>> buffer;
 		//Mutex restricting access to structure.
         uint64_t total_size;
-		uint64_t quantity_occupied;
+		uint64_t quantity_occupied = 0;
 		std::mutex mut;
 };
 

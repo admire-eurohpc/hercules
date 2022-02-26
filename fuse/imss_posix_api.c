@@ -174,8 +174,11 @@ int imss_getattr(const char *path, struct stat *stbuf)
 					pthread_mutex_lock(&lock_fileopen);
 					map_put(map, imss_path, ds);
 					pthread_mutex_unlock(&lock_fileopen);
-				}	else
+				}	else{
+					fprintf(stderr, "[IMSS-FUSE]	Cannot get dataset metadata.");
 					return -ENOENT;
+				}
+					
 			}
 
 			pthread_mutex_lock(&lock);
@@ -188,6 +191,7 @@ int imss_getattr(const char *path, struct stat *stbuf)
 			if (header.st_nlink != 0) {
 				memcpy(stbuf, &header, sizeof(struct stat));
 			} else {
+				fprintf(stderr, "[IMSS-FUSE]	Cannot get dataset metadata.");
 				return -ENOENT;
 			}
 
@@ -1019,7 +1023,7 @@ int imss_rename(const char *old_path, const char *new_path){
 	struct stat ds_stat_n;
 	printf("old_path=%s, new_path=%s\n",old_path, new_path);
 	int file_desc_o, file_desc_n;
-
+	int fd=0;
 	char old_rpath[MAX_PATH];
 	bzero(old_rpath, MAX_PATH);
 	get_iuri(old_path, old_rpath);
@@ -1028,8 +1032,77 @@ int imss_rename(const char *old_path, const char *new_path){
 	bzero(new_rpath, MAX_PATH);
 	get_iuri(new_path, new_rpath);
 
-    //Assing file handler and create dataset
-	int fd = fd_lookup(old_rpath);
+
+	
+
+    //CHECKING IF IS MV DIR TO DIR
+	//check old_path if it is a directory if it is add / at the end
+	int res = imss_getattr(old_path, &ds_stat_n);
+    if (res == 0) {
+		printf("old_path[last]=%c\n",old_path[strlen(old_path) -1]);
+		if (S_ISDIR(ds_stat_n.st_mode)) {
+			
+			
+			printf("**************EXISTE EL ORIGEN ES DIRECTORIO=%s\n",old_path);
+			strcat(old_rpath, "/");
+			printf("fd_lookup=%s\n",old_rpath);
+			fd = fd_lookup(old_rpath);
+			if (fd >= 0) 
+				file_desc_o = fd;
+			else if (fd == -2)
+				return -ENOENT;
+			else 
+				file_desc_o = open_dataset(old_rpath);
+
+			if(file_desc_o < 0) {
+				fprintf(stderr, "[IMSS-FUSE]    Cannot open dataset.\n");
+
+				return -ENOENT;
+			}
+			
+			//If origin path is a directory then we are in the case of mv dir to dir
+			//Extract destination directory from path
+			int pos = 0;
+			for (int c = 0; c < strlen(new_path); ++c) {
+				if (new_path[c] == '/') {
+					if (c + 1 < strlen(new_path))
+					   pos=c;
+				}
+			}
+			char dir_dest[256] = {0};
+			memcpy(dir_dest,&new_path[0],pos+1);
+			printf("dir_dest=%s\n",dir_dest);
+
+			char rdir_dest[MAX_PATH];
+			bzero(rdir_dest, MAX_PATH);
+			get_iuri(dir_dest,rdir_dest);
+			
+			printf("rdir_dest=%s\n",rdir_dest);
+
+			res = imss_getattr(dir_dest, &ds_stat_n);
+			if(res == 0){
+				if (S_ISDIR(ds_stat_n.st_mode)) {
+					//WE ARE IN MV DIR TO DIR
+					printf("********CASO DIR TO DIR********\n");
+
+					map_rename_dir_dir(map, old_rpath,new_rpath);
+
+					//RENAME LOCAL_IMSS(GARRAY), SRV_STAT(MAP & TREE)
+					rename_dataset_metadata_dir_dir(old_rpath,new_rpath);
+
+					//RENAME SRV_WORKER(MAP)
+					
+					rename_dataset_srv_worker_dir_dir(old_rpath,new_rpath,fd,0);
+					return 0;
+				}
+			}
+
+		}
+	}
+
+	//MV FILE TO FILE OR MV FILE TO DIR
+	//Assing file handler
+	fd = fd_lookup(old_rpath);
 
 	if (fd >= 0) 
 		file_desc_o = fd;
@@ -1040,25 +1113,25 @@ int imss_rename(const char *old_path, const char *new_path){
 
 	if(file_desc_o < 0) {
 		fprintf(stderr, "[IMSS-FUSE]    Cannot open dataset.\n");
+
 		return -ENOENT;
 	}
+	res = imss_getattr(new_path, &ds_stat_n);
 	
-    int res = imss_getattr(new_rpath, &ds_stat_n);
-
-    if (res > 0) {
+    if (res == 0) {
+		printf("**************EXISTE EL DESTINO=%s\n",new_path);
+		printf("new_path[last]=%c\n",new_path[strlen(new_path) -1]);
 		if (S_ISDIR(ds_stat_n.st_mode)) {
-			if (new_rpath[strlen(new_rpath) -1] != '/')
-			    strcat(new_rpath, "/");
-			char * p = old_rpath;
-			for (int c = 0; c < strlen(old_rpath); ++c) {
-				if (old_rpath[c] == '/') {
-					if (c + 1 < strlen(old_rpath))
-					   p = old_rpath + c + 1;
-				}
-			}
-			strcat(new_rpath, p);
+			//Because of how the path arrive never get here.
+		}else{
+			printf("**************TENGO QUE BORRARLO ES UN FICHERO=%s\n",new_path);
+			imss_unlink(new_path);
 		}
+	}else{
+		printf("**************NO EXISTE EL DESTINO=%s\n",new_path);
 	}
+
+
 	printf("old_rpath=%s, new_rpath=%s\n",old_rpath, new_rpath);
 
 	map_rename(map, old_rpath,new_rpath);

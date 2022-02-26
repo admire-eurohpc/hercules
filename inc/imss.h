@@ -286,7 +286,21 @@ int32_t delete_dataset(const char * dataset_uri);
 
 	RETURNS:	 0 - Release operation took place successfully.
 				-1 - In case of error.*/
+int32_t rename_dataset_metadata_dir_dir(char * old_dir, char * rdir_dest);
+
+
+/*Method renaming a dataset in metadata.
+
+	RETURNS:	 0 - Release operation took place successfully.
+				-1 - In case of error.*/
 int32_t rename_dataset_metadata(char * old_dataset_uri, char * new_dataset_uri);
+
+/*Method renaming a dataset in srv_worker.
+
+	RETURNS:	 0 - Release operation took place successfully.
+				-1 - In case of error.*/
+int32_t rename_dataset_srv_worker_dir_dir(char * old_dir, char * rdir_dest,int32_t 	 dataset_id,
+	 int32_t 	 data_id);
 
 /*Method renaming a dataset in srv_worker.
 
