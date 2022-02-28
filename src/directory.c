@@ -148,10 +148,11 @@ GTree_rename_dir_dir(char * old_dir,char * rdir_dest)
 	if (GTree_search(tree_root, old_dir, &dir_node)==1){
 	
 		uint32_t num_elements_indir = g_node_n_nodes (dir_node, G_TRAVERSE_ALL)-1;
+		uint32_t num_elements_indir_childrens = g_node_n_children (dir_node);
 		printf("DIR_NUM_ELEMENTS=%d\n",num_elements_indir+1);
 		char * dir_elements = (char *) malloc((num_elements_indir+1)*URI_);
 		char * aux_dir_elem = dir_elements;
-		serialize_dir(dir_node,num_elements_indir,&aux_dir_elem);
+		serialize_dir(dir_node,num_elements_indir_childrens,&aux_dir_elem);
 		
 		char * aux = dir_elements;
 		for(int i=0;i<num_elements_indir+1;i++){
@@ -166,7 +167,7 @@ GTree_rename_dir_dir(char * old_dir,char * rdir_dest)
 						memmove(p, p + len, strlen(p + len) + 1);
 					}
 				}
-				char * new_path = (char *) malloc(strlen(rdir_dest) + 1); 
+				char * new_path = (char *) malloc(256); 
 				strcpy(new_path, rdir_dest);
 				strcat(new_path,"/");
 				strcat(new_path,path);
@@ -305,7 +306,7 @@ serialize_dir(GNode * 	visited_node,
 	      char ** 	buffer)
 {
 	//Add the concerned uri into the buffer.
-	printf("serialize_dir add:%s\n",visited_node->data);
+	printf("First serialize_dir add:%s\n",visited_node->data);
 	memcpy(*buffer, (char *) visited_node->data, URI_);
 	*buffer += URI_;
 
@@ -321,7 +322,7 @@ serialize_dir(GNode * 	visited_node,
 		if (!num_grandchildren)
 		{
 			//Add the child's uri to the buffer.
-			printf("serialize_dir add:%s\n",child->data);
+			printf("Next serialize_dir add:%s\n",child->data);
 			memcpy(*buffer, (char *) child->data, URI_);
 			*buffer += URI_;
 		}

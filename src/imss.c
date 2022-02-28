@@ -1429,7 +1429,8 @@ rename_dataset_metadata_dir_dir(char * old_dir, char * rdir_dest){
 					memmove(p, p + len, strlen(p + len) + 1);
 				}
 			}
-			char * new_path = (char *) malloc(strlen(rdir_dest) + 1); 
+			//char * new_path = (char *) malloc(strlen(rdir_dest) + 1); 
+			char * new_path = (char *) malloc(256); 
 			strcpy(new_path, rdir_dest);
 			strcat(new_path,"/");
 			strcat(new_path,path);
