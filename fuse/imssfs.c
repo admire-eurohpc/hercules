@@ -43,11 +43,11 @@ char * POLICY = "RR"; //Default RR
 uint64_t STORAGE_SIZE = 1024*1024*16; //In Kb, Default 16 GB
 uint64_t META_BUFFSIZE = 1024 * 16; //In Kb, Default 16MB
 //uint64_t IMSS_BLKSIZE = 1024; //In Kb, Default 1 MB
-uint64_t IMSS_BLKSIZE = 8;//4
+uint64_t IMSS_BLKSIZE = 4;//4
 //uint64_t IMSS_BUFFSIZE = 1024*1024*2; //In Kb, Default 2Gb
 uint64_t IMSS_BUFFSIZE = 1024*2048; //In Kb, Default 2Gb
 int32_t REPL_FACTOR = 1; //Default none
-char * MOUNTPOINT[6] = {"imssfs", "-f" , "XXXX", "-s", "-d", NULL}; // {"f", mountpoint} Not default ({"f", NULL})
+char * MOUNTPOINT[6] = {"imssfs", "-f" , "XXXX", "-s", NULL}; // {"f", mountpoint} Not default ({"f", NULL})
 
 uint64_t IMSS_DATA_BSIZE;
 
@@ -216,7 +216,6 @@ int parse_args(int argc, char ** argv){
 					print_help();
 					return 0;
 				}
-				printf("IMSS_BUFFSIZE=%ld, STORAGE_SIZE=%ld\n",IMSS_BUFFSIZE,STORAGE_SIZE);
 				if(IMSS_BUFFSIZE>STORAGE_SIZE){
 					print_help();
 					fprintf(stderr, "[IMSS-FUSE]	Total HERCULES storage size must be larger than IMSS_STORAGE_SIZE, %ld KB\n",IMSS_BUFFSIZE+META_BUFFSIZE);
@@ -342,8 +341,8 @@ int main(int argc, char *argv[])
 
     map = map_create(); 
 
-    IMSS_DATA_BSIZE = IMSS_BLKSIZE*KB-sizeof(uint32_t);
+    IMSS_DATA_BSIZE = IMSS_BLKSIZE*KB;
 
-	return fuse_main(5, MOUNTPOINT, &imss_oper, NULL);
+	return fuse_main(4, MOUNTPOINT, &imss_oper, NULL);
 }
 

@@ -263,7 +263,6 @@ imss_metadata(void * arg_)
 
 	
 	//Map tracking metadata saved records.
-	printf("Metadata:arg.buffer_size=%d\n",arg.buffer_size);
 	map_records metadata_map(arg.buffer_size * KB);
 	//Pointer to the allocated metadata buffer memory.
 	unsigned char * pt_met;

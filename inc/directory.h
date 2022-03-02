@@ -34,12 +34,4 @@ int32_t GTree_insert(char * desired_data);
 //Method that will be called for each tree node freeing the associated data element.
 int32_t gnodetraverse (GNode * node, void * data);
 
-//Method that will be called for each tree node freeing if st_nlink=0 the associated data element.
-int32_t
-gnodetraverse_garbage_collector (GNode * node, void * data);
-
-//Method that will be called for each tree node..
-int32_t 
-Gnodetraverse_garbage_collector (map_records * map);
-
 #endif

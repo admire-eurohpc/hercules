@@ -66,16 +66,14 @@ pthread_mutex_t lock_fileopen = PTHREAD_MUTEX_INITIALIZER;
 
 
 
-long fd_lookup(const char * path) {
+void fd_lookup(const char * path, int *fd, struct stat * s, char ** aux) {
 	pthread_mutex_lock(&lock_fileopen);
-	int fd = -1;
-	int found;
-
-	found = map_search(map, path, &fd);
+	*fd = -1;
+	//printf("fd_lookup:%p\n",aux);
+	int found = map_search(map, path, fd , s, aux);
 	if (!found)
-		fd = -1;
+		*fd = -1;
 	pthread_mutex_unlock(&lock_fileopen);
-	return fd;
 }
 
 void get_iuri(const char * path, /*output*/ char * uri){
@@ -151,13 +149,11 @@ int imss_getattr(const char *path, struct stat *stbuf)
 			else return -ENOENT;
 
 		case 2: //Case file
-			printf("GetAttribute: path %s\n", imss_path);
+			
 			if(stat_dataset(imss_path, &metadata) == -1){
 				fprintf(stderr, "[IMSS-FUSE]	Cannot get dataset metadata.");
 				return -ENOENT;
 			}
-
-
 
 			//Get header
 			//FIXME! Not always possible!!!!
@@ -165,38 +161,35 @@ int imss_getattr(const char *path, struct stat *stbuf)
 			//
 			uint32_t ds;
 
-			int fd = fd_lookup(imss_path);
+			int fd;
+			struct stat stats;
+			char * aux;
+			fd_lookup(imss_path, &fd, &stats, &aux);
 			if (fd >= 0) 
 				ds = fd;
 			else {
 				ds = open_dataset(imss_path);
 				if (ds >=0) {
+                    aux = (char *) malloc(IMSS_BLKSIZE*KB);
+	                get_data(ds, 0, (unsigned char*)aux);
+	    			memcpy(&stats, aux, sizeof(struct stat));
 					pthread_mutex_lock(&lock_fileopen);
-					map_put(map, imss_path, ds);
+					map_put(map, imss_path, ds, stats, aux);
 					pthread_mutex_unlock(&lock_fileopen);
-				}	else{
+					//free(aux);
+				} else{
 					fprintf(stderr, "[IMSS-FUSE]	Cannot get dataset metadata.");
 					return -ENOENT;
 				}
 					
 			}
-
-			pthread_mutex_lock(&lock);
-			get_data(ds, 0, head);
-			pthread_mutex_unlock(&lock);
-			//Read header
-			struct stat header;
-			memcpy(&header, head, sizeof(struct stat));
-
-			if (header.st_nlink != 0) {
-				memcpy(stbuf, &header, sizeof(struct stat));
+			if (stats.st_nlink != 0) {
+				memcpy(stbuf, &stats, sizeof(struct stat));
 			} else {
 				fprintf(stderr, "[IMSS-FUSE]	Cannot get dataset metadata.");
 				return -ENOENT;
 			}
-
 			return 0;
-
 		default:
 			return -1;
 	}
@@ -306,7 +299,10 @@ int imss_open(const char *path, struct fuse_file_info *fi)
 	get_iuri(path, imss_path);
 
 
-	int fd = fd_lookup(imss_path);
+	int fd;
+	struct stat stats;
+	char * aux;
+	fd_lookup(imss_path, &fd, &stats, &aux);
 
 	if (fd >= 0) 
 		file_desc = fd;
@@ -314,9 +310,15 @@ int imss_open(const char *path, struct fuse_file_info *fi)
 		return -1;
 	else {
 		file_desc = open_dataset(imss_path);
+		
+		aux = (char *) malloc(IMSS_BLKSIZE*KB);
+	    get_data(file_desc, 0, (unsigned char*)aux);
+	    memcpy(&stats, aux, sizeof(struct stat));
 		pthread_mutex_lock(&lock_fileopen);
-		map_put(map, imss_path, file_desc);
+		map_put(map, imss_path, file_desc, stats, aux);
 		pthread_mutex_unlock(&lock_fileopen);
+
+		//free(aux);
 	}
 
 
@@ -336,7 +338,6 @@ int imss_read(const char *path, char *buf, size_t size, off_t offset,
 		struct fuse_file_info *fi)
 {
 
-	//printf("offset=%d\n",offset);
 	//Compute current block and offsets
 	int64_t curr_blk, end_blk, start_offset, end_offset;
 	int64_t first = 0; 
@@ -350,7 +351,7 @@ int imss_read(const char *path, char *buf, size_t size, off_t offset,
 	//Needed variables
 	size_t byte_count = 0;
 	int64_t rbytes;
-	char * aux = (char *) malloc(IMSS_BLKSIZE*KB);
+	//char * aux = (char *) malloc(IMSS_BLKSIZE*KB);
 
 	//Read header
 	//get_data(fi->fh, 0, (unsigned char*)aux);
@@ -359,187 +360,151 @@ int imss_read(const char *path, char *buf, size_t size, off_t offset,
 	char rpath[MAX_PATH];
 	get_iuri(path, rpath);
 
-	int fd = fd_lookup(rpath);
+	int fd;
+	struct stat stats;
+	char * aux;
+	//printf("imss_read aux before %p\n", aux);
+	fd_lookup(rpath, &fd, &stats, &aux);
+	//printf("imss_read aux after %p\n", aux);
 	if (fd >= 0) 
 		ds = fd;
 	else if (fd == -2)
 		return -ENOENT;
-	else
-		ds = open_dataset(rpath);
-
-
+	
 	memset(buf, 0, size);
 	//Read remaining blocks
 	while(curr_blk <= end_blk){
-
-
 		pthread_mutex_lock(&lock);
 		int err = get_data(ds, curr_blk, (unsigned char*)aux);
 		pthread_mutex_unlock(&lock);
 
 		if( err != -1){
-
-			//Parse data
-			uint32_t filled;
-			memcpy (&filled, aux, HEADER);
-
-			//Parse buffer
-
 			//First block case
 			if (first == 0) {
-				if(size < filled - start_offset) to_read = size;
-				else to_read = filled - start_offset;
+				if(size < stats.st_size - start_offset) 
+				    to_read = size;
+				else 
+					to_read = stats.st_size - start_offset;
+				    //to_read = IMSS_BLKSIZE*KB - start_offset;
+
 				//Check if offset is bigger than filled, return 0 because is EOF case
-				if(start_offset > filled) 
+				if(start_offset > stats.st_size) 
 					return 0; 
-				memcpy(buf, aux + HEADER + start_offset, to_read);
+
+				memcpy(buf, aux + start_offset, to_read);
 				byte_count += to_read;
 				++first;
 
 				//Middle block case
 			} else if (curr_blk != end_blk) {
-
-				//Read only filled
-				to_read = filled;
-				memcpy(buf + byte_count, aux + HEADER, to_read);
-				byte_count += filled;
-
-
+				//memcpy(buf + byte_count, aux + HEADER, IMSS_BLKSIZE*KB);
+				memcpy(buf + byte_count, aux, IMSS_BLKSIZE*KB);
+				byte_count += IMSS_BLKSIZE*KB;
 				//End block case
 			}  else {
 
 				//Read the minimum between end_offset and filled (read_ = min(end_offset, filled))
-				int64_t pending = filled;
-
-				if (filled >= end_offset)
-					pending = end_offset;
-
-				if (size < pending)
-					to_read = size;
-				else
-					to_read = pending;
-
-				memcpy(buf + byte_count, aux + sizeof(uint32_t), to_read);
-				byte_count += to_read;
-
+				int64_t pending = size - byte_count;
+				memcpy(buf + byte_count, aux, pending);
+				byte_count += pending;
 			}
 
 		} 
-
 		++curr_blk;
-		size-=to_read;
 	}
-	free(aux);
+	//free(aux);
 
 	return byte_count;
 }
 
-int imss_write(const char *path, const char *buf, size_t size,//if buffer is "" it has \nola\n why?¿ echo ""> /tmp/testimss/prueba ver foto
+int imss_write(const char *path, const char *buf, size_t size,
 		off_t off, struct fuse_file_info *fi)
 {
+	//printf("size=%d\n",size);
 	//Compute offsets to write
 	int64_t curr_blk, end_blk, start_offset, end_offset;
-	curr_blk = off / IMSS_DATA_BSIZE + 1; //Add one to skip block 0
+	int64_t start_blk = off / IMSS_DATA_BSIZE + 1; //Add one to skip block 0
 	start_offset = off % IMSS_DATA_BSIZE;
 	end_blk = (off+size) / IMSS_DATA_BSIZE + 1; //Add one to skip block 0
 	end_offset = (off+size) % IMSS_DATA_BSIZE; 
+	curr_blk = start_blk;
 
 	//Needed variables
 	size_t byte_count = 0;
-	int64_t wbytes;
 	int first = 0;
 	int ds = 0;
-	int64_t to_copy;
-	uint32_t filled;
+	//int64_t to_copy;
+	//uint32_t filled;
+	int64_t to_copy = 0;
+	uint32_t filled = 0;
 	struct stat header;
-	char *aux = malloc(IMSS_BLKSIZE*KB);
-
+	//char *aux = malloc(IMSS_BLKSIZE*KB);
+	char *aux;
 	char rpath[MAX_PATH];
 	bzero(rpath, MAX_PATH);
 	get_iuri(path, rpath);
 
 
-	int fd = fd_lookup(rpath);
+	int fd;
+	struct stat stats;
+	fd_lookup(rpath, &fd, &stats, &aux);
 	if (fd >= 0) 
 		ds = fd;
 	else if (fd == -2)
 		return -ENOENT;
-	else
-		ds = open_dataset(rpath);
-
-
-	//Read header
-	pthread_mutex_lock(&lock);
-	if(get_data(ds, 0, (unsigned char*)aux) < 0){
-		fprintf(stderr, "[IMSS-FUSE]	Error reading metadata.\n");
-		error_print=-ENOENT;
-		pthread_mutex_unlock(&lock);
-		return -ENOENT;
-	}
-	pthread_mutex_unlock(&lock);
-	memcpy(&header, aux, sizeof(struct stat));
-
+	
+	
+	
 	//For the rest of blocks
 	while(curr_blk <= end_blk){
-
-		//Fisr block
-		if (first==0 && start_offset && header.st_size != 0) {
+		//First fragmented block
+		if (first==0 && start_offset && stats.st_size != 0) {
 			//Get previous block
 			pthread_mutex_lock(&lock);
 			if(get_data(ds, curr_blk, (unsigned char *)aux) < 0){
 				fprintf(stderr, "[IMSS-FUSE]	Error reading from imss.\n");
 				error_print=-ENOENT;
 				pthread_mutex_unlock(&lock);
+				//free(aux);
 				return -ENOENT;
 			}
 			pthread_mutex_unlock(&lock);
 			//Bytes to write are the minimum between the size parameter and the remaining space in the block (BLOCKSIZE-start_offset)
 			to_copy = (size < IMSS_DATA_BSIZE-start_offset) ? size : IMSS_DATA_BSIZE-start_offset;
 
-			memcpy(&filled, aux, sizeof(uint32_t));
-			memcpy(aux + HEADER + start_offset, buf + byte_count, to_copy);
+			memcpy(aux + start_offset, buf + byte_count, to_copy);
 
-			//Check if there is need to update the offset
-			if(start_offset + to_copy > filled){
-
-				filled = start_offset + to_copy;
-				memcpy(aux, &filled, sizeof(uint32_t));
-			} 
+		
+			
 		}
 		//Last Block
 		else if(curr_blk == end_blk){
 			to_copy = end_offset;
 			//Only if last block has contents
-			if(curr_blk <= header.st_blocks){
+			if(curr_blk <= stats.st_blocks && start_offset){
 				pthread_mutex_lock(&lock);
 				if(get_data(ds, curr_blk, (unsigned char *)aux) < 0){
 					fprintf(stderr, "[IMSS-FUSE]	Error reading from imss.\n");
 					error_print=-ENOENT;
 					pthread_mutex_unlock(&lock);
+					//free(aux);
 					return -ENOENT;
 				}
 				pthread_mutex_unlock(&lock);
-				memcpy(&filled, aux, sizeof(uint32_t));
+				
 			}
 			else{
 				memset(aux, 0, IMSS_BLKSIZE*KB);
-				filled = to_copy;
-				memcpy(aux, &filled, sizeof(uint32_t));
+				
 			}
 
-			memcpy(aux + HEADER, buf + byte_count, to_copy);
+			memcpy(aux , buf + byte_count, to_copy);
 
-			//When copied bytes exceed offset, update filled 
-			if(to_copy > filled){
-				filled = to_copy;
-				memcpy(aux, &filled, sizeof(uint32_t));
-			}
 		}
 		//middle block
 		else{
 			to_copy = IMSS_DATA_BSIZE;
-			memcpy(aux, &to_copy, sizeof(uint32_t));
-			memcpy(aux + HEADER, buf + byte_count, to_copy);
+			memcpy(aux, buf + byte_count, to_copy);
 		}
 
 		//Write and update variables
@@ -548,6 +513,7 @@ int imss_write(const char *path, const char *buf, size_t size,//if buffer is "" 
 			fprintf(stderr, "[IMSS-FUSE]	Error writing to imss.\n");
 			error_print=-ENOENT;
 			pthread_mutex_unlock(&lock);
+			//free(aux);
 			return -ENOENT;
 		}
 		pthread_mutex_unlock(&lock);
@@ -556,23 +522,18 @@ int imss_write(const char *path, const char *buf, size_t size,//if buffer is "" 
 		++curr_blk;
 		++first;
 	}
+	//free(aux);
 
 	//Update header count if the file has become bigger
-	if(size + off > header.st_size){
-		header.st_size = size + off;
-		header.st_blocks = curr_blk-1;
-		memcpy(aux, &header, sizeof(struct stat));
+	if(size + off > stats.st_size){
+		stats.st_size = size + off;
+		stats.st_blocks = curr_blk-1;
 		pthread_mutex_lock(&lock);
-		if(set_data(ds, 0, (unsigned char*)aux) < 0){
-			fprintf(stderr, "[IMSS-FUSE]	Error writing to imss.\n");
-			error_print=-ENOENT;
-			pthread_mutex_unlock(&lock);
-			return -ENOENT;
-		}
+        map_update(map, rpath, ds, stats);
 		pthread_mutex_unlock(&lock);
 	}
 
-	free(aux);
+	//free(aux);
 	return byte_count;
 }
 
@@ -585,36 +546,27 @@ int imss_release(const char * path, struct fuse_file_info *fi)
 	bzero(rpath, MAX_PATH);
 	get_iuri(path, rpath);
 
-	int fd = fd_lookup(rpath);
+	int fd;
+	struct stat stats;
+	char * aux;
+	fd_lookup(rpath, &fd, &stats, &aux);
 	if (fd >= 0) 
 		ds = fd;
 	else 
 		return  -ENOENT;
 
 	char head[IMSS_BLKSIZE*KB];
-	pthread_mutex_lock(&lock);
-	if(get_data(ds, 0, head) < 0){
-		fprintf(stderr, "[IMSS-FUSE][release]	Error reading from imss.\n");
-		error_print=-ENOENT;
-		pthread_mutex_unlock(&lock);
-		return -ENOENT;
-	}
-
-	pthread_mutex_unlock(&lock);
-	struct stat header;
-	memcpy(&header, head, sizeof(struct stat));
 
 	//Get time
 	struct timespec spec;
 	clock_gettime(CLOCK_REALTIME, &spec);
 
 	//Update time
-	header.st_mtim = spec;
-	header.st_ctim = spec;
-
+	stats.st_mtim = spec;
+	stats.st_ctim = spec;
 
 	//write metadata
-	memcpy(head, &header, sizeof(struct stat));
+	memcpy(head, &stats, sizeof(struct stat));
 	pthread_mutex_lock(&lock);
 	if(set_data(ds, 0, head) < 0){
 		fprintf(stderr, "[IMSS-FUSE][release]	Error writing to imss.\n");
@@ -693,7 +645,7 @@ int imss_create(const char * path, mode_t mode, struct fuse_file_info * fi)
 	//strcpy(fd_table[fi->fh], rpath);
 
 	pthread_mutex_lock(&lock_fileopen);
-	map_put(map, rpath, fi->fh);
+	map_put(map, rpath, fi->fh, ds_stat, buff);
 	/*if (!S_ISDIR(mode)){
 	  fileopen_table[index].type=2;
 	  }else{
@@ -703,7 +655,7 @@ int imss_create(const char * path, mode_t mode, struct fuse_file_info * fi)
 
 	pthread_mutex_unlock(&lock_fileopen);
 
-	free(buff);
+	//free(buff);
 	return 0; 
 
 }
@@ -757,10 +709,13 @@ int imss_unlink(const char * path){
 
 	get_iuri(path, imss_path);
 
-	char *buff = malloc(IMSS_BLKSIZE*KB);
+	//char *buff = malloc(IMSS_BLKSIZE*KB);
 
 	uint32_t ds;
-	int fd = fd_lookup(imss_path);
+	int fd;
+	struct stat stats;
+	char * buff;
+	fd_lookup(imss_path, &fd, &stats, &buff);
 	if (fd >= 0) 
 		ds = fd;
 	else 
@@ -791,7 +746,7 @@ int imss_unlink(const char * path){
 	delete_dataset(imss_path);
 
 	release_dataset(ds);
-	free (buff);
+	//free (buff);
 	return 0;
 }
 
@@ -806,7 +761,10 @@ int imss_utimens(const char * path, const struct timespec tv[2]) {
 	get_iuri(path, rpath);
 
 	//Assing file handler and create dataset
-	int fd = fd_lookup(rpath);
+	int fd;
+	struct stat stats;
+	char * buff;
+	fd_lookup(rpath, &fd, &stats, &buff);
 
 	if (fd >= 0) 
 		file_desc = fd;
@@ -819,7 +777,7 @@ int imss_utimens(const char * path, const struct timespec tv[2]) {
 	}
 
 
-	char *buff = malloc(IMSS_BLKSIZE*KB);
+	//char *buff = malloc(IMSS_BLKSIZE*KB);
 	pthread_mutex_lock(&lock);
 	get_data(file_desc, 0, (unsigned char *)buff);
 	pthread_mutex_unlock(&lock);
@@ -836,7 +794,7 @@ int imss_utimens(const char * path, const struct timespec tv[2]) {
 	pthread_mutex_unlock(&lock);
 
 
-	free(buff);
+	//free(buff);
 
 	return 0;
 }
@@ -859,7 +817,7 @@ int imss_flush(const char * path, struct fuse_file_info * fi){
 		error_print=0;
 		return err;
 	}
-	struct stat ds_stat;
+	//struct stat ds_stat;
 	struct timespec spec;
 	clock_gettime(CLOCK_REALTIME, &spec);
 	uint32_t file_desc;
@@ -872,7 +830,10 @@ int imss_flush(const char * path, struct fuse_file_info * fi){
 	get_iuri(path, rpath);
 
 	//Assing file handler and create dataset
-	int fd = fd_lookup(rpath);
+	int fd;
+	struct stat stats;
+	char * buff;
+	fd_lookup(rpath, &fd, &stats, &buff);
 
 	if (fd >= 0) 
 		file_desc = fd;
@@ -886,22 +847,12 @@ int imss_flush(const char * path, struct fuse_file_info * fi){
 	}
 
 
-	char *buff = malloc(IMSS_BLKSIZE*KB);
-	pthread_mutex_lock(&lock);
-	if(get_data(file_desc, 0, (unsigned char *)buff) < 0){
-		fprintf(stderr, "[IMSS-FUSE]	Error reading from imss.\n");
-		error_print=-ENOENT;
-		pthread_mutex_unlock(&lock);
-		return -ENOENT;
-	}
-	pthread_mutex_unlock(&lock);
+	//char *buff = malloc(IMSS_BLKSIZE*KB);
 
-	memcpy(&ds_stat, buff, sizeof(struct stat));
-
-	ds_stat.st_mtime = spec.tv_sec;
+	stats.st_mtime = spec.tv_sec;
 
 	//Write initial block
-	memcpy(buff, &ds_stat, sizeof(struct stat));
+	memcpy(buff, &stats, sizeof(struct stat));
 
 	pthread_mutex_lock(&lock);
 	if(set_data(file_desc, 0, (unsigned char *)buff) < 0){
@@ -914,7 +865,7 @@ int imss_flush(const char * path, struct fuse_file_info * fi){
 	pthread_mutex_unlock(&lock);
 
 
-	free(buff);
+	//free(buff);
 
 	return 0;
 }
@@ -929,13 +880,16 @@ int imss_chmod(const char *path, mode_t mode){
 
 	struct stat ds_stat;
 	uint32_t file_desc;
-	printf("chmod_path=%s\n",path);
+	//printf("chmod_path=%s\n",path);
 	char rpath[MAX_PATH];
 	bzero(rpath, MAX_PATH);
 	get_iuri(path, rpath);
 
 	//Assing file handler and create dataset
-	int fd = fd_lookup(rpath);
+	int fd;
+	struct stat stats;
+	char * buff;
+	fd_lookup(rpath, &fd, &stats, &buff);
 
 	if (fd >= 0) 
 		file_desc = fd;
@@ -948,7 +902,7 @@ int imss_chmod(const char *path, mode_t mode){
 	}
 
 
-	char *buff = malloc(IMSS_BLKSIZE*KB);
+	//char *buff = malloc(IMSS_BLKSIZE*KB);
 	pthread_mutex_lock(&lock);
 	get_data(file_desc, 0, (unsigned char *)buff);
 	pthread_mutex_unlock(&lock);
@@ -965,7 +919,7 @@ int imss_chmod(const char *path, mode_t mode){
 	pthread_mutex_unlock(&lock);
 
 
-	free(buff);
+	//free(buff);
 
 	return 0;
 }
@@ -978,7 +932,10 @@ int imss_chown(const char *path, uid_t uid, gid_t gid) {
 	get_iuri(path, rpath);
 
 	//Assing file handler and create dataset
-	int fd = fd_lookup(rpath);
+	int fd;
+	struct stat stats;
+	char * buff;
+	fd_lookup(rpath, &fd, &stats, &buff);
 
 	if (fd >= 0) 
 		file_desc = fd;
@@ -991,7 +948,7 @@ int imss_chown(const char *path, uid_t uid, gid_t gid) {
 	}
 
 
-	char *buff = malloc(IMSS_BLKSIZE*KB);
+	//char *buff = malloc(IMSS_BLKSIZE*KB);
 	pthread_mutex_lock(&lock);
 	get_data(file_desc, 0, (unsigned char *)buff);
 	pthread_mutex_unlock(&lock);
@@ -1013,7 +970,7 @@ int imss_chown(const char *path, uid_t uid, gid_t gid) {
 	pthread_mutex_unlock(&lock);
 
 
-	free(buff);
+	//free(buff);
 
 	return 0;
 
@@ -1021,7 +978,6 @@ int imss_chown(const char *path, uid_t uid, gid_t gid) {
 
 int imss_rename(const char *old_path, const char *new_path){
 	struct stat ds_stat_n;
-	printf("old_path=%s, new_path=%s\n",old_path, new_path);
 	int file_desc_o, file_desc_n;
 	int fd=0;
 	char old_rpath[MAX_PATH];
@@ -1039,14 +995,14 @@ int imss_rename(const char *old_path, const char *new_path){
 	//check old_path if it is a directory if it is add / at the end
 	int res = imss_getattr(old_path, &ds_stat_n);
     if (res == 0) {
-		printf("old_path[last]=%c\n",old_path[strlen(old_path) -1]);
 		if (S_ISDIR(ds_stat_n.st_mode)) {
-			
-			
-			printf("**************EXISTE EL ORIGEN ES DIRECTORIO=%s\n",old_path);
+
 			strcat(old_rpath, "/");
-			printf("fd_lookup=%s\n",old_rpath);
-			fd = fd_lookup(old_rpath);
+			
+			int fd;
+			struct stat stats;
+			char * aux;
+			fd_lookup(old_rpath, &fd, &stats, &aux);
 			if (fd >= 0) 
 				file_desc_o = fd;
 			else if (fd == -2)
@@ -1071,19 +1027,15 @@ int imss_rename(const char *old_path, const char *new_path){
 			}
 			char dir_dest[256] = {0};
 			memcpy(dir_dest,&new_path[0],pos+1);
-			printf("dir_dest=%s\n",dir_dest);
 
 			char rdir_dest[MAX_PATH];
 			bzero(rdir_dest, MAX_PATH);
 			get_iuri(dir_dest,rdir_dest);
-			
-			printf("rdir_dest=%s\n",rdir_dest);
 
 			res = imss_getattr(dir_dest, &ds_stat_n);
 			if(res == 0){
 				if (S_ISDIR(ds_stat_n.st_mode)) {
 					//WE ARE IN MV DIR TO DIR
-					printf("********CASO DIR TO DIR********\n");
 
 					map_rename_dir_dir(map, old_rpath,new_rpath);
 
@@ -1102,7 +1054,10 @@ int imss_rename(const char *old_path, const char *new_path){
 
 	//MV FILE TO FILE OR MV FILE TO DIR
 	//Assing file handler
-	fd = fd_lookup(old_rpath);
+	fd;
+	struct stat stats;
+	char * aux;
+	fd_lookup(old_rpath, &fd, &stats, &aux);
 
 	if (fd >= 0) 
 		file_desc_o = fd;
@@ -1119,29 +1074,22 @@ int imss_rename(const char *old_path, const char *new_path){
 	res = imss_getattr(new_path, &ds_stat_n);
 	
     if (res == 0) {
-		printf("**************EXISTE EL DESTINO=%s\n",new_path);
-		printf("new_path[last]=%c\n",new_path[strlen(new_path) -1]);
+		//printf("**************EXISTE EL DESTINO=%s\n",new_path);
+		//printf("new_path[last]=%c\n",new_path[strlen(new_path) -1]);
 		if (S_ISDIR(ds_stat_n.st_mode)) {
 			//Because of how the path arrive never get here.
 		}else{
-			printf("**************TENGO QUE BORRARLO ES UN FICHERO=%s\n",new_path);
+			//printf("**************TENGO QUE BORRARLO ES UN FICHERO=%s\n",new_path);
 			imss_unlink(new_path);
 		}
 	}else{
-		printf("**************NO EXISTE EL DESTINO=%s\n",new_path);
+		//printf("**************NO EXISTE EL DESTINO=%s\n",new_path);
 	}
 
 
-	printf("old_rpath=%s, new_rpath=%s\n",old_rpath, new_rpath);
+	//printf("old_rpath=%s, new_rpath=%s\n",old_rpath, new_rpath);
 
 	map_rename(map, old_rpath,new_rpath);
-	/*map_erase(map,old_rpath);
-	map_put(map,new_rpath,fd);
-
-	found=map_search(map,new_rpath,&fd);
-	if(found!=-1){
-		printf("añadido %s\n",new_rpath);
-	}*/
 
 	//RENAME LOCAL_IMSS(GARRAY), SRV_STAT(MAP & TREE)
 	rename_dataset_metadata(old_rpath,new_rpath);

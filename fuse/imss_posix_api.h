@@ -18,7 +18,7 @@
 #ifndef H_IMSS_POSIX_API
 #define H_IMSS_POSIX_API
 
-long fd_lookup(const char * path);
+void fd_lookup(const char * path, int *fd, struct stat * s, char ** aux);
 void get_iuri(const char * path, /*output*/ char * uri);
 int imss_truncate(const char * path, off_t offset);
 int imss_access(const char *path, int permission);

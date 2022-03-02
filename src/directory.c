@@ -117,20 +117,13 @@ GTree_rename(char * old_desired_data,char * new_desired_data)
 
 	//Check if the node has been already inserted.
 	if (GTree_search(tree_root, old_desired_data, &closest_node)==1){
-		printf("TREE Exist found:%s\n",old_desired_data);
 		if(strcmp(old_desired_data,(char *)closest_node->data)==0){
-			printf("TREE Data rename Tree Before: %s\n",closest_node->data);
-			//memcpy(closest_node->data,new_desired_data,strlen(new_desired_data)+1);
 			g_node_destroy(closest_node);
 			GTree_insert(new_desired_data);
-
-			//printf("TREE Data rename Tree After: %s\n",closest_node->data);
-
-
 		}
 		
 	}else{
-		printf("Rename Error not found:%s\n",old_desired_data);
+		//printf("Rename Error not found:%s\n",old_desired_data);
 		return 0;
 	}
 		
@@ -141,7 +134,7 @@ GTree_rename(char * old_desired_data,char * new_desired_data)
 int32_t
 GTree_rename_dir_dir(char * old_dir,char * rdir_dest)
 {	
-	printf("TREE DIR TO DIR RENAME\n");
+
 	//Node whose elements must be retrieved.
 	GNode * dir_node;
 	//Check if the node has been already inserted.
@@ -149,7 +142,7 @@ GTree_rename_dir_dir(char * old_dir,char * rdir_dest)
 	
 		uint32_t num_elements_indir = g_node_n_nodes (dir_node, G_TRAVERSE_ALL)-1;
 		uint32_t num_elements_indir_childrens = g_node_n_children (dir_node);
-		printf("DIR_NUM_ELEMENTS=%d\n",num_elements_indir+1);
+		//printf("DIR_NUM_ELEMENTS=%d\n",num_elements_indir+1);
 		char * dir_elements = (char *) malloc((num_elements_indir+1)*URI_);
 		char * aux_dir_elem = dir_elements;
 		serialize_dir(dir_node,num_elements_indir_childrens,&aux_dir_elem);
@@ -171,7 +164,7 @@ GTree_rename_dir_dir(char * old_dir,char * rdir_dest)
 				strcpy(new_path, rdir_dest);
 				strcat(new_path,"/");
 				strcat(new_path,path);
-				printf("inserting=%s\n",new_path);	
+	
 				GTree_insert(new_path);
 
 			}
@@ -192,14 +185,11 @@ GTree_delete(char * desired_data)
 
 	//Check if the node has been already inserted.
 	if (GTree_search(tree_root, desired_data, &closest_node)==1){
-		//printf("Entro a borrar: %s\n",closest_node->data);
 		if(strcmp(desired_data,(char *)closest_node->data)==0){
-			//printf("g_node_destroy: %s\n",closest_node->data);
 			g_node_destroy(closest_node);//Delete Node
 		}
 		
 	}else{
-		//printf("Delete Error not found:\n");
 		return 0;
 	}
 
@@ -285,7 +275,6 @@ serialize_dir_childrens(GNode * 	visited_node,
 		/*if (!num_grandchildren)
 		{*/
 			//Add the child's uri to the buffer.
-			printf("serialize_dir_childrens add:%s\n",child->data);
 			memcpy(*buffer, (char *) child->data, URI_);
 			*buffer += URI_;
 		/*}
@@ -306,7 +295,6 @@ serialize_dir(GNode * 	visited_node,
 	      char ** 	buffer)
 {
 	//Add the concerned uri into the buffer.
-	printf("First serialize_dir add:%s\n",visited_node->data);
 	memcpy(*buffer, (char *) visited_node->data, URI_);
 	*buffer += URI_;
 
@@ -322,7 +310,6 @@ serialize_dir(GNode * 	visited_node,
 		if (!num_grandchildren)
 		{
 			//Add the child's uri to the buffer.
-			printf("Next serialize_dir add:%s\n",child->data);
 			memcpy(*buffer, (char *) child->data, URI_);
 			*buffer += URI_;
 		}
@@ -385,33 +372,7 @@ gnodetraverse (GNode * 	node,
 	return 0;
 }
 
-//Method that will be called for each tree node freeing if st_nlink=0 the associated data element.
-int32_t
-gnodetraverse_garbage_collector (GNode * 	node,//dont delete maybe usefull in the future
-	       void * 	data)
-{
-	char * key = (char *) data;
-	//Check if there was an associated block to the key.
-	/*if (!(map->get(key, &address_, &block_size_rtvd)))
-	{
-		printf("ERROR NO BLOCK");
-	}*/
-	//g_tree_destroy
-	//free(node->data);
 
-	return 0;
-}
-
-//Method that will be called for each tree node..
-int32_t
-Gnodetraverse_garbage_collector (map_records * map)//dont delete maybe usefull in the future
-{
-	//Freeing all resources of the tree structure.
-	g_node_traverse(tree_root, G_PRE_ORDER, G_TRAVERSE_ALL, -1, gnodetraverse_garbage_collector, NULL);
-	
-
-	return 0;
-}
 
 
 

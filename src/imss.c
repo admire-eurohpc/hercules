@@ -546,7 +546,7 @@ get_dir(char * 	 requested_uri,
 	}
 
 	char * elements = (char *) zmq_msg_data(&uri_elements);
-	//printf("requested_uri=%s\n",requested_uri);
+
 	if (!strncmp("$ERRIMSS_NO_KEY_AVAIL$", elements, 22))
 	{
 		zmq_msg_close(&uri_elements);
@@ -620,7 +620,7 @@ init_imss(char *   imss_uri,
 		memset(command, 0, 2048);
 
 		sprintf(command, "mpirun -np %d -f %s %s %s %d %lu foo %d %d %s &", n_servers, hostfile, binary_path, imss_uri, conn_port, buff_size, 0, n_servers, "");
-		printf("*****buffsize=%d\n",buff_size);
+		
 		//Perform the deployment (FROM LINUX MAN PAGES: "system() returns after the command has been completed").
 		if (system(command) == -1)
 		{
@@ -1401,16 +1401,12 @@ delete_dataset(const char * 	    dataset_uri)
 	unsigned char * msg_data = (unsigned char *) zmq_msg_data(&msg_struct);
 
 	zmq_msg_close(&msg_struct);
-
-	printf("delete_dataset_recv %s\n",msg_data);
-
 	
 	return 1;
 }
 
 int32_t 
 rename_dataset_metadata_dir_dir(char * old_dir, char * rdir_dest){
-	printf("*****Rename Dataset Dir to Dir\n");
 
 	/*********RENAME GARRAY DATASET*******/
 	dataset_info dataset_info_;
@@ -1485,10 +1481,7 @@ rename_dataset_metadata_dir_dir(char * old_dir, char * rdir_dest){
 
 int32_t 
 rename_dataset_metadata(char * old_dataset_uri, char * new_dataset_uri){
-	
-	printf("*****Rename Dataset\n");
-	
-	
+
 	/*********RENAME GARRAY DATASET*******/
 	dataset_info dataset_info_;
 
@@ -1635,7 +1628,7 @@ int32_t
 rename_dataset_srv_worker_dir_dir(char * old_dir, char * rdir_dest,
 int32_t 	 dataset_id,	 int32_t 	 data_id)
 {
-	printf("RENAMING SRV_WORKER_DIR_DIR\n");
+	//printf("RENAMING SRV_WORKER_DIR_DIR\n");
 	int32_t n_server;
 	//Server containing the corresponding data to be retrieved.
 	if ((n_server = get_data_location(dataset_id, data_id, GET)) == -1)

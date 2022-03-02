@@ -16,6 +16,7 @@ set(CMAKE_C_FLAGS "-D_FILE_OFFSET_BITS=64 -lulockmgr -DFUSE")
 
 
 target_include_directories(imssfs PRIVATE ${FUSE_INCLUDE_DIR})
-target_link_libraries(imssfs  ${CMAKE_THREAD_LIBS_INIT} zmq  ${FUSE_LIBRARIES}  imss_static  tcmalloc)
+target_link_libraries(imssfs  ${CMAKE_THREAD_LIBS_INIT} zmq  ${FUSE_LIBRARIES}  imss_static)
+#target_link_libraries(imssfs  ${CMAKE_THREAD_LIBS_INIT} zmq  ${FUSE_LIBRARIES}  imss_static  tcmalloc)
 
 target_compile_features(imssfs PRIVATE cxx_std_17)

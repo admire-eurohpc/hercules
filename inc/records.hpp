@@ -150,20 +150,14 @@ class map_records
 			//save partners for later deletion and new insertion of news paths
 			std::vector<string> vec;
 			
-			
-			printf("***RENAME SRV_WORKER\n");
 			for(const auto & it : buffer) {
 				string key = it.first;
-				std::cout <<"Exist map srv worker" << key << '\n';
 				
 				int pos = key.find('$');
 				string path = key.substr(0,pos);
 				string block = key.substr(pos,key.length()+1);
 				
-				std::cout <<"path= " << path << '\n';
-				std::cout <<"block= " << block << '\n';
 				if(path.compare(old_key) == 0){
-					printf("COINCIDE\n");
 					vec.insert(vec.begin(),key);
 				}
 			}
@@ -173,14 +167,11 @@ class map_records
 				auto item = buffer.find(*i);
 
 				string key = *i;
-				std::cout <<"VEC=" << key << '\n';
 				int pos = key.find('$');
 				string block = key.substr(pos,key.length()+1);
-				std::cout <<"block= " << block << '\n';
 
 				
 				string new_path=new_key+block;
-				std::cout <<"add new_key=" << new_path << '\n';
 				auto node = buffer.extract(key);
 				node.key()=new_path;
 				buffer.insert(std::move(node));
@@ -299,7 +290,7 @@ class map_records
 		
 					//comprobar la estructura st_ulink
 					struct stat * st_p = (struct stat *) it.second.first;
-					
+					std::cout << key << "stlink:" <<st_p->st_nlink<<'\n';
 					if(st_p->st_nlink == 0){
 						
 						//borrar todos los bloques con mismo path/key
@@ -331,7 +322,7 @@ class map_records
 			std::unique_lock<std::mutex> lock(mut);
 			std::vector<string>::iterator i;
 			for (i=vec.begin(); i<vec.end(); i++){
-				std::cout << "Garbage Collector: Deleting " << *i << "\n";
+				//std::cout << "Garbage Collector: Deleting " << *i << "\n";
 				auto item = buffer.find(*i);
 				free(item->second.first);
 				buffer.erase (*i);

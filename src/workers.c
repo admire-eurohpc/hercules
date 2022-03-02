@@ -219,7 +219,8 @@ srv_worker (void * th_argv)
 		uint64_t block_size_recv = (uint64_t) atoi(number);
 
 		//Create an std::string in order to be managed by the map structure.
-		std::string key; key.assign((const char *) uri_);
+		std::string key; 
+		key.assign((const char *) uri_);
 
 		//printf("REQUEST: %s (%ld)\n", key.c_str(), block_size_recv);
 
@@ -247,7 +248,7 @@ srv_worker (void * th_argv)
 						//Check if there was an associated block to the key.
 						if (!(map->get(key, &address_, &block_size_rtvd)))
 						{
-							printf("ERROR2: %s (%ld)\n", key.c_str(), block_size_recv);
+							//printf("ERROR2: %s (%ld)\n", key.c_str(), block_size_recv);
 							
 							//Send the error code block.
 							if (zmq_send(socket, err_code, strlen(err_code), 0) < 0)
@@ -292,15 +293,15 @@ srv_worker (void * th_argv)
 						std::size_t found = key.find(' ');
 						if (found!=std::string::npos){
 							string old_key = key.substr(0,found);
-							std::cout << "srv_worker: old key " << old_key << '\n';
+							
 							string new_key = key.substr(found+1,key.length());
-							std::cout << "srv_worker: new key " << new_key << '\n';
+							
 							
 							//RENAME MAP
 							map->cleaning_specific(new_key);
 							int32_t result = map->rename_data_srv_worker(old_key,new_key);
 							if(result == 0){
-							printf("0 elements rename from stat_worker\n");
+							
 							break;
 							}
 						}
@@ -320,9 +321,9 @@ srv_worker (void * th_argv)
 						std::size_t found = key.find(' ');
 						if (found!=std::string::npos){
 							string old_dir = key.substr(0,found);
-							std::cout << "old_dir: " << old_dir << '\n';
+							
 							string rdir_dest = key.substr(found+1,key.length());
-							std::cout << "rdir_dest: " << rdir_dest << '\n';
+						
 							
 							//RENAME MAP
 							map->rename_data_dir_dir_srv_worker(old_dir,rdir_dest);
@@ -366,14 +367,15 @@ srv_worker (void * th_argv)
 				if (!map->get(key, &address_, &block_size_rtvd))
 				{
 					
-					//printf("***address=%s\n",address_);
-					unsigned char * buffer = (unsigned char *) malloc(block_size_recv);
+					
+					//unsigned char * buffer = (unsigned char *) malloc(block_size_recv);
+					unsigned char * buffer = (unsigned char *)aligned_alloc(1024, block_size_recv);
 					//Receive the block into the buffer.
 					int err = zmq_recv(socket, buffer, block_size_recv, 0);
 				
 					int32_t insert_successful;
 					//Include the new record in the tracking structure.
-					printf("srv_worker put lenght=%d\n",block_size_recv);
+				
 					insert_successful=map->put(key, buffer, block_size_recv);
 					//Include the new record in the tracking structure.
 					if (insert_successful != 0)
@@ -384,23 +386,17 @@ srv_worker (void * th_argv)
 					}
 
 					//Update the pointer.
-					printf("Insert Map srv_worker: %s\n",(char *) key.c_str());
+					
 					arguments->pt += block_size_recv;
 					
 				}
 				//If was already stored:
 				else
 				{
-					//printf("Rewrite block %s\n",(char *) key.c_str());
-					/*int32_t lock = (address_ - buffer_address) / buffer_segment;
-
-					pthread_mutex_lock(&region_locks[lock]);*/
 
 					//Receive the block into the buffer.
 					
 					zmq_recv(socket, address_, block_size_rtvd, 0);
-					/*struct stat * st_p2 = (struct stat *) address_;
-					printf("REWRITEst_p_NLINK=%d\n",st_p2->st_nlink);*/
 
 					//pthread_mutex_unlock(&region_locks[lock]);
 				}
@@ -645,15 +641,10 @@ stat_worker (void * th_argv)
 					}
 					case DELETE_OP:
 					{
-			            std::cout << key <<"\n";
+			           
 						int32_t result = map->delete_metadata_stat_worker(key);
 						GTree_delete((char *) key.c_str());
-						if(result == 0){
-							printf("0 elements delete from stat_worker\n");
-						}else{
-							printf("%d elements with key  %s delete from stat_worker\n",result,uri_);
-						}
-
+						
 
 						char release_msg[] = "DELETE\0";
 
@@ -671,14 +662,12 @@ stat_worker (void * th_argv)
 						std::size_t found = key.find(' ');
 						if (found!=std::string::npos){
 							string old_key = key.substr(0,found);
-							//std::cout << "old key " << old_key << '\n';
 							string new_key = key.substr(found+1,key.length());
-							//std::cout << "new key " << new_key << '\n';
 							
 							//RENAME MAP
 							int32_t result = map->rename_metadata_stat_worker(old_key,new_key);
 							if(result == 0){
-							printf("0 elements rename from stat_worker\n");
+							//printf("0 elements rename from stat_worker\n");
 							break;
 							}
 
@@ -701,9 +690,9 @@ stat_worker (void * th_argv)
 						std::size_t found = key.find(' ');
 						if (found!=std::string::npos){
 							string old_dir = key.substr(0,found);
-							std::cout << "old_dir: " << old_dir << '\n';
+	
 							string rdir_dest = key.substr(found+1,key.length());
-							std::cout << "rdir_dest: " << rdir_dest << '\n';
+							
 							
 							//RENAME MAP
 							map->rename_metadata_dir_dir_stat_worker(old_dir,rdir_dest);
@@ -745,8 +734,6 @@ stat_worker (void * th_argv)
 
 					int32_t insert_successful;
 					//Include the new record in the tracking structure.
-					printf("stat_worker put lenght=%d\n",block_size_recv);
-					printf("buffer insert stat=%s\n",buffer);
 					insert_successful=map->put(key, buffer, block_size_recv);
 					if (insert_successful != 0)
 					{
@@ -759,8 +746,6 @@ stat_worker (void * th_argv)
 					//Insert the received uri into the directory tree.
 					pthread_mutex_lock(&tree_mut);
 					insert_successful = GTree_insert((char *) key.c_str());
-					printf("Insert Map stat_worker: %s\n",(char *) key.c_str());
-					printf("Insert Tree: %s\n",(char *) key.c_str());
 					pthread_mutex_unlock(&tree_mut);
 
 					if (insert_successful == -1)
