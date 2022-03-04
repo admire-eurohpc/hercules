@@ -420,7 +420,7 @@ int imss_read(const char *path, char *buf, size_t size, off_t offset,
 int imss_write(const char *path, const char *buf, size_t size,
 		off_t off, struct fuse_file_info *fi)
 {
-	//printf("size=%d\n",size);
+	//printf("size=%d\n",size); 
 	//Compute offsets to write
 	int64_t curr_blk, end_blk, start_offset, end_offset;
 	int64_t start_blk = off / IMSS_DATA_BSIZE + 1; //Add one to skip block 0
@@ -428,6 +428,7 @@ int imss_write(const char *path, const char *buf, size_t size,
 	end_blk = (off+size) / IMSS_DATA_BSIZE + 1; //Add one to skip block 0
 	end_offset = (off+size) % IMSS_DATA_BSIZE; 
 	curr_blk = start_blk;
+
 
 	//Needed variables
 	size_t byte_count = 0;

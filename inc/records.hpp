@@ -85,13 +85,8 @@ class map_records
 			std::map <std::string, std::pair<unsigned char *, uint64_t>>::iterator it;
 			//Block the access to the map structure.
 			std::unique_lock<std::mutex> lock(mut);
+
 			//Search for the address related to the key.
-			//std::cout <<"IN SERVER MAP: START" << '\n';
-			for(const auto & iterator : buffer){
-				string key = iterator.first;
-				//std::cout <<"IN SERVER MAP: Exist " << key << '\n';
-			}
-			//std::cout <<"IN SERVER MAP: END " << '\n';
 			it = buffer.find(key);
 			//Check if the value did exist within the map.
 			if(it == buffer.end()){
@@ -124,11 +119,7 @@ class map_records
 			}else{
 				
 				imss_info_ * data = (imss_info_*) it->second.first;
-				/*printf("BEFORE data->uri=%s\n",data->uri_);
-				printf("BEFORE it->second.first=%s\n",it->second.first);*/
 				strcpy(data->uri_,new_key.c_str());
-				/*printf("LATER it->second.first=%s\n",it->second.first);
-				printf("LATER data->uri=%s\n",data->uri_);*/
 				auto node = buffer.extract(old_key);
 				node.key()=new_key;
 				buffer.insert(std::move(node));
@@ -174,9 +165,7 @@ class map_records
 				string new_path=new_key+block;
 				auto node = buffer.extract(key);
 				node.key()=new_path;
-				buffer.insert(std::move(node));
-
-				
+				buffer.insert(std::move(node));				
 			}
 
 			//Return the address associated to the record.
@@ -194,7 +183,6 @@ class map_records
 			
 			for(const auto & it : buffer) {
 				string key = it.first;
-				//std::cout << "DATA key: " << key << '\n';
 				int found = key.find(old_dir);
 				if (found!=std::string::npos){
 					vec.insert(vec.begin(),key);
@@ -208,17 +196,15 @@ class map_records
 
 			std::vector<string>::iterator i;
 			for (i=vec.begin(); i<vec.end(); i++){
-			string key = *i;
-			key.erase(0,old_dir.length()-1);
-			
-			string new_path=rdir_dest;
-			new_path.append(key);
-			//std::cout << "DATA new_path: " << new_path<< '\n';
-
-			
-			auto node = buffer.extract(*i);
-			node.key() = new_path;
-			buffer.insert(std::move(node));
+				string key = *i;
+				key.erase(0,old_dir.length()-1);
+				
+				string new_path=rdir_dest;
+				new_path.append(key);
+		
+				auto node = buffer.extract(*i);
+				node.key() = new_path;
+				buffer.insert(std::move(node));
 
 			}
 
@@ -236,7 +222,6 @@ class map_records
 			
 			for(const auto & it : buffer) {
 				string key = it.first;
-				//std::cout << "METADATA key: " << key << '\n';
 				int found = key.find(old_dir);
 				if (found!=std::string::npos){
 					vec.insert(vec.begin(),key);
@@ -247,11 +232,8 @@ class map_records
 					new_path.append(key);
 					
 					imss_info_ * data = (imss_info_*) it.second.first;
-					//printf("BEFORE data->uri=%s\n",data->uri_);
-					//printf("BEFORE it->second.first=%s\n",it.second.first);
 					strcpy(data->uri_,new_path.c_str());
-					//printf("LATER it->second.first=%s\n",it.second.first);
-					//printf("LATER data->uri=%s\n",data->uri_);
+
 				}
 			}
 
@@ -262,9 +244,7 @@ class map_records
 			
 			string new_path=rdir_dest;
 			new_path.append(key);
-			//std::cout << "METADATA new_path: " << new_path<< '\n';
-
-			
+		
 			auto node = buffer.extract(*i);
 			node.key() = new_path;
 			buffer.insert(std::move(node));
@@ -290,7 +270,7 @@ class map_records
 		
 					//comprobar la estructura st_ulink
 					struct stat * st_p = (struct stat *) it.second.first;
-					std::cout << key << "stlink:" <<st_p->st_nlink<<'\n';
+					//std::cout << key << "stlink:" <<st_p->st_nlink<<'\n';
 					if(st_p->st_nlink == 0){
 						
 						//borrar todos los bloques con mismo path/key
@@ -304,7 +284,6 @@ class map_records
 								int pos_partner = partner_key.find('$');
 								string partner_path = partner_key.substr(0,pos_partner);
 								
-								//std::cout << path <<'\n';
 								int found_partner = partner_path.compare(path);
 								if(found_partner == 0){
 									vec.insert(vec.begin(),partner_key);
