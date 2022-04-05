@@ -23,6 +23,10 @@ int32_t main (int32_t argc, char **argv)
 	uint32_t iterations  = atoi(argv[1]);
 	uint32_t block_size  = atoi(argv[2]);
 
+	//Humber these two no necesary, add it in the case of detached in imssfs.c
+	char meta_hostfile[]	     = "";
+	uint16_t metadata_port=0;
+
 	auto t1 = clk::now();
 	//Hercules init -- Attached deploy
 	if (hercules_init(0, 4194304, 5555, 1, 5569, 2048, metadata) == -1) exit(-1);
@@ -37,7 +41,7 @@ int32_t main (int32_t argc, char **argv)
 
 	t1 = clk::now();
 	//Imss deploy
-	if (init_imss(imss_test, hostfile, 1, 5555, 4192256, ATTACHED, NULL) == -1) exit(-1);
+	if (init_imss(imss_test, hostfile, meta_hostfile, 1, 5555, 4192256, ATTACHED, NULL,metadata_port) == -1) exit(-1);
 	t2 = clk::now();
 	auto init_imss_time = std::chrono::duration_cast<std::chrono::nanoseconds>(t2-t1);
 

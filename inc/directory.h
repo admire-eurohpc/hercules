@@ -34,4 +34,7 @@ int32_t GTree_insert(char * desired_data);
 //Method that will be called for each tree node freeing the associated data element.
 int32_t gnodetraverse (GNode * node, void * data);
 
+int32_t
+gnodetraverse_find (GNode * 	node,
+	       void * 	desired_data);
 #endif

@@ -204,7 +204,6 @@ imss_server(void * arg_)
 		}
 	
 
-    	//Deploy a thread distributing incomming clients among all ports.
 	if (pthread_create(&thread_garbage_collector, NULL, garbage_collector, (void *) &buffer_map) == -1)
 	{
 		perror("ERRIMSS_GARBAGECOLLECTOR_DEPLOY");
@@ -563,3 +562,4 @@ hercules_release()
 
 	return 0;
 }
+

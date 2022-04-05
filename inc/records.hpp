@@ -53,6 +53,10 @@ class map_records
 			total_size = nsize;
 		}
 
+		int64_t get_size()  {
+			return total_size;
+		}
+
 		//Used in stat_worker threads
 		//Method deleting a record.
 		int32_t delete_metadata_stat_worker(std::string key)
@@ -72,6 +76,7 @@ class map_records
 			  fprintf(stderr, "[Map record] Out of space  %ld/%ld.\n",quantity_occupied + length, total_size);			  
 			  return -1;
 			}
+			std::cout <<"add in map:" << key << '\n';
 			quantity_occupied = quantity_occupied + length;
 			buffer.insert({key, value});
 
@@ -90,11 +95,12 @@ class map_records
 			it = buffer.find(key);
 			//Check if the value did exist within the map.
 			if(it == buffer.end()){
+				//std::cout <<"No Exist " << key << '\n';
 				return 0;
 			}
 
 			//Assign the values obtained to the provided references.
-			
+			//std::cout <<"Exist " << key << '\n';
 			*(add_) = it->second.first;
 			*(size_) = it->second.second;
 

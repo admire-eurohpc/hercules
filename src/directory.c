@@ -9,6 +9,7 @@
 
 //Pointer to the tree's root node.
 GNode * tree_root;
+GNode * last_parent=NULL;
 
 //Method searching for a certain data node.
 int32_t
@@ -50,7 +51,7 @@ GTree_search_(GNode * 	parent_node,
 			if (!strcmp((char *) child->data, desired_data))
 			{
 				*found_node = child;
-
+					
 				//The desired data was found.
 				return 1;
 			}
@@ -87,7 +88,7 @@ GTree_search_(GNode * 	parent_node,
 		//Move on to the following child.
 		child = child->next;
 	}
-
+	last_parent = parent_node;
 	return 0;
 }
 
@@ -203,12 +204,38 @@ int32_t
 GTree_insert(char * desired_data)
 {
 	//Closest node to the one requested (or even the requested one itself).
-	GNode * closest_node;
+	GNode * closest_node=NULL;
+
+	
+	if(last_parent!=NULL){
+		
+		
+		char data_search[256] = {0};
+		if(desired_data[strlen(desired_data)-1]=='/'){
+			memcpy(data_search, desired_data,strlen(desired_data)-1);
+        }else{
+
+            memcpy(data_search, desired_data,strlen(desired_data));
+        }
+		char father[256] = {0};
+		char * lastson = strrchr(data_search, '/');
+		 int copy=(strlen(data_search)-strlen(lastson));
+
+
+		memcpy(father,&data_search[0],copy+1);
+ 
+		if(strncmp((char *) last_parent->data, father, strlen((char *) father))==0 && strlen((char*)last_parent->data)==strlen(father)){
+			closest_node = last_parent;
+		}
+	}
+	
 
 	//Check if the node has been already inserted.
-	if (GTree_search(tree_root, desired_data, &closest_node))
-
-		return 0;
+	if(closest_node==NULL){
+		if (GTree_search(tree_root, desired_data, &closest_node)){
+			return 0;
+		}
+	}
 
 	//Length of the found uri. An additional unit is added in order to avoid the first '/' encountered.
 	int32_t closest_data_length = strlen((char *) closest_node->data) + 1;
@@ -246,7 +273,7 @@ GTree_insert(char * desired_data)
 			//Introduce it as a child of the closest one found.
 			g_node_append(closest_node, new_node);
 
-			closest_node = new_node;
+			//closest_node = new_node;
 		}
 	}
 
@@ -377,4 +404,3 @@ gnodetraverse (GNode * 	node,
 
 
 	
-

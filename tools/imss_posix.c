@@ -105,7 +105,7 @@ imss_posix_init(void)
     }
 
 
-    if(init_imss(IMSS_ROOT, IMSS_HOSTFILE, N_SERVERS, IMSS_SRV_PORT, IMSS_BUFFSIZE, ATTACHED, NULL) < 0) {
+    if(init_imss(IMSS_ROOT, IMSS_HOSTFILE, META_HOSTFILE, N_SERVERS, IMSS_SRV_PORT, IMSS_BUFFSIZE, ATTACHED, NULL, METADATA_PORT) < 0) {
         fprintf(stderr,"IMSS init failed, cannot create servers.\n");
     }
 

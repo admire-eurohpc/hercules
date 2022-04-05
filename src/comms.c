@@ -203,7 +203,7 @@ recv_dynamic_struct(void *  socket,
 			break;
 		}
 	}
-
+ 
 	zmq_msg_close(&msg_struct);
 
 	return 1;

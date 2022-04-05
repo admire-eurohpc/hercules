@@ -173,7 +173,7 @@ uint32_t get_dir(char * requested_uri, char ** buffer, char *** items);
 	RETURNS:	 0 - Initialization procedure was successfully performed.
 			-1 - In case of error.
 */
-int32_t init_imss(char * imss_uri, char * hostfile, int32_t n_servers, uint16_t conn_port, uint64_t buff_size, uint32_t deployment, char * binary_path);
+int32_t init_imss(char * imss_uri, char * hostfile, char * meta_hostfile, int32_t n_servers, uint16_t conn_port, uint64_t buff_size, uint32_t deployment, char * binary_path, uint16_t meta_port);
 
 /* Method initializing the required resources to make use of an existing IMSS.
 
@@ -282,6 +282,13 @@ int32_t open_dataset(char * dataset_uri);
 				-1 - In case of error.*/
 int32_t delete_dataset(const char * dataset_uri);
 
+/*Method writev various datasets.
+
+	RETURNS:	 0 - Release operation took place successfully.
+				-1 - In case of error.*/
+int32_t writev_multiple(const char * buf, int32_t dataset_id,int64_t data_id,
+ int64_t end_blk, int64_t start_offset, int64_t end_offset, int64_t IMSS_DATA_BSIZE, int64_t size);
+
 /*Method renaming a dataset in metadata.
 
 	RETURNS:	 0 - Release operation took place successfully.
@@ -347,6 +354,16 @@ int32_t stat_dataset(const char * dataset_uri, dataset_info * dataset_info_);
 /****************************************************************************************************************************/
 /********************************************* DATA OBJECT MANAGEMENT FUNCTIONS *********************************************/
 
+
+//Method retrieving a multiple datasets
+int32_t
+readv_multiple(int32_t 	 dataset_id,
+	int32_t 	 curr_block,
+	 int32_t 	 prefetch,
+	 unsigned char * buffer,
+	  uint64_t 	 BLOCKSIZE,
+	  int64_t    start_offset,
+	  int64_t	size);
 
 /* Method retrieving a data element associated to a certain dataset.
 

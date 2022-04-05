@@ -10,6 +10,7 @@ gcc -Wall imss.c `pkg-config fuse --cflags --libs` -o imss
 
 #define FUSE_USE_VERSION 26
 #include "map.hpp"
+#include "mapprefetch.hpp"
 #include "hercules.h"
 #include "imss_posix_api.h"
 #include <fuse.h>
@@ -30,9 +31,10 @@ gcc -Wall imss.c `pkg-config fuse --cflags --libs` -o imss
 /*
    -----------	IMSS Global variables, filled at the beggining or by default -----------
 */
+uint32_t deployment = 1;	//Default 1=ATACHED, 0=DETACHED
 uint16_t IMSS_SRV_PORT = 1; //Not default, 1 will fail
 uint16_t METADATA_PORT = 1; //Not default, 1 will fail
-int32_t N_SERVERS = 1; //Default
+int32_t N_SERVERS = 1; //Default 1
 int32_t N_META_SERVERS = 1; //Default 1 1
 int32_t N_BLKS = 1; //Default 1
 char * METADATA_FILE = NULL; //Not default
@@ -42,16 +44,31 @@ char * META_HOSTFILE = NULL; //Not default
 char * POLICY = "RR"; //Default RR
 uint64_t STORAGE_SIZE = 1024*1024*16; //In Kb, Default 16 GB
 uint64_t META_BUFFSIZE = 1024 * 16; //In Kb, Default 16MB
+//uint64_t META_BUFFSIZE = 1024 * 1000;
 //uint64_t IMSS_BLKSIZE = 1024; //In Kb, Default 1 MB
-uint64_t IMSS_BLKSIZE = 16;//4 cat /proc/sys/net/ipv4/tcp_rmem
+uint64_t IMSS_BLKSIZE = 4;
 //uint64_t IMSS_BUFFSIZE = 1024*1024*2; //In Kb, Default 2Gb
 uint64_t IMSS_BUFFSIZE = 1024*2048; //In Kb, Default 2Gb
 int32_t REPL_FACTOR = 1; //Default none
 char * MOUNTPOINT[6] = {"imssfs", "-f" , "XXXX", "-s", NULL}; // {"f", mountpoint} Not default ({"f", NULL})
 
+uint16_t PREFETCH = 6;
+uint16_t MULTIPLE = 1;
+char prefetch_path[256];
+int32_t prefetch_first_block = -1; 
+int32_t prefetch_last_block = -1;
+int32_t prefetch_pos = 0;
+pthread_t prefetch_t;
+int16_t prefetch_ds = 0;
+int32_t prefetch_offset = 0;
+
+pthread_cond_t      cond_prefetch;
+pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+
 uint64_t IMSS_DATA_BSIZE;
 
 void * map;
+void * map_prefetch;
 
 
 #define MAX_PATH 256
@@ -102,6 +119,7 @@ void print_help(){
 	printf("\t-o	IMSS block size in KB (by default 1024).\n");
 	printf("\t-R	Replication factor (by default NONE).\n");
 	printf("\t-x	Metadata server number (by default 1).\n");
+	printf("\t-d	Deployment (by default 1).\n");
 
 	printf("\n\t-l	Mountpoint (*).\n");
 
@@ -132,8 +150,7 @@ int parse_args(int argc, char ** argv){
 
 	int opt;
 	int argument;
-
-	while((opt = getopt(argc, argv, "p:m:s:b:M:h:r:a:P:S:B:e:o:R:x:Hl:")) != -1){ 
+	while((opt = getopt(argc, argv, "p:m:s:b:M:h:r:a:P:S:B:e:o:R:x:d:Hl:")) != -1){ 
 		switch(opt) { 
 			case 'p':
 				
@@ -218,7 +235,7 @@ int parse_args(int argc, char ** argv){
 				}
 				if(IMSS_BUFFSIZE>STORAGE_SIZE){
 					print_help();
-					fprintf(stderr, "[IMSS-FUSE]	Total HERCULES storage size must be larger than IMSS_STORAGE_SIZE, %ld KB\n",IMSS_BUFFSIZE+META_BUFFSIZE);
+					fprintf(stderr, "[IMSS-FUSE]	1Total HERCULES storage size must be larger than IMSS_STORAGE_SIZE, %ld KB\n",IMSS_BUFFSIZE+META_BUFFSIZE);
 					return 0;
 				}
 				break;
@@ -235,7 +252,7 @@ int parse_args(int argc, char ** argv){
 				}
 				if(META_BUFFSIZE>STORAGE_SIZE){
 					print_help();
-					fprintf(stderr, "[IMSS-FUSE]	Total HERCULES storage size must be larger than IMSS_STORAGE_SIZE, %ld KB\n",META_BUFFSIZE+IMSS_BUFFSIZE);
+					fprintf(stderr, "[IMSS-FUSE]	2Total HERCULES storage size must be larger than IMSS_STORAGE_SIZE, %ld KB\n",META_BUFFSIZE+IMSS_BUFFSIZE);
 					return 0;
 				}
 				break;
@@ -275,6 +292,17 @@ int parse_args(int argc, char ** argv){
 					return 0;
 				}
 				break;
+			case 'd':
+				if(!sscanf(optarg, "%" SCNu32, &deployment)){
+					print_help();
+					return 0;
+				}
+				argument = atoi(optarg);
+				if(argument<0){
+					print_help();
+					return 0;
+				}
+				break;
 			case 'H':
 				print_help();
 				return 0;
@@ -305,6 +333,37 @@ int parse_args(int argc, char ** argv){
 	return 1;
 }
 
+void *
+prefetch_function (void * th_argv)
+{
+	for (;;) {
+
+	    pthread_mutex_lock(&lock);
+		while( prefetch_ds  < 0 ){
+		     pthread_cond_wait(&cond_prefetch, &lock);
+	    }
+		
+
+		if(prefetch_first_block<prefetch_last_block && prefetch_first_block != -1){
+			//printf("Se activo Prefetch path:%s$%d-$%d\n",prefetch_path, prefetch_first_block, prefetch_last_block);
+			int exist_first_block, exist_last_block, position;
+			char * buf = map_get_buffer_prefetch(map_prefetch, prefetch_path, &exist_first_block, &exist_last_block);
+			int err = readv_multiple(prefetch_ds, prefetch_first_block, prefetch_last_block, buf, IMSS_BLKSIZE, prefetch_offset, IMSS_BLKSIZE * KB * (prefetch_last_block - prefetch_first_block));
+			if(err==-1){
+				pthread_mutex_unlock(&lock);
+				continue;
+			}
+			map_update_prefetch(map_prefetch, prefetch_path, prefetch_first_block, prefetch_last_block);
+			
+		}
+		
+		
+		prefetch_ds = -1;
+		pthread_mutex_unlock(&lock);
+	}
+
+	pthread_exit(NULL);
+}
 
 /*
    ----------- MAIN -----------
@@ -330,19 +389,34 @@ int main(int argc, char *argv[])
 	} 
 
 	//Initialize the IMSS servers
-	if(init_imss(IMSS_ROOT, IMSS_HOSTFILE, N_SERVERS, IMSS_SRV_PORT, IMSS_BUFFSIZE, ATTACHED, NULL) < 0) {
+	if(init_imss(IMSS_ROOT, IMSS_HOSTFILE, META_HOSTFILE, N_SERVERS, IMSS_SRV_PORT, IMSS_BUFFSIZE, deployment, "/home/hcristobal/imss/build/server", METADATA_PORT) < 0) {
+	//if(init_imss(IMSS_ROOT, IMSS_HOSTFILE, N_SERVERS, IMSS_SRV_PORT, IMSS_BUFFSIZE, deployment, NULL) < 0) {
 		//Notify error and exit
 		fprintf(stderr, "[IMSS-FUSE]	IMSS init failed, cannot create servers.\n");
 		return -EIO;
 	} 
+	printf("Termine init_imss\n");
 
 	char * test = get_deployed();
 	if(test) {free(test);}
 
     map = map_create(); 
+	map_prefetch = map_create_prefetch();
 
-    IMSS_DATA_BSIZE = IMSS_BLKSIZE*KB;
+	IMSS_DATA_BSIZE = IMSS_BLKSIZE*KB;
 
+    int ret;
+    pthread_attr_t tattr;
+    /* initialized with default attributes */
+    ret = pthread_attr_init(&tattr);
+    ret = pthread_attr_setdetachstate(&tattr,PTHREAD_CREATE_DETACHED);
+
+	if (pthread_create(&prefetch_t, &tattr, prefetch_function, NULL) == -1)
+	{
+		perror("ERRIMSS_PREFETCH_DEPLOY");
+		pthread_exit(NULL);
+	}
+
+   
 	return fuse_main(4, MOUNTPOINT, &imss_oper, NULL);
 }
-

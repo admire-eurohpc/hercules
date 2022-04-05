@@ -34,7 +34,7 @@
 
 uint16_t IMSS_SRV_PORT = 1; //Not default, 1 will fail
 uint16_t METADATA_PORT = 1; //Not default, 1 will fail
-int32_t N_SERVERS = 1; //Default
+int32_t N_SERVERS = 2; //Default
 int32_t N_META_SERVERS = 1; //Default 1 1
 int32_t N_BLKS = 1; //Default 1
 char * METADATA_FILE = NULL; //Not default

@@ -66,7 +66,7 @@ server_conn(void ** router,
 		perror("ERRIMSS_THREAD_RCVTIMEO");
 		return -1;
 	}
-	//printf("WORKER BINDED to: %s\n", (const char *) router_endpoint);
+	printf("WORKER BINDED to: %s\n", (const char *) router_endpoint);
 	//Connect the router socket to a certain endpoint.
 	if (zmq_bind(*router, (const char *) router_endpoint) == -1)
 	{
@@ -259,6 +259,8 @@ srv_worker (void * th_argv)
 						}
 						else
 						{
+							//printf("Read\n");
+							//std::cout <<"key:" << key << '\n';
 							/*int32_t lock = (address_ - buffer_address) / buffer_segment;
 							pthread_mutex_lock(&region_locks[lock]);*/
 
@@ -340,7 +342,124 @@ srv_worker (void * th_argv)
 						}
 			            break;
 					}
+					case READV:
+					{
+						//printf("READV\n");
+						//std::cout <<"key:" << key << '\n';
+						std::size_t found = key.find('$');
+						string path;
+						if (found!=std::string::npos){
+							path = key.substr(0,found+1);
+							//std::cout <<"path:" << path << '\n';
+							
+							key.erase(0,found+1);
+							std::size_t found = key.find(' ');
+							int curr_blk = stoi(key.substr(0,found));
+							key.erase(0,found+1);
 
+							found = key.find(' ');
+							int end_blk = stoi(key.substr(0,found));
+							key.erase(0,found+1);
+
+							found = key.find(' ');
+							int blocksize = stoi(key.substr(0,found));
+							key.erase(0,found+1);
+
+							found = key.find(' ');
+							int start_offset = stoi(key.substr(0,found));
+							key.erase(0,found+1);
+
+							found = key.find(' ');
+							int64_t size = stoi(key.substr(0,found));
+							key.erase(0,found+1);
+
+							/*std::cout <<"curr_blk:" << curr_blk << '\n';
+							std::cout <<"end_blk:" << end_blk << '\n';
+							std::cout <<"blocksize:" << blocksize << '\n';
+							std::cout <<"start_offset:" << start_offset << '\n';
+							std::cout <<"size:" << size << '\n';*/
+
+							//Needed variables
+							size_t byte_count = 0;
+							int first = 0;
+							int ds = 0;
+							int64_t to_copy = 0;
+							uint32_t filled = 0;
+							size_t to_read = 0;
+
+							int pos = path.find('$');
+							std::string first_element = path.substr(0,pos+1);
+							first_element = first_element + std::to_string(0);
+							map->get(first_element, &address_, &block_size_rtvd);
+							struct stat * stats = (struct stat *) address_;
+
+							unsigned char * buf = (unsigned char *)malloc(size);
+							while(curr_blk <= end_blk){
+									string element = path;
+									element = element + std::to_string(curr_blk);
+									//std::cout <<"READV element:" << element << '\n';
+									if (map->get(element, &address_, &block_size_rtvd)==0)
+									{//If dont exist 
+										//Send the error code block.
+										//std::cout <<"READV NO EXISTE element:" << element << '\n';
+										if (zmq_send(socket, err_code, strlen(err_code), 0) < 0)
+										{
+											perror("ERRIMSS_WORKER_SENDERR");
+											pthread_exit(NULL);
+										}
+									}//If was already stored:
+									else
+									{
+										//First block case
+										if (first == 0) {
+											if(size < stats->st_size - start_offset){
+											//to_read = size;
+											to_read = blocksize*KB - start_offset;
+										}else{ 	
+											if(stats->st_size<blocksize*KB){
+												to_read = stats->st_size - start_offset;
+											}else{
+												to_read = blocksize*KB - start_offset;
+											}																
+											
+											
+										}
+
+											//Check if offset is bigger than filled, return 0 because is EOF case
+											if(start_offset > stats->st_size) 
+												return 0; 
+
+											memcpy(buf, address_ + start_offset, to_read);
+											byte_count += to_read;
+											++first;
+
+											//Middle block case
+										} else if (curr_blk != end_blk) {
+											//memcpy(buf + byte_count, aux + HEADER, IMSS_BLKSIZE*KB);
+											memcpy(buf + byte_count, address_, blocksize*KB);
+											byte_count += blocksize*KB;
+											//End block case
+										}  else {
+
+											//Read the minimum between end_offset and filled (read_ = min(end_offset, filled))
+											int64_t pending = size - byte_count;
+											memcpy(buf + byte_count, address_, pending);
+											byte_count += pending;
+										}
+									}								
+								++curr_blk;
+								}
+								//Send the requested block.
+								if (zmq_send(socket, buf, size, 0) < 0)
+								{
+									perror("ERRIMSS_WORKER_SENDBLOCK");
+									pthread_exit(NULL);
+								}
+							}
+							
+
+			            break;
+					}
                     case WHO:
                     {
                         //Provide the uri of this instance.
@@ -363,45 +482,181 @@ srv_worker (void * th_argv)
 			//More messages will arrive to the socket.
 			case WRITE_OP:
 			{
-				//If the record was not already stored, add the block.
-				if (!map->get(key, &address_, &block_size_rtvd))
-				{
+				//std::cout <<"key:" << key << '\n';
+
+				std::size_t found = key.find(' ');
+				if (found!=std::string::npos){
 					
+					//printf("WRITEV CASE\n");
+					string path = key.substr(0,found);
+					key.erase(0,found+1);
+					//std::cout <<"path:" << key << '\n';
 					
-					//unsigned char * buffer = (unsigned char *) malloc(block_size_recv);
-					unsigned char * buffer = (unsigned char *)aligned_alloc(1024, block_size_recv);
-					//Receive the block into the buffer.
-					int err = zmq_recv(socket, buffer, block_size_recv, 0);
-				
-					int32_t insert_successful;
-					//Include the new record in the tracking structure.
-				
-					insert_successful=map->put(key, buffer, block_size_recv);
-					//Include the new record in the tracking structure.
-					if (insert_successful != 0)
+					std::size_t found = key.find(' ');
+						int curr_blk = stoi(key.substr(0,found));
+						key.erase(0,found+1);
+						
+						found = key.find(' ');
+						int end_blk = stoi(key.substr(0,found));
+						key.erase(0,found+1);
+
+						found = key.find(' ');
+						int start_offset = stoi(key.substr(0,found));
+						key.erase(0,found+1);
+
+						found = key.find(' ');
+						int end_offset = stoi(key.substr(0,found));
+						key.erase(0,found+1);
+
+						found = key.find(' ');
+						int IMSS_DATA_BSIZE = stoi(key.substr(0,found));
+						key.erase(0,found+1);
+
+						int size = stoi(key);
+
+						/*std::cout <<"curr_blk:" << curr_blk << '\n';
+						std::cout <<"end_blk:" << end_blk << '\n';
+						std::cout <<"start_offset:" << start_offset << '\n';
+						std::cout <<"end_offset:" << end_offset << '\n';
+						std::cout <<"IMSS_DATA_BSIZE:" << IMSS_DATA_BSIZE << '\n';
+						std::cout <<"size:" << size << '\n';*/
+
+						unsigned char * buf = (unsigned char *)malloc(size);
+						//Receive all blocks into the buffer.
+						zmq_recv(socket, buf, size, 0);
+						
+						int pos = path.find('$');
+						std::string first_element = path.substr(0,pos+1);
+						first_element = first_element + "0";
+						map->get(first_element, &address_, &block_size_rtvd);
+						//imss_info * data = (imss_info *) address_;
+						//printf("READ_OP SEND data->type=%c\n",data->type);
+						struct stat * stats = (struct stat *) address_;
+						//printf("READ_OP SEND stats.st_size=%ld\n",stats->st_size);
+
+						//Needed variables
+						size_t byte_count = 0;
+						int first = 0;
+						int ds = 0;
+						int64_t to_copy = 0;
+						uint32_t filled = 0;
+						unsigned char *aux = (unsigned char *)malloc(IMSS_DATA_BSIZE);
+						int count = 0;
+						//For the rest of blocks
+						while(curr_blk <= end_blk){
+							count=count +1;
+							//printf("count=%d\n",count);
+							pos = path.find('$');
+							string element = path.substr(0,pos+1);
+							element = element + std::to_string(curr_blk);
+							//std::cout <<"element:" << element << '\n';
+
+							//First fragmented block
+							if (first==0 && start_offset && stats->st_size != 0) {
+								
+								//Get previous block
+								map->get(element, &aux, &block_size_rtvd);//path por curr_block
+								//Bytes to write are the minimum between the size parameter and the remaining space in the block (BLOCKSIZE-start_offset)
+								to_copy = (size < IMSS_DATA_BSIZE-start_offset) ? size : IMSS_DATA_BSIZE-start_offset;
+
+								memcpy(aux + start_offset, buf + byte_count, to_copy);
+
+							
+								
+							}
+							//Last Block
+							else if(curr_blk == end_blk){
+								if(end_offset != 0){
+									to_copy = end_offset;
+								}else{
+									to_copy = IMSS_DATA_BSIZE;
+								}
+								//Only if last block has contents
+								if(curr_blk <= stats->st_blocks && start_offset){
+									map->get(element, &aux, &block_size_rtvd);//path por curr_block
+									
+								}
+								else{
+									memset(aux, 0, IMSS_DATA_BSIZE);
+									
+								}
+								if(byte_count == size){
+									to_copy=0;
+								}
+								//printf("curr_block=%d, end_block=%d, byte_count=%d\n",curr_blk, end_blk, byte_count);
+								memcpy(aux , buf + byte_count, to_copy);
+
+							}
+							//middle block
+							else{
+								to_copy = IMSS_DATA_BSIZE;
+								memcpy(aux, buf + byte_count, to_copy);
+							}
+
+							//Write and update variables
+							if (!map->get(element, &address_, &block_size_rtvd))
+							{	
+								map->put(element,aux,block_size_rtvd);
+							}else{
+								memcpy(address_,aux,block_size_rtvd);
+							}
+							//printf("currblock=%d, byte_count=%d\n",curr_blk, byte_count);
+							byte_count += to_copy;
+							++curr_blk;
+							++first;
+						}
+						int16_t off = (end_blk * IMSS_DATA_BSIZE) - 1 - size;
+						if(size + off > stats->st_size){
+							stats->st_size = size + off;
+							stats->st_blocks = curr_blk-1;
+						}
+					
+						free(buf);
+				}else{
+					//printf("WRITE NORMAL CASE\n");
+					//If the record was not already stored, add the block.
+					if (!map->get(key, &address_, &block_size_rtvd))
 					{
-						perror("ERRIMSS_WORKER_MAPPUT");
-						//pthread_exit(NULL);
-						continue;
+						
+						
+						//unsigned char * buffer = (unsigned char *) malloc(block_size_recv);
+						unsigned char * buffer = (unsigned char *)aligned_alloc(1024, block_size_recv);
+						//Receive the block into the buffer.
+						zmq_recv(socket, buffer, block_size_recv, 0);
+
+						int32_t insert_successful;
+						//Include the new record in the tracking structure.
+						insert_successful=map->put(key, buffer, block_size_recv);
+						//Include the new record in the tracking structure.
+						if (insert_successful != 0)
+						{
+							perror("ERRIMSS_WORKER_MAPPUT");
+							//pthread_exit(NULL);
+							continue;
+						}
+
+						//Update the pointer.
+						
+						arguments->pt += block_size_recv;
+						
+					}
+					//If was already stored:
+					else
+					{
+
+						//Receive the block into the buffer.
+						
+						zmq_recv(socket, address_, block_size_rtvd, 0);
+
+						//pthread_mutex_unlock(&region_locks[lock]);
 					}
 
-					//Update the pointer.
-					
-					arguments->pt += block_size_recv;
-					
+					break;
 				}
-				//If was already stored:
-				else
-				{
-
-					//Receive the block into the buffer.
 					
-					zmq_recv(socket, address_, block_size_rtvd, 0);
 
-					//pthread_mutex_unlock(&region_locks[lock]);
-				}
 
-				break;
+				
 			}
 
 			default:
@@ -571,6 +826,7 @@ stat_worker (void * th_argv)
 					{
 						char * buffer;
 						int32_t numelems_indir;
+						zmq_msg_t msg;
 
 						//Retrieve all elements inside the requested directory.
 						pthread_mutex_lock(&tree_mut);
@@ -588,8 +844,11 @@ stat_worker (void * th_argv)
 							break;
 						}
 
+						zmq_msg_init_size (&msg,  (numelems_indir*URI_));
+						memcpy(zmq_msg_data(&msg), buffer, (numelems_indir*URI_));
+
 						//Send the serialized set of elements within the requested directory.
-						if (zmq_send(socket, buffer, (numelems_indir*URI_), 0) < 0)
+						if (zmq_msg_send(&msg, socket, 0) < 0)
 						{
 							perror("ERRIMSS_WORKER_SENDBLOCK");
 							pthread_exit(NULL);
@@ -613,7 +872,7 @@ stat_worker (void * th_argv)
 						}
 						else
 						{
-							imss_info * data = (imss_info *) address_;
+							//imss_info * data = (imss_info *) address_;
 							//printf("READ_OP SEND data->type=%c\n",data->type);
 							//Send the requested block.
 							if (zmq_send(socket, address_, block_size_rtvd, 0) < 0)
@@ -687,6 +946,7 @@ stat_worker (void * th_argv)
 					}
 					case RENAME_DIR_DIR_OP:
 					{
+
 						std::size_t found = key.find(' ');
 						if (found!=std::string::npos){
 							string old_dir = key.substr(0,found);
@@ -928,7 +1188,7 @@ srv_attached_dispatcher(void * th_argv)
 		    pthread_exit(NULL);
 		}
 
-		//printf("DISPATCHER_SRV REQUEST RECEIVED: %s\n", (char *) zmq_msg_data(&client_req));
+		//printf("REQUEST RECEIVED: %s\n", (char *) zmq_msg_data(&client_req));
 
 		//Check if the client is requesting connection resources.
 		if (!strncmp((char *) zmq_msg_data(&client_req), "HELLO!", 6))

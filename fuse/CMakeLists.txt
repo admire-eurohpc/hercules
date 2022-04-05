@@ -1,12 +1,13 @@
 find_package(FUSE REQUIRED)
 
 
-add_library(imss_posix_api STATIC imss_posix_api.c map.cpp)
+add_library(imss_posix_api STATIC imss_posix_api.c map.cpp mapprefetch.cpp)
 
 add_executable(imssfs
     map.cpp
     imssfs.c
 	imss_posix_api.c
+    mapprefetch.cpp
     )
 
 
