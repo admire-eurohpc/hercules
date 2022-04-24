@@ -68,13 +68,22 @@ ADD_EXECUTABLE( original_overhead
 SET(IMSS_INC "-I${CMAKE_SOURCE_DIR}/inc")
 SET(IMSS_LIB "-L${CMAKE_SOURCE_DIR}/build/app")
 
+
+target_link_directories(imss_static PUBLIC /opt/anaconda3/lib)
+target_link_directories(imss_shared PUBLIC /opt/anaconda3/lib)
+target_link_directories(server PUBLIC /opt/anaconda3/lib)
+
+set(CMAKE_C_LDFLAGS "-L/opt/anaconda3/lib")
+
 target_include_directories(imss_static PUBLIC zmq ) #${ZeroMQ_INCLUDE_DIR})
-target_include_directories(server PUBLIC  zmq ) #${ZeroMQ_INCLUDE_DIR})
+target_include_directories(imss_shared PUBLIC zmq ) #${ZeroMQ_INCLUDE_DIR})
+target_include_directories(server PUBLIC  zmq) #${ZeroMQ_INCLUDE_DIR})
 target_include_directories(release_imss PUBLIC  zmq ) #${ZeroMQ_INCLUDE_DIR})
 
-TARGET_LINK_LIBRARIES(imss_static ${CMAKE_THREAD_LIBS_INIT} zmq  ${MPI_LIBRARIES} ${GLIB_LIBRARIES})
-TARGET_LINK_LIBRARIES(imss_shared ${CMAKE_THREAD_LIBS_INIT} zmq  ${MPI_LIBRARIES} ${GLIB_LIBRARIES})
-TARGET_LINK_LIBRARIES(server ${CMAKE_THREAD_LIBS_INIT} zmq ${MPI_LIBRARIES} ${GLIB_LIBRARIES} ${PCRE_LIBRARY})
+TARGET_LINK_LIBRARIES(imss_static ${CMAKE_THREAD_LIBS_INIT} zmq  ${MPI_LIBRARIES} ${GLIB_LIBRARIES} )
+#TARGET_LINK_LIBRARIES(imss_static ${CMAKE_THREAD_LIBS_INIT} zmq  ${MPI_LIBRARIES} ${GLIB_LIBRARIES}  tcmalloc )
+#TARGET_LINK_LIBRARIES(imss_shared ${CMAKE_THREAD_LIBS_INIT} zmq  ${MPI_LIBRARIES} ${GLIB_LIBRARIES} tcmalloc)
+TARGET_LINK_LIBRARIES(server ${CMAKE_THREAD_LIBS_INIT} zmq ${MPI_LIBRARIES} ${GLIB_LIBRARIES} ${PCRE_LIBRARY} )
 #TARGET_LINK_LIBRARIES(dirr ${GLIB_LIBRARIES})
 TARGET_LINK_LIBRARIES(release_imss zmq ${GLIB_LIBRARIES})
 #TARGET_LINK_LIBRARIES(dummy imss_static ${CMAKE_THREAD_LIBS_INIT} zmq ${MPI_LIBRARIES} ${GLIB_LIBRARIES})

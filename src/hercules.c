@@ -127,30 +127,28 @@ imss_server(void * arg_)
 		pthread_exit(NULL);
 	}
 
-	//Map tracking saved records.
-	map_records buffer_map;
-
 	//Amount of memory enabled for execution.
 	uint64_t data_reserved;
 
 	region_locks = (pthread_mutex_t *) malloc(THREAD_POOL * sizeof(pthread_mutex_t));
+
+	//Special independent thread as a garbage collector
+	pthread_t thread_garbage_collector;
 
 	//Initialize pool of threads.
 	pthread_t threads[(THREAD_POOL+1)];
 	//Thread arguments.
 	p_argv arguments[(THREAD_POOL+1)];
 
-	//Execute all threads.
-	for (int32_t i = 0; i < (THREAD_POOL+1); i++)
-	{
-		//Add port number to thread arguments.
-		arguments[i].port = (arg.port)++;
 
-		//Deploy all dispatcher + service threads.
-		if (!i)
-		{
+
+
+		//Add port number to thread arguments.
+	arguments[0].port = (arg.port)++;
+
+	
 			//Deploy a thread distributing incomming clients among all ports.
-			if (pthread_create(&threads[i], NULL, srv_attached_dispatcher, (void *) &arguments[i]) == -1)
+			if (pthread_create(&threads[0], NULL, srv_attached_dispatcher, (void *) &arguments[0]) == -1)
 			{
 				perror("ERRIMSS_SRVDISPATCHER_DEPLOY");
 				pthread_exit(NULL);
@@ -167,27 +165,33 @@ imss_server(void * arg_)
 			pthread_mutex_unlock(&buff_size_mut);
 
 			pthread_mutex_lock(&backend_buff_mut);
+			
 			//Check if there is enough space to create a new IMSS server entity within the backend storage.
-			if (buffer_KB > backend_buffer_size)
+			if (buffer_KB > backend_buffer_size)//Total storage size include data server . Then must be lagger
 			{
-				perror("ERRIMSS_BUFFTOOBIG");
+				perror("ERRIMSS_BUFFTOOBIG. Total storage size overpass when allocating a new imss_server_data_buffer");
 				pthread_exit(NULL);
 			}
 			backend_buffer_size -= buffer_KB;
+			    	//Map tracking saved records.
+        	
 			pthread_mutex_unlock(&backend_buff_mut);
 
 			data_reserved = buffer_KB * KB;
-
-			buffer_address = (unsigned char *) malloc(sizeof(char)*data_reserved);
+            map_records buffer_map(data_reserved);
+			//buffer_address = (unsigned char *) malloc(sizeof(char)*data_reserved );
 
 			buffer_segment = data_reserved/THREAD_POOL;
-		}
-		else
+	
+
+
+		for (int32_t i = 1; i < (THREAD_POOL+1); i++)
 		{
+			arguments[i].port = (arg.port)++;
 			//Add the reference to the map into the set of thread arguments.
 			arguments[i].map = &buffer_map;
 			//Specify the address used by each thread to write inside the buffer.
-			arguments[i].pt = (unsigned char *) ((i-1)*buffer_segment + buffer_address);
+			arguments[i].pt = 0;
             //URI of the corresponding IMSS instance.
             strcpy(arguments[i].my_uri, att_imss_uri);
 
@@ -198,7 +202,20 @@ imss_server(void * arg_)
 				pthread_exit(NULL);
 			}
 		}
+	
+
+	if (pthread_create(&thread_garbage_collector, NULL, garbage_collector, (void *) &buffer_map) == -1)
+	{
+		perror("ERRIMSS_GARBAGECOLLECTOR_DEPLOY");
+		pthread_exit(NULL);
 	}
+
+		//Wait for the threads to conclude.
+	if (pthread_join(thread_garbage_collector, NULL) != 0)
+		{
+			perror("ERRIMSS_METADISPATCHER_JOIN");
+			pthread_exit(NULL);
+		}
 
 	//Release communication resources.
 	if (pthread_mutex_destroy(&buff_size_mut) != 0)
@@ -243,15 +260,16 @@ imss_metadata(void * arg_)
 	pthread_cond_signal(&comms_cond);
 	pthread_mutex_unlock(&comms_mut);
 
+	
 	//Map tracking metadata saved records.
-	map_records metadata_map;
+	map_records metadata_map(arg.buffer_size * KB);
 	//Pointer to the allocated metadata buffer memory.
 	unsigned char * pt_met;
 
 	pthread_mutex_lock(&backend_buff_mut);
-	if (backend_buffer_size < arg.buffer_size)
+	if (backend_buffer_size < arg.buffer_size)//Total storage size inclue metadata. Then must be lagger
 	{
-		perror("ERRIMSS_BUFFTOOBIG");
+		perror("ERRIMSS_BUFFTOOBIG. Total storage size overpass when allocating a new imss_server_metadata_buffer.");
 		pthread_exit(NULL);
 	}
 	backend_buffer_size -= arg.buffer_size;
@@ -268,8 +286,8 @@ imss_metadata(void * arg_)
 	}
 
 	//Create the tree_root node.
-	char * root_data = (char *) malloc(1);
-	root_data[0] = '/';
+	char * root_data = (char *) malloc(8);
+	strcpy(root_data,"imss://");
 	tree_root = g_node_new((void *) root_data);
 
 	//Address pointing to the end of the last metadata record.
@@ -279,7 +297,6 @@ imss_metadata(void * arg_)
 	uint64_t bytes_written;
 	
 	if ((offset = metadata_read(arg.metadata_file, &metadata_map, pt_met, &bytes_written)) == NULL)
-
 		pthread_exit(NULL);
 
 	//Obtain the remaining free amount of data reserved to the buffer after the metadata read operation.
@@ -288,10 +305,13 @@ imss_metadata(void * arg_)
 	//Buffer segment size assigned to each thread.
 	int64_t buffer_segment_ = data_reserved/THREAD_POOL;
 
+	
+
 	//Initialize pool of threads.
 	pthread_t threads[(THREAD_POOL+1)];
 	//Thread arguments.
 	p_argv arguments[(THREAD_POOL+1)];
+
 
 	//Execute all threads.
 	for (int32_t i = 0; i < (THREAD_POOL+1); i++)
@@ -314,8 +334,8 @@ imss_metadata(void * arg_)
 			//Add the reference to the map into the set of thread arguments.
 			arguments[i].map = &metadata_map;
 			//Specify the address used by each thread to write inside the buffer.
-			arguments[i].pt = (unsigned char *) ((i-1)*(buffer_segment_) + offset);
-
+			arguments[i].pt = 0;
+            //arguments[i].total_size = buffer_segment_;
 			//Throw thread with the corresponding function and arguments.
 			if (pthread_create(&threads[i], NULL, stat_worker, (void *) &arguments[i]) == -1)
 			{
@@ -337,7 +357,6 @@ imss_metadata(void * arg_)
 
 	//Save the current metadata information into a file.
 	if (metadata_write(arg.metadata_file, pt_met, &metadata_map, arguments, buffer_segment_, bytes_written) == -1)
-
 		pthread_exit(NULL);
 
 	//Freeing all resources of the tree structure.
@@ -543,3 +562,4 @@ hercules_release()
 
 	return 0;
 }
+

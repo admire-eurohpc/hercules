@@ -50,18 +50,26 @@ int32_t main(int32_t argc, char **argv)
 	char *   stat_add;
 	char *   metadata_file;
 	char *   deployfile;
-	int32_t  buffer_size, stat_port, num_servers;
+	int64_t  buffer_size, stat_port, num_servers;
 	void * 	 socket;
 
 	/***************************************************************/
 	/******************** PARSE INPUT ARGUMENTS ********************/
 	/***************************************************************/
-
+	for(int i=0;i<argc;i++){
+		printf("argv[%d]=%s\n",i,argv[i]);
+	}
+	printf("argc=%d\n",argc);
+	
 	//ARGV[2] = bind port number.
 	bind_port	= (uint16_t) atoi(argv[2]);
 	aux_bind_port	= bind_port;
 	//ARGV[3] = buffer size provided.
 	buffer_size	= atoi(argv[3]);
+
+    // Default setup for imss uri
+    imss_uri = (char *) malloc(32);
+    strcpy(imss_uri, "imss://");
 
 
 	//ZeroMQ context intialization.
@@ -118,7 +126,8 @@ int32_t main(int32_t argc, char **argv)
 
 			//Connection address.
 			char stat_address[LINE_LENGTH];
-			sprintf(stat_address, "%s%s%c%d%c", "tcp://", stat_add, ':', stat_port+1, '\0');
+			sprintf(stat_address, "%s%s%c%ld%c", "tcp://", stat_add, ':', stat_port+1, '\0');
+			printf("stat_address=%s\n",stat_address);
 			//Connect to the specified endpoint.
 			if (zmq_connect(socket, (const char *) stat_address) == -1)
 			{
@@ -154,7 +163,6 @@ int32_t main(int32_t argc, char **argv)
 		}
 
 		MPI_Bcast(&imss_exists, 1, MPI_INT, 0, MPI_COMM_WORLD);
-
 		if (imss_exists)
 		{
 			if (!rank)
@@ -192,8 +200,8 @@ int32_t main(int32_t argc, char **argv)
 		//strcpy(imss_uri, "stat\0");
 
 		//Create the tree_root node.
-		char * root_data = (char *) malloc(1);
-		root_data[0] = '/';
+		char * root_data = (char *) malloc(8);
+		strcpy(root_data,"imss://");
 		tree_root = g_node_new((void *) root_data);
 
 		if (pthread_mutex_init(&tree_mut, NULL) != 0)
@@ -225,7 +233,8 @@ int32_t main(int32_t argc, char **argv)
 
 
 	//Map tracking saved records.
-	map_records map;
+
+	map_records map(buffer_size*KB);
 
 	int64_t data_reserved;
 	//Pointer to the allocated buffer memory.
@@ -292,7 +301,8 @@ int32_t main(int32_t argc, char **argv)
 
 			//IMSS server.
 			if (argc == 9)
-			{
+			{	
+				printf("Cree un srv_worker server\n");
 				if (pthread_create(&threads[i], NULL, srv_worker, (void *) &arguments[i]) == -1)
 				{
 					//Notify thread error deployment.
@@ -303,6 +313,7 @@ int32_t main(int32_t argc, char **argv)
 			//Metadata server.
 			else
 			{
+				printf("Cree un stat_worker server\n");
 				if (pthread_create(&threads[i], NULL, stat_worker, (void *) &arguments[i]) == -1)
 				{
 					//Notify thread error deployment.

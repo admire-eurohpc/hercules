@@ -8,10 +8,15 @@
 #define RELEASE			2
 #define WHO			    3
 #define WRITE_OP		1
+#define DELETE_OP		4
+#define RENAME_OP		5
+#define RENAME_DIR_DIR_OP 6
+#define WRITEV 			7
+#define READV 			8
 
 #define GETDIR			1
 
-#define THREAD_POOL		2
+#define THREAD_POOL		4
 
 #define LOCAL_DATASET_UPDATE	0
 
@@ -30,11 +35,15 @@ typedef struct {
     //URI assigned to the current IMSS instance.
     char my_uri[URI_];
 
+	int64_t total_size;
 } p_argv;
 
 
 //Thread method attending client data requests.
 void * srv_worker (void * th_argv);
+
+//Thread method searching and cleaning nodes with st_nlink=0
+void * garbage_collector (void * th_argv);
 
 //Thread method attending client metadata requests.
 void * stat_worker (void * th_argv);

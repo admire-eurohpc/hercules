@@ -4,9 +4,12 @@
 #include <unistd.h>
 #include <string.h>
 #include <directory.h>
+#include <stdio.h>
+#include "records.hpp"
 
 //Pointer to the tree's root node.
 GNode * tree_root;
+GNode * last_parent=NULL;
 
 //Method searching for a certain data node.
 int32_t
@@ -25,25 +28,67 @@ GTree_search_(GNode * 	parent_node,
 	for (int32_t i = 0; i < num_children; i++)
 	{
 		//Search for a directory antecesor of the desired node.
-		if (!strncmp((char *) child->data, desired_data, strlen((char *) child->data)))
-		{
+
+		//HAVE TO CHECK IF IT IS A DIRECTORY OR A FILE
+		//For this i check if it has at the end /
+		
+		if(desired_data[strlen(desired_data)-1]=='/'&&!strncmp((char *) child->data, desired_data, strlen((char *) child->data))){
+			//Check if the compared node is the requested one.
+			int a = 1;
+			if (!strcmp((char *) child->data, desired_data))
+			{
+				*found_node = child;
+				
+				//The desired data was found.
+				return 1;
+			}
+			else{
+				//Check within the new node.
+				return GTree_search_(child, desired_data, found_node);
+			}
+		}else if(desired_data[strlen(desired_data)-1]!='/'&&!strncmp((char *) child->data, desired_data, strlen((char *) child->data))){
 			//Check if the compared node is the requested one.
 			if (!strcmp((char *) child->data, desired_data))
 			{
 				*found_node = child;
-
+					
 				//The desired data was found.
 				return 1;
 			}
-			else
+			else{
+				//SPECIAL CASE EXAMPLE PRUEBA_1 CREATED AND WANT TO ADD PRUEBA_11
+				//CHECK THE NUMBERS OF '/' IN THE PATHS TO SEE IF WE ARRIVE TO THE DIRECTORY
+				int amount = 0;
+				for (int32_t j = 0; j < strlen(desired_data)-1; j++)
+				{
+					if(desired_data[j]=='/'){
+						amount = amount + 1;
+					}
+				}
+				int amount_child = 0;
+				char * path_child = (char *)child->data;
+				for (int32_t j = 0; j < strlen(path_child)-1; j++)
+				{
+					if(path_child[j]=='/'){
+						amount_child = amount_child + 1;
+					}
+				}
+
+				if(amount==amount_child){
+					//Move on to the following child.
+					child = child->next;
+					continue;
+				}
+
 				//Check within the new node.
 				return GTree_search_(child, desired_data, found_node);
+			}
 		}
 
 		//Move on to the following child.
 		child = child->next;
 	}
-
+	last_parent = parent_node;
 	return 0;
 }
 
@@ -64,17 +109,133 @@ GTree_search(GNode * 	parent_node,
 	return GTree_search_(parent_node, desired_data, found_node);
 }
 
-//Method inserting a new path.
+//Method renaming a new path.
 int32_t
-GTree_insert(char * desired_data)
+GTree_rename(char * old_desired_data,char * new_desired_data)
 {
 	//Closest node to the one requested (or even the requested one itself).
 	GNode * closest_node;
 
 	//Check if the node has been already inserted.
-	if (GTree_search(tree_root, desired_data, &closest_node))
-
+	if (GTree_search(tree_root, old_desired_data, &closest_node)==1){
+		if(strcmp(old_desired_data,(char *)closest_node->data)==0){
+			g_node_destroy(closest_node);
+			GTree_insert(new_desired_data);
+		}
+		
+	}else{
+		//printf("Rename Error not found:%s\n",old_desired_data);
 		return 0;
+	}
+		
+	return 1;
+}
+
+//Method renaming dir to dir.
+int32_t
+GTree_rename_dir_dir(char * old_dir,char * rdir_dest)
+{	
+
+	//Node whose elements must be retrieved.
+	GNode * dir_node;
+	//Check if the node has been already inserted.
+	if (GTree_search(tree_root, old_dir, &dir_node)==1){
+	
+		uint32_t num_elements_indir = g_node_n_nodes (dir_node, G_TRAVERSE_ALL)-1;
+		uint32_t num_elements_indir_childrens = g_node_n_children (dir_node);
+		//printf("DIR_NUM_ELEMENTS=%d\n",num_elements_indir+1);
+		char * dir_elements = (char *) malloc((num_elements_indir+1)*URI_);
+		char * aux_dir_elem = dir_elements;
+		serialize_dir(dir_node,num_elements_indir_childrens,&aux_dir_elem);
+		
+		char * aux = dir_elements;
+		for(int i=0;i<num_elements_indir+1;i++){
+			
+			if(strstr(aux, old_dir) != NULL) {
+				char * path = aux;
+				
+				size_t len = strlen(old_dir);
+				if (len > 0) {
+					char *p = path;
+					while ((p = strstr(p, old_dir)) != NULL) {
+						memmove(p, p + len, strlen(p + len) + 1);
+					}
+				}
+				char * new_path = (char *) malloc(256); 
+				strcpy(new_path, rdir_dest);
+				strcat(new_path,"/");
+				strcat(new_path,path);
+	
+				GTree_insert(new_path);
+
+			}
+			aux += URI_;
+		}
+		g_node_destroy(dir_node);
+
+	}
+	return 0;
+}
+
+//Method deleting a new path.
+int32_t
+GTree_delete(char * desired_data)
+{
+	//Closest node to the one requested (or even the requested one itself).
+	GNode * closest_node;
+
+	//Check if the node has been already inserted.
+	if (GTree_search(tree_root, desired_data, &closest_node)==1){
+		if(strcmp(desired_data,(char *)closest_node->data)==0){
+			g_node_destroy(closest_node);//Delete Node
+		}
+		
+	}else{
+		return 0;
+	}
+
+		
+
+	return 1;
+}
+
+//Method inserting a new path.
+int32_t
+GTree_insert(char * desired_data)
+{
+	//Closest node to the one requested (or even the requested one itself).
+	GNode * closest_node=NULL;
+
+	
+	if(last_parent!=NULL){
+		
+		
+		char data_search[256] = {0};
+		if(desired_data[strlen(desired_data)-1]=='/'){
+			memcpy(data_search, desired_data,strlen(desired_data)-1);
+        }else{
+
+            memcpy(data_search, desired_data,strlen(desired_data));
+        }
+		char father[256] = {0};
+		char * lastson = strrchr(data_search, '/');
+		 int copy=(strlen(data_search)-strlen(lastson));
+
+
+		memcpy(father,&data_search[0],copy+1);
+ 
+		if(strncmp((char *) last_parent->data, father, strlen((char *) father))==0 && strlen((char*)last_parent->data)==strlen(father)){
+			closest_node = last_parent;
+		}
+	}
+	
+
+	//Check if the node has been already inserted.
+	if(closest_node==NULL){
+		if (GTree_search(tree_root, desired_data, &closest_node)){
+			return 0;
+		}
+	}
 
 	//Length of the found uri. An additional unit is added in order to avoid the first '/' encountered.
 	int32_t closest_data_length = strlen((char *) closest_node->data) + 1;
@@ -97,30 +258,31 @@ GTree_insert(char * desired_data)
 
 		if ((desired_data[new_position] == '/') || (i == (more_chars-1)))
 		{
-			if ((i == (more_chars-1)))
-
+			if (i == (more_chars-1))
 				new_position++;
 
+            //if (i == 0 && desired_data[new_position+1] == '/')
+       
 			//String that will be introduced as a new node.
-			char * new_data = (char *) malloc(new_position);
-			strncpy(new_data, desired_data, (new_position));
-
+			char * new_data = (char *) malloc(new_position+1);
+			strcpy(new_data, desired_data);
 			//New node to be introduced.
+			//printf("new_node=%s\n",new_data);
 			GNode * new_node = g_node_new((void *) new_data);
 
 			//Introduce it as a child of the closest one found.
 			g_node_append(closest_node, new_node);
 
-			closest_node = new_node;
+			//closest_node = new_node;
 		}
 	}
 
 	return 1;
 }
 
-//Method serializing the number of elements within a directory into a buffer.
+//Method serializing the number of childrens within a directory into a buffer.
 int32_t
-serialize_dir(GNode * 	visited_node,
+serialize_dir_childrens(GNode * 	visited_node,
 	      uint32_t 	num_children,
 	      char ** 	buffer)
 {
@@ -129,10 +291,46 @@ serialize_dir(GNode * 	visited_node,
 	*buffer += URI_;
 
 	GNode * child = visited_node->children;
-
+	//printf("node=%s  num_children=%d\n",(char *) visited_node->data,num_children);
 	for (int32_t i = 0; i < num_children; i++)
-	{
+	{ 
 		//Number of children of the current child node.
+		
+		//uint32_t num_grandchildren = g_node_n_children(child);
+
+		//If the child is a leaf one, just store the corresponding info.
+		/*if (!num_grandchildren)
+		{*/
+			//Add the child's uri to the buffer.
+			memcpy(*buffer, (char *) child->data, URI_);
+			*buffer += URI_;
+		/*}
+		else
+
+			serialize_dir(child, num_grandchildren, buffer);*/
+
+		child = child->next;
+	}
+
+	return 0;
+}
+
+//Method serializing the number of elements within a directory into a buffer.
+int32_t
+serialize_dir(GNode * 	visited_node,
+	      uint32_t 	num_nodes,
+	      char ** 	buffer)
+{
+	//Add the concerned uri into the buffer.
+	memcpy(*buffer, (char *) visited_node->data, URI_);
+	*buffer += URI_;
+
+	GNode * child = visited_node->children;
+	//printf("node=%s  num_nodes=%d\n",(char *) visited_node->data,num_nodes);
+	for (int32_t i = 0; i < num_nodes; i++)
+	{ 
+		//Number of children of the current child node.
+		
 		uint32_t num_grandchildren = g_node_n_children(child);
 
 		//If the child is a leaf one, just store the corresponding info.
@@ -142,10 +340,9 @@ serialize_dir(GNode * 	visited_node,
 			memcpy(*buffer, (char *) child->data, URI_);
 			*buffer += URI_;
 		}
-		else
-
+		else{
 			serialize_dir(child, num_grandchildren, buffer);
-
+		}
 		child = child->next;
 	}
 
@@ -170,19 +367,24 @@ GTree_getdir(char * 	desired_dir,
 		return NULL;
 
 	//Number of elements contained by the concerned directory.
-	uint32_t num_elements_indir = g_node_n_nodes (dir_node, G_TRAVERSE_ALL);
+	//uint32_t num_elements_indir = g_node_n_nodes (dir_node, G_TRAVERSE_ALL);
 
-	*numdir_elems = num_elements_indir;
+	//*numdir_elems = num_elements_indir;
 
-	//Buffer containing the whole set of elements within a certain directory.
-	char * dir_elements = (char *) malloc(sizeof(char)*num_elements_indir*URI_);
-	char * aux_dir_elem = dir_elements;
 
 	//Number of children of the directory node.
 	uint32_t num_children = g_node_n_children(dir_node);
+	*numdir_elems = num_children +1;//+1 because of the actual directory + childrens
+
+	//Buffer containing the whole set of elements within a certain directory.
+	//char * dir_elements = (char *) malloc(sizeof(char)*num_elements_indir*URI_);
+	char * dir_elements = (char *) malloc((num_children+1)*URI_);
+	char * aux_dir_elem = dir_elements;
+
+	
 
 	//Call the serialization function storing all dir elements in the buffer.
-	serialize_dir(dir_node, num_children, &aux_dir_elem);
+	serialize_dir_childrens(dir_node, num_children, &aux_dir_elem);
 
 	return dir_elements;
 }
@@ -197,3 +399,8 @@ gnodetraverse (GNode * 	node,
 	return 0;
 }
 
+
+
+
+
+	

@@ -17,18 +17,18 @@
 #define TIMEOUT_MS	10000
 
 //Replication factor assigned to each dataset in creation time.
-const int NONE = 1;
-const int DRM = 2;
-const int TRM = 3;
+#define NONE  1
+#define DRM  2
+#define TRM  3
 
 //Type of IMSS instance to be deployed.
-const int DETACHED	= 0;
-const int ATTACHED 	= 1;
+#define DETACHED	 0
+#define ATTACHED 	 1
 
 //IMSS release operation possibilities.
-const int DISCONNECT = 0;
-const int CLOSE_DETACHED = 1;
-const int CLOSE_ATTACHED = 2;
+#define DISCONNECT  0
+#define CLOSE_DETACHED  1
+#define CLOSE_ATTACHED  2
 
 
 
@@ -38,7 +38,7 @@ const int CLOSE_ATTACHED = 2;
 #define REQ_MSG		272
 #define KEY		512
 #define MONITOR		1
-#define ELEMENTS	1024
+#define ELEMENTS	5120
 #define IMSS		0
 #define DATASET		1
 
@@ -49,7 +49,7 @@ typedef struct {
 	//IMSS URI.
 	char uri_[URI_];
 	//Byte specifying the type of structure.
-	char type = 'I';
+	char type;// = 'I';
 	//Set of ips comforming the IMSS.
 	char ** ips;
 	//Number of IMSS servers.
@@ -84,7 +84,7 @@ typedef struct {
 	//URI identifying a certain dataset.
 	char uri_[URI_];
 	//Byte specifying the type of structure.
-	char type = 'D';
+	char type;// = 'D';
 	//Policy that was followed in order to write the dataset.
 	char policy[8];
 	//Number of data elements conforming the dataset entity.
@@ -97,6 +97,8 @@ typedef struct {
 	int32_t imss_d;
 	//Connection to the IMSS server running in the same machine.
 	int32_t local_conn;
+	//Actual size
+	int64_t size;
 
 
 	/*************** USED EXCLUSIVELY BY LOCAL DATASETS ***************/
@@ -111,9 +113,9 @@ typedef struct {
 
 } dataset_info;
 
-
-
-
+#ifndef FUSE
+extern "C" {
+#endif
 /****************************************************************************************************************************/
 /****************************************** METADATA SERVICE MANAGEMENT FUNCTIONS  ******************************************/
 
@@ -171,7 +173,7 @@ uint32_t get_dir(char * requested_uri, char ** buffer, char *** items);
 	RETURNS:	 0 - Initialization procedure was successfully performed.
 			-1 - In case of error.
 */
-int32_t init_imss(char * imss_uri, char * hostfile, int32_t n_servers, uint16_t conn_port, uint64_t buff_size, uint32_t deployment, char * binary_path);
+int32_t init_imss(char * imss_uri, char * hostfile, char * meta_hostfile, int32_t n_servers, uint16_t conn_port, uint64_t buff_size, uint32_t deployment, char * binary_path, uint16_t meta_port);
 
 /* Method initializing the required resources to make use of an existing IMSS.
 
@@ -245,12 +247,11 @@ char * get_deployed();
 
                 free(deployment);
 */
-char * get_deployed(char * endpoint);
+char * get_deployed_(char * endpoint);
 
 
 /****************************************************************************************************************************/
 /*********************************************** DATASET MANAGEMENT FUNCTIONS ***********************************************/
-
 
 /* Method creating a dataset and the environment enabling READ and WRITE operations over it.
 
@@ -273,6 +274,48 @@ int32_t create_dataset(char * dataset_uri, char * policy, int32_t num_data_elem,
 			 -1 - In case of error.
 */
 int32_t open_dataset(char * dataset_uri);
+
+
+/*Method deleting a dataset.
+
+	RETURNS:	 0 - Release operation took place successfully.
+				-1 - In case of error.*/
+int32_t delete_dataset(const char * dataset_uri);
+
+/*Method writev various datasets.
+
+	RETURNS:	 0 - Release operation took place successfully.
+				-1 - In case of error.*/
+int32_t writev_multiple(const char * buf, int32_t dataset_id,int64_t data_id,
+ int64_t end_blk, int64_t start_offset, int64_t end_offset, int64_t IMSS_DATA_BSIZE, int64_t size);
+
+/*Method renaming a dataset in metadata.
+
+	RETURNS:	 0 - Release operation took place successfully.
+				-1 - In case of error.*/
+int32_t rename_dataset_metadata_dir_dir(char * old_dir, char * rdir_dest);
+
+
+/*Method renaming a dataset in metadata.
+
+	RETURNS:	 0 - Release operation took place successfully.
+				-1 - In case of error.*/
+int32_t rename_dataset_metadata(char * old_dataset_uri, char * new_dataset_uri);
+
+/*Method renaming a dataset in srv_worker.
+
+	RETURNS:	 0 - Release operation took place successfully.
+				-1 - In case of error.*/
+int32_t rename_dataset_srv_worker_dir_dir(char * old_dir, char * rdir_dest,int32_t 	 dataset_id,
+	 int32_t 	 data_id);
+
+/*Method renaming a dataset in srv_worker.
+
+	RETURNS:	 0 - Release operation took place successfully.
+				-1 - In case of error.*/
+int32_t rename_dataset_srv_worker(char * old_dataset_uri, char * new_dataset_uri,int32_t 	 dataset_id,
+	 int32_t 	 data_id);
+
 
 /* Method releasing the set of resources required to deal with a dataset.
 
@@ -311,6 +354,16 @@ int32_t stat_dataset(const char * dataset_uri, dataset_info * dataset_info_);
 /****************************************************************************************************************************/
 /********************************************* DATA OBJECT MANAGEMENT FUNCTIONS *********************************************/
 
+
+//Method retrieving a multiple datasets
+int32_t
+readv_multiple(int32_t 	 dataset_id,
+	int32_t 	 curr_block,
+	 int32_t 	 prefetch,
+	 unsigned char * buffer,
+	  uint64_t 	 BLOCKSIZE,
+	  int64_t    start_offset,
+	  int64_t	size);
 
 /* Method retrieving a data element associated to a certain dataset.
 
@@ -359,6 +412,13 @@ int32_t set_data(int32_t dataset_id, int32_t data_id, unsigned char * buffer);
 
 				free(locations);
 */
+
+int32_t
+set_ndata(int32_t 	 dataset_id,
+	 int32_t 	 data_id,
+	 unsigned char * buffer,
+	 uint32_t size);
+
 char ** get_dataloc(const char * dataset, int32_t data_id, int32_t * num_storages);
 
 /* Method specifying the type (DATASET or IMSS INSTANCE) of a provided URI.
@@ -396,5 +456,8 @@ int32_t free_imss(imss_info * imss_info_);
 */
 int32_t free_dataset(dataset_info * dataset_info_);
 
+#ifndef FUSE
+}
+#endif
 
 #endif
