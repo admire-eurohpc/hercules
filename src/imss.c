@@ -2362,7 +2362,7 @@ get_type(char * uri)
 
 	//Discover the metadata server that handles the entity.
 	uint32_t m_srv = discover_stat_srv(uri);
-
+	//printf("get_type=%s\n",uri);
 	//Send the request.
 	if (comm_send(stat_client[m_srv], formated_uri, formated_uri_length, 0) != formated_uri_length)
 	{

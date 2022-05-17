@@ -787,6 +787,7 @@ stat_worker (void * th_argv)
 		//Information associated to the arriving key.
 		unsigned char * address_;
 		uint64_t block_size_rtvd;
+		//printf("stat_worker RECV more=%ld, blocksss=%ld\n",more, block_size_recv);
 		//Differentiate between READ and WRITE operations. 
 		switch (more)
 		{
@@ -807,7 +808,6 @@ stat_worker (void * th_argv)
 						char * buffer;
 						int32_t numelems_indir;
 						zmq_msg_t msg;
-
 						//Retrieve all elements inside the requested directory.
 						pthread_mutex_lock(&tree_mut);
 						buffer = GTree_getdir((char *) key.c_str(), &numelems_indir);
@@ -822,7 +822,6 @@ stat_worker (void * th_argv)
 							
 							break;
 						}
-
 						zmq_msg_init_size (&msg,  (numelems_indir*URI_));
 						memcpy(zmq_msg_data(&msg), buffer, (numelems_indir*URI_));
 
@@ -838,6 +837,7 @@ stat_worker (void * th_argv)
 					}
 					case READ_OP:
 					{
+						//printf("STAT_WORKER READ-OP\n");
 						//Check if there was an associated block to the key.
 						if (!(map->get(key, &address_, &block_size_rtvd)))
 						{
@@ -850,7 +850,7 @@ stat_worker (void * th_argv)
 						}
 						else
 						{
-							//imss_info * data = (imss_info *) address_;
+							imss_info * data = (imss_info *) address_;
 							//printf("READ_OP SEND data->type=%c\n",data->type);
 							//Send the requested block.
 							if (comm_send(socket, address_, block_size_rtvd, 0) < 0)
@@ -970,6 +970,8 @@ stat_worker (void * th_argv)
 
 					int32_t insert_successful;
 					//Include the new record in the tracking structure.
+					/*imss_info * data = (imss_info *) buffer;
+					printf("WRITE_OP data->type=%c\n",data->type);*/
 					insert_successful=map->put(key, buffer, block_size_recv);
 					if (insert_successful != 0)
 					{

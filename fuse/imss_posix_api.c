@@ -135,7 +135,6 @@ int imss_getattr(const char *path, struct stat *stbuf)
 
 	bzero(imss_path, MAX_PATH);
 	get_iuri(path, imss_path);
-
 	memset(stbuf, 0, sizeof(struct stat));
 	clock_gettime(CLOCK_REALTIME, &spec);
 

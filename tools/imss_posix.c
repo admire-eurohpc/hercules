@@ -314,10 +314,12 @@ int __xstat(int fd, const char *pathname, struct stat *buf)
         char * new_path; 
         new_path = convert_path(pathname, MOUNT_POINT);
         int exist = map_fd_search(map_fd, pathname, &ret, &p);
+        int ret = imss_getattr(new_path, buf);
         return imss_getattr(new_path, buf);
     }else{
         return real_xstat(fd,pathname, buf);
     }
+    
   return 0;
 }
 /*

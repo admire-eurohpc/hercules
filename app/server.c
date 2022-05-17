@@ -334,7 +334,7 @@ int32_t main(int32_t argc, char **argv)
 		my_imss.ips = (char **) malloc(num_servers*sizeof(char *));
 		my_imss.num_storages 	= num_servers;
 		my_imss.conn_port	= aux_bind_port;
-
+		my_imss.type	= 'I';//extremely important
 		//FILE entity managing the IMSS deployfile.
 		FILE * svr_nodes;
 
