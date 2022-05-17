@@ -6,7 +6,8 @@ add_library(imss_posix_api STATIC imss_posix_api.c map.cpp mapprefetch.cpp)
 add_executable(imssfs
     map.cpp
     imssfs.c
-	imss_posix_api.c
+    imss_posix_api.c
+    imss_fuse_api.c
     mapprefetch.cpp
     )
 

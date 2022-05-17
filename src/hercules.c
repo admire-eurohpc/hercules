@@ -12,7 +12,7 @@
 #include "hercules.h"
 #include "directory.h"
 #include "records.hpp"
-
+#include "comms.h"
 
 
 /***************************************************************************
@@ -386,9 +386,7 @@ hercules_init(uint32_t rank,
 {
 	//Save the total number of bytes that were assigned to the backend storage.
 	backend_buffer_size = backend_strg_size;
-
 	connection_port = server_port_num; //FIXME
-
 	//ZeroMQ context intialization.
 	if ((context = zmq_ctx_new()) == NULL)
 	{
@@ -402,23 +400,20 @@ hercules_init(uint32_t rank,
 		perror("ERRHERCULES_PUBSOCK_CREATE");
 		return -1;
 	}
-
 	pub_dir = (char *) malloc(32*sizeof(char));
 	sprintf(pub_dir, "inproc://hercules_comms-%d", rank);
 
-	if (zmq_bind(pub, pub_dir) == -1)
+	if ( comm_bind(pub, pub_dir) == -1)
 	{
 		perror("ERRHERCULES_PUBSOCK_BIND");
 		return -1;
 	}
-
 	//Initialize communication resources.
 	if (pthread_mutex_init(&comms_mut, NULL) != 0)
 	{
 		perror("ERRHERCULES_MUT_INIT");
 		return -1;
 	}
-
 	if (pthread_cond_init(&comms_cond, NULL) != 0)
 	{
 		perror("ERRHERCULES_COND_INIT");
@@ -443,9 +438,7 @@ hercules_init(uint32_t rank,
 		perror("ERRHERCULES_SRVTH_CREATE");
 		return -1;
 	}
-
 	//Wait until the thread copies the provided arguments.
-
 	pthread_mutex_lock(&comms_mut);
 
 	while (not_copied)
@@ -477,7 +470,6 @@ hercules_init(uint32_t rank,
 			perror("HERCULES_METATH_CREATE");
 			return -1;
 		}
-
 		//Wait until the thread copies the provided arguments.
 
 		pthread_mutex_lock(&comms_mut);
@@ -501,7 +493,6 @@ hercules_init(uint32_t rank,
 		perror("ERRHERCULES_COND_DESTROY");
 		return -1;
 	}
-
 	return 0;
 }
 
@@ -514,7 +505,7 @@ hercules_release()
 	zmq_msg_init_size(&release_rsc, 8);
 	memcpy(zmq_msg_data(&release_rsc), "RELEASE\0", 8);
 
-	if (zmq_msg_send(&release_rsc, pub, 0) == -1)
+	if ( comm_msg_send(&release_rsc, pub, 0)== -1)
 	{
 		perror("ERRHERCULES_PUBLISH_RELEASEMSG");
 		return -1;
@@ -536,7 +527,7 @@ hercules_release()
 		return -1;
 	}
 
-	zmq_msg_close(&release_rsc);
+	comm_msg_close(&release_rsc);
 
 	//Close publisher socket.
 	if (zmq_close(pub) == -1)

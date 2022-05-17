@@ -16,7 +16,7 @@
 
 #define GETDIR			1
 
-#define THREAD_POOL		4
+#define THREAD_POOL		3
 
 #define LOCAL_DATASET_UPDATE	0
 

@@ -56,10 +56,10 @@ int32_t main(int32_t argc, char **argv)
 	/***************************************************************/
 	/******************** PARSE INPUT ARGUMENTS ********************/
 	/***************************************************************/
-	for(int i=0;i<argc;i++){
+	/*for(int i=0;i<argc;i++){
 		printf("argv[%d]=%s\n",i,argv[i]);
 	}
-	printf("argc=%d\n",argc);
+	printf("argc=%d\n",argc);*/
 	
 	//ARGV[2] = bind port number.
 	bind_port	= (uint16_t) atoi(argv[2]);
@@ -118,7 +118,7 @@ int32_t main(int32_t argc, char **argv)
 
 			int32_t identity = -1;
 			//Set communication id.
-			if (zmq_setsockopt(socket, ZMQ_IDENTITY, &identity, sizeof(int32_t)) == -1)
+			if (comm_setsockopt(socket, ZMQ_IDENTITY, &identity, sizeof(int32_t)) == -1)
 			{
 				perror("ERRIMSS_SRV_SETIDENT");
 				return -1;
@@ -127,6 +127,7 @@ int32_t main(int32_t argc, char **argv)
 			//Connection address.
 			char stat_address[LINE_LENGTH];
 			sprintf(stat_address, "%s%s%c%ld%c", "tcp://", stat_add, ':', stat_port+1, '\0');
+			//sprintf(stat_address, "%s%s%c%ld%c", "inproc://", stat_add, ':', stat_port+1, '\0');
 			printf("stat_address=%s\n",stat_address);
 			//Connect to the specified endpoint.
 			if (zmq_connect(socket, (const char *) stat_address) == -1)
@@ -141,7 +142,7 @@ int32_t main(int32_t argc, char **argv)
 			size_t formated_uri_length = strlen(formated_uri);
 
 			//Send the request.
-			if (zmq_send(socket, formated_uri, formated_uri_length, 0)  != formated_uri_length)
+			if (comm_send(socket, formated_uri, formated_uri_length, 0)  != formated_uri_length)
 			{
 				perror("ERRIMSS_DATASET_REQ");
 				return -1;
@@ -225,12 +226,11 @@ int32_t main(int32_t argc, char **argv)
 		return -1;
 	}
 	//Bind the previous pub socket for inprocess communications.
-	if (zmq_bind(pub, pub_dir) == -1)
+	if (comm_bind(pub, pub_dir) == -1)
 	{
 		perror("ERRIMSS_PUBSOCK_BIND");
 		return -1;
 	}
-
 
 	//Map tracking saved records.
 
@@ -371,7 +371,7 @@ int32_t main(int32_t argc, char **argv)
 		//Send the created structure to the metadata server.
 		sprintf(key_plus_size, "%lu %s", (sizeof(imss_info)+my_imss.num_storages*LINE_LENGTH), my_imss.uri_);
 
-		if (zmq_send(socket, key_plus_size, KEY+16, ZMQ_SNDMORE) != (KEY+16))
+		if (comm_send(socket, key_plus_size, KEY+16, ZMQ_SNDMORE) != (KEY+16))
 		{
 			perror("ERRIMSS_SRV_SENDKEY");
 			return -1;

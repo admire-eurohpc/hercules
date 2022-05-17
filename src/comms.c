@@ -3,6 +3,7 @@
 #include "zmq.h"
 #include "imss.h"
 #include "comms.h"
+#include <errno.h>
 
 //Free function provided to zmq_msg_init_data in order to free the buffer once sent.
 void free_msg (void * data, void * hint) {free(data);}
@@ -99,13 +100,11 @@ send_dynamic_struct(void *  socket,
 	zmq_msg_t buffer_msg;
 
 	zmq_msg_init_data(&buffer_msg, info_buffer, msg_size, free_msg, NULL);
-
-	if (zmq_msg_send (&buffer_msg, socket, 0) != msg_size)
+	if (comm_msg_send (&buffer_msg, socket, 0) != msg_size)
 	{
 		perror("ERRIMSS_SENDDYNAMSTRUCT");
 		return -1;
 	}
-
 	zmq_msg_close(&buffer_msg);
 
 	return 0;
@@ -127,7 +126,7 @@ recv_dynamic_struct(void *  socket,
 		return -1;
 	}
 
-	if (zmq_msg_recv(&msg_struct, socket, 0) == -1)
+	if (comm_msg_recv(&msg_struct, socket, 0) == -1)
 	{
 		perror("ERRIMSS_RECVDYNAMSTRUCT_RECV");
 		return -1;
@@ -178,7 +177,6 @@ recv_dynamic_struct(void *  socket,
 			dataset_info * struct_ = (dataset_info *) data_struct;
 
 			//Copy the actual structure into the one provided through reference.
-
 			memcpy(struct_, msg_data, sizeof(dataset_info));
 
 			if (!strncmp("$ERRIMSS_NO_KEY_AVAIL$", struct_->uri_, 22))
@@ -207,4 +205,159 @@ recv_dynamic_struct(void *  socket,
 	zmq_msg_close(&msg_struct);
 
 	return 1;
+}
+
+
+//Method zmq_comm_msg_recv printing error if there is
+int comm_msg_recv (zmq_msg_t *msg, void *socket, int flags)
+{
+	int ret = zmq_msg_recv (msg, socket, flags);
+	if(ret <0){
+		perror("FAIL ZMQ_MSG_RECV");
+	}
+	if(errno=EAGAIN){
+		errno=0;
+	}
+	return ret;
+}
+
+//Method zmq_comm_recv printing error if there is
+int comm_recv (void *socket, void *buf, size_t len, int flags)
+{
+
+	int ret = zmq_recv (socket, buf, len, flags);
+	if(ret <0){
+		perror("FAIL ZMQ__RECV");
+	}
+	if(errno=EAGAIN){
+		errno=0;
+	}
+	return ret;
+}
+
+//Method zmq_comm_msg_send printing error if there is
+int comm_msg_send (zmq_msg_t *msg, void *socket, int flags)
+{
+	int ret = zmq_msg_send (msg, socket, flags);
+	if(ret <0){
+		perror("FAIL ZMQ_MSG_SEND");
+	}
+	if(errno=EAGAIN){
+		errno=0;
+	}
+	return ret;
+}
+
+//Method zmq_comm_send printing error if there is
+int comm_send (void *socket, void *buf, size_t len, int flags)
+{
+	int ret = zmq_send (socket, buf, len, flags);
+	if(ret <0){
+		perror("FAIL ZMQ_SEND");
+	}
+	if(errno=EAGAIN){
+		errno=0;
+	}
+	return ret;
+}
+
+//Method zmq_setsockopt printing error if there is
+int comm_setsockopt (void *socket, int option_name, const void *option_value, size_t option_len){
+	int ret = zmq_setsockopt (socket, option_name, option_value, option_len);
+	if(ret <0){
+		perror("FAIL ZMQ_SETSOCKOPT");
+	}
+	if(errno=EAGAIN){
+		errno=0;
+	}
+	return ret;
+}
+
+//Method zmq_bind printing error if there is
+int comm_bind (void *socket, const char *endpoint){
+	int ret = zmq_bind (socket, endpoint);
+	if(ret <0){
+		perror("FAIL ZMQ_BIND");
+	}
+	if(errno=EAGAIN){
+		errno=0;
+	}
+	return ret;
+}
+
+int comm_getsockopt (void *socket, int option_name, void *option_value, size_t *option_len){
+	int ret = zmq_getsockopt (socket, option_name, option_value, option_len);
+	if(ret <0){
+		perror("FAIL ZMQ_GETSOCKET");
+	}
+	if(errno=EAGAIN){
+		errno=0;
+	}
+	return ret;
+}
+
+int comm_msg_close (zmq_msg_t *msg){
+	int ret = zmq_msg_close (msg);
+	if(ret <0){
+		perror("FAIL ZMQ_MSG_CLOSE");
+	}
+	if(errno=EAGAIN){
+		errno=0;
+	}
+	return ret;
+}
+
+int comm_close (void *socket){
+	int ret = zmq_close (socket);
+	if(ret <0){
+		perror("FAIL ZMQ_CLOSE");
+	}
+	if(errno=EAGAIN){
+		errno=0;
+	}
+	return ret;
+}
+
+int comm_msg_init (zmq_msg_t *msg){
+	int ret = zmq_msg_init (msg);
+	if(ret <0){
+		perror("FAIL ZMQ_MSG_INIT");
+	}
+	if(errno=EAGAIN){
+		errno=0;
+	}
+	return ret;
+}
+
+int comm_connect (void *socket, const char *endpoint){
+	int ret = zmq_connect (socket, endpoint);
+	if(ret <0){
+		perror("FAIL ZMQ_CONNECT");
+	}
+	if(errno=EAGAIN){
+		errno=0;
+	}
+	return ret;
+}
+
+int comm_ctx_set (void *context, int option_name, int option_value){
+	int ret = zmq_ctx_set (context, option_name, option_value);
+	if(ret <0){
+		perror("FAIL ZMQ_CTX_SET");
+	}
+	if(errno=EAGAIN){
+		errno=0;
+	}
+	return ret;
+}
+
+int comm_msg_init_data (zmq_msg_t *msg, void *data, size_t size, zmq_free_fn *ffn, void *hint){
+	int ret = zmq_msg_init_data (msg, data, size, ffn, hint);
+	if(ret <0){
+		perror("FAIL ZMQ_MSG_INIT_DATA");
+	}
+	if(errno=EAGAIN){
+		errno=0;
+	}
+	return ret;
 }

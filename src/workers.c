@@ -10,6 +10,7 @@
 #include "workers.h"
 #include "directory.h"
 #include "records.hpp"
+#include <sys/time.h>
 
 #define GARBAGE_COLLECTOR_PERIOD 120
 
@@ -60,28 +61,29 @@ server_conn(void ** router,
 		return -1;
 	}
 	//Set a receive timeout of 5 ms so as to perform a check iteration once in a while.
-	int32_t rcvtimeo = 5;
-	if (zmq_setsockopt(*router, ZMQ_RCVTIMEO, &rcvtimeo, sizeof(int32_t)) == -1)
+	//int32_t rcvtimeo = 5;
+	int32_t rcvtimeo = -1;
+	if (comm_setsockopt(*router, ZMQ_RCVTIMEO, &rcvtimeo, sizeof(int32_t)) == -1)
 	{
 		perror("ERRIMSS_THREAD_RCVTIMEO");
 		return -1;
 	}
 	printf("WORKER BINDED to: %s\n", (const char *) router_endpoint);
 	//Connect the router socket to a certain endpoint.
-	if (zmq_bind(*router, (const char *) router_endpoint) == -1)
+	if (comm_bind(*router, (const char *) router_endpoint) == -1)
 	{
 		perror("ERRIMSS_THREAD_ROUTERBIND");
 		return -1;
 	}
 	uint32_t hwm = 0;
 	//Unset the limit in the number of messages to be queued in the socket receive queue.
-	if (zmq_setsockopt(*router, ZMQ_RCVHWM, &hwm, sizeof(int32_t)) == -1)
+	if (comm_setsockopt(*router, ZMQ_RCVHWM, &hwm, sizeof(int32_t)) == -1)
 	{
 		perror("ERRIMSS_THREAD_SETRCVHWM");
 		return -1;
 	}
 	//Unset the limit in the number of messages to be queued in the socket send queue.
-	if (zmq_setsockopt(*router, ZMQ_SNDHWM, &hwm, sizeof(int32_t)) == -1)
+	if (comm_setsockopt(*router, ZMQ_SNDHWM, &hwm, sizeof(int32_t)) == -1)
 	{
 		perror("ERRIMSS_THREAD_SETSNDHWM");
 		return -1;
@@ -100,7 +102,7 @@ server_conn(void ** router,
 		return -1;
 	}
 	//Subscribe to all incomming topics.
-	if (zmq_setsockopt (*subscriber, ZMQ_SUBSCRIBE, "", 0) == -1)
+	if (comm_setsockopt (*subscriber, ZMQ_SUBSCRIBE, "", 0) == -1)
 	{
 		perror("ERRIMSS_THREAD_SUBSCRIBE");
 		return -1;
@@ -128,7 +130,7 @@ srv_worker (void * th_argv)
 	//Format socket endpoint.
 	char endpoint[24];
 	sprintf(endpoint, "%s%d", "tcp://*:", arguments->port);
-
+	//sprintf(endpoint, "%s%d", "inproc://kk-",arguments->port);
 	//Communication sockets.
 	void * socket;
 	void * sub;
@@ -155,15 +157,14 @@ srv_worker (void * th_argv)
 		zmq_msg_init (&client_req);
 
 		//Save the identity of the requesting client.
-		zmq_msg_recv(&client_id, socket, 0);
-
+		comm_msg_recv(&client_id, socket, 0);
 		//Check if a timeout was triggered in the previous receive operation.
 		if ((errno == EAGAIN) && !zmq_msg_size(&client_id))
 		{
 			zmq_msg_init (&release);
 
 			//If something was published, close sockets and exit.
-			if (zmq_msg_recv(&release, sub, ZMQ_DONTWAIT) > 0)
+			if (comm_msg_recv(&release, sub, ZMQ_DONTWAIT) > 0)
 			{
 				if (zmq_close(socket) == -1)
 				{
@@ -177,9 +178,9 @@ srv_worker (void * th_argv)
 					pthread_exit(NULL);
 				}
 
-				zmq_msg_close(&client_id);
-				zmq_msg_close(&client_req);
-				zmq_msg_close(&release);
+				comm_msg_close(&client_id);
+				comm_msg_close(&client_req);
+				comm_msg_close(&release);
 
 				if (pthread_mutex_destroy(&region_locks[(arguments->port)%THREAD_POOL]) != 0)
 				{
@@ -195,9 +196,8 @@ srv_worker (void * th_argv)
 
 			continue;
 		}
-
 		//Save the request to be served.
-		zmq_msg_recv(&client_req, socket, 0);
+		comm_msg_recv(&client_req, socket, 0);
 
 		//Determine if more messages are comming.
 		if ((zmq_getsockopt(socket, ZMQ_RCVMORE, &more, &more_size)) == -1)
@@ -235,7 +235,7 @@ srv_worker (void * th_argv)
 			case READ_OP:
 			{
 				//Specify client to be answered.
-				if (zmq_send(socket, (int *) zmq_msg_data(&client_id), sizeof(int), ZMQ_SNDMORE) < 0)
+				if (comm_send(socket, (int *) zmq_msg_data(&client_id), sizeof(int), ZMQ_SNDMORE) < 0)
 				{
 					perror("ERRIMSS_WORKER_SENDCLIENTID");
 					pthread_exit(NULL);
@@ -245,13 +245,16 @@ srv_worker (void * th_argv)
 				{
 					case READ_OP:
 					{
+						//printf("SRV_WORKER READ_OP\n");
+
+
 						//Check if there was an associated block to the key.
 						if (!(map->get(key, &address_, &block_size_rtvd)))
 						{
 							//printf("ERROR2: %s (%ld)\n", key.c_str(), block_size_recv);
 							
 							//Send the error code block.
-							if (zmq_send(socket, err_code, strlen(err_code), 0) < 0)
+							if (comm_send(socket, err_code, strlen(err_code), 0) < 0)
 							{
 								perror("ERRIMSS_WORKER_SENDERR");
 								pthread_exit(NULL);
@@ -265,7 +268,7 @@ srv_worker (void * th_argv)
 							pthread_mutex_lock(&region_locks[lock]);*/
 
 							//Send the requested block.
-							if (zmq_send(socket, address_, block_size_rtvd, 0) < 0)
+							if (comm_send(socket, address_, block_size_rtvd, 0) < 0)
 							{
 								perror("ERRIMSS_WORKER_SENDBLOCK");
 								pthread_exit(NULL);
@@ -282,7 +285,7 @@ srv_worker (void * th_argv)
 						//Publish RELEASE message to all threads.
 						char release_msg[] = "RELEASE\0";
 
-						if (zmq_send(pub, release_msg, strlen(release_msg), 0) < 0)
+						if (comm_send(pub, release_msg, strlen(release_msg), 0) < 0)
 						{
 							perror("ERRIMSS_PUBLISH_RELEASEMSG");
 							pthread_exit(NULL);
@@ -311,7 +314,7 @@ srv_worker (void * th_argv)
 
 						char release_msg[] = "RENAME\0";
 
-						if (zmq_send(socket, release_msg, strlen(release_msg), 0) < 0)
+						if (comm_send(socket, release_msg, strlen(release_msg), 0) < 0)
 						{
 							perror("ERRIMSS_PUBLISH_RENAMEMSG");
 							pthread_exit(NULL);
@@ -335,7 +338,7 @@ srv_worker (void * th_argv)
 
 						char release_msg[] = "RENAME\0";
 
-						if (zmq_send(socket, release_msg, strlen(release_msg), 0) < 0)
+						if (comm_send(socket, release_msg, strlen(release_msg), 0) < 0)
 						{
 							perror("ERRIMSS_PUBLISH_RENAMEMSG");
 							pthread_exit(NULL);
@@ -344,14 +347,12 @@ srv_worker (void * th_argv)
 					}
 					case READV:
 					{
-						//printf("READV\n");
-						//std::cout <<"key:" << key << '\n';
+						//printf("READV CASE\n");
 						std::size_t found = key.find('$');
 						string path;
 						if (found!=std::string::npos){
 							path = key.substr(0,found+1);
 							//std::cout <<"path:" << path << '\n';
-							
 							key.erase(0,found+1);
 							std::size_t found = key.find(' ');
 							int curr_blk = stoi(key.substr(0,found));
@@ -373,11 +374,6 @@ srv_worker (void * th_argv)
 							int64_t size = stoi(key.substr(0,found));
 							key.erase(0,found+1);
 
-							/*std::cout <<"curr_blk:" << curr_blk << '\n';
-							std::cout <<"end_blk:" << end_blk << '\n';
-							std::cout <<"blocksize:" << blocksize << '\n';
-							std::cout <<"start_offset:" << start_offset << '\n';
-							std::cout <<"size:" << size << '\n';*/
 
 							//Needed variables
 							size_t byte_count = 0;
@@ -390,10 +386,11 @@ srv_worker (void * th_argv)
 							int pos = path.find('$');
 							std::string first_element = path.substr(0,pos+1);
 							first_element = first_element + std::to_string(0);
+							//printf("first_element=%s\n",first_element.c_str());
 							map->get(first_element, &address_, &block_size_rtvd);
 							struct stat * stats = (struct stat *) address_;
-
 							unsigned char * buf = (unsigned char *)malloc(size);
+
 							while(curr_blk <= end_blk){
 									string element = path;
 									element = element + std::to_string(curr_blk);
@@ -402,7 +399,7 @@ srv_worker (void * th_argv)
 									{//If dont exist 
 										//Send the error code block.
 										//std::cout <<"READV NO EXISTE element:" << element << '\n';
-										if (zmq_send(socket, err_code, strlen(err_code), 0) < 0)
+										if (comm_send(socket, err_code, strlen(err_code), 0) < 0)
 										{
 											perror("ERRIMSS_WORKER_SENDERR");
 											pthread_exit(NULL);
@@ -420,15 +417,12 @@ srv_worker (void * th_argv)
 												to_read = stats->st_size - start_offset;
 											}else{
 												to_read = blocksize*KB - start_offset;
-											}																
-											
-											
+											}																	
 										}
 
 											//Check if offset is bigger than filled, return 0 because is EOF case
 											if(start_offset > stats->st_size) 
 												return 0; 
-
 											memcpy(buf, address_ + start_offset, to_read);
 											byte_count += to_read;
 											++first;
@@ -450,7 +444,7 @@ srv_worker (void * th_argv)
 								++curr_blk;
 								}
 								//Send the requested block.
-								if (zmq_send(socket, buf, size, 0) < 0)
+								if (comm_send(socket, buf, size, 0) < 0)
 								{
 									perror("ERRIMSS_WORKER_SENDBLOCK");
 									pthread_exit(NULL);
@@ -463,7 +457,7 @@ srv_worker (void * th_argv)
                     case WHO:
                     {
                         //Provide the uri of this instance.
-                        if (zmq_send(socket, arguments->my_uri, strlen(arguments->my_uri), 0) < 0)
+                        if (comm_send(socket, arguments->my_uri, strlen(arguments->my_uri), 0) < 0)
 						{
 							perror("ERRIMSS_WHOREQUEST");
 							pthread_exit(NULL);
@@ -482,8 +476,8 @@ srv_worker (void * th_argv)
 			//More messages will arrive to the socket.
 			case WRITE_OP:
 			{
-				//std::cout <<"key:" << key << '\n';
-
+				//printf("WRITE_OP key=%s\n",key.c_str());
+				//std::cout <<"WRITE_OP key:" << key << '\n';
 				std::size_t found = key.find(' ');
 				if (found!=std::string::npos){
 					
@@ -520,11 +514,10 @@ srv_worker (void * th_argv)
 						std::cout <<"end_offset:" << end_offset << '\n';
 						std::cout <<"IMSS_DATA_BSIZE:" << IMSS_DATA_BSIZE << '\n';
 						std::cout <<"size:" << size << '\n';*/
-
 						unsigned char * buf = (unsigned char *)malloc(size);
 						//Receive all blocks into the buffer.
-						zmq_recv(socket, buf, size, 0);
-						
+						comm_recv(socket, buf, size, 0);
+						//printf("WRITEV-buffer=%s\n",buf);
 						int pos = path.find('$');
 						std::string first_element = path.substr(0,pos+1);
 						first_element = first_element + "0";
@@ -532,7 +525,6 @@ srv_worker (void * th_argv)
 						//imss_info * data = (imss_info *) address_;
 						//printf("READ_OP SEND data->type=%c\n",data->type);
 						struct stat * stats = (struct stat *) address_;
-						//printf("READ_OP SEND stats.st_size=%ld\n",stats->st_size);
 
 						//Needed variables
 						size_t byte_count = 0;
@@ -618,12 +610,12 @@ srv_worker (void * th_argv)
 					if (!map->get(key, &address_, &block_size_rtvd))
 					{
 						
-						
 						//unsigned char * buffer = (unsigned char *) malloc(block_size_recv);
 						unsigned char * buffer = (unsigned char *)aligned_alloc(1024, block_size_recv);
 						//Receive the block into the buffer.
-						zmq_recv(socket, buffer, block_size_recv, 0);
-
+						
+						comm_recv(socket, buffer, block_size_recv, 0);
+						struct stat * stats = (struct stat *) buffer;
 						int32_t insert_successful;
 						//Include the new record in the tracking structure.
 						insert_successful=map->put(key, buffer, block_size_recv);
@@ -645,8 +637,7 @@ srv_worker (void * th_argv)
 					{
 
 						//Receive the block into the buffer.
-						
-						zmq_recv(socket, address_, block_size_rtvd, 0);
+						comm_recv(socket, address_, block_size_rtvd, 0);
 
 						//pthread_mutex_unlock(&region_locks[lock]);
 					}
@@ -702,7 +693,7 @@ stat_worker (void * th_argv)
 	//Format socket endpoint.
 	char endpoint[24];
 	sprintf(endpoint, "%s%d", "tcp://*:", arguments->port);
-
+	//sprintf(endpoint, "%s%d", "inproc://kk-", arguments->port);
 	//Communication sockets.
 	void * socket;
 	void * sub;
@@ -727,20 +718,16 @@ stat_worker (void * th_argv)
 		//Initialize ZeroMQ messages.
 		zmq_msg_init (&client_id);
 		zmq_msg_init (&client_req);
-
 		//Save the identity of the requesting client.
-		zmq_msg_recv(&client_id, socket, 0);
-
-
-
+		comm_msg_recv(&client_id, socket, 0);
 
 		//Check if a timeout was triggered in the previous receive operation.
 		if ((errno == EAGAIN) && !zmq_msg_size(&client_id))
 		{
+			//printf("zmq_msg_size=%ld\n",zmq_msg_size(&client_id));
 			zmq_msg_init (&release);
-
 			//If something was published, close sockets and exit.
-			if (zmq_msg_recv(&release, sub, ZMQ_DONTWAIT) > 0)
+			if (comm_msg_recv(&release, sub, ZMQ_DONTWAIT) > 0)
 			{
 				if (zmq_close(socket) == -1)
 				{
@@ -754,23 +741,21 @@ stat_worker (void * th_argv)
 					pthread_exit(NULL);
 				}
 
-				zmq_msg_close(&client_id);
-				zmq_msg_close(&client_req);
-				zmq_msg_close(&release);
+				comm_msg_close(&client_id);
+				comm_msg_close(&client_req);
+				comm_msg_close(&release);
 
 				pthread_exit(NULL);
 			}
-
+			
 			//Overwrite errno value.
 			errno = 1;
 
 			continue;
 		}
-
-		
-
-		//Save the request to be served.
-		zmq_msg_recv(&client_req, socket, 0);
+		//printf("zmq_eerno=%d %s\n",zmq_errno(), zmq_strerror(1));
+		//Save the request to be served
+		comm_msg_recv(&client_req, socket, 0);
 
 		//Determine if more messages are comming.
 		if ((zmq_getsockopt(socket, ZMQ_RCVMORE, &more, &more_size)) == -1)
@@ -780,7 +765,6 @@ stat_worker (void * th_argv)
 		}
 
 		//Expeted incomming message format: "SIZE_IN_KB KEY"
-
 		int32_t req_size = zmq_msg_size(&client_req);
 
 		char raw_msg[req_size+1];
@@ -793,7 +777,6 @@ stat_worker (void * th_argv)
 		char number[16];
 		sscanf(raw_msg, "%s", number);
 		int32_t number_length = (int32_t) strlen(number);
-
 		//Elements conforming the request.
 		char * uri_ = raw_msg + number_length + 1;
 		uint64_t block_size_recv = (uint64_t) atoi(number);
@@ -804,9 +787,6 @@ stat_worker (void * th_argv)
 		//Information associated to the arriving key.
 		unsigned char * address_;
 		uint64_t block_size_rtvd;
-
-
-  
 		//Differentiate between READ and WRITE operations. 
 		switch (more)
 		{
@@ -814,7 +794,7 @@ stat_worker (void * th_argv)
 			case READ_OP:
 			{
 				//Specify client to be answered.
-				if (zmq_send(socket, (int *) zmq_msg_data(&client_id), sizeof(int), ZMQ_SNDMORE) < 0)
+				if (comm_send(socket, (int *) zmq_msg_data(&client_id), sizeof(int), ZMQ_SNDMORE) < 0)
 				{
 					perror("ERRIMSS_WORKER_SENDCLIENTID");
 					pthread_exit(NULL);
@@ -832,15 +812,14 @@ stat_worker (void * th_argv)
 						pthread_mutex_lock(&tree_mut);
 						buffer = GTree_getdir((char *) key.c_str(), &numelems_indir);
 						pthread_mutex_unlock(&tree_mut);
-
 						if (buffer == NULL)
 						{
-							if (zmq_send(socket, err_code, strlen(err_code), 0) < 0)
+							if (comm_send(socket, err_code, strlen(err_code), 0) < 0)
 							{
 								perror("ERRIMSS_STATWORKER_NODIR");
 								pthread_exit(NULL);
 							}
-
+							
 							break;
 						}
 
@@ -848,12 +827,11 @@ stat_worker (void * th_argv)
 						memcpy(zmq_msg_data(&msg), buffer, (numelems_indir*URI_));
 
 						//Send the serialized set of elements within the requested directory.
-						if (zmq_msg_send(&msg, socket, 0) < 0)
+						if (comm_msg_send(&msg, socket, 0) < 0)
 						{
 							perror("ERRIMSS_WORKER_SENDBLOCK");
 							pthread_exit(NULL);
 						}
-
 						free(buffer);
 
 						break;
@@ -864,7 +842,7 @@ stat_worker (void * th_argv)
 						if (!(map->get(key, &address_, &block_size_rtvd)))
 						{
 							//Send the error code block.
-							if (zmq_send(socket, err_code, strlen(err_code), 0) < 0)
+							if (comm_send(socket, err_code, strlen(err_code), 0) < 0)
 							{
 								perror("ERRIMSS_WORKER_SENDERR");
 								pthread_exit(NULL);
@@ -875,7 +853,7 @@ stat_worker (void * th_argv)
 							//imss_info * data = (imss_info *) address_;
 							//printf("READ_OP SEND data->type=%c\n",data->type);
 							//Send the requested block.
-							if (zmq_send(socket, address_, block_size_rtvd, 0) < 0)
+							if (comm_send(socket, address_, block_size_rtvd, 0) < 0)
 							{
 								perror("ERRIMSS_WORKER_SENDBLOCK");
 								pthread_exit(NULL);
@@ -890,7 +868,7 @@ stat_worker (void * th_argv)
 						//Publish RELEASE message to all threads.
 						char release_msg[] = "RELEASE\0";
 
-						if (zmq_send(pub, release_msg, strlen(release_msg), 0) < 0)
+						if (comm_send(pub, release_msg, strlen(release_msg), 0) < 0)
 						{
 							perror("ERRIMSS_PUBLISH_RELEASEMSG");
 							pthread_exit(NULL);
@@ -900,14 +878,13 @@ stat_worker (void * th_argv)
 					}
 					case DELETE_OP:
 					{
-			           
 						int32_t result = map->delete_metadata_stat_worker(key);
 						GTree_delete((char *) key.c_str());
 						
 
 						char release_msg[] = "DELETE\0";
 
-						if (zmq_send(socket, release_msg, strlen(release_msg), 0) < 0)
+						if (comm_send(socket, release_msg, strlen(release_msg), 0) < 0)
 						{
 							perror("ERRIMSS_PUBLISH_DELETEMSG");
 							pthread_exit(NULL);
@@ -937,7 +914,7 @@ stat_worker (void * th_argv)
 
 						char release_msg[] = "RENAME\0";
 
-						if (zmq_send(socket, release_msg, strlen(release_msg), 0) < 0)
+						if (comm_send(socket, release_msg, strlen(release_msg), 0) < 0)
 						{
 							perror("ERRIMSS_PUBLISH_RENAMEMSG");
 							pthread_exit(NULL);
@@ -965,7 +942,7 @@ stat_worker (void * th_argv)
 
 						char release_msg[] = "RENAME\0";
 
-						if (zmq_send(socket, release_msg, strlen(release_msg), 0) < 0)
+						if (comm_send(socket, release_msg, strlen(release_msg), 0) < 0)
 						{
 							perror("ERRIMSS_PUBLISH_RENAMEMSG");
 							pthread_exit(NULL);
@@ -987,10 +964,9 @@ stat_worker (void * th_argv)
 				//If the record was not already stored, add the block.
 				if (!map->get(key, &address_, &block_size_rtvd))
 				{
-
 					//Receive the block into the buffer.
 					unsigned char * buffer = (unsigned char *) malloc (block_size_recv);
-					zmq_recv(socket, buffer, block_size_recv, 0);
+					comm_recv(socket, buffer, block_size_recv, 0);
 
 					int32_t insert_successful;
 					//Include the new record in the tracking structure.
@@ -1034,7 +1010,7 @@ stat_worker (void * th_argv)
 								pthread_exit(NULL);
 							}
 
-							if (zmq_msg_recv(&data_locations_msg, socket, 0) == -1)
+							if (comm_msg_recv(&data_locations_msg, socket, 0) == -1)
 							{
 								perror("ERRIMSS_WORKER_DATALOCATRECV");
 								pthread_exit(NULL);
@@ -1059,14 +1035,14 @@ stat_worker (void * th_argv)
 
 								data_locations[update_positions[i]] = *update_value;
 
-							if (zmq_msg_close(&data_locations_msg) == -1)
+							if (comm_msg_close(&data_locations_msg) == -1)
 							{
 								perror("ERRIMSS_WORKER_DATALOCATCLOSE");
 								pthread_exit(NULL);
 							}
 
 							//Specify client to be answered.
-							if (zmq_send(socket, (int *) zmq_msg_data(&client_id), sizeof(int), ZMQ_SNDMORE) < 0)
+							if (comm_send(socket, (int *) zmq_msg_data(&client_id), sizeof(int), ZMQ_SNDMORE) < 0)
 							{
 								perror("ERRIMSS_WORKER_DATALOCATANSWER1");
 								pthread_exit(NULL);
@@ -1074,7 +1050,7 @@ stat_worker (void * th_argv)
 
 							//Answer the client with the update.
 							char answer[9] = "UPDATED!";
-							if (zmq_send(socket, answer, 9, 0) < 0)
+							if (comm_send(socket, answer, 9, 0) < 0)
 							{
 								perror("ERRIMSS_WORKER_DATALOCATANSWER2");
 								pthread_exit(NULL);
@@ -1089,7 +1065,7 @@ stat_worker (void * th_argv)
 							memset(address_, '\0', block_size_rtvd);
 
 							//Receive the block into the buffer.
-							zmq_recv(socket, address_, block_size_rtvd, 0);
+							comm_recv(socket, address_, block_size_rtvd, 0);
 
 							break;
 						}
@@ -1120,7 +1096,7 @@ srv_attached_dispatcher(void * th_argv)
 	//Format socket endpoint.
 	char endpoint[24];
 	sprintf(endpoint, "%s%d", "tcp://*:", arguments->port);
-
+    //sprintf(endpoint, "%s%d", "inproc://kk-", arguments->port);
 	//Communication sockets
 	void * socket;
 	void * sub;
@@ -1142,7 +1118,7 @@ srv_attached_dispatcher(void * th_argv)
 		zmq_msg_init (&client_req);
 
 		//Save the identity of the requesting client.
-		zmq_msg_recv(&client_id, socket, 0);
+		comm_msg_recv(&client_id, socket, 0);
 
 		//Check if a timeout was triggered in the previous receive operation.
 		if ((errno == EAGAIN) && !zmq_msg_size(&client_id))
@@ -1150,7 +1126,7 @@ srv_attached_dispatcher(void * th_argv)
 			zmq_msg_init (&release);
 
 			//If something was published, close sockets and exit.
-			if (zmq_msg_recv(&release, sub, ZMQ_DONTWAIT) > 0)
+			if (comm_msg_recv(&release, sub, ZMQ_DONTWAIT) > 0)
 			{
 				if (zmq_close(socket) == -1)
 				{
@@ -1164,9 +1140,9 @@ srv_attached_dispatcher(void * th_argv)
 					pthread_exit(NULL);
 				}
 
-				zmq_msg_close(&client_id);
-				zmq_msg_close(&client_req);
-				zmq_msg_close(&release);
+				comm_msg_close(&client_id);
+				comm_msg_close(&client_req);
+				comm_msg_close(&release);
 
 				pthread_exit(NULL);
 			}
@@ -1176,13 +1152,12 @@ srv_attached_dispatcher(void * th_argv)
 
 			continue;
 		}
-
 		//Save the request to be served.
-		zmq_msg_recv(&client_req, socket, 0);
+		comm_msg_recv(&client_req, socket, 0);
 
 		int32_t c_id = *((int32_t *) zmq_msg_data(&client_id));
 		//Specify client to answered to.
-		if (zmq_send(socket, &c_id, sizeof(int32_t), ZMQ_SNDMORE) < 0)
+		if (comm_send(socket, &c_id, sizeof(int32_t), ZMQ_SNDMORE) < 0)
 		{
 		    perror("ERRIMSS_SRVDISP_SENDCLIENTID");
 		    pthread_exit(NULL);
@@ -1218,7 +1193,7 @@ srv_attached_dispatcher(void * th_argv)
 			sprintf(response_, "%d%c%d", port_, '-', client_id_++);
 
 			//Send communication specifications.
-			if (zmq_send(socket, response_, strlen(response_), 0) < 0)
+			if (comm_send(socket, response_, strlen(response_), 0) < 0)
 			{
 				perror("ERRIMSS_SRVDISP_SENDBLOCK");
 				pthread_exit(NULL);
@@ -1230,7 +1205,7 @@ srv_attached_dispatcher(void * th_argv)
 		else if (*((int32_t *) zmq_msg_data(&client_req)) == WHO)
 		{
 		    //Provide the uri of this instance.
-		    if (zmq_send(socket, arguments->my_uri, strlen(arguments->my_uri), 0) < 0)
+		    if (comm_send(socket, arguments->my_uri, strlen(arguments->my_uri), 0) < 0)
 		    {
 			perror("ERRIMSS_WHOREQUEST");
 			pthread_exit(NULL);
@@ -1250,8 +1225,9 @@ dispatcher(void * th_argv)
 
 	//Format socket endpoint.
 	char endpoint[24];
+	
 	sprintf(endpoint, "%s%d", "tcp://*:", arguments->port);
-
+	//sprintf(endpoint, "%s%d", "inproc://kk-", arguments->port);
 	//Communication sockets
 	void * socket;
 	void * sub;
@@ -1272,7 +1248,7 @@ dispatcher(void * th_argv)
 		zmq_msg_init (&client_req);
 
 		//Save the identity of the requesting client.
-		zmq_msg_recv(&client_id, socket, 0);
+		comm_msg_recv(&client_id, socket, 0);
 
 		//Check if a timeout was triggered in the previous receive operation.
 		if ((errno == EAGAIN) && !zmq_msg_size(&client_id))
@@ -1280,7 +1256,7 @@ dispatcher(void * th_argv)
 			zmq_msg_init (&release);
 
 			//If something was published, close sockets and exit.
-			if (zmq_msg_recv(&release, sub, ZMQ_DONTWAIT) > 0)
+			if (comm_msg_recv(&release, sub, ZMQ_DONTWAIT) > 0)
 			{
 				if (zmq_close(socket) == -1)
 				{
@@ -1294,9 +1270,9 @@ dispatcher(void * th_argv)
 					pthread_exit(NULL);
 				}
 
-				zmq_msg_close(&client_id);
-				zmq_msg_close(&client_req);
-				zmq_msg_close(&release);
+				comm_msg_close(&client_id);
+				comm_msg_close(&client_req);
+				comm_msg_close(&release);
 
 				pthread_exit(NULL);
 			}
@@ -1306,14 +1282,13 @@ dispatcher(void * th_argv)
 
 			continue;
 		}
-
 		//Save the request to be served.
-		zmq_msg_recv(&client_req, socket, 0);
+		comm_msg_recv(&client_req, socket, 0);
 
         int32_t c_id = *((int32_t *) zmq_msg_data(&client_id));
 
         //Specify client to answered to.
-        if (zmq_send(socket, &c_id, sizeof(int32_t), ZMQ_SNDMORE) < 0)
+        if (comm_send(socket, &c_id, sizeof(int32_t), ZMQ_SNDMORE) < 0)
         {
             perror("ERRIMSS_STATDISP_SENDCLIENTID");
             pthread_exit(NULL);
@@ -1330,7 +1305,7 @@ dispatcher(void * th_argv)
             sprintf(response_, "%d%c%d", port_, '-', client_id_++);
 
             //Send communication specifications.
-            if (zmq_send(socket, response_, strlen(response_), 0) < 0)
+            if (comm_send(socket, response_, strlen(response_), 0) < 0)
             {
                 perror("ERRIMSS_STATDISP_SENDBLOCK");
                 pthread_exit(NULL);
@@ -1342,7 +1317,7 @@ dispatcher(void * th_argv)
 		else if (*((int32_t *) zmq_msg_data(&client_req)) == WHO)
         {
             //Provide the uri of this instance.
-            if (zmq_send(socket, arguments->my_uri, strlen(arguments->my_uri), 0) < 0)
+            if (comm_send(socket, arguments->my_uri, strlen(arguments->my_uri), 0) < 0)
             {
                 perror("ERRIMSS_WHOREQUEST");
                 pthread_exit(NULL);

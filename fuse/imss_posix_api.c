@@ -13,7 +13,6 @@ gcc -Wall imss.c `pkg-config fuse --cflags --libs` -o imss
 #include "mapprefetch.hpp"
 #include "imss.h"
 #include "hercules.h"
-#include <fuse.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <string.h>
@@ -25,7 +24,10 @@ gcc -Wall imss.c `pkg-config fuse --cflags --libs` -o imss
 #include <time.h>
 #include <limits.h>
 #include <math.h>
+#include <sys/time.h>
 
+#include <dirent.h>
+#include <sys/types.h>
 #include "imss_posix_api.h"
 
 #define KB 1024
@@ -89,7 +91,6 @@ pthread_mutex_t lock_fileopen = PTHREAD_MUTEX_INITIALIZER;
 void fd_lookup(const char * path, int *fd, struct stat * s, char ** aux) {
 	pthread_mutex_lock(&lock_fileopen);
 	*fd = -1;
-	//printf("fd_lookup:%p\n",aux);
 	int found = map_search(map, path, fd , s, aux);
 	if (!found)
 		*fd = -1;
@@ -98,9 +99,13 @@ void fd_lookup(const char * path, int *fd, struct stat * s, char ** aux) {
 
 void get_iuri(const char * path, /*output*/ char * uri){
 
-	//Copying protocol
-	strcpy(uri, "imss:/");
-	strcat(uri, path);
+	if(! strncmp(path, "imss:/", strlen("imss:/")) ) {
+		strcat(uri, path);
+	}else{
+		//Copying protocol
+		strcpy(uri, "imss:/");
+		strcat(uri, path);
+	}
 }
 
 /*
@@ -118,11 +123,7 @@ int imss_access(const char *path, int permission)
 
 int imss_getattr(const char *path, struct stat *stbuf)
 {
-
-	
-	struct fuse_context * ctx;
-	ctx = fuse_get_context();
-
+	//printf("imss_getattr=%s\n",path);
 	//Needed variables for the call
 	char * buffer;
 	char ** refs;
@@ -141,8 +142,8 @@ int imss_getattr(const char *path, struct stat *stbuf)
 	stbuf->st_atim = spec; 
 	stbuf->st_mtim = spec;
 	stbuf->st_ctim = spec;
-	stbuf->st_uid = ctx->uid;
-	stbuf->st_gid = ctx->gid;
+	stbuf->st_uid = getuid();
+	stbuf->st_gid = getgid();
 	stbuf->st_blksize = IMSS_BLKSIZE;
 	//printf("imss_getattr=%s\n",imss_path);
 	uint32_t type = get_type(imss_path);
@@ -244,9 +245,11 @@ int imss_getattr(const char *path, struct stat *stbuf)
    2) The readdir implementation keeps track of the offsets of the directory entries. It uses the offset parameter
    and always passes non-zero offset to the filler function. When the buffer is full (or an error happens) the filler function will return '1'. 
  */
-int imss_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
-		off_t offset, struct fuse_file_info *fi)
+
+
+int imss_readdir(const char *path, void *buf, posix_fill_dir_t filler, off_t offset)
 {
+	printf("imss_readdir=%s\n",path);
 	//Needed variables for the call
 	char * buffer;
 	char ** refs;
@@ -256,7 +259,6 @@ int imss_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 
 	bzero(imss_path, MAX_PATH);
 	get_iuri(path, imss_path);
-
 	//Call IMSS to get metadata
 	if((n_ent = get_dir((char*)imss_path, &buffer, &refs)) < 0){
 		strcat(imss_path,"/");
@@ -265,13 +267,13 @@ int imss_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 			return -ENOENT;
 		}
 	}
-
 	//Fill buffer
 	//TODO: Check if subdirectory
+	//printf("[FUSE] imss_readdir %s has=%d\n",path, n_ent);
 	for(int i = 0; i < n_ent; ++i) {
 		if (i == 0) {
-			filler(buf, ".", NULL, 0);
 			filler(buf, "..", NULL, 0);
+			filler(buf, ".", NULL, 0);
 		} else {
 			struct stat stbuf;
 			int error = imss_getattr(refs[i]+6, &stbuf); 
@@ -295,7 +297,6 @@ int imss_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 	}
 	//Free resources
 	free(refs);
-
 	return 0;
 
 	/*(void) offset;
@@ -311,8 +312,9 @@ int imss_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 	  return 0;*/
 }
 
-int imss_open(const char *path, struct fuse_file_info *fi)
+int imss_open(const char *path, uint64_t *fh)
 {
+	//printf("imss_open=%s\n",path);
 	//TODO -> Access control
 	//DEBUG
 	char imss_path[MAX_PATH] = {0};
@@ -326,50 +328,42 @@ int imss_open(const char *path, struct fuse_file_info *fi)
 	struct stat stats;
 	char * aux;
 	fd_lookup(imss_path, &fd, &stats, &aux);
-
-	if (fd >= 0) 
+	if (fd >= 0) {
 		file_desc = fd;
-	else if (fd == -2)
+	}else if (fd == -2)
 		return -1;
 	else {
-		file_desc = open_dataset(imss_path);
 		
+		file_desc = open_dataset(imss_path);
 		aux = (char *) malloc(IMSS_BLKSIZE * KB);
 	    get_data(file_desc, 0, (unsigned char*)aux);
 	    memcpy(&stats, aux, sizeof(struct stat));
 		pthread_mutex_lock(&lock_fileopen);
 		map_put(map, imss_path, file_desc, stats, aux);
-
-		if (PREFETCH) {
+		if (PREFETCH != 0) {
             char * buff = (char *) malloc(PREFETCH *IMSS_BLKSIZE * KB);
 			map_init_prefetch(map_prefetch, imss_path, buff);
 	    }
-
+		
 		pthread_mutex_unlock(&lock_fileopen);
 
 		//free(aux);
 	}
 
-
 	//File does not exist	
 	if(file_desc < 0) return -ENOENT;
 
 	//Assign file descriptor
-	fi->fh = file_desc;
-
-
-
+	*fh = file_desc;
 	/*if ((fi->flags & 3) != O_RDONLY)
 	  return -EACCES;*/
-
 	return 0;
 }
 
 
 
-int imss_sread(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi)
+int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 {
-	//printf("IMSS_READ size=%d, path=%s\n", size, path);
 	int64_t curr_blk, end_blk, start_offset, end_offset;
 	int64_t first = 0; 
 	int ds = 0;
@@ -391,18 +385,29 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset, struct fu
 	struct stat stats;
 	char * aux;
 	fd_lookup(rpath, &fd, &stats, &aux);
-
+	
+	//Check if offset is bigger than filled, return 0 because is EOF case
+	if(start_offset >= stats.st_size){ 
+		return 0; 
+	}	
+	
 	if (fd >= 0) 
 		ds = fd;
 	else if (fd == -2)
 		return -ENOENT;
 	
 	memset(buf, 0, size);
-
+	
 	while(curr_blk <= end_blk){
 
 		pthread_mutex_lock(&lock);
+		struct timeval start, end;
+        int delta_us;
+		gettimeofday(&start, NULL);
 		int err = get_data(ds, curr_blk, (unsigned char*)aux);
+		gettimeofday(&end, NULL);
+		delta_us = (int) (end.tv_usec - start.tv_usec);
+		//printf("SREAD delta_us=%6.3f\n",(delta_us/1000.0F));
 		pthread_mutex_unlock(&lock);
 
 		if( err != -1){
@@ -446,14 +451,13 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset, struct fu
 		} 
 		++curr_blk;
 	}
-
 	return byte_count;
 }
 
-int imss_vread(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi)
+int imss_vread_prefetch(const char *path, char *buf, size_t size, off_t offset)
 {
 
-	//printf("IMSS_READV size=%d, path=%s\n", size, path);
+	//printf("IMSS_READV size=%ld, path=%s\n", size, path);
 	//Compute current block and offsets
 	int64_t curr_blk, end_blk, start_offset, end_offset;
 	int64_t first = 0; 
@@ -485,7 +489,16 @@ int imss_vread(const char *path, char *buf, size_t size, off_t offset, struct fu
 	
 	memset(buf, 0, size);
 	//Read remaining blocks
-
+	if(stats.st_size<size && stats.st_size<IMSS_DATA_BSIZE){
+		//total = IMSS_DATA_BSIZE;
+		size = stats.st_size;
+		end_blk = ceil((double)(offset+size) / IMSS_DATA_BSIZE);
+		end_offset = (offset+size) % IMSS_DATA_BSIZE;
+	}
+	//Check if offset is bigger than filled, return 0 because is EOF case
+	if(start_offset >= stats.st_size){ 
+		return 0; 
+	}
 	
 	int err;
 	//printf("READ path:%s, start block=%ld, end_block=%ld, size=%ld\n",rpath, curr_blk, end_blk, size);
@@ -627,14 +640,297 @@ int imss_vread(const char *path, char *buf, size_t size, off_t offset, struct fu
 	return byte_count;
 }
 
+int imss_vread_no_prefetch(const char *path, char *buf, size_t size, off_t offset)
+{
+	//printf("IMSS_READV size=%ld, path=%s, offset=%ld\n", size, path, offset);
+	//Compute current block and offsets
+	int64_t curr_blk, end_blk, start_offset, end_offset;
+	int64_t first = 0; 
+	int ds = 0;
+	curr_blk = offset / IMSS_DATA_BSIZE +1; //Plus one to skip the header (0) block
+	start_offset = offset % IMSS_DATA_BSIZE;
+	//end_blk = (offset+size) / IMSS_DATA_BSIZE+1; //Plus one to skip the header (0) block
+	end_blk = ceil((double)(offset+size) / IMSS_DATA_BSIZE);
+	end_offset = (offset+size) % IMSS_DATA_BSIZE;
+	size_t to_read = 0;
+
+	//Needed variables
+	size_t byte_count = 0;
+	int64_t rbytes;
+
+	char rpath[MAX_PATH];
+	get_iuri(path, rpath);
+
+	int fd;
+	struct stat stats;
+	char * aux;
+	//printf("imss_read aux before %p\n", aux);
+	fd_lookup(rpath, &fd, &stats, &aux);
+	
+	//printf("imss_read aux after %p\n", aux);
+	if (fd >= 0) 
+		ds = fd;
+	else if (fd == -2)
+		return -ENOENT;
+	
+	memset(buf, 0, size);
+	int total = size;
+	//Read remaining blocks
+	if(stats.st_size<size && stats.st_size<IMSS_DATA_BSIZE){
+		//total = IMSS_DATA_BSIZE;
+		size = stats.st_size;
+		end_blk = ceil((double)(offset+size) / IMSS_DATA_BSIZE);
+		end_offset = (offset+size) % IMSS_DATA_BSIZE;
+	}
+	//Check if offset is bigger than filled, return 0 because is EOF case
+	if(start_offset >= stats.st_size){ 
+		return 0; 
+	}	
+	int err;
+	//printf("READ path:%s, start block=%ld, end_block=%ld, size=%ld\n",rpath, curr_blk, end_blk, size);
+
+	//printf("READ curr_block=%ld end_block=%ld numbers of block=%ld\n",curr_blk, end_blk,(end_blk-curr_blk+1));
+	while(curr_blk <= end_blk){
 
 
-int imss_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi) {
+				
+				if(first==0){//readv si es el primero leo todos
+					//printf("READV TODOS\n");
+					pthread_mutex_lock(&lock);
+					err = readv_multiple(ds, curr_blk, end_blk, buf, IMSS_BLKSIZE, start_offset, total);
+					pthread_mutex_unlock(&lock);
+					if(err == -1)
+						return -1;
+					return size;
+				}else{//si ya tengo alguno guardado
+					//printf("READV LOS QUE FALTABAN\n");
+					pthread_mutex_lock(&lock);
+					err = readv_multiple(ds, curr_blk, end_blk, buf + byte_count, IMSS_BLKSIZE, 
+					start_offset, IMSS_BLKSIZE * KB * (end_blk-curr_blk+1));
+					pthread_mutex_unlock(&lock);
+					if(err == -1)
+						return -1;
+					return size;
+				}
+				
+	
 
-   if (MULTIPLE)
-      imss_vread(path, buf, size, offset, fi);
-   else
-      imss_sread(path, buf, size, offset, fi);
+	if( err != -1){
+		//First block case
+		if (first == 0) {
+			if(size < stats.st_size - start_offset){
+				//to_read = size;
+				to_read = IMSS_BLKSIZE*KB - start_offset;
+			}else{ 	
+				if(stats.st_size < IMSS_BLKSIZE*KB){
+					to_read = stats.st_size - start_offset;
+				}else{
+					to_read = IMSS_BLKSIZE*KB - start_offset;
+				}																		
+			}
+
+			//Check if offset is bigger than filled, return 0 because is EOF case
+			if(start_offset > stats.st_size) 
+				return 0; 
+
+			memcpy(buf, aux + start_offset, to_read);
+			byte_count += to_read;
+			++first;
+
+			//Middle block case
+		} else if (curr_blk != end_blk) {
+			//memcpy(buf + byte_count, aux + HEADER, IMSS_BLKSIZE*KB);
+			memcpy(buf + byte_count, aux, IMSS_BLKSIZE*KB);
+			byte_count += IMSS_BLKSIZE*KB;
+			//End block case
+		}  else {
+
+			//Read the minimum between end_offset and filled (read_ = min(end_offset, filled))
+			int64_t pending = size - byte_count;
+			memcpy(buf + byte_count, aux, pending);
+			byte_count += pending;
+		}
+
+	} 
+	++curr_blk;
+	}
+	
+	return byte_count;
+}
+
+int imss_vread_2x(const char *path, char *buf, size_t size, off_t offset)
+{
+	
+	//printf("IMSS_READV size=%ld, path=%s, offset=%ld\n", size, path, offset);
+	//Compute current block and offsets
+	int64_t curr_blk, end_blk, start_offset, end_offset;
+	int64_t first = 0; 
+	int ds = 0;
+	curr_blk = offset / IMSS_DATA_BSIZE +1; //Plus one to skip the header (0) block
+	start_offset = offset % IMSS_DATA_BSIZE;
+	//end_blk = (offset+size) / IMSS_DATA_BSIZE+1; //Plus one to skip the header (0) block
+	end_blk = ceil((double)(offset+size) / IMSS_DATA_BSIZE);
+	end_offset = (offset+size) % IMSS_DATA_BSIZE;
+	size_t to_read = 0;
+
+	//Needed variables
+	size_t byte_count = 0;
+	int64_t rbytes;
+
+	char rpath[MAX_PATH];
+	get_iuri(path, rpath);
+
+	int fd;
+	struct stat stats;
+	char * aux;
+	//printf("imss_read aux before %p\n", aux);
+	fd_lookup(rpath, &fd, &stats, &aux);
+	//printf("imss_read aux after %p\n", aux);
+	if (fd >= 0) 
+		ds = fd;
+	else if (fd == -2)
+		return -ENOENT;
+	
+	memset(buf, 0, size);
+	//Read remaining blocks
+	if(stats.st_size<size && stats.st_size<IMSS_DATA_BSIZE){
+		//total = IMSS_DATA_BSIZE;
+		size = stats.st_size;
+		end_blk = ceil((double)(offset+size) / IMSS_DATA_BSIZE);
+		end_offset = (offset+size) % IMSS_DATA_BSIZE;
+	}
+	//Check if offset is bigger than filled, return 0 because is EOF case
+	if(start_offset >= stats.st_size){ 
+		return 0; 
+	}
+	PREFETCH = (end_blk-curr_blk)*3;
+	int err;
+	//printf("READ curr_block=%ld end_block=%ld numbers of block=%ld\n",curr_blk, end_blk,(end_blk-curr_blk+1));
+	while(curr_blk <= end_blk){
+				
+				int exist_first_block, exist_last_block;
+				aux = map_get_buffer_prefetch(map_prefetch, rpath, &exist_first_block, &exist_last_block);
+				//curr_blk, exist_first_block, end_blk, exist_last_block);
+				if(curr_blk >= exist_first_block && curr_blk <= exist_last_block){//Tiene el bloque
+					//Tengo que mover el puntero al bloque correspondiente
+					int pos = curr_blk - exist_first_block;
+					aux = aux + (IMSS_BLKSIZE * KB * pos);
+					err = 1;
+				}else{
+					if(first==0){//readv si es el primero leo todos
+						//printf("READV TODOS\n");
+						pthread_mutex_lock(&lock);
+						err = readv_multiple(ds, curr_blk, end_blk, buf, IMSS_BLKSIZE, start_offset, size);
+						pthread_mutex_unlock(&lock);
+						
+						//PERSONAL PREFETCH
+						prefetch_ds = ds;
+						strcpy(prefetch_path, rpath);
+						prefetch_first_block = end_blk;
+						//prefetch_last_block = min ((end_blk + PREFETCH), stats.st_blocks);
+						if( (end_blk + PREFETCH) <= stats.st_blocks){
+							prefetch_last_block = (end_blk + PREFETCH);
+						}else{
+							prefetch_last_block = stats.st_blocks;
+						}
+						if(prefetch_last_block<prefetch_first_block){
+							return size;
+						}
+
+						prefetch_offset = start_offset;
+						char * buf = map_get_buffer_prefetch(map_prefetch, prefetch_path, &exist_first_block, &exist_last_block);
+						int err = readv_multiple(prefetch_ds, prefetch_first_block, prefetch_last_block, buf, IMSS_BLKSIZE, prefetch_offset, IMSS_BLKSIZE * KB * (prefetch_last_block - prefetch_first_block));
+						map_update_prefetch(map_prefetch, prefetch_path, prefetch_first_block, prefetch_last_block);
+						if(err == -1)
+							return -1;
+						return size;
+					}else{//si ya tengo alguno guardado
+						//printf("READV LOS QUE FALTABAN\n");
+						pthread_mutex_lock(&lock);
+						//printf("2ASK real ones\n");
+						err = readv_multiple(ds, curr_blk, end_blk, buf + byte_count, IMSS_BLKSIZE, 
+						start_offset, IMSS_BLKSIZE * KB * (end_blk-curr_blk));
+						pthread_mutex_unlock(&lock);
+
+						//PERSONAL PREFETCH
+						prefetch_ds = ds;
+						strcpy(prefetch_path, rpath);
+						prefetch_first_block = end_blk + 1;
+						if( (end_blk + PREFETCH) <= stats.st_blocks){
+							prefetch_last_block = (end_blk + PREFETCH);
+						}else{
+							prefetch_last_block = stats.st_blocks;
+						}
+						if(prefetch_last_block<prefetch_first_block){
+							return size;
+						}
+						
+						prefetch_offset = start_offset;
+						char * buf = map_get_buffer_prefetch(map_prefetch, prefetch_path, &exist_first_block, &exist_last_block);
+						int err = readv_multiple(prefetch_ds, prefetch_first_block, prefetch_last_block, buf, IMSS_BLKSIZE, prefetch_offset, IMSS_BLKSIZE * KB * (prefetch_last_block - prefetch_first_block));
+						map_update_prefetch(map_prefetch, prefetch_path, prefetch_first_block, prefetch_last_block);
+
+
+						if(err == -1)
+							return -1;
+						return size;
+					}
+					
+				}
+    // printf("End update_prefetch\n");
+	if( err != -1){
+		//First block case
+		if (first == 0) {
+			if(size < stats.st_size - start_offset){
+				//to_read = size;
+				to_read = IMSS_BLKSIZE*KB - start_offset;
+			}else{ 	
+				if(stats.st_size < IMSS_BLKSIZE*KB){
+					to_read = stats.st_size - start_offset;
+				}else{
+					to_read = IMSS_BLKSIZE*KB - start_offset;
+				}																		
+			}
+
+			//Check if offset is bigger than filled, return 0 because is EOF case
+			if(start_offset > stats.st_size) 
+				return 0; 
+
+			memcpy(buf, aux + start_offset, to_read);
+			byte_count += to_read;
+			++first;
+
+			//Middle block case
+		} else if (curr_blk != end_blk) {
+			//memcpy(buf + byte_count, aux + HEADER, IMSS_BLKSIZE*KB);
+			memcpy(buf + byte_count, aux, IMSS_BLKSIZE*KB);
+			byte_count += IMSS_BLKSIZE*KB;
+			//End block case
+		}  else {
+
+			//Read the minimum between end_offset and filled (read_ = min(end_offset, filled))
+			int64_t pending = size - byte_count;
+			memcpy(buf + byte_count, aux, pending);
+			byte_count += pending;
+		}
+
+	} 
+	++curr_blk;
+	}
+	
+	return byte_count;
+}
+
+int imss_read(const char *path, char *buf, size_t size, off_t offset) {
+   if (MULTIPLE==1){
+      imss_vread_prefetch(path, buf, size, offset);
+   }else if(MULTIPLE==2){
+      imss_vread_no_prefetch(path, buf, size, offset);
+   }else if(MULTIPLE==3){
+      imss_vread_2x(path, buf, size, offset);
+   }else{
+	   imss_sread(path, buf, size, offset);
+   }
 }
 
 
@@ -644,10 +940,9 @@ int imss_read(const char *path, char *buf, size_t size, off_t offset, struct fus
 
 
 
-int imss_write(const char *path, const char *buf, size_t size,
-		off_t off, struct fuse_file_info *fi)
+int imss_write(const char *path, const char *buf, size_t size, off_t off)
 {
-	//printf("IMSS_WRITE size=%ld path=%s\n",size, path); 
+	//printf("IMSS_WRITE size=%ld path=%s off=%ld IMSS_DATA_BLOCKSIZE=%ld\n",size, path, off, IMSS_DATA_BSIZE); 
 	//Compute offsets to write
 	int64_t curr_blk, end_blk, start_offset, end_offset;
 	int64_t start_blk = off / IMSS_DATA_BSIZE + 1; //Add one to skip block 0
@@ -691,6 +986,7 @@ int imss_write(const char *path, const char *buf, size_t size,
 			map_update(map, rpath, ds, stats);
 			pthread_mutex_unlock(&lock);
 		}
+
 		return size;
 	}
 
@@ -790,10 +1086,9 @@ int imss_write(const char *path, const char *buf, size_t size,
 	return byte_count;
 }
 
-int imss_release(const char * path, struct fuse_file_info *fi)
+int imss_release(const char * path)
 {
 	//Update dates
-
 	int ds = 0;
 	char rpath[MAX_PATH];
 	bzero(rpath, MAX_PATH);
@@ -845,15 +1140,11 @@ int imss_release(const char * path, struct fuse_file_info *fi)
 	return 0;
 }
 
-int imss_create(const char * path, mode_t mode, struct fuse_file_info * fi)
+int imss_create(const char * path, mode_t mode, uint64_t * fh)
 {
 	struct timespec spec;
-	struct fuse_context * ctx;
-	ctx = fuse_get_context();
-	//printf("create path=%s\n",path);
 	//TODO check mode
 	struct stat ds_stat;
-
 	//Check if already created!
 	char rpath[MAX_PATH];
 	bzero(rpath, MAX_PATH);
@@ -861,15 +1152,13 @@ int imss_create(const char * path, mode_t mode, struct fuse_file_info * fi)
 
 	//Assing file handler and create dataset
 	int res = 0;
-
-
 	res = create_dataset((char*)rpath, POLICY,  N_BLKS, IMSS_BLKSIZE, REPL_FACTOR);
 	if(res < 0) {
 		fprintf(stderr, "[IMSS-FUSE]	Cannot create new dataset.\n");
 		return res;
-	} else
-		fi->fh = res;
-
+	} else{
+		*fh = res;
+	}
 	clock_gettime(CLOCK_REALTIME, &spec);
 
 	memset(&ds_stat, 0, sizeof(struct stat));
@@ -880,8 +1169,8 @@ int imss_create(const char * path, mode_t mode, struct fuse_file_info * fi)
 	ds_stat.st_atime = spec.tv_sec;
 	ds_stat.st_mtime = spec.tv_sec;
 	ds_stat.st_ctime = spec.tv_sec;
-	ds_stat.st_uid = ctx->uid;
-	ds_stat.st_gid = ctx->gid;
+	ds_stat.st_uid = getuid();
+	ds_stat.st_gid = getgid();
 	ds_stat.st_blocks = 0;
 	ds_stat.st_blksize = IMSS_BLKSIZE*KB;	
 	if (!S_ISDIR(mode))
@@ -893,38 +1182,36 @@ int imss_create(const char * path, mode_t mode, struct fuse_file_info * fi)
 	char *buff = (char *) malloc(IMSS_BLKSIZE*KB);//[IMSS_BLKSIZE*KB];
 	memcpy(buff, &ds_stat, sizeof(struct stat));
 	pthread_mutex_lock(&lock);
-	set_data(fi->fh, 0, (unsigned char *)buff);
+	set_data(*fh, 0, (unsigned char *)buff);
 	pthread_mutex_unlock(&lock);
 	//set_data(fi->fh, 0, (unsigned char *)buff);//first file handler return 1
 	//strcpy(fd_table[fi->fh], rpath);
 
 	pthread_mutex_lock(&lock_fileopen);
-	map_put(map, rpath, fi->fh, ds_stat, buff);
+	map_put(map, rpath, *fh, ds_stat, buff);
 	/*if (!S_ISDIR(mode)){
 	  fileopen_table[index].type=2;
 	  }else{
 	  fileopen_table[index].type=1;
 	  }*/
 
-	if (PREFETCH) {
+	if (PREFETCH !=0) {
         char * buff = (char *) malloc(PREFETCH *IMSS_BLKSIZE * KB);
 	    map_init_prefetch(map_prefetch, rpath, buff);
 	}
 	pthread_mutex_unlock(&lock_fileopen);
-
 	//free(buff);
 	return 0; 
 
 }
 
 //Does nothing
-int imss_opendir(const char * path, struct fuse_file_info * fi) {
+int imss_opendir(const char * path) {
 	return 0;
 }
 
 //Does nothing
-int imss_releasedir(const char * path, struct fuse_file_info * fi) {
-	//printf("-----------Release_dir %s\n",path);
+int imss_releasedir(const char * path) {
 	return 0;
 }
 
@@ -939,12 +1226,15 @@ int imss_rmdir(const char * path){
 	bzero(imss_path, MAX_PATH);
 	get_iuri(path, imss_path);
 
+	if(imss_path[strlen(imss_path)-1]=='/'){
+	}else{
+		strcat(imss_path,"/");
+	}
 	
-	strcat(imss_path,"/");
-	//printf("-----------Remove dir %s\n",imss_path);
+	printf("-----------Remove dir %s\n",imss_path);
 	if((n_ent = get_dir((char*)imss_path, &buffer, &refs)) > 0){
-
 		if(n_ent > 1){
+			printf("NO ESTA VACIO EL DIRECTORIO\n");
 			return -EPERM;
 		}
 	}else{
@@ -966,7 +1256,7 @@ int imss_unlink(const char * path){
 	char imss_path[MAX_PATH] = {0};
 
 	get_iuri(path, imss_path);
-	//printf("unlink=%s\n", path);
+	printf("imss_unlink=%s\n", path);
 	//char *buff = malloc(IMSS_BLKSIZE*KB);
 
 	uint32_t ds;
@@ -1064,15 +1354,16 @@ int imss_utimens(const char * path, const struct timespec tv[2]) {
 int imss_mkdir(const char * path, mode_t mode) {
 	char rpath[MAX_PATH];
 	bzero(rpath, MAX_PATH);
-	struct fuse_file_info fi;
+	uint64_t fi;
 	strcpy(rpath,path);
-	strcat(rpath,"/");
-	//printf("mkadir=%s\n",rpath);
+	if (path[strlen(path)-1] != '/'){
+		strcat(rpath,"/");
+	}
 	imss_create(rpath,  mode | S_IFDIR, &fi);
 	return 0;
 }
 
-int imss_flush(const char * path, struct fuse_file_info * fi){
+int imss_flush(const char * path){
 
 	if(error_print!=0){
 		int32_t err=error_print;
@@ -1250,7 +1541,6 @@ int imss_rename(const char *old_path, const char *new_path){
 	bzero(new_rpath, MAX_PATH);
 	get_iuri(new_path, new_rpath);
 
-	
     //CHECKING IF IS MV DIR TO DIR
 	//check old_path if it is a directory if it is add / at the end
 	int res = imss_getattr(old_path, &ds_stat_n);
@@ -1297,7 +1587,6 @@ int imss_rename(const char *old_path, const char *new_path){
 			if(res == 0){
 				if (S_ISDIR(ds_stat_n.st_mode)) {
 					//WE ARE IN MV DIR TO DIR
-					
 					map_rename_dir_dir(map, old_rpath,new_rpath);
 					map_rename_dir_dir_prefetch(map_prefetch, old_rpath,new_rpath);
 

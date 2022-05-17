@@ -12,7 +12,7 @@
 #include <vector>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <fcntl.h>
+//#include <fcntl.h>
 
 using std::map;
 using std::pair;
@@ -76,7 +76,7 @@ class map_records
 			  fprintf(stderr, "[Map record] Out of space  %ld/%ld.\n",quantity_occupied + length, total_size);			  
 			  return -1;
 			}
-			std::cout <<"add in map:" << key << '\n';
+			printf("add in map=%s\n",key.c_str());
 			quantity_occupied = quantity_occupied + length;
 			buffer.insert({key, value});
 
@@ -86,16 +86,18 @@ class map_records
 		//Method retrieving the address associated to a certain record.
 		int32_t get(std::string key, unsigned char ** add_, uint64_t * size_)
 		{
+			
+			//printf("GET KEY=%s\n",key.c_str());
 			//Map iterator that will be searching for the key.
 			std::map <std::string, std::pair<unsigned char *, uint64_t>>::iterator it;
 			//Block the access to the map structure.
 			std::unique_lock<std::mutex> lock(mut);
-
+				
 			//Search for the address related to the key.
 			it = buffer.find(key);
 			//Check if the value did exist within the map.
 			if(it == buffer.end()){
-				//std::cout <<"No Exist " << key << '\n';
+				//printf("NO EXIST=%s\n",key.c_str());
 				return 0;
 			}
 
@@ -181,6 +183,7 @@ class map_records
 		//Method renaming from srv_worker
 		int32_t rename_data_dir_dir_srv_worker(std::string old_dir, std::string rdir_dest)
 		{
+			//printf("rename data_dir_dir_srv_worker\n");
 			//Map iterator that will be searching for the key.
 			std::map <std::string, std::pair<unsigned char *, uint64_t>>::iterator it;
 			//Block the access to the map structure.
@@ -220,6 +223,7 @@ class map_records
 		//Method renaming from stat_worker
 		int32_t rename_metadata_dir_dir_stat_worker(std::string old_dir, std::string rdir_dest)
 		{
+			//printf("rename_metadata_dir_dir_stat_worker\n");
 			//Map iterator that will be searching for the key.
 			std::map <std::string, std::pair<unsigned char *, uint64_t>>::iterator it;
 			//Block the access to the map structure.

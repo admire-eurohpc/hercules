@@ -48,7 +48,6 @@ void map_update_prefetch(void* map, char * path,   int first_block,  int last_bl
   MapPrefetch* m = reinterpret_cast<MapPrefetch*> (map);
 
    auto search = m->find(std::string(path));
-     
   if (search != m->end()) {
      search->second.first_block = first_block;
      search->second.last_block = last_block;

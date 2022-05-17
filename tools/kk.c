@@ -12,7 +12,7 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/stat.h>
-#include <fcntl.h>
+//#include <fcntl.h>
 #include <string.h>
 
 #include "imss.h"
