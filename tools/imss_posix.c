@@ -23,7 +23,7 @@
 #include "mapprefetch.hpp"
 #include <math.h>
 
-
+#undef _FILE_OFFSET_BITS
 
 #define KB 1024 
 uint32_t deployment = 2;//Default 1=ATACHED, 0=DETACHED ONLY METADATA SERVER 2=DETACHED METADATA AND DATA SERVERS
@@ -67,12 +67,19 @@ void * map_prefetch;
 char * MOUNT_POINT;
 void * map_fd;
 
+static off_t (*real_lseek)(int fd, off_t offset, int whence) =  NULL;
 static int (*real_statvfs)(const char *path, struct statvfs *buf) = NULL;
+static int (*real__lxstat)(int fd, const char *pathname, struct stat *buf) = NULL;
 static int (*real_xstat)(int fd, const char *path, struct stat *buf) = NULL;
+static int (*real_stat)(const char *pathname, struct stat *buf) = NULL;
 static int (*real_close)(int fd) = NULL;
 static int (*real_puts)(const char* str) = NULL;
+static int (*real__open_2)(const char *pathname, int flags, ...) = NULL;
+static int (*real_open64)(const char *pathname, int flags, ...) = NULL;
 static int (*real_open)(const char *pathname, int flags, ...) = NULL;
-//static int (*real_open)(const char *pathname, int flags, mode_t mode) = NULL;
+static FILE* (*real_fopen)(const char *restrict pathname, const char *restrict mode) = NULL;
+static FILE* (*real_fopen64)(const char *restrict pathname, const char *restrict mode) = NULL;
+static int (*real_access)(const char *pathname, int mode) = NULL;
 static int (*real_mkdir)(const char *path, mode_t mode) = NULL;
 static ssize_t (*real_write)(int fd, const void *buf, size_t size) = NULL;
 static ssize_t (*real_read)(int fd, const void *buf, size_t size) = NULL;
@@ -291,6 +298,7 @@ int atexit(void (*function)(void)){
 }
 */
 
+
 int
 close(int fd)
 {
@@ -304,35 +312,31 @@ close(int fd)
     
 }
 
-int __xstat(int fd, const char *pathname, struct stat *buf)
-{
-    int ret;
-    int p = 0;
-    char * workdir = getenv("PWD");
-    real_xstat = dlsym(RTLD_NEXT, "__xstat");
-    if(! strncmp(pathname, MOUNT_POINT, strlen(MOUNT_POINT)) || ! strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT))) {
-        char * new_path; 
-        new_path = convert_path(pathname, MOUNT_POINT);
-        int exist = map_fd_search(map_fd, pathname, &ret, &p);
-        int ret = imss_getattr(new_path, buf);
-        return imss_getattr(new_path, buf);
-    }else{
-        return real_xstat(fd,pathname, buf);
-    }
-    
-  return 0;
-}
 /*
-int stat(const char *path, struct stat *buf){
-     printf("*****STAT WORKER! path=%s\n",path);
-     return 0;
+int access(const char *path, int mode){
+    real_access = dlsym(RTLD_NEXT,"access");
+    char * workdir = getenv("PWD");
+    int ret=0;
+    if(! strncmp(path, MOUNT_POINT, strlen(MOUNT_POINT)) || ! strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT))) {
+        printf("#####ACCESS worked! path=%s mode=%d\n",path,mode);
+        char * new_path; 
+        new_path = convert_path(path, MOUNT_POINT);
+        struct stat *stbuf;
+        ret = imss_getattr(new_path, stbuf);
+    }else{
+        printf("###REAL ACCESS\n");
+        ret = real_access(path, mode);
+    }
+   printf("access return=%d errno=%d\n",ret, errno);
+    return 0;
 }*/
+
 /*
 int statvfs(const char *path, struct statvfs *buf){
     int ret;
-    int p = 0;
+    unsigned long p = 0;
     char * workdir = getenv("PWD");
-    real_xstat = dlsym(RTLD_NEXT, "statvfs");
+    real_statvfs = dlsym(RTLD_NEXT, "statvfs");
     if(! strncmp(path, MOUNT_POINT, strlen(MOUNT_POINT)) || ! strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT))) {
         printf("STATVFS WORKER! path=%s\n",path);
         char * new_path; 
@@ -340,12 +344,67 @@ int statvfs(const char *path, struct statvfs *buf){
         int exist = map_fd_search(map_fd, new_path, &ret, &p);
         buf->f_bsize = IMSS_DATA_BSIZE;
         buf->f_fsid = ret;
+        ret = 0;
     }else{
-        real_statvfs(path,buf);
+        ret = real_statvfs(path,buf);
     }
     
-    return 0;
+    return ret;
 }*/
+
+int __lxstat(int fd, const char *pathname, struct stat *buf)
+{
+    int ret;
+    unsigned long p = 0;
+    char * workdir = getenv("PWD");
+    real__lxstat = dlsym(RTLD_NEXT, "__lxstat");
+    if(! strncmp(pathname, MOUNT_POINT, strlen(MOUNT_POINT)) || ! strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT))) {
+        char * new_path; 
+        new_path = convert_path(pathname, MOUNT_POINT);
+        //int exist = map_fd_search(map_fd, new_path, &ret, &p);
+        ret = imss_getattr(new_path, buf);
+    }else{
+        ret = real__lxstat(fd,pathname, buf);
+    }
+    
+  return ret;
+}
+
+int __xstat(int fd, const char *pathname, struct stat *buf)
+{
+    int ret;
+    unsigned long p = 0;
+    char * workdir = getenv("PWD");
+    real_xstat = dlsym(RTLD_NEXT, "__xstat");
+    if(! strncmp(pathname, MOUNT_POINT, strlen(MOUNT_POINT)) || ! strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT))) {
+        char * new_path; 
+        new_path = convert_path(pathname, MOUNT_POINT);
+       // int exist = map_fd_search(map_fd, new_path, &ret, &p);
+        ret = imss_getattr(new_path, buf);
+        
+    }else{
+        ret = real_xstat(fd,pathname, buf);
+    }
+  return ret;
+}
+
+int stat(const char *pathname, struct stat *buf){
+     int ret;
+    unsigned long p = 0;
+    char * workdir = getenv("PWD");
+    real_stat = dlsym(RTLD_NEXT, "stat");
+    if(! strncmp(pathname, MOUNT_POINT, strlen(MOUNT_POINT)) || ! strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT))) {
+        char * new_path; 
+        new_path = convert_path(pathname, MOUNT_POINT);
+        //int exist = map_fd_search(map_fd, new_path, &ret, &p);
+        ret = imss_getattr(new_path, buf);
+    }else{
+        ret = real_stat(pathname, buf);
+    }
+    
+  return ret;
+}
+
 
 ssize_t getxattr(const char *path, const char *name, void *value, size_t size) {
 
@@ -354,12 +413,11 @@ return 0;
 
 }
 
-int open(const char *pathname, int flags, ...)
-{
-    //printf("open worked!\n");
-    real_open = dlsym(RTLD_NEXT,"open");
+int __open_2(const char *pathname, int flags, ...){
+    real__open_2 = dlsym(RTLD_NEXT,"__open_2");
     int ret;
-    int p = 0;
+    int ret_ds;
+    unsigned long p = 0;
     va_list valist;
     va_start(valist, flags);
    
@@ -367,7 +425,7 @@ int open(const char *pathname, int flags, ...)
     for (int i = 0; i < 1; i++) {
         mode= va_arg(valist, mode_t);
     }
-	//printf("(%3o)\n", mode&0777);
+	
  
     va_end(valist);
     char * workdir = getenv("PWD");
@@ -378,18 +436,109 @@ int open(const char *pathname, int flags, ...)
         new_path = convert_path(pathname, MOUNT_POINT);
         
         int exist = map_fd_search(map_fd, new_path, &ret, &p);
-        if(exist != 1){
-        ret = real_open("/dev/null", flags);//Get a file descriptor
-        map_fd_put(map_fd, new_path, ret, p);
+        if (exist==-1){
+            ret = real__open_2("/dev/null", flags);//Get a file descriptor
+            map_fd_put(map_fd, new_path, ret, p);
+           int create_flag = (flags & O_CREAT);
+           if (create_flag){
+               imss_create(new_path, mode, &ret_ds);
+           }else{
+               imss_open(new_path, &ret_ds);
+           }
+            //map_fd_search(map_fd, new_path, &ret, &p);
         }
 
-        if (flags == O_CREAT|O_WRONLY|O_TRUNC && exist !=1){
-            //printf("CUSTOM CREATE worked!\n"); 
-            imss_create(new_path, mode, &ret);
-            map_fd_search(map_fd, new_path, &ret, &p);
-        }else{
-            //printf("CUSTOM OPEN worked! pathname=%s fd=%ld\n",new_path, ret); 
-            //imss_open(new_path, &ret);
+        
+    } else {
+        //fprintf(stderr, "REAL OPEN worked!\n"); 
+        ret = real__open_2(pathname, flags);
+    }
+    //printf("\nopen return fd=%ld\n",ret);
+    return ret;    
+}
+
+int open64(const char *pathname, int flags, ...)
+{
+    real_open64 = dlsym(RTLD_NEXT,"open64");
+    int ret;
+    int ret_ds;
+    unsigned long p = 0;
+    va_list valist;
+    va_start(valist, flags);
+   
+    mode_t mode;
+    for (int i = 0; i < 1; i++) {
+        mode= va_arg(valist, mode_t);
+    }
+	
+ 
+    va_end(valist);
+    char * workdir = getenv("PWD");
+
+    if(! strncmp(pathname, MOUNT_POINT, strlen(MOUNT_POINT)) || ! strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT))) {
+        
+        char * new_path; 
+        new_path = convert_path(pathname, MOUNT_POINT);
+        
+        int exist = map_fd_search(map_fd, new_path, &ret, &p);
+        if (exist==-1){
+            ret = real_open64("/dev/null", flags);//Get a file descriptor
+            map_fd_put(map_fd, new_path, ret, p);
+           int create_flag = (flags & O_CREAT);
+           if (create_flag){
+               imss_create(new_path, mode, &ret_ds);
+           }else{
+               imss_open(new_path, &ret_ds);
+           }
+            //map_fd_search(map_fd, new_path, &ret, &p);
+        }
+
+        
+    } else {
+        //fprintf(stderr, "REAL OPEN worked!\n"); 
+        ret = real_open64(pathname, flags);
+    }
+    //printf("\nopen return fd=%ld\n",ret);
+    return ret;  
+}
+
+int open(const char *pathname, int flags, ...)
+{
+    //printf("***************open worked!=%s\n",pathname);
+    real_open = dlsym(RTLD_NEXT,"open");
+    int ret;
+    int ret_ds;
+    unsigned long p = 0;
+    va_list valist;
+    va_start(valist, flags);
+   
+    mode_t mode;
+    for (int i = 0; i < 1; i++) {
+        mode= va_arg(valist, mode_t);
+    }
+	
+ 
+    va_end(valist);
+    char * workdir = getenv("PWD");
+
+    if(! strncmp(pathname, MOUNT_POINT, strlen(MOUNT_POINT)) || ! strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT))) {
+        
+        char * new_path; 
+        new_path = convert_path(pathname, MOUNT_POINT);
+        
+        int exist = map_fd_search(map_fd, new_path, &ret, &p);
+        if (exist==-1){
+            ret = real_open("/dev/null", flags);//Get a file descriptor
+            map_fd_put(map_fd, new_path, ret, p);
+           int create_flag = (flags & O_CREAT);
+           if (create_flag){
+               //printf("CUSTOM_OPEN CREATE worked! path=%s fd=%d\n",pathname, ret); 
+               imss_create(new_path, mode, &ret_ds);
+           }else{
+               //printf("CUSTOM OPEN worked! pathname=%s fd=%d\n",new_path, ret); 
+               imss_open(new_path, &ret_ds);
+           }
+            //map_fd_search(map_fd, new_path, &ret, &p);
         }
         
     } else {
@@ -397,7 +546,7 @@ int open(const char *pathname, int flags, ...)
         ret = real_open(pathname, flags);
     }
     //printf("\nopen return fd=%ld\n",ret);
-    return ret;  
+    return ret;   
 }
 
 int mkdir(const char *path, mode_t mode){
@@ -422,23 +571,53 @@ ssize_t pwrite(int fildes, const void *buf, size_t nbyte, off_t offset){
     return 0;
 }
 
+
+off_t lseek(int fd, off_t offset, int whence){
+    real_lseek = dlsym(RTLD_NEXT,"lseek");
+    long ret;
+    unsigned long p = 0;
+    char path[256] = {0};
+
+    if(map_fd_search_by_val(map_fd, path, fd) == 1) {
+       
+        if(whence == SEEK_SET){
+            //printf("SEEK_SET=%ld\n",offset);
+            ret = offset;
+            map_fd_update_value(map_fd, path, fd, ret);
+        
+        }else if(whence == SEEK_CUR){
+            //printf("SEEK_CUR=%ld\n",offset);
+            map_fd_search(map_fd, path, &fd, &p);
+            ret = p+offset;
+            map_fd_update_value(map_fd, path, fd, ret);
+        }else if(whence == SEEK_END){
+            //printf("SEEK_END=%ld\n",offset);
+            struct stat ds_stat_n;
+            imss_getattr(path, &ds_stat_n);
+            ret = offset + ds_stat_n.st_size;
+            map_fd_update_value(map_fd, path, fd, ret);
+        }    
+           
+    }else{     
+        ret = real_lseek(fd, offset, whence);
+        //printf("REAL LSEEK return=%d\n",ret);
+    }
+    return ret;
+}
+
 ssize_t write(int fd, const void *buf, size_t size){
     
     real_write = dlsym(RTLD_NEXT,"write");
     size_t ret;
-    int p = 0;
-
+    unsigned long p = 0;
     char path[256] = {0};
+
     if(map_fd_search_by_val(map_fd, path, fd) == 1) {
-        //printf("CUSTOM write worked! fd=%d, size=%ld\n", fd, size); 
         struct stat ds_stat_n;
         imss_getattr(path, &ds_stat_n);
         map_fd_search(map_fd, path, &fd, &p);
-        ret=imss_write(path,buf,size,p);//OFFSET
-        
-        //updates
-        p=p+size;
-        map_fd_update_value(map_fd, path, fd, p);
+        //printf("CUSTOM write worked! fd=%d, size=%ld offset=%d\n", fd, size, p); 
+        ret=imss_write(path,buf,size,p);
         imss_release(path);
     }else{
         //printf("REAL write worked! fd=%d, size=%ld\n", fd, size); 
@@ -448,17 +627,21 @@ ssize_t write(int fd, const void *buf, size_t size){
 }
 
 ssize_t read(int fd, void *buf, size_t size){
+    //printf("LD_PRELOAD READ fd=%d\n",fd);
     real_read = dlsym(RTLD_NEXT,"read");
     size_t ret;
+    unsigned long p = 0;
     char path[256] = {0};
+
     if(map_fd_search_by_val(map_fd, path, fd) == 1) {
-       printf("CUSTOM read worked! path=%s\n",path);
-        //ret = imss_write(path,buf,size,fd);
-        off_t offset=0;
-        ret = imss_read(path,buf,size,offset);
+        //printf("CUSTOM read worked! path=%s fd=%d\n",path, fd);
+        map_fd_search(map_fd, path, &fd, &p);
+        ret = imss_read(path,buf,size,p);
+        //printf("\nEND LD_PRELOAD IMSS_READ ret=%ld\n",ret);
     }else{
         ret = real_read(fd, buf, size);
     }
+
     return ret;
 }
 
@@ -467,24 +650,39 @@ int unlink (const char *name){//unlink
     real_unlink = dlsym(RTLD_NEXT,"unlink");
     int ret;
     char * workdir = getenv("PWD");
+    
     if(! strncmp(name, MOUNT_POINT, strlen(MOUNT_POINT)) || ! strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT))) {
         char * new_path;
-        printf("CUSTOM unlink worked!\n"); 
-        new_path = convert_path(name, MOUNT_POINT);
         
+        new_path = convert_path(name, MOUNT_POINT);      
         int32_t type = get_type(new_path);
         if(type == 0){
             strcat(new_path,"/");
             type = get_type(new_path);
+            
             if(type == 2){
-                printf("3DELETE DIRECTORY!\n"); 
-                return ret = imss_rmdir(new_path);
+                ret = imss_rmdir(new_path);
             }
+        }else{
+            ret = imss_unlink(new_path);
         }
-        ret = imss_unlink(new_path);
+        
         
     }else if(! strncmp(name, "imss://", strlen("imss://"))){
-        ret = imss_unlink(name);
+        char path[256] = {0};
+        strcpy(path,name);
+        int32_t type = get_type(path);
+        if(type == 0){
+            strcat(path,"/");
+            type = get_type(path);
+            
+            if(type == 2){
+                ret = imss_rmdir(path);
+            }
+        }else{
+            ret = imss_unlink(path);
+        }
+    
     }else{
         ret = real_unlink(name);
     }
@@ -497,12 +695,18 @@ int rmdir (const char *path) {
     real_rmdir = dlsym(RTLD_NEXT,"rmdir");
     int ret;
     char * workdir = getenv("PWD");
+    
     if(! strncmp(path, MOUNT_POINT, strlen(MOUNT_POINT)) || ! strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT))) {
         char * new_path; 
         new_path = convert_path(path, MOUNT_POINT);
         ret = imss_rmdir(new_path);
+        if(ret==-1){//special case io500
+            ret=unlinkat(0,path,0);
+        }
+   
     }else if(! strncmp(path, "imss://", strlen("imss://"))){
         ret = imss_rmdir(path);
+   
     }else{
         ret = real_rmdir(path);
     }
@@ -515,18 +719,19 @@ int unlinkat (int fd, const char *name, int flag){//rm & rm -r
     int ret = 0;
     char * workdir = getenv("PWD");
     if(! strncmp(name, MOUNT_POINT, strlen(MOUNT_POINT)) || ! strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT))) {
-        printf("unlinkat worked! name=%s\n",name);
         char * new_path; 
         new_path = convert_path(name, MOUNT_POINT);
         int n_ent = 0;
         char *buffer;
         char **refs;
+        
         if((n_ent = get_dir((char*)new_path, &buffer, &refs)) < 0){
             strcat(new_path,"/");
 		    if((n_ent = get_dir((char*)new_path, &buffer, &refs)) < 0){	
                 return -ENOENT;
              }
         }
+        
         for(int i = n_ent-1; i>-1 ; --i) {
             char *last = refs[i] + strlen(refs[i]) - 1;
 
@@ -536,6 +741,7 @@ int unlinkat (int fd, const char *name, int flag){//rm & rm -r
                 unlink(refs[i]);
             }        
         }
+   
     }else{
         ret = real_unlinkat(fd,name,flag);
     }
@@ -548,13 +754,14 @@ int rename (const char *old, const char *new){
     real_rename = dlsym(RTLD_NEXT,"rename");
     int ret;
     char * workdir = getenv("PWD");
+    
     if((! strncmp(old, MOUNT_POINT, strlen(MOUNT_POINT)) && ! strncmp(new, MOUNT_POINT, strlen(MOUNT_POINT)) ) || ! strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT))) {
-        printf("CUSTOM rename worked!\n");
         char * old_path; 
         old_path = convert_path(old, MOUNT_POINT);
         char * new_path; 
         new_path = convert_path(new, MOUNT_POINT);
         imss_rename(old_path,new_path);
+   
     }else{
         ret = real_rename(old, new);
     } 
@@ -563,14 +770,15 @@ int rename (const char *old, const char *new){
 
 
 int fchmodat(int dirfd, const char *pathname, mode_t mode, int flags){
-    printf("chmod worked!\n");
     real_fchmodat = dlsym(RTLD_NEXT,"chmod");
     int ret;
     char * workdir = getenv("PWD");
+   
     if(! strncmp(pathname, MOUNT_POINT, strlen(MOUNT_POINT)) || ! strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT))) {
         char * new_path; 
         new_path = convert_path(pathname, MOUNT_POINT);
         ret = imss_chmod(new_path, mode);
+   
     }else{
         ret = real_fchmodat(dirfd, pathname, mode, flags);
     }
@@ -579,14 +787,15 @@ int fchmodat(int dirfd, const char *pathname, mode_t mode, int flags){
 }
 
 int fchownat(int dirfd, const char *pathname, uid_t owner, gid_t group, int flags){
-    printf("chownat worked!\n");
     real_fchownat = dlsym(RTLD_NEXT,"chown");
     int ret;
     char * workdir = getenv("PWD");
+   
     if(! strncmp(pathname, MOUNT_POINT, strlen(MOUNT_POINT)) || ! strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT))) {
         char * new_path; 
         new_path = convert_path(pathname, MOUNT_POINT);
         ret = imss_chown(new_path, owner, group);
+   
     }else{
         ret = real_fchownat(dirfd, pathname, owner, group, flags);
     }
@@ -599,11 +808,11 @@ DIR *opendir(const char *name)
 {
     
     real_opendir = dlsym(RTLD_NEXT, "opendir");
-    printf("\n    OPENDIR name=%s\n",name);
 
     DIR *dirp; 
     
     char * workdir = getenv("PWD");
+   
     if(! strncmp(name, MOUNT_POINT, strlen(MOUNT_POINT)) || ! strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT))) {
         char * new_path; 
         new_path = convert_path(name, MOUNT_POINT);
@@ -611,10 +820,12 @@ DIR *opendir(const char *name)
         int ret = 0; 
         dirp = real_opendir("/tmp");
         seekdir(dirp, 0);
-        int p = 0;
+        unsigned long p = 0;
         int fd = 0;
+      
         if(map_fd_search(map_fd, new_path, &fd, &p) == 1) {
             map_fd_update_value(map_fd, new_path, dirfd(dirp), p);
+      
         }else{
              map_fd_put(map_fd, new_path, dirfd(dirp), p);
         }
@@ -634,40 +845,36 @@ int myfiller(void *buf, const char *name, const struct stat *stbuf, off_t off) {
 
 struct dirent *readdir(DIR *dirp)
 {
-   
-    struct dirent *entry;
-    struct dirent *real_entry;
+   //printf("readdir\n");
+    struct dirent *entry = (struct dirent *) malloc(sizeof(struct dirent));
     real_readdir = dlsym(RTLD_NEXT, "readdir");
-    printf("\nREADDDIR WORKED!\n");
-    
     size_t ret;
-    char path[256] = {0};
+    //char path[256] = {0};
+    char *path=malloc(256);
+    bzero(path,256);
     if(map_fd_search_by_val(map_fd, path, dirfd(dirp)) == 1) {
-        char buf[1024];
-        bzero(buf, 1024);
+        char buf[KB*KB]={0};
         char *token;
         imss_readdir(path, buf, myfiller, 0);
-        long pos = telldir(dirp);
+        unsigned long pos = telldir(dirp);
       
-        printf("pos=%ld\n",pos);
         token = strtok(buf,"$");
+        //printf("readddir token=%s\n",token);
         int i = 0;
+      
         while( token != NULL ) {
            if (i == pos) {
-                printf("ADD=%s\n",token);
-                entry = (struct dirent *) malloc(sizeof(struct dirent));
-
-              /*  real_entry = real_readdir(dirp); */
-                entry->d_ino = dirfd(dirp);
+                entry->d_ino = 0;
                 entry->d_off = pos;
 
                 //name of file
                 strcpy(entry->d_name, token);
 
-                char path_search[256];
+                char path_search[256]={0};
                 sprintf(path_search,"imss://%s",token);
                 //type of file;
                 int32_t type = get_type(path_search);
+                
                 if(!strncmp(token,".",strlen(token))){
                     entry->d_type=DT_DIR;
                 }else  if(!strncmp(token,"..",strlen(token))){
@@ -698,7 +905,6 @@ struct dirent *readdir(DIR *dirp)
         }
         seekdir(dirp, pos + 1);
         if (token == NULL) {
-            printf("ADD NULL\n");
             entry = NULL;
         }
 
@@ -706,14 +912,14 @@ struct dirent *readdir(DIR *dirp)
         entry = real_readdir(dirp);
     }
     if(entry!=NULL){
-        /*printf("entry->d_ino=%ld\n",entry->d_ino);
+        printf("entry->d_ino=%ld\n",entry->d_ino);
         printf("entry->d_off=%ld\n",entry->d_off);
         printf("entry->d_reclen=%d\n",entry->d_reclen);
         printf("entry->d_type=%d\n",entry->d_type);
-        printf("entry->d_name:%s\n",entry->d_name);*/
+        printf("entry->d_name:%s\n",entry->d_name);
     }
   
-   
+    free(path);
     return entry;
  
 }
@@ -721,7 +927,7 @@ struct dirent *readdir(DIR *dirp)
 int closedir(DIR *dirp){
     real_closedir = dlsym(RTLD_NEXT, "closedir");
     map_fd_search_by_val_close(map_fd, dirfd(dirp)); 
-    printf("closedir worked! fd=%d\n",dirfd(dirp));
+    //printf("closedir worked! fd=%d\n",dirfd(dirp));
     int ret = real_closedir(dirp);
 
     return ret;

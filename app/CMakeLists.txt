@@ -18,6 +18,7 @@ ADD_EXECUTABLE( server
 
 ADD_EXECUTABLE( release_imss 
 				./release_imss.c
+				../src/comms.c
 )
 
 ADD_LIBRARY( imss_static STATIC

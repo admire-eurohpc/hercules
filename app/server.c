@@ -56,10 +56,10 @@ int32_t main(int32_t argc, char **argv)
 	/***************************************************************/
 	/******************** PARSE INPUT ARGUMENTS ********************/
 	/***************************************************************/
-	/*for(int i=0;i<argc;i++){
+	for(int i=0;i<argc;i++){
 		printf("argv[%d]=%s\n",i,argv[i]);
 	}
-	printf("argc=%d\n",argc);*/
+	printf("argc=%d\n",argc);
 	
 	//ARGV[2] = bind port number.
 	bind_port	= (uint16_t) atoi(argv[2]);
@@ -87,7 +87,7 @@ int32_t main(int32_t argc, char **argv)
 	//IMSS server.
 	if (argc == 9)
 	{
-		if (zmq_ctx_set(context, ZMQ_IO_THREADS, atoi(argv[8])))
+		if (comm_ctx_set(context, ZMQ_IO_THREADS, atoi(argv[8])))
 		{
 			perror("ERRIMSS_CTX_SETIOTHRS");
 			return -1;
@@ -130,7 +130,7 @@ int32_t main(int32_t argc, char **argv)
 			//sprintf(stat_address, "%s%s%c%ld%c", "inproc://", stat_add, ':', stat_port+1, '\0');
 			printf("stat_address=%s\n",stat_address);
 			//Connect to the specified endpoint.
-			if (zmq_connect(socket, (const char *) stat_address) == -1)
+			if (comm_connect(socket, (const char *) stat_address) == -1)
 			{
 				perror("ERRIMSS_SRV_CONNECT");
 				return -1;
@@ -346,7 +346,7 @@ int32_t main(int32_t argc, char **argv)
 
 		//Number of characters successfully read from the line.
 		int32_t n_chars;
-
+		printf("num_servers=%ld\n",num_servers);
 		for (int32_t i = 0; i < num_servers; i++)
 		{
 			//Allocate resources in the metadata structure so as to store the current IMSS's IP.

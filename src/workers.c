@@ -96,7 +96,7 @@ server_conn(void ** router,
 		return -1;
 	}
 	//Connect to the INPROC endpoint.
-	if (zmq_connect(*subscriber, (const char *) pub_dir) == -1)
+	if (comm_connect(*subscriber, (const char *) pub_dir) == -1)
 	{
 		perror("ERRIMSS_THREAD_CONNECTSUB");
 		return -1;
@@ -200,7 +200,7 @@ srv_worker (void * th_argv)
 		comm_msg_recv(&client_req, socket, 0);
 
 		//Determine if more messages are comming.
-		if ((zmq_getsockopt(socket, ZMQ_RCVMORE, &more, &more_size)) == -1)
+		if ((comm_getsockopt(socket, ZMQ_RCVMORE, &more, &more_size)) == -1)
 		{
 			perror("ERRIMSS_WORKER_GETSOCKOPT");
 			pthread_exit(NULL);
@@ -347,7 +347,7 @@ srv_worker (void * th_argv)
 					}
 					case READV:
 					{
-						//printf("READV CASE\n");
+						printf("READV CASE\n");
 						std::size_t found = key.find('$');
 						string path;
 						if (found!=std::string::npos){
@@ -394,11 +394,11 @@ srv_worker (void * th_argv)
 							while(curr_blk <= end_blk){
 									string element = path;
 									element = element + std::to_string(curr_blk);
-									//std::cout <<"READV element:" << element << '\n';
+									//std::cout <<"SERVER READV element:" << element << '\n';
 									if (map->get(element, &address_, &block_size_rtvd)==0)
 									{//If dont exist 
 										//Send the error code block.
-										//std::cout <<"READV NO EXISTE element:" << element << '\n';
+										//std::cout <<"SERVER READV NO EXISTE element:" << element << '\n';
 										if (comm_send(socket, err_code, strlen(err_code), 0) < 0)
 										{
 											perror("ERRIMSS_WORKER_SENDERR");
@@ -758,7 +758,7 @@ stat_worker (void * th_argv)
 		comm_msg_recv(&client_req, socket, 0);
 
 		//Determine if more messages are comming.
-		if ((zmq_getsockopt(socket, ZMQ_RCVMORE, &more, &more_size)) == -1)
+		if ((comm_getsockopt(socket, ZMQ_RCVMORE, &more, &more_size)) == -1)
 		{
 			perror("ERRIMSS_WORKER_GETSOCKOPT");
 			pthread_exit(NULL);
@@ -805,6 +805,7 @@ stat_worker (void * th_argv)
 				{
 					case GETDIR:
 					{
+						//printf("stat_server GETDIR key=%s\n",key.c_str());
 						char * buffer;
 						int32_t numelems_indir;
 						zmq_msg_t msg;

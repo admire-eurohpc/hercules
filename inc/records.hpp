@@ -13,6 +13,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 //#include <fcntl.h>
+#include<sys/utsname.h>
 
 using std::map;
 using std::pair;
@@ -72,11 +73,17 @@ class map_records
 			//Block the access to the map structure.
 			std::unique_lock<std::mutex> lock(mut);
 			//Add a new couple to the map.
+			//printf("total_size=%ld, quantity_occupied=%ld\n",total_size, quantity_occupied);
 			if (quantity_occupied + length > total_size) { //out of space
-			  fprintf(stderr, "[Map record] Out of space  %ld/%ld.\n",quantity_occupied + length, total_size);			  
+			  printf("[Map record] Out of space  %ld/%ld.\n",quantity_occupied + length, total_size);			  
 			  return -1;
 			}
-			printf("add in map=%s\n",key.c_str());
+
+
+			struct utsname detect;
+			uname(&detect);
+			/*printf("Nodename    - %s \n", detect.nodename);
+			printf("add in map=%s\n",key.c_str());*/
 			quantity_occupied = quantity_occupied + length;
 			buffer.insert({key, value});
 
@@ -100,9 +107,11 @@ class map_records
 				//printf("NO EXIST=%s\n",key.c_str());
 				return 0;
 			}
-
+			/*struct utsname detect;
+			uname(&detect);
+			printf("Nodename    - %s \n", detect.nodename);
 			//Assign the values obtained to the provided references.
-			//std::cout <<"Exist " << key << '\n';
+			std::cout <<"Exist " << key << '\n';*/
 			*(add_) = it->second.first;
 			*(size_) = it->second.second;
 

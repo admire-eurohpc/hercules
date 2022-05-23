@@ -2,7 +2,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
-
+#include "comms.h"
 
 int32_t main(int32_t argc, char **argv)
 {
@@ -36,7 +36,7 @@ int32_t main(int32_t argc, char **argv)
 		//}
 
 		//Connect to the specified endpoint.
-		if (zmq_connect(sockets[i-1], (const char *) argv[i]) == -1)
+		if (comm_connect(sockets[i-1], (const char *) argv[i]) == -1)
 		{
 			perror("ERRIMSSRLS_SOCKET_CONNECT");
 			return -1;
@@ -44,7 +44,7 @@ int32_t main(int32_t argc, char **argv)
 
 		char release_msg[] = "2 RELEASE\0";
 
-		if (zmq_send(sockets[i-1], release_msg, strlen(release_msg), 0) < 0)
+		if (comm_send(sockets[i-1], release_msg, strlen(release_msg), 0) < 0)
 		{
 			perror("ERRIMSSRLS_SEND_RELEASEMSG");
 			return -1;
@@ -54,7 +54,7 @@ int32_t main(int32_t argc, char **argv)
 	//Close the previous DEALER sockets.
 	for (int32_t i = 1; i < argc; i++)
 	{
-		if (zmq_close(sockets[i-1]) == -1)
+		if (comm_close(sockets[i-1]) == -1)
 		{
 			perror("ERRIMSSRLS_SCKT_CLOSE");
 			return -1;

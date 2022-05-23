@@ -286,7 +286,7 @@ int32_t delete_dataset(const char * dataset_uri);
 
 	RETURNS:	 0 - Release operation took place successfully.
 				-1 - In case of error.*/
-int32_t writev_multiple(const char * buf, int32_t dataset_id,int64_t data_id,
+int32_t writev_multiple(char * buf, int32_t dataset_id,int64_t data_id,
  int64_t end_blk, int64_t start_offset, int64_t end_offset, int64_t IMSS_DATA_BSIZE, int64_t size);
 
 /*Method renaming a dataset in metadata.

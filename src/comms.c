@@ -99,13 +99,13 @@ send_dynamic_struct(void *  socket,
 
 	zmq_msg_t buffer_msg;
 
-	zmq_msg_init_data(&buffer_msg, info_buffer, msg_size, free_msg, NULL);
+	comm_msg_init_data(&buffer_msg, info_buffer, msg_size, free_msg, NULL);
 	if (comm_msg_send (&buffer_msg, socket, 0) != msg_size)
 	{
 		perror("ERRIMSS_SENDDYNAMSTRUCT");
 		return -1;
 	}
-	zmq_msg_close(&buffer_msg);
+	comm_msg_close(&buffer_msg);
 
 	return 0;
 }
@@ -150,7 +150,7 @@ recv_dynamic_struct(void *  socket,
 
 			if (!strncmp("$ERRIMSS_NO_KEY_AVAIL$", struct_->uri_, 22))
 			{
-				zmq_msg_close(&msg_struct);
+				comm_msg_close(&msg_struct);
 				return 0;
 			}
 
@@ -181,7 +181,7 @@ recv_dynamic_struct(void *  socket,
 
 			if (!strncmp("$ERRIMSS_NO_KEY_AVAIL$", struct_->uri_, 22))
 			{
-				zmq_msg_close(&msg_struct);
+				comm_msg_close(&msg_struct);
 				return 0;
 			}
 
@@ -202,7 +202,7 @@ recv_dynamic_struct(void *  socket,
 		}
 	}
  
-	zmq_msg_close(&msg_struct);
+	comm_msg_close(&msg_struct);
 
 	return 1;
 }

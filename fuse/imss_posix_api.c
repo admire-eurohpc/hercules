@@ -132,8 +132,6 @@ int imss_getattr(const char *path, struct stat *stbuf)
 	char imss_path[MAX_PATH] = {0};
 	dataset_info metadata;
 	struct timespec spec;
-
-	bzero(imss_path, MAX_PATH);
 	get_iuri(path, imss_path);
 	memset(stbuf, 0, sizeof(struct stat));
 	clock_gettime(CLOCK_REALTIME, &spec);
@@ -166,7 +164,6 @@ int imss_getattr(const char *path, struct stat *stbuf)
 				stbuf->st_size = 4;
 				stbuf->st_nlink = 1;
 				stbuf->st_mode = S_IFDIR | 0755;
-
 				//Free resources
 				//free(buffer);
 				free(refs);
@@ -186,7 +183,6 @@ int imss_getattr(const char *path, struct stat *stbuf)
 			//FIXME! Not always possible!!!!
 			//
 			//
-			
 			fd_lookup(imss_path, &fd, &stats, &aux);
 			if (fd >= 0) 
 				ds = fd;
@@ -255,8 +251,6 @@ int imss_readdir(const char *path, void *buf, posix_fill_dir_t filler, off_t off
 	int n_ent = 0;
 
 	char imss_path[MAX_PATH] = {0};
-
-	bzero(imss_path, MAX_PATH);
 	get_iuri(path, imss_path);
 	//Call IMSS to get metadata
 	if((n_ent = get_dir((char*)imss_path, &buffer, &refs)) < 0){
@@ -271,9 +265,11 @@ int imss_readdir(const char *path, void *buf, posix_fill_dir_t filler, off_t off
 	//printf("[FUSE] imss_readdir %s has=%d\n",path, n_ent);
 	for(int i = 0; i < n_ent; ++i) {
 		if (i == 0) {
+			//printf("[readdir]. y ..\n");
 			filler(buf, "..", NULL, 0);
 			filler(buf, ".", NULL, 0);
 		} else {
+			//printf("[readdir]%s\n",refs[i]+6);
 			struct stat stbuf;
 			int error = imss_getattr(refs[i]+6, &stbuf); 
 			if (!error) {
@@ -318,8 +314,6 @@ int imss_open(const char *path, uint64_t *fh)
 	//DEBUG
 	char imss_path[MAX_PATH] = {0};
 	int32_t file_desc;
-
-	bzero(imss_path, MAX_PATH);
 	get_iuri(path, imss_path);
 
 
@@ -377,7 +371,7 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 	size_t byte_count = 0;
 	int64_t rbytes;
 
-	char rpath[MAX_PATH];
+	char rpath[MAX_PATH] = {0};
 	get_iuri(path, rpath);
 
 	int fd;
@@ -472,7 +466,7 @@ int imss_vread_prefetch(const char *path, char *buf, size_t size, off_t offset)
 	size_t byte_count = 0;
 	int64_t rbytes;
 
-	char rpath[MAX_PATH];
+	char rpath[MAX_PATH] = {0};
 	get_iuri(path, rpath);
 
 	int fd;
@@ -657,9 +651,9 @@ int imss_vread_no_prefetch(const char *path, char *buf, size_t size, off_t offse
 	size_t byte_count = 0;
 	int64_t rbytes;
 
-	char rpath[MAX_PATH];
+	char rpath[MAX_PATH] = {0};
 	get_iuri(path, rpath);
-
+	//printf("rpath=%s\n",rpath);
 	int fd;
 	struct stat stats;
 	char * aux;
@@ -776,7 +770,7 @@ int imss_vread_2x(const char *path, char *buf, size_t size, off_t offset)
 	size_t byte_count = 0;
 	int64_t rbytes;
 
-	char rpath[MAX_PATH];
+	char rpath[MAX_PATH] = {0};
 	get_iuri(path, rpath);
 
 	int fd;
@@ -921,6 +915,7 @@ int imss_vread_2x(const char *path, char *buf, size_t size, off_t offset)
 }
 
 int imss_read(const char *path, char *buf, size_t size, off_t offset) {
+	//printf("imss_read path=%s size=%ld\n",path,size);
    if (MULTIPLE==1){
       imss_vread_prefetch(path, buf, size, offset);
    }else if(MULTIPLE==2){
@@ -941,7 +936,7 @@ int imss_read(const char *path, char *buf, size_t size, off_t offset) {
 
 int imss_write(const char *path, const char *buf, size_t size, off_t off)
 {
-	//printf("IMSS_WRITE size=%ld path=%s off=%ld IMSS_DATA_BLOCKSIZE=%ld\n",size, path, off, IMSS_DATA_BSIZE); 
+	printf("IMSS_WRITE size=%ld path=%s off=%ld IMSS_DATA_BLOCKSIZE=%ld\n",size, path, off, IMSS_DATA_BSIZE); 
 	//Compute offsets to write
 	int64_t curr_blk, end_blk, start_offset, end_offset;
 	int64_t start_blk = off / IMSS_DATA_BSIZE + 1; //Add one to skip block 0
@@ -960,8 +955,7 @@ int imss_write(const char *path, const char *buf, size_t size, off_t off)
 	struct stat header;
 	//char *aux = malloc(IMSS_BLKSIZE*KB);
 	char *aux;
-	char rpath[MAX_PATH];
-	bzero(rpath, MAX_PATH);
+	char rpath[MAX_PATH] = {0};
 	get_iuri(path, rpath);
 
 
@@ -973,7 +967,7 @@ int imss_write(const char *path, const char *buf, size_t size, off_t off)
 	else if (fd == -2)
 		return -ENOENT;
 	
-	//printf("Writing curr_block=%ld end_block=%ld numbers of block=%ld\n",curr_blk, end_blk,(end_blk-curr_blk+1));
+	printf("Writing curr_block=%ld end_block=%ld numbers of block=%ld\n",curr_blk, end_blk,(end_blk-curr_blk+1));
 	if((end_blk-curr_blk)>1){
 		writev_multiple(buf,ds, curr_blk, end_blk, start_offset, end_offset, IMSS_DATA_BSIZE, size);
 		
@@ -1089,8 +1083,7 @@ int imss_release(const char * path)
 {
 	//Update dates
 	int ds = 0;
-	char rpath[MAX_PATH];
-	bzero(rpath, MAX_PATH);
+	char rpath[MAX_PATH] = {0};
 	get_iuri(path, rpath);
 
 	int fd;
@@ -1145,8 +1138,7 @@ int imss_create(const char * path, mode_t mode, uint64_t * fh)
 	//TODO check mode
 	struct stat ds_stat;
 	//Check if already created!
-	char rpath[MAX_PATH];
-	bzero(rpath, MAX_PATH);
+	char rpath[MAX_PATH] = {0};
 	get_iuri(path, rpath);
 
 	//Assing file handler and create dataset
@@ -1222,30 +1214,30 @@ int imss_rmdir(const char * path){
 	char ** refs;
 	int n_ent = 0;
 	char imss_path[MAX_PATH] = {0};
-	bzero(imss_path, MAX_PATH);
 	get_iuri(path, imss_path);
 
-	if(imss_path[strlen(imss_path)-1]=='/'){
-	}else{
+	if(imss_path[strlen(imss_path)-1]!='/'){
 		strcat(imss_path,"/");
 	}
 	
-	printf("-----------Remove dir %s\n",imss_path);
+	//printf("-----------Remove dir %s\n",imss_path);
 	if((n_ent = get_dir((char*)imss_path, &buffer, &refs)) > 0){
 		if(n_ent > 1){
-			printf("NO ESTA VACIO EL DIRECTORIO\n");
+			//printf("NO ESTA VACIO EL DIRECTORIO tiene=%d\n",n_ent);
 			return -EPERM;
 		}
 	}else{
 		return -ENOENT;
 	}
-
-	if(n_ent==1){
-        char new_path[MAX_PATH];
+	/*if(n_ent==1){
+        char new_path[MAX_PATH] = {0};
 		strcpy(new_path,path);
-		strcat(new_path,"/");
+		if(imss_path[strlen(imss_path)-1]!='/'){
+			strcat(imss_path,"/");
+		}
 		imss_unlink(new_path);
-	}
+	}*/
+	imss_unlink(imss_path);
 
 	return 0;
 }
@@ -1255,8 +1247,6 @@ int imss_unlink(const char * path){
 	char imss_path[MAX_PATH] = {0};
 
 	get_iuri(path, imss_path);
-	printf("imss_unlink=%s\n", path);
-	//char *buff = malloc(IMSS_BLKSIZE*KB);
 
 	uint32_t ds;
 	int fd;
@@ -1296,7 +1286,6 @@ int imss_unlink(const char * path){
 	delete_dataset(imss_path);
 
 	release_dataset(ds);
-	//free (buff);
 	return 0;
 }
 
@@ -1306,8 +1295,7 @@ int imss_utimens(const char * path, const struct timespec tv[2]) {
 	clock_gettime(CLOCK_REALTIME, &spec);
 	uint32_t file_desc;
 
-	char rpath[MAX_PATH];
-	bzero(rpath, MAX_PATH);
+	char rpath[MAX_PATH] = {0};
 	get_iuri(path, rpath);
 
 	//Assing file handler and create dataset
@@ -1351,8 +1339,7 @@ int imss_utimens(const char * path, const struct timespec tv[2]) {
 
 
 int imss_mkdir(const char * path, mode_t mode) {
-	char rpath[MAX_PATH];
-	bzero(rpath, MAX_PATH);
+	char rpath[MAX_PATH] = {0};
 	uint64_t fi;
 	strcpy(rpath,path);
 	if (path[strlen(path)-1] != '/'){
@@ -1377,8 +1364,7 @@ int imss_flush(const char * path){
 
 
 
-	char rpath[MAX_PATH];
-	bzero(rpath, MAX_PATH);
+	char rpath[MAX_PATH] = {0};
 	get_iuri(path, rpath);
 
 	//Assing file handler and create dataset
@@ -1433,8 +1419,7 @@ int imss_chmod(const char *path, mode_t mode){
 	struct stat ds_stat;
 	uint32_t file_desc;
 	//printf("chmod_path=%s\n",path);
-	char rpath[MAX_PATH];
-	bzero(rpath, MAX_PATH);
+	char rpath[MAX_PATH] = {0};
 	get_iuri(path, rpath);
 
 	//Assing file handler and create dataset
@@ -1479,8 +1464,7 @@ int imss_chmod(const char *path, mode_t mode){
 int imss_chown(const char *path, uid_t uid, gid_t gid) {
 	struct stat ds_stat;
 	uint32_t file_desc;
-	char rpath[MAX_PATH];
-	bzero(rpath, MAX_PATH);
+	char rpath[MAX_PATH] = {0};
 	get_iuri(path, rpath);
 
 	//Assing file handler and create dataset
@@ -1532,12 +1516,10 @@ int imss_rename(const char *old_path, const char *new_path){
 	struct stat ds_stat_n;
 	int file_desc_o, file_desc_n;
 	int fd=0;
-	char old_rpath[MAX_PATH];
-	bzero(old_rpath, MAX_PATH);
+	char old_rpath[MAX_PATH] = {0};
 	get_iuri(old_path, old_rpath);
 
-	char new_rpath[MAX_PATH];
-	bzero(new_rpath, MAX_PATH);
+	char new_rpath[MAX_PATH] = {0};
 	get_iuri(new_path, new_rpath);
 
     //CHECKING IF IS MV DIR TO DIR
@@ -1578,8 +1560,7 @@ int imss_rename(const char *old_path, const char *new_path){
 			char dir_dest[256] = {0};
 			memcpy(dir_dest,&new_path[0],pos+1);
 
-			char rdir_dest[MAX_PATH];
-			bzero(rdir_dest, MAX_PATH);
+			char rdir_dest[MAX_PATH] = {0};
 			get_iuri(dir_dest,rdir_dest);
 
 			res = imss_getattr(dir_dest, &ds_stat_n);
