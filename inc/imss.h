@@ -99,8 +99,10 @@ typedef struct {
 	int32_t local_conn;
 	//Actual size
 	int64_t size;
-
-
+	//Server of data where node_0 is
+	int32_t node_0;
+	//N_servers
+	int32_t n_servers;
 	/*************** USED EXCLUSIVELY BY LOCAL DATASETS ***************/
 
 

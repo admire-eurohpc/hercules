@@ -323,6 +323,7 @@ srv_worker (void * th_argv)
 					}
 					case RENAME_DIR_DIR_OP:
 					{
+						//printf("SRV_WORKER RENAME_DIR_DIR_OP\n");
 						std::size_t found = key.find(' ');
 						if (found!=std::string::npos){
 							string old_dir = key.substr(0,found);
@@ -838,7 +839,7 @@ stat_worker (void * th_argv)
 					}
 					case READ_OP:
 					{
-						//printf("STAT_WORKER READ-OP\n");
+						//printf("STAT_WORKER READ_OP\n");
 						//Check if there was an associated block to the key.
 						if (!(map->get(key, &address_, &block_size_rtvd)))
 						{
@@ -971,8 +972,10 @@ stat_worker (void * th_argv)
 
 					int32_t insert_successful;
 					//Include the new record in the tracking structure.
-					/*imss_info * data = (imss_info *) buffer;
-					printf("WRITE_OP data->type=%c\n",data->type);*/
+					dataset_info * data = (dataset_info *) buffer;
+					printf("WRITE_OP data->type=%c\n",data->type);
+					printf("WRITE_OP data->servers=%d\n",data->n_servers);
+					printf("WRITE_OP data->node_0=%d\n",data->node_0);
 					insert_successful=map->put(key, buffer, block_size_recv);
 					if (insert_successful != 0)
 					{

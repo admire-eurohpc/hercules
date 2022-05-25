@@ -87,16 +87,21 @@ find_server (int32_t 	  n_servers,
 	     int32_t 	  op_type)
 {
 	int32_t next_server = -1;
-
 	switch (session_plcy)
 	{
 		//Follow a round robin policy.
 		case ROUND_ROBIN_:
 		{
-			uint16_t crc_ = crc16(fname, strlen(fname));
-
-			//First server that received a block from the current file.
-			next_server = crc_ % n_servers;
+			dataset_info new_dataset;
+			//Dataset metadata request.
+			int32_t stat_dataset_res = stat_dataset(fname, &new_dataset);
+			if(stat_dataset_res==0){
+				uint16_t crc_ = crc16(fname, strlen(fname));
+				//First server that received a block from the current file.
+				next_server = crc_ % n_servers;
+			}else{
+				next_server = new_dataset.node_0;
+			}
 
 			//Next server receiving the following block.
 			next_server = (next_server + n_msg) % n_servers;

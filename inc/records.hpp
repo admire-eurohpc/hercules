@@ -82,8 +82,8 @@ class map_records
 
 			struct utsname detect;
 			uname(&detect);
-			/*printf("Nodename    - %s \n", detect.nodename);
-			printf("add in map=%s\n",key.c_str());*/
+			printf("Nodename    - %s \n", detect.nodename);
+			printf("add in map=%s\n",key.c_str());
 			quantity_occupied = quantity_occupied + length;
 			buffer.insert({key, value});
 
@@ -99,19 +99,21 @@ class map_records
 			std::map <std::string, std::pair<unsigned char *, uint64_t>>::iterator it;
 			//Block the access to the map structure.
 			std::unique_lock<std::mutex> lock(mut);
-				
+			
+			struct utsname detect;
+			uname(&detect);
+
 			//Search for the address related to the key.
 			it = buffer.find(key);
 			//Check if the value did exist within the map.
 			if(it == buffer.end()){
-				//printf("NO EXIST=%s\n",key.c_str());
+				printf("Nodename-%s NO EXIST=%s\n",detect.nodename, key.c_str());
 				return 0;
 			}
-			/*struct utsname detect;
-			uname(&detect);
-			printf("Nodename    - %s \n", detect.nodename);
+			
+			printf("Nodename    - %s	GET-%s \n", detect.nodename, key.c_str());
 			//Assign the values obtained to the provided references.
-			std::cout <<"Exist " << key << '\n';*/
+			//std::cout <<"Exist " << key << '\n';
 			*(add_) = it->second.first;
 			*(size_) = it->second.second;
 
@@ -192,13 +194,16 @@ class map_records
 		//Method renaming from srv_worker
 		int32_t rename_data_dir_dir_srv_worker(std::string old_dir, std::string rdir_dest)
 		{
-			//printf("rename data_dir_dir_srv_worker\n");
+			//printf("rename data_dir_dir_srv_worker old_dir=%s dir_dest=%s\n",old_dir.c_str(), rdir_dest.c_str());
 			//Map iterator that will be searching for the key.
 			std::map <std::string, std::pair<unsigned char *, uint64_t>>::iterator it;
 			//Block the access to the map structure.
 			std::unique_lock<std::mutex> lock(mut);
 			std::vector<string> vec;
 			
+			struct utsname detect;
+			uname(&detect);
+
 			for(const auto & it : buffer) {
 				string key = it.first;
 				int found = key.find(old_dir);
@@ -215,12 +220,14 @@ class map_records
 			std::vector<string>::iterator i;
 			for (i=vec.begin(); i<vec.end(); i++){
 				string key = *i;
+				printf("Nodename    - %s	Rename modify original=%s\n",detect.nodename,key.c_str());
 				key.erase(0,old_dir.length()-1);
 				
 				string new_path=rdir_dest;
 				new_path.append(key);
 		
 				auto node = buffer.extract(*i);
+				printf("Nodename    - %s	Rename new=%s\n",detect.nodename, new_path.c_str());
 				node.key() = new_path;
 				buffer.insert(std::move(node));
 

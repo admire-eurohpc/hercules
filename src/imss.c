@@ -60,7 +60,6 @@ extern uint16_t	connection_port; //FIXME
 
 char        att_deployment[URI_];
 
-
 /**********************************************************************************/
 /*********************** IMSS INTERNAL MANAGEMENT FUNCTIONS ***********************/
 /**********************************************************************************/
@@ -224,6 +223,49 @@ GInsert (int32_t * pos,
 			g_array_remove_index(garray_insert, *pos);
 
 		g_array_insert_val(garray_insert, *pos, *item);
+		inserted_pos = *pos;
+	}
+
+	return inserted_pos;
+}
+
+//Method inserting an element into a certain control GArray vector.
+int32_t
+Get_fd (int32_t * pos,
+	 int32_t * max, 
+	 GArray *  garray_insert,
+	 GArray *  garray_free)
+{
+	//Position where the element will be inserted.
+	int32_t inserted_pos = -1;
+
+	*pos = -1;
+
+	//Updating the position where the following item will be inserted within a GArray.
+	if (garray_free->len)
+	{
+		//Retrieve a free position from the existing wholes within the vector.
+		printf("here1\n");
+		*pos = g_array_index(garray_free, int32_t, 0);
+		//g_array_remove_index(garray_free, 0);
+	}
+
+	if (*pos == -1)
+	{
+		//Append an element into the corresponding array if there was no space left.
+		printf("here2\n");
+		//g_array_append_val(garray_insert, *item);
+		inserted_pos = ++(*max) - 1;
+	}
+	else
+	{
+		//Insert an element in a certain position within the provided garray.
+
+		if (*pos < garray_insert->len)
+			printf("here3\n");
+			//g_array_remove_index(garray_insert, *pos);
+
+		//g_array_insert_val(garray_insert, *pos, *item);
 		inserted_pos = *pos;
 	}
 
@@ -1096,6 +1138,9 @@ create_dataset(char *  dataset_uri,
 	       int32_t data_elem_size,
 	       int32_t repl_factor)
 {	
+
+	curr_imss = g_array_index(imssd, imss, curr_dataset.imss_d);
+
 	if ((dataset_uri == NULL) || (policy == NULL) || !num_data_elem || !data_elem_size)
 	{
 		fprintf(stderr, "ERRIMSS_CRTDATASET_WRONGARG\n");
@@ -1139,7 +1184,10 @@ create_dataset(char *  dataset_uri,
 	new_dataset.local_conn 		= associated_imss.conns.matching_server;
 	new_dataset.repl_factor		= repl_factor;
 	new_dataset.size 			= 0;
-
+	
+	new_dataset.n_servers		= curr_imss.info.num_storages;
+	//int32_t fd = Get_fd(&datasetd_pos, &datasetd_max_size, datasetd, free_datasetd);
+	new_dataset.node_0 = find_server(curr_imss.info.num_storages, 0, dataset_uri, SET);
 	//Size of the message to be sent.
 	uint64_t msg_size = sizeof(dataset_info);
 
@@ -1639,7 +1687,6 @@ int32_t
 rename_dataset_srv_worker_dir_dir(char * old_dir, char * rdir_dest,
 int32_t 	 dataset_id,	 int32_t 	 data_id)
 {
-	//printf("RENAMING SRV_WORKER_DIR_DIR\n");
 	int32_t n_server;
 	//Server containing the corresponding data to be retrieved.
 	if ((n_server = get_data_location(dataset_id, data_id, GET)) == -1)
@@ -1656,7 +1703,6 @@ int32_t 	 dataset_id,	 int32_t 	 data_id)
 	{
 		//Server storing the current data block.
 		uint32_t n_server_ = (n_server + i*(curr_imss_storages/curr_dataset.repl_factor)) % curr_imss_storages;
-
 		repl_servers[i] = n_server_;
 
 		//Check if the current connection is the local one (if there is).
@@ -1682,13 +1728,13 @@ int32_t 	 dataset_id,	 int32_t 	 data_id)
 	key[key_length-1] = '\0';
 
 	//Request the concerned block to the involved servers.
-	for (int32_t i = 0; i < curr_dataset.repl_factor; i++)
+	//for (int32_t i = 0; i < curr_dataset.repl_factor; i++)
+	for (int32_t i = 0; i < curr_imss.info.num_storages; i++)
 	{
-		//printf("BLOCK %d ASKED TO %d SERVER with key: %s (%d)\n", data_id, repl_servers[i], key, key_length);
-
 		//Send read request message specifying the block URI.
-		//if (comm_send(curr_imss.conns.sockets_[repl_servers[i]], key, KEY, 0) < 0)
-		if (comm_send(curr_imss.conns.sockets_[repl_servers[i]], key, key_length, 0) != key_length)
+		
+		//if (comm_send(curr_imss.conns.sockets_[repl_servers[i]], key, key_length, 0) != key_length)
+		if (comm_send(curr_imss.conns.sockets_[i], key, key_length, 0) != key_length)
 		{
 			perror("ERRIMSS_GETDATA_REQ");
 			return -1;
@@ -1700,8 +1746,7 @@ int32_t 	 dataset_id,	 int32_t 	 data_id)
 			perror("ERRIMSS_RECVDYNAMSTRUCT_INIT");
 			return -1;
 		}
-
-		if (comm_msg_recv(&msg_struct, curr_imss.conns.sockets_[repl_servers[i]], 0) == -1)
+		if (comm_msg_recv(&msg_struct, curr_imss.conns.sockets_[i], 0) == -1)
 		{
 			perror("ERRIMSS_RECVDYNAMSTRUCT_RECV");
 			return -1;
@@ -1971,7 +2016,7 @@ get_data(int32_t 	 dataset_id,
 	{
 		//Server storing the current data block.
 		uint32_t n_server_ = (n_server + i*(curr_imss_storages/curr_dataset.repl_factor)) % curr_imss_storages;
-
+		//printf("Server storing is=%d\n",n_server_);
 		repl_servers[i] = n_server_;
 
 		//Check if the current connection is the local one (if there is).
@@ -1999,7 +2044,7 @@ get_data(int32_t 	 dataset_id,
 	//Request the concerned block to the involved servers.
 	for (int32_t i = 0; i < curr_dataset.repl_factor; i++)
 	{
-		printf("BLOCK %d ASKED TO %d SERVER with key: %s (%d)\n", data_id, repl_servers[i], key, key_length);
+		printf("CLIENT GET_DATA BLOCK %d ASKED TO %d SERVER with key: %s (%d)\n", data_id, repl_servers[i], key, key_length);
 
 		//Send read request message specifying the block URI.
 		//if (comm_send(curr_imss.conns.sockets_[repl_servers[i]], key, KEY, 0) < 0)

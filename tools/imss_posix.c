@@ -359,6 +359,7 @@ int __lxstat(int fd, const char *pathname, struct stat *buf)
     char * workdir = getenv("PWD");
     real__lxstat = dlsym(RTLD_NEXT, "__lxstat");
     if(! strncmp(pathname, MOUNT_POINT, strlen(MOUNT_POINT)) || ! strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT))) {
+        printf("__lxstat WORKED!\n");
         char * new_path; 
         new_path = convert_path(pathname, MOUNT_POINT);
         //int exist = map_fd_search(map_fd, new_path, &ret, &p);
@@ -377,6 +378,7 @@ int __xstat(int fd, const char *pathname, struct stat *buf)
     char * workdir = getenv("PWD");
     real_xstat = dlsym(RTLD_NEXT, "__xstat");
     if(! strncmp(pathname, MOUNT_POINT, strlen(MOUNT_POINT)) || ! strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT))) {
+        printf("__xstat WORKED!\n");
         char * new_path; 
         new_path = convert_path(pathname, MOUNT_POINT);
        // int exist = map_fd_search(map_fd, new_path, &ret, &p);
@@ -394,6 +396,7 @@ int stat(const char *pathname, struct stat *buf){
     char * workdir = getenv("PWD");
     real_stat = dlsym(RTLD_NEXT, "stat");
     if(! strncmp(pathname, MOUNT_POINT, strlen(MOUNT_POINT)) || ! strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT))) {
+        printf("stat WORKED!\n");
         char * new_path; 
         new_path = convert_path(pathname, MOUNT_POINT);
         //int exist = map_fd_search(map_fd, new_path, &ret, &p);
@@ -714,7 +717,7 @@ int rmdir (const char *path) {
 }
 
 int unlinkat (int fd, const char *name, int flag){//rm & rm -r
-    
+    printf("unlinkat WORKED!\n");
     real_unlinkat = dlsym(RTLD_NEXT,"unlinkat");
     int ret = 0;
     char * workdir = getenv("PWD");

@@ -41,7 +41,7 @@ int32_t error_print=0;//Temporal solution maybe to change in the future.
 
 extern int32_t REPL_FACTOR;
 
-
+extern int32_t  N_SERVERS;
 extern int32_t N_BLKS;
 extern char * POLICY; 
 extern uint64_t IMSS_BLKSIZE;
@@ -1568,8 +1568,9 @@ int imss_rename(const char *old_path, const char *new_path){
 				if (S_ISDIR(ds_stat_n.st_mode)) {
 					//WE ARE IN MV DIR TO DIR
 					map_rename_dir_dir(map, old_rpath,new_rpath);
-					map_rename_dir_dir_prefetch(map_prefetch, old_rpath,new_rpath);
-
+					if(MULTIPLE==1){
+						map_rename_dir_dir_prefetch(map_prefetch, old_rpath,new_rpath);
+					}
 					//RENAME LOCAL_IMSS(GARRAY), SRV_STAT(MAP & TREE)
 					rename_dataset_metadata_dir_dir(old_rpath,new_rpath);
 
