@@ -36,7 +36,7 @@ int32_t main (int32_t argc, char **argv)
 
 		return -1;
 
-	printf("BLOCK %s$%d LOCATED IN: %s\n", dataset_name, block_number, location);
+	//printf("BLOCK %s$%d LOCATED IN: %s\n", dataset_name, block_number, location);
 
 	// 3. Destroy the communication established with the metadata server.
 	if (stat_release() == -1)

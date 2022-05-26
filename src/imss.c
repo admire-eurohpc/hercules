@@ -1956,7 +1956,7 @@ readv_multiple(int32_t 	 dataset_id,
 	//Request the concerned block to the involved servers.
 	for (int32_t i = 0; i < curr_dataset.repl_factor; i++)
 	{
-		printf("BLOCK %d ASKED TO %d SERVER with key: %s (%d)\n", curr_block, repl_servers[i], key, key_length);
+		//printf("BLOCK %d ASKED TO %d SERVER with key: %s (%d)\n", curr_block, repl_servers[i], key, key_length);
 
 		//Send read request message specifying the block URI.
 		//if (comm_send(curr_imss.conns.sockets_[repl_servers[i]], key, KEY, 0) < 0)
@@ -2044,7 +2044,7 @@ get_data(int32_t 	 dataset_id,
 	//Request the concerned block to the involved servers.
 	for (int32_t i = 0; i < curr_dataset.repl_factor; i++)
 	{
-		printf("CLIENT GET_DATA BLOCK %d ASKED TO %d SERVER with key: %s (%d)\n", data_id, repl_servers[i], key, key_length);
+		//printf("CLIENT GET_DATA BLOCK %d ASKED TO %d SERVER with key: %s (%d)\n", data_id, repl_servers[i], key, key_length);
 
 		//Send read request message specifying the block URI.
 		//if (comm_send(curr_imss.conns.sockets_[repl_servers[i]], key, KEY, 0) < 0)
@@ -2053,6 +2053,8 @@ get_data(int32_t 	 dataset_id,
 			perror("ERRIMSS_GETDATA_REQ");
 			return -1;
 		}
+		
+		//printf("GET_DATA after send petition to read\n");
 		//Receive data related to the previous read request directly into the buffer.
 		if (comm_recv(curr_imss.conns.sockets_[repl_servers[i]], buffer, curr_dataset.data_entity_size, 0) == -1)
 		{
@@ -2064,7 +2066,6 @@ get_data(int32_t 	 dataset_id,
 			else
 				break;
 		}
-
 
 		//Check if the requested key was correctly retrieved.
 		if (strncmp((const char *) buffer, "$ERRIMSS_NO_KEY_AVAIL$", 22)){

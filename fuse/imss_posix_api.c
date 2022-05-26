@@ -50,7 +50,8 @@ extern void * map;
 extern void * map_prefetch;
 
 extern uint16_t PREFETCH;
-extern uint16_t MULTIPLE;
+extern uint16_t MULTIPLE_READ;
+extern uint16_t MULTIPLE_WRITE;
 
 extern unsigned char * BUFFERPREFETCH;
 extern char prefetch_path  [256];
@@ -244,7 +245,7 @@ int imss_getattr(const char *path, struct stat *stbuf)
 
 int imss_readdir(const char *path, void *buf, posix_fill_dir_t filler, off_t offset)
 {
-	printf("imss_readdir=%s\n",path);
+	//printf("imss_readdir=%s\n",path);
 	//Needed variables for the call
 	char * buffer;
 	char ** refs;
@@ -390,7 +391,6 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 		return -ENOENT;
 	
 	memset(buf, 0, size);
-	
 	while(curr_blk <= end_blk){
 
 		pthread_mutex_lock(&lock);
@@ -402,23 +402,23 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 		delta_us = (int) (end.tv_usec - start.tv_usec);
 		//printf("SREAD delta_us=%6.3f\n",(delta_us/1000.0F));
 		pthread_mutex_unlock(&lock);
-
 		if( err != -1){
 			//First block case
 			if (first == 0) {
-				if(size < stats.st_size - start_offset){
-				    //to_read = size;
-					to_read = IMSS_BLKSIZE*KB - start_offset;
+				long total=stats.st_size - start_offset;
+				if(size < (stats.st_size - start_offset) && size < IMSS_DATA_BSIZE){
+				    to_read = size;
+					//to_read = IMSS_DATA_BSIZE - start_offset;
 				}else{ 	
-					if(stats.st_size < IMSS_BLKSIZE*KB){
+					if(stats.st_size < IMSS_DATA_BSIZE){
+						
 						to_read = stats.st_size - start_offset;
+						
 					}else{
-						to_read = IMSS_BLKSIZE*KB - start_offset;
-					}																
-					
-				    
+						
+						to_read = IMSS_DATA_BSIZE - start_offset;
+					}																			    
 				}
-
 				//Check if offset is bigger than filled, return 0 because is EOF case
 				if(start_offset > stats.st_size) 
 					return 0; 
@@ -426,12 +426,11 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 				memcpy(buf, aux + start_offset, to_read);
 				byte_count += to_read;
 				++first;
-
 				//Middle block case
 			} else if (curr_blk != end_blk) {
 				//memcpy(buf + byte_count, aux + HEADER, IMSS_BLKSIZE*KB);
-				memcpy(buf + byte_count, aux, IMSS_BLKSIZE*KB);
-				byte_count += IMSS_BLKSIZE*KB;
+				memcpy(buf + byte_count, aux, IMSS_DATA_BSIZE);
+				byte_count += IMSS_DATA_BSIZE;
 				//End block case
 			}  else {
 
@@ -439,6 +438,7 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 				int64_t pending = size - byte_count;
 				memcpy(buf + byte_count, aux, pending);
 				byte_count += pending;
+				
 			}
 
 		} 
@@ -916,15 +916,17 @@ int imss_vread_2x(const char *path, char *buf, size_t size, off_t offset)
 
 int imss_read(const char *path, char *buf, size_t size, off_t offset) {
 	//printf("imss_read path=%s size=%ld\n",path,size);
-   if (MULTIPLE==1){
-      imss_vread_prefetch(path, buf, size, offset);
-   }else if(MULTIPLE==2){
-      imss_vread_no_prefetch(path, buf, size, offset);
-   }else if(MULTIPLE==3){
-      imss_vread_2x(path, buf, size, offset);
+   int ret;
+   if (MULTIPLE_READ==1){
+      ret = imss_vread_prefetch(path, buf, size, offset);
+   }else if(MULTIPLE_READ==2){
+      ret = imss_vread_no_prefetch(path, buf, size, offset);
+   }else if(MULTIPLE_READ==3){
+      ret = imss_vread_2x(path, buf, size, offset);
    }else{
-	   imss_sread(path, buf, size, offset);
+	   ret = imss_sread(path, buf, size, offset);
    }
+   return ret;
 }
 
 
@@ -936,7 +938,7 @@ int imss_read(const char *path, char *buf, size_t size, off_t offset) {
 
 int imss_write(const char *path, const char *buf, size_t size, off_t off)
 {
-	printf("IMSS_WRITE size=%ld path=%s off=%ld IMSS_DATA_BLOCKSIZE=%ld\n",size, path, off, IMSS_DATA_BSIZE); 
+	//printf("IMSS_WRITE size=%ld path=%s off=%ld IMSS_DATA_BLOCKSIZE=%ld\n",size, path, off, IMSS_DATA_BSIZE); 
 	//Compute offsets to write
 	int64_t curr_blk, end_blk, start_offset, end_offset;
 	int64_t start_blk = off / IMSS_DATA_BSIZE + 1; //Add one to skip block 0
@@ -967,20 +969,23 @@ int imss_write(const char *path, const char *buf, size_t size, off_t off)
 	else if (fd == -2)
 		return -ENOENT;
 	
-	printf("Writing curr_block=%ld end_block=%ld numbers of block=%ld\n",curr_blk, end_blk,(end_blk-curr_blk+1));
-	if((end_blk-curr_blk)>1){
-		writev_multiple(buf,ds, curr_blk, end_blk, start_offset, end_offset, IMSS_DATA_BSIZE, size);
-		
-		//Update header count if the file has become bigger
-		if(size + off > stats.st_size){
-			stats.st_size = size + off;
-			stats.st_blocks = curr_blk-1;
-			pthread_mutex_lock(&lock);
-			map_update(map, rpath, ds, stats);
-			pthread_mutex_unlock(&lock);
-		}
+	//printf("Writing curr_block=%ld end_block=%ld numbers of block=%ld\n",curr_blk, end_blk,(end_blk-curr_blk+1));
+	if(MULTIPLE_WRITE == 1){
+		//printf("MULTIPLE WRITE\n");
+		if((end_blk-curr_blk)>1){
+			writev_multiple(buf,ds, curr_blk, end_blk, start_offset, end_offset, IMSS_DATA_BSIZE, size);
+			
+			//Update header count if the file has become bigger
+			if(size + off > stats.st_size){
+				stats.st_size = size + off;
+				stats.st_blocks = curr_blk-1;
+				pthread_mutex_lock(&lock);
+				map_update(map, rpath, ds, stats);
+				pthread_mutex_unlock(&lock);
+			}
 
-		return size;
+			return size;
+		}
 	}
 
 	//For the rest of blocks
@@ -1568,7 +1573,7 @@ int imss_rename(const char *old_path, const char *new_path){
 				if (S_ISDIR(ds_stat_n.st_mode)) {
 					//WE ARE IN MV DIR TO DIR
 					map_rename_dir_dir(map, old_rpath,new_rpath);
-					if(MULTIPLE==1){
+					if(MULTIPLE_READ==1){
 						map_rename_dir_dir_prefetch(map_prefetch, old_rpath,new_rpath);
 					}
 					//RENAME LOCAL_IMSS(GARRAY), SRV_STAT(MAP & TREE)

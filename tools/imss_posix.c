@@ -39,13 +39,14 @@ char     IMSS_ROOT[32];
 char     META_HOSTFILE[512];
 uint64_t STORAGE_SIZE = 1024*1024*16; //In Kb, Default 16 GB
 uint64_t META_BUFFSIZE = 1024 * 16; //In Kb, Default 16MB
-uint64_t IMSS_BLKSIZE = 16;
+uint64_t IMSS_BLKSIZE = 512;
 uint64_t IMSS_BUFFSIZE = 1024*2048; //In Kb, Default 2Gb
 int32_t REPL_FACTOR = 1; //Default none
 int32_t  IMSS_DEBUG = 0;
 
 uint16_t PREFETCH = 6;
-uint16_t MULTIPLE = 2;
+uint16_t MULTIPLE_READ = 0;//1=vread with prefetch, 2=vread without prefetch, 3=vread_2x else sread
+uint16_t MULTIPLE_WRITE = 0;//1=writev, else sread
 char prefetch_path[256];
 int32_t prefetch_first_block = -1; 
 int32_t prefetch_last_block = -1;
@@ -378,7 +379,7 @@ int __xstat(int fd, const char *pathname, struct stat *buf)
     char * workdir = getenv("PWD");
     real_xstat = dlsym(RTLD_NEXT, "__xstat");
     if(! strncmp(pathname, MOUNT_POINT, strlen(MOUNT_POINT)) || ! strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT))) {
-        printf("__xstat WORKED!\n");
+        //printf("__xstat WORKED!\n");
         char * new_path; 
         new_path = convert_path(pathname, MOUNT_POINT);
        // int exist = map_fd_search(map_fd, new_path, &ret, &p);
@@ -637,10 +638,10 @@ ssize_t read(int fd, void *buf, size_t size){
     char path[256] = {0};
 
     if(map_fd_search_by_val(map_fd, path, fd) == 1) {
-        //printf("CUSTOM read worked! path=%s fd=%d\n",path, fd);
+        //printf("CUSTOM read worked! path=%s fd=%d, size=%ld\n",path, fd, size);
         map_fd_search(map_fd, path, &fd, &p);
         ret = imss_read(path,buf,size,p);
-        //printf("\nEND LD_PRELOAD IMSS_READ ret=%ld\n",ret);
+       // printf("END LD_PRELOAD IMSS_READ ret=%ld, size=%d\n\n",ret, size);
     }else{
         ret = real_read(fd, buf, size);
     }
@@ -717,7 +718,7 @@ int rmdir (const char *path) {
 }
 
 int unlinkat (int fd, const char *name, int flag){//rm & rm -r
-    printf("unlinkat WORKED!\n");
+    //printf("unlinkat WORKED!\n");
     real_unlinkat = dlsym(RTLD_NEXT,"unlinkat");
     int ret = 0;
     char * workdir = getenv("PWD");
@@ -914,13 +915,13 @@ struct dirent *readdir(DIR *dirp)
     }else{
         entry = real_readdir(dirp);
     }
-    if(entry!=NULL){
+   /* if(entry!=NULL){
         printf("entry->d_ino=%ld\n",entry->d_ino);
         printf("entry->d_off=%ld\n",entry->d_off);
         printf("entry->d_reclen=%d\n",entry->d_reclen);
         printf("entry->d_type=%d\n",entry->d_type);
         printf("entry->d_name:%s\n",entry->d_name);
-    }
+    }*/
   
     free(path);
     return entry;

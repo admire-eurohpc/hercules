@@ -479,10 +479,14 @@ srv_worker (void * th_argv)
 			{
 				//printf("WRITE_OP key=%s\n",key.c_str());
 				//std::cout <<"WRITE_OP key:" << key << '\n';
+
+				struct utsname detect;
+				uname(&detect);
+
 				std::size_t found = key.find(' ');
 				if (found!=std::string::npos){
 					
-					//printf("WRITEV CASE\n");
+					printf("WRITEV CASE\n");
 					string path = key.substr(0,found);
 					key.erase(0,found+1);
 					//std::cout <<"path:" << key << '\n';
@@ -537,6 +541,7 @@ srv_worker (void * th_argv)
 						int count = 0;
 						//For the rest of blocks
 						while(curr_blk <= end_blk){
+							//printf("Nodename    - %s current_block=%d\n", detect.nodename, curr_blk);
 							count=count +1;
 							//printf("count=%d\n",count);
 							pos = path.find('$');
@@ -590,6 +595,8 @@ srv_worker (void * th_argv)
 							if (!map->get(element, &address_, &block_size_rtvd))
 							{	
 								map->put(element,aux,block_size_rtvd);
+								
+								//printf("Nodename    - %s after put\n", detect.nodename);
 							}else{
 								memcpy(address_,aux,block_size_rtvd);
 							}
@@ -620,6 +627,7 @@ srv_worker (void * th_argv)
 						int32_t insert_successful;
 						//Include the new record in the tracking structure.
 						insert_successful=map->put(key, buffer, block_size_recv);
+						
 						//Include the new record in the tracking structure.
 						if (insert_successful != 0)
 						{
@@ -972,10 +980,10 @@ stat_worker (void * th_argv)
 
 					int32_t insert_successful;
 					//Include the new record in the tracking structure.
-					dataset_info * data = (dataset_info *) buffer;
+					/*dataset_info * data = (dataset_info *) buffer;
 					printf("WRITE_OP data->type=%c\n",data->type);
 					printf("WRITE_OP data->servers=%d\n",data->n_servers);
-					printf("WRITE_OP data->node_0=%d\n",data->node_0);
+					printf("WRITE_OP data->node_0=%d\n",data->node_0);*/
 					insert_successful=map->put(key, buffer, block_size_recv);
 					if (insert_successful != 0)
 					{

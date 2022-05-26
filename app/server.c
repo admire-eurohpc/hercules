@@ -346,7 +346,6 @@ int32_t main(int32_t argc, char **argv)
 
 		//Number of characters successfully read from the line.
 		int32_t n_chars;
-		printf("num_servers=%ld\n",num_servers);
 		for (int32_t i = 0; i < num_servers; i++)
 		{
 			//Allocate resources in the metadata structure so as to store the current IMSS's IP.

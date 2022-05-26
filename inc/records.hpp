@@ -75,18 +75,16 @@ class map_records
 			//Add a new couple to the map.
 			//printf("total_size=%ld, quantity_occupied=%ld\n",total_size, quantity_occupied);
 			if (quantity_occupied + length > total_size) { //out of space
-			  printf("[Map record] Out of space  %ld/%ld.\n",quantity_occupied + length, total_size);			  
+			 // printf("[Map record] Out of space  %ld/%ld.\n",quantity_occupied + length, total_size);			  
 			  return -1;
 			}
 
 
 			struct utsname detect;
 			uname(&detect);
-			printf("Nodename    - %s \n", detect.nodename);
-			printf("add in map=%s\n",key.c_str());
+			//printf("Nodename    - %s add in map=%s\n", detect.nodename, key.c_str());
 			quantity_occupied = quantity_occupied + length;
 			buffer.insert({key, value});
-
 			return 0;
 		}
 
@@ -107,11 +105,11 @@ class map_records
 			it = buffer.find(key);
 			//Check if the value did exist within the map.
 			if(it == buffer.end()){
-				printf("Nodename-%s NO EXIST=%s\n",detect.nodename, key.c_str());
+				//printf("Nodename-%s NO EXIST=%s\n",detect.nodename, key.c_str());
 				return 0;
 			}
 			
-			printf("Nodename    - %s	GET-%s \n", detect.nodename, key.c_str());
+			//printf("Nodename    - %s	GET-%s \n", detect.nodename, key.c_str());
 			//Assign the values obtained to the provided references.
 			//std::cout <<"Exist " << key << '\n';
 			*(add_) = it->second.first;

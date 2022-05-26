@@ -45,14 +45,15 @@ uint64_t STORAGE_SIZE = 1024*1024*16; //In Kb, Default 16 GB
 uint64_t META_BUFFSIZE = 1024 * 16; //In Kb, Default 16MB
 //uint64_t META_BUFFSIZE = 1024 * 1000;
 //uint64_t IMSS_BLKSIZE = 1024; //In Kb, Default 1 MB
-uint64_t IMSS_BLKSIZE = 16;
+uint64_t IMSS_BLKSIZE = 256;
 //uint64_t IMSS_BUFFSIZE = 1024*1024*2; //In Kb, Default 2Gb
 uint64_t IMSS_BUFFSIZE = 1024*2048; //In Kb, Default 2Gb
 int32_t REPL_FACTOR = 1; //Default none
 char * MOUNTPOINT[7] = {"imssfs", "-f" , "XXXX", "-s", NULL}; // {"f", mountpoint} Not default ({"f", NULL})
 
 uint16_t PREFETCH = 6;
-uint16_t MULTIPLE = 2;//1=vread with prefetch, 2=vread without prefetch, 3=vread_2x else sread
+uint16_t MULTIPLE_READ = 0;//1=vread with prefetch, 2=vread without prefetch, 3=vread_2x else sread
+uint16_t MULTIPLE_WRITE = 0;//1=writev, else sread
 char prefetch_path[256];
 int32_t prefetch_first_block = -1; 
 int32_t prefetch_last_block = -1;
