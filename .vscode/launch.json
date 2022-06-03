@@ -1,0 +1,41 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Launch",
+            "type": "cppdbg",
+            "request": "launch",
+            // Resolved by CMake Tools:
+            "program": "${command:cmake.launchTargetPath}",
+            //"args": ["-p", "5555", "-m", "5569", "-M", "./metadata", "-h", "./hostTucan", "-b", "8", "-r", "imss://", "-a", "./hostTucan", "-S", "10000000000", "-d", "1", "-B","1048576000","-l", "/tmp/testimss/"],
+            
+            "args": ["-p", "5555", "-m", "5569", "-M", "./metadata", "-h", "./hostfile", "-b", "8", "-r", "imss://", "-a", "./stat_hostfile", "-S", "10000000000", "-d", "2", "-s", "2", "-B","1048576000","-l", "/tmp/testimss/"],
+            
+            //"args": ["./metadata", "5569", "67108864"] ,
+           //"args": ["imss://", "5555", "1048576000", "compute-6-2", "5569", "1", "./hostfile", "1"] ,
+           "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/build",
+            "environment": [
+                {
+                    // add the directory where our target was built to the PATHs
+                    // it gets resolved by CMake Tools:
+                    "name": "PATH",
+                    "value": "$PATH:${command:cmake.launchTargetDirectory}"
+                },
+                {
+                    "name": "OTHER_VALUE",
+                    "value": "Something something"
+                }
+            ],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ]
+        }
+    ]
+}

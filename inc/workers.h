@@ -13,6 +13,7 @@
 #define RENAME_DIR_DIR_OP 6
 #define WRITEV 			7
 #define READV 			8
+#define SPLIT_READV 	9
 
 #define GETDIR			1
 

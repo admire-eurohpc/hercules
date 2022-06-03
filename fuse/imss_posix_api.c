@@ -70,7 +70,6 @@ extern pthread_mutex_t     mutex_prefetch;
 
 
 #define MAX_PATH 256
-
 extern pthread_mutex_t lock;
 pthread_mutex_t lock_fileopen = PTHREAD_MUTEX_INITIALIZER;
 
@@ -354,7 +353,250 @@ int imss_open(const char *path, uint64_t *fh)
 	return 0;
 }
 
+int imss_split_readv(const char *path, char *buf, size_t size, off_t offset)
+{
+	int64_t curr_blk, end_blk, start_offset, end_offset;
+	int64_t first = 0; 
+	int ds = 0;
+	curr_blk = offset / IMSS_DATA_BSIZE +1; //Plus one to skip the header (0) block
+	start_offset = offset % IMSS_DATA_BSIZE;
+	//end_blk = (offset+size) / IMSS_DATA_BSIZE + 1; //Plus one to skip the header (0) block
+	end_blk = ceil((double)(offset+size) / IMSS_DATA_BSIZE);
+	end_offset = (offset+size) % IMSS_DATA_BSIZE;
+	size_t to_read = 0;
 
+	//printf("\n[CLIENT] [SLIT_READ] size=%ld  offset=%ld start block=%ld, end_block=%ld\n",size, offset, curr_blk, end_blk);
+	//Needed variables
+	size_t byte_count = 0;
+	int64_t rbytes;
+
+	char rpath[MAX_PATH] = {0};
+	
+	get_iuri(path, rpath);
+	
+	int fd;
+	struct stat stats;
+	char * aux;
+
+	fd_lookup(rpath, &fd, &stats, &aux);
+	
+
+	//Check if offset is bigger than filled, return 0 because is EOF case
+	if(start_offset >= stats.st_size){ 
+		return 0; 
+	}	
+	
+	if (fd >= 0) 
+		ds = fd;
+	else if (fd == -2)
+		return -ENOENT;
+
+	//List of servers for the blocks
+	int** list_servers = (int**)calloc(N_SERVERS,sizeof(int*));
+	int total = end_blk - curr_blk + 1;
+    
+	//Initialization to 0.
+	for (int i=0; i<N_SERVERS; i++)
+    {
+        list_servers[i] = (int*)calloc(size,sizeof(int));
+		//bzero(list_servers[i],size*sizeof(int));
+    } 
+	
+	//Getting list of servers for each block
+	split_location_servers(list_servers,ds, curr_blk, end_blk);
+	
+	/*char msg[N_SERVERS][1024];//save msg to send.
+	memset(msg,'\0',N_SERVERS*1024);*/
+
+	int lenght_message			= 102400;
+	char **msg;//save block read for each server
+	msg = calloc(N_SERVERS, sizeof(char*)); 
+	for(int z = 0; z < N_SERVERS; z++) { 
+		msg[z] = calloc(lenght_message, sizeof(char));
+	}
+	int amount[N_SERVERS];//save how many are sent to each server.
+
+
+	//Preparing message for the server
+	int count;
+	
+	char *all_blocks	= calloc(lenght_message, sizeof(char));
+	char *block 		= calloc(10, sizeof(char));	
+	char *number 		= calloc(10, sizeof(char));	
+	for(int server = 0; server < N_SERVERS; server++){
+		/*char all_blocks[1024];*/
+		memset(all_blocks,'\0',lenght_message);
+		count=0;
+		for (int i=0; i<total; i++){
+			if(list_servers[server][i]>0){
+			//	printf("**list_servers[%d][%d]=%d\n", server,i,list_servers[server][i]);
+				sprintf(block,"$%d",list_servers[server][i]);
+			//	printf("block=%s\n",block);
+			//	printf("all_block=%s length=%ld\n",all_blocks, strlen(all_blocks));
+				strcat(all_blocks,block);
+				count++;
+			}
+		}
+		amount[server] = count;
+		sprintf(number,"%d",count);
+		strcat(msg[server],number);
+		strcat(msg[server],all_blocks);
+	//	printf("server=%d msg_full=%s\n",server, msg[server]);
+	//	printf("amount=%d\n",amount[server]);
+	}
+
+	
+	free(block);
+	free(number);
+	free(all_blocks);
+	
+
+	char **buffer_servers;//save block read for each server
+	buffer_servers = calloc(N_SERVERS, sizeof(char*)); 
+	for(int z = 0; z < N_SERVERS; z++) { 
+		buffer_servers[z] = calloc(amount[z]*IMSS_DATA_BSIZE, sizeof(char));
+	}
+
+	//*********************Lineal*******************************
+	/*for(int server = 0; server < N_SERVERS; server++){
+		printf("server=%d, N_SERVER=%d\n",server, N_SERVERS);
+		int err = split_readv(server, path, msg[server],buffer_servers[server], amount[server], IMSS_BLKSIZE, start_offset, stats.st_size);
+		if(err == -1)
+			return -1;
+	}*/
+	//*********************Lineal*******************************
+
+	//*********************Threads*******************************
+	//Initialize pool of threads.
+	pthread_t threads[(N_SERVERS)];
+	thread_argv arguments[(N_SERVERS)];
+	
+	for(int server = 0; server < N_SERVERS; server++){
+		arguments[server].n_server			=	server;
+		arguments[server].path 				= 	path;		
+		arguments[server].msg				= 	msg[server];
+		arguments[server].buffer			=	buffer_servers[server];
+		arguments[server].size				=	amount[server];
+		arguments[server].BLKSIZE			=	IMSS_BLKSIZE;
+		arguments[server].start_offset		=	start_offset;
+		arguments[server].stats_size		=	stats.st_size;
+		arguments[server].lenght_key		=	lenght_message;
+		
+	/*	printf("\nCustom   ->buffer %p\n", buffer_servers[server]);
+		printf("arguments->buffer %p\n", arguments[server].buffer);
+		printf("arguments.n_server=%d\n",arguments[server].n_server);
+		printf("arguments.path=%s\n",arguments[server].path);
+		printf("arguments.msg=%s\n",arguments[server].msg);
+		printf("arguments.size=%d\n",arguments[server].size);
+		printf("arguments.BLKSIZE=%ld\n",arguments[server].BLKSIZE);
+		printf("arguments.start_offset=%ld\n",arguments[server].start_offset);
+		printf("arguments.stats-size=%d\n",arguments[server].stats_size);
+	*/	
+		if(arguments[server].size > 0){
+			if (pthread_create(&threads[server], NULL, split_readv, (void *) &arguments[server]) == -1)
+			{
+				perror("ERRIMSS_METAWORKER_DEPLOY");
+				pthread_exit(NULL);
+			}
+		}
+		
+	}
+	//Wait for the threads to conclude.
+	for (int32_t server = 0; server < (N_SERVERS); server++)
+	{
+		
+		if(arguments[server].size > 0){
+		//	printf("Esperando hilo=%d\n",server);
+			if (pthread_join(threads[server], NULL) != 0)
+			{
+				perror("ERRIMSS_METATH_JOIN");
+				pthread_exit(NULL);
+			}
+		}
+		
+	}
+
+	//*********************Threads*******************************
+	
+	size_t byte_count_servers[N_SERVERS];//save how many are sent to each server.
+	for(int server = 0; server < N_SERVERS; server++){
+		byte_count_servers[server] = 0;
+	}
+
+	for (int i=0; i<total; i++){
+		for(int server = 0; server < N_SERVERS; server++){
+			
+			if(list_servers[server][i] == curr_blk){
+			//	printf("block find list_servers[%d][%d]=%d=%ld\n",server,i,list_servers[server][i],curr_blk);
+			
+				//First block case
+				if (first == 0) {
+				//	printf("FIRST BLOCK\n");
+					if(size < (stats.st_size - start_offset) && size < IMSS_DATA_BSIZE && total==1){
+				//		printf("*First block 1 case to_read=size=%ld\n",size);
+						to_read = size;
+					}else{ 	
+						if(stats.st_size < IMSS_DATA_BSIZE){
+				//			printf("*First block 2 case to_read=stats.st_size - start_offset=%ld\n",stats.st_size-start_offset);
+							to_read = stats.st_size - start_offset;
+							
+						}else{
+				//			printf("*First block 3 case to_read=IMSS_DATA_BSIZE- start_offset=%ld\n",IMSS_DATA_BSIZE-start_offset);
+							to_read = IMSS_DATA_BSIZE - start_offset;
+						}																			    
+					}
+					//Check if offset is bigger than filled, return 0 because is EOF case
+					if(start_offset > stats.st_size) 
+						return 0; 
+
+					memcpy(buf, buffer_servers[server] + start_offset, to_read);
+					byte_count_servers[server] += to_read;
+					byte_count += to_read;
+					++first;
+					//Middle block case
+				} else if (curr_blk != end_blk) {
+				//	printf("MIDDLE BLOCK\n");
+				//	printf("curr_block=%ld, end_block=%ld\n",curr_blk, end_blk);
+				//	printf("byte_count=%ld, byte_count_servers[%d]=%ld\n",byte_count,server,byte_count_servers[server]);
+					memcpy(buf + byte_count, buffer_servers[server] + byte_count_servers[server], IMSS_DATA_BSIZE);
+					byte_count_servers[server] += IMSS_DATA_BSIZE;
+					byte_count += IMSS_DATA_BSIZE;
+					//End block case
+				}  else {
+				//	printf("LAST BLOCK\n");
+					//Read the minimum between end_offset and filled (read_ = min(end_offset, filled))
+					int64_t pending = size - byte_count;		
+					memcpy(buf + byte_count, buffer_servers[server] + byte_count_servers[server], pending);
+					byte_count_servers[server] += pending;
+					byte_count += pending;
+					
+				}
+
+			}
+		
+		}
+	curr_blk++;
+	}
+
+	//Releasing
+	for (int i=0; i<N_SERVERS; i++)
+    {
+		free(list_servers[i]);
+	}
+	free(list_servers);
+
+	for(int z = 0; z < N_SERVERS; z++) { 
+		free(buffer_servers[z]);
+	}
+	free(buffer_servers);
+
+	for(int z = 0; z < N_SERVERS; z++) { 
+		free(msg[z]);
+	}
+	free(msg);
+
+	return byte_count;
+}
 
 int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 {
@@ -368,18 +610,22 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 	end_offset = (offset+size) % IMSS_DATA_BSIZE;
 	size_t to_read = 0;
 
+	//printf("[CLIENT] [SREAD] start block=%ld, end_block=%ld\n",curr_blk, end_blk);
 	//Needed variables
 	size_t byte_count = 0;
 	int64_t rbytes;
 
 	char rpath[MAX_PATH] = {0};
+	
 	get_iuri(path, rpath);
-
+	
 	int fd;
 	struct stat stats;
 	char * aux;
+
 	fd_lookup(rpath, &fd, &stats, &aux);
 	
+
 	//Check if offset is bigger than filled, return 0 because is EOF case
 	if(start_offset >= stats.st_size){ 
 		return 0; 
@@ -390,22 +636,33 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 	else if (fd == -2)
 		return -ENOENT;
 	
+	struct timeval start, end;
+	float delta_us;
+	gettimeofday(&start, NULL);
 	memset(buf, 0, size);
-	while(curr_blk <= end_blk){
+	
 
+	struct timeval start1, end1;
+	float delta_us1;
+	gettimeofday(&start1, NULL);
+
+	while(curr_blk <= end_blk){
 		pthread_mutex_lock(&lock);
-		struct timeval start, end;
-        int delta_us;
-		gettimeofday(&start, NULL);
+		
+		struct timeval start2, end2;
+        float delta_us2;
+		gettimeofday(&start2, NULL);
+		
 		int err = get_data(ds, curr_blk, (unsigned char*)aux);
-		gettimeofday(&end, NULL);
-		delta_us = (int) (end.tv_usec - start.tv_usec);
-		//printf("SREAD delta_us=%6.3f\n",(delta_us/1000.0F));
+		
+		gettimeofday(&end2, NULL);
+		delta_us2 = (float) (end2.tv_usec - start2.tv_usec);
+		//printf("[CLIENT] [SREAD] curr_block=%ld delta_us=%6.3f\n",curr_blk,(delta_us2/1000.0F));
+		
 		pthread_mutex_unlock(&lock);
 		if( err != -1){
 			//First block case
 			if (first == 0) {
-				long total=stats.st_size - start_offset;
 				if(size < (stats.st_size - start_offset) && size < IMSS_DATA_BSIZE){
 				    to_read = size;
 					//to_read = IMSS_DATA_BSIZE - start_offset;
@@ -444,6 +701,9 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 		} 
 		++curr_blk;
 	}
+	gettimeofday(&end1, NULL);
+	delta_us1 = (float) (end1.tv_usec - start1.tv_usec);
+	//printf("[CLIENT] [SREAD_END] delta_us=%6.3f\n",(delta_us1/1000.0F));
 	return byte_count;
 }
 
@@ -503,9 +763,7 @@ int imss_vread_prefetch(const char *path, char *buf, size_t size, off_t offset)
 		aux = map_get_buffer_prefetch(map_prefetch, rpath, &exist_first_block, &exist_last_block);
 		
 		if( aux != NULL ){//Existe fichero es normal esta creado anteriormente
-			/*printf("exist_first_block=%d\n",exist_first_block);
-			printf("exist_last_block=%d\n",exist_last_block);
-			printf("reads=%d\n",reads);*/
+
 			if(curr_blk >= exist_first_block && curr_blk <= exist_last_block){//Tiene el bloque
 				//Tengo que mover el puntero al bloque correspondiente
 				//printf("Existe se lo doy bloque=%ld\n", curr_blk);
@@ -513,10 +771,7 @@ int imss_vread_prefetch(const char *path, char *buf, size_t size, off_t offset)
 				aux = aux + (IMSS_BLKSIZE * KB * pos);
 				err = 1;
 			}else{//Existe pero no tiene ese bloque especifico
-				//printf("No existe lo pido al servidor bloque=%ld\n",curr_blk);
-				/*pthread_mutex_lock(&lock);
-				err = get_data(ds, curr_blk, (unsigned char*)aux);
-				pthread_mutex_unlock(&lock);*/
+
 				
 				if(first==0){//readv si es el primero leo todos
 					//printf("READV TODOS\n");
@@ -923,6 +1178,8 @@ int imss_read(const char *path, char *buf, size_t size, off_t offset) {
       ret = imss_vread_no_prefetch(path, buf, size, offset);
    }else if(MULTIPLE_READ==3){
       ret = imss_vread_2x(path, buf, size, offset);
+   }else if(MULTIPLE_READ==4){
+	   ret = imss_split_readv(path, buf, size, offset);
    }else{
 	   ret = imss_sread(path, buf, size, offset);
    }

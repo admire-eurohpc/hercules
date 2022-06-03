@@ -105,7 +105,7 @@ class map_records
 			it = buffer.find(key);
 			//Check if the value did exist within the map.
 			if(it == buffer.end()){
-				//printf("Nodename-%s NO EXIST=%s\n",detect.nodename, key.c_str());
+				///printf("Nodename-%s NO EXIST=%s\n",detect.nodename, key.c_str());
 				return 0;
 			}
 			

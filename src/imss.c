@@ -60,6 +60,8 @@ extern uint16_t	connection_port; //FIXME
 
 char        att_deployment[URI_];
 
+
+
 /**********************************************************************************/
 /*********************** IMSS INTERNAL MANAGEMENT FUNCTIONS ***********************/
 /**********************************************************************************/
@@ -245,7 +247,6 @@ Get_fd (int32_t * pos,
 	if (garray_free->len)
 	{
 		//Retrieve a free position from the existing wholes within the vector.
-		printf("here1\n");
 		*pos = g_array_index(garray_free, int32_t, 0);
 		//g_array_remove_index(garray_free, 0);
 	}
@@ -253,7 +254,6 @@ Get_fd (int32_t * pos,
 	if (*pos == -1)
 	{
 		//Append an element into the corresponding array if there was no space left.
-		printf("here2\n");
 		//g_array_append_val(garray_insert, *item);
 		inserted_pos = ++(*max) - 1;
 	}
@@ -262,7 +262,6 @@ Get_fd (int32_t * pos,
 		//Insert an element in a certain position within the provided garray.
 
 		if (*pos < garray_insert->len)
-			printf("here3\n");
 			//g_array_remove_index(garray_insert, *pos);
 
 		//g_array_insert_val(garray_insert, *pos, *item);
@@ -1879,7 +1878,7 @@ writev_multiple(char * buf, int32_t dataset_id,int64_t data_id,
 		//Server receiving the current data block.
 		uint32_t n_server_ = (n_server + i*(curr_imss_storages/curr_dataset.repl_factor)) % curr_imss_storages;
 
-		printf("BLOCK %ld SENT TO %d SERVER with key: %s (%d)\n", data_id, n_server_, key, key_length);
+		//printf("BLOCK %ld SENT TO %d SERVER with key: %s (%d)\n", data_id, n_server_, key, key_length);
 
 		//Send read request message specifying the block URI.
 		//if (comm_send(curr_imss.conns.sockets_[n_server_], key, KEY, ZMQ_SNDMORE) < 0)
@@ -1900,7 +1899,7 @@ writev_multiple(char * buf, int32_t dataset_id,int64_t data_id,
 	return 0;
 }
 
-//Method retrieving a data prefetch
+//Method retrieving multiple data
 int32_t
 readv_multiple(int32_t 	 dataset_id,
 	int32_t 	 curr_block,
@@ -1966,9 +1965,6 @@ readv_multiple(int32_t 	 dataset_id,
 			perror("ERRIMSS_GETDATA_REQ");
 			return -1;
 		}
-		struct timeval start, end;
-		int delta_us;
-		gettimeofday(&start, NULL);
 		//Receive data related to the previous read request directly into the buffer.
 		if (comm_recv(curr_imss.conns.sockets_[repl_servers[i]], buffer, size, 0) == -1)
 		{
@@ -1980,9 +1976,6 @@ readv_multiple(int32_t 	 dataset_id,
 			else
 				break;
 		}
-		gettimeofday(&end, NULL);
-		delta_us = (int) (end.tv_usec - start.tv_usec);
-		//printf("delta_us=%6.3f\n",(delta_us/1000.0F));
 		//Check if the requested key was correctly retrieved.
 		if (strncmp((const char *) buffer, "$ERRIMSS_NO_KEY_AVAIL$", 22)){
 			return 0;
@@ -1994,6 +1987,164 @@ readv_multiple(int32_t 	 dataset_id,
 	return -1;
 }
 
+void *
+split_readv(void * th_argv)
+{
+	//Cast from generic pointer type to p_argv struct type pointer.
+	thread_argv * arguments = (thread_argv *) th_argv;
+	
+	//Servers that the data block is going to be requested to.
+	int32_t repl_servers[curr_dataset.repl_factor];
+
+	int32_t curr_imss_storages = curr_imss.info.num_storages;
+
+	//Retrieve the corresponding connections to the previous servers.
+	for (int32_t i = 0; i < curr_dataset.repl_factor; i++)
+	{
+		//Server storing the current data block.
+		uint32_t n_server_ = (arguments->n_server + i*(curr_imss_storages/curr_dataset.repl_factor)) % curr_imss_storages;
+
+		repl_servers[i] = n_server_;
+
+		//Check if the current connection is the local one (if there is).
+		if (repl_servers[i] == curr_dataset.local_conn)
+		{
+			//Move the local connection to the first one to be requested.
+
+			int32_t aux_conn = repl_servers[0];
+
+			repl_servers[0] = repl_servers[i];
+
+			repl_servers[i] = aux_conn;
+		}
+	}
+//	printf("[CLIENT] [Split_readv]\n");
+	char key_[arguments->lenght_key + KEY];
+	//Key related to the requested data element.
+	sprintf(key_, "9 %s %ld %ld %d %s",arguments->path, arguments->BLKSIZE, arguments->start_offset, arguments->stats_size, arguments->msg);
+	int key_length = strlen(key_)+1;
+	char key[key_length];
+	memcpy((void *) key, (void *) key_, key_length);
+	key[key_length-1] = '\0';
+	
+	//Request the concerned block to the involved servers.
+	for (int32_t i = 0; i < curr_dataset.repl_factor; i++)
+	{
+		//printf("BLOCK %d ASKED TO %d SERVER with key: %s (%d)\n", curr_block, repl_servers[i], key, key_length);
+
+		//Send read request message specifying the block URI.
+		//if (comm_send(curr_imss.conns.sockets_[repl_servers[i]], key, KEY, 0) < 0)
+		
+		if (comm_send(curr_imss.conns.sockets_[repl_servers[i]], key, key_length, 0) != key_length)
+		{
+			perror("ERRIMSS_GETDATA_REQ");
+		}
+		struct timeval start, end;
+		float delta_us;
+		gettimeofday(&start, NULL);
+		//Receive data related to the previous read request directly into the buffer.
+		if (comm_recv(curr_imss.conns.sockets_[repl_servers[i]], arguments->buffer, arguments->size*arguments->BLKSIZE*KB, 0) == -1)
+		{
+			if (errno != EAGAIN)
+			{
+				perror("ERRIMSS_GETDATA_RECV");
+			}
+			else
+				break;
+		}
+		gettimeofday(&end, NULL);
+		delta_us = (float) (end.tv_usec - start.tv_usec);
+	//	printf("\n[CLIENT] [S_SPLIT_READ] recv data delta_us=%6.3f\n",(delta_us/1000.0F));
+		//Check if the requested key was correctly retrieved.
+		if (strncmp((const char *) arguments->buffer, "$ERRIMSS_NO_KEY_AVAIL$", 22)){
+		}
+			
+	}
+	pthread_exit(NULL);
+}
+//Method retrieving multiple data from a specific server
+/*int32_t
+split_readv(int32_t n_server,
+			char * path, 
+			char * msg, 
+			unsigned char * buffer, 
+			int32_t size, 
+			uint64_t BLKSIZE,
+			int64_t    start_offset,
+			int    stats_size)
+{
+	printf("n_server=%d msg=%s size=%d\n", n_server, msg, size);
+	
+	//Servers that the data block is going to be requested to.
+	int32_t repl_servers[curr_dataset.repl_factor];
+
+	int32_t curr_imss_storages = curr_imss.info.num_storages;
+
+	//Retrieve the corresponding connections to the previous servers.
+	for (int32_t i = 0; i < curr_dataset.repl_factor; i++)
+	{
+		//Server storing the current data block.
+		uint32_t n_server_ = (n_server + i*(curr_imss_storages/curr_dataset.repl_factor)) % curr_imss_storages;
+
+		repl_servers[i] = n_server_;
+
+		//Check if the current connection is the local one (if there is).
+		if (repl_servers[i] == curr_dataset.local_conn)
+		{
+			//Move the local connection to the first one to be requested.
+
+			int32_t aux_conn = repl_servers[0];
+
+			repl_servers[0] = repl_servers[i];
+
+			repl_servers[i] = aux_conn;
+		}
+	}
+
+	char key_[KEY];
+	//Key related to the requested data element.
+	sprintf(key_, "9 %s %ld %ld %d %s",path, BLKSIZE, start_offset, stats_size, msg);
+	int key_length = strlen(key_)+1;
+	char key[key_length];
+	memcpy((void *) key, (void *) key_, key_length);
+	key[key_length-1] = '\0';
+	
+	//Request the concerned block to the involved servers.
+	for (int32_t i = 0; i < curr_dataset.repl_factor; i++)
+	{
+		//printf("BLOCK %d ASKED TO %d SERVER with key: %s (%d)\n", curr_block, repl_servers[i], key, key_length);
+
+		//Send read request message specifying the block URI.
+		//if (comm_send(curr_imss.conns.sockets_[repl_servers[i]], key, KEY, 0) < 0)
+		
+		if (comm_send(curr_imss.conns.sockets_[repl_servers[i]], key, key_length, 0) != key_length)
+		{
+			perror("ERRIMSS_GETDATA_REQ");
+			return -1;
+		}
+		//Receive data related to the previous read request directly into the buffer.
+		if (comm_recv(curr_imss.conns.sockets_[repl_servers[i]], buffer, size*BLKSIZE*KB, 0) == -1)
+		{
+			if (errno != EAGAIN)
+			{
+				perror("ERRIMSS_GETDATA_RECV");
+				return -1;
+			}
+			else
+				break;
+		}
+		//Check if the requested key was correctly retrieved.
+		if (strncmp((const char *) buffer, "$ERRIMSS_NO_KEY_AVAIL$", 22)){
+			return 0;
+		}
+			
+	}
+
+	//fprintf(stderr, "ERRIMSS_GETDATA_UNAVAIL\n");
+	return -1;
+}
+*/
+
 //Method retrieving a data element associated to a certain dataset.
 int32_t
 get_data(int32_t 	 dataset_id,
@@ -2001,10 +2152,14 @@ get_data(int32_t 	 dataset_id,
 	 unsigned char * buffer)
 {
 	int32_t n_server;
-	//Server containing the corresponding data to be retrieved.
-	if ((n_server = get_data_location(dataset_id, data_id, GET)) == -1)
 
+	
+	//Server containing the corresponding data to be retrieved.
+	if ((n_server = get_data_location(dataset_id, data_id, GET)) == -1){
 		return -1;
+	}
+	
+		
 
 	//Servers that the data block is going to be requested to.
 	int32_t repl_servers[curr_dataset.repl_factor];
@@ -2041,19 +2196,32 @@ get_data(int32_t 	 dataset_id,
 	memcpy((void *) key, (void *) key_, key_length);
 	key[key_length-1] = '\0';
 
+	
+
 	//Request the concerned block to the involved servers.
 	for (int32_t i = 0; i < curr_dataset.repl_factor; i++)
 	{
 		//printf("CLIENT GET_DATA BLOCK %d ASKED TO %d SERVER with key: %s (%d)\n", data_id, repl_servers[i], key, key_length);
 
 		//Send read request message specifying the block URI.
+		
+		struct timeval start, end;
+		float delta_us;
+		gettimeofday(&start, NULL);
+
 		//if (comm_send(curr_imss.conns.sockets_[repl_servers[i]], key, KEY, 0) < 0)
 		if (comm_send(curr_imss.conns.sockets_[repl_servers[i]], key, key_length, 0) != key_length)
 		{
 			perror("ERRIMSS_GETDATA_REQ");
 			return -1;
 		}
-		
+
+		gettimeofday(&end, NULL);
+		delta_us = (float) (end.tv_usec - start.tv_usec);
+		//printf("\n[CLIENT] [SREAD] send petition delta_us=%6.3f\n",(delta_us/1000.0F));
+
+
+		gettimeofday(&start, NULL);
 		//printf("GET_DATA after send petition to read\n");
 		//Receive data related to the previous read request directly into the buffer.
 		if (comm_recv(curr_imss.conns.sockets_[repl_servers[i]], buffer, curr_dataset.data_entity_size, 0) == -1)
@@ -2066,6 +2234,9 @@ get_data(int32_t 	 dataset_id,
 			else
 				break;
 		}
+		gettimeofday(&end, NULL);
+		delta_us = (float) (end.tv_usec - start.tv_usec);
+		//printf("\n[CLIENT] [SREAD] recv data delta_us=%6.3f\n",(delta_us/1000.0F));
 
 		//Check if the requested key was correctly retrieved.
 		if (strncmp((const char *) buffer, "$ERRIMSS_NO_KEY_AVAIL$", 22)){
@@ -2073,9 +2244,7 @@ get_data(int32_t 	 dataset_id,
 		}
 			
 	}
-
-	//fprintf(stderr, "ERRIMSS_GETDATA_UNAVAIL\n");
-	return -1;
+	return 1;
 }
 
 
@@ -2443,7 +2612,26 @@ get_type(char * uri)
 	return 0;
 }
 
+//Method retriving list of servers to read.
+int32_t
+split_location_servers(int** list_servers,int32_t dataset_id,  int32_t curr_blk, int32_t end_blk)
+{
+	int size = end_blk - curr_blk + 1;
+	//printf("size=%d\n",size);
+		
+	for(int i = 0; i < size; i++){
+		int32_t n_server;
+		
+		//Server containing the corresponding data to be retrieved.
+		if ((n_server = get_data_location(dataset_id, curr_blk, GET)) == -1){
+			return -1;
+		}
+		list_servers[n_server][i]=curr_blk;
+		curr_blk++;
+	}
 
+	return 0;
+}
 /**********************************************************************************/
 /***************************** DATA RELEASE RESOURCES *****************************/
 /**********************************************************************************/

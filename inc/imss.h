@@ -115,6 +115,21 @@ typedef struct {
 
 } dataset_info;
 
+
+//[SPLIT READV] Set of arguments passed to each server thread.
+typedef struct {
+
+			int32_t n_server;
+			char *path;
+			char *msg;
+			unsigned char * buffer; 
+			int32_t size;
+			uint64_t BLKSIZE;
+			int64_t    start_offset;
+			int    stats_size;
+			int    lenght_key;
+} thread_argv;
+
 #ifndef FUSE
 extern "C" {
 #endif
@@ -434,9 +449,22 @@ char ** get_dataloc(const char * dataset, int32_t data_id, int32_t * num_storage
 */
 int32_t get_type(char * uri);
 
+//Method retriving list of servers to read.
+int32_t
+split_location_servers(int** list_servers,int32_t dataset_id,  int32_t curr_blk, int32_t end_blk);
 
-
-
+//Method retrieving multiple data from a specific server
+void *
+split_readv(void * th_argv);
+/*int32_t
+split_readv(int32_t n_server,
+			char * path, 
+			char * msg, 
+			unsigned char * buffer, 
+			int32_t size, 
+			uint64_t BLKSIZE,
+			int64_t    start_offset,
+			int    stats_size);*/
 
 /****************************************************************************************************************************/
 /************************************************** DATA RELEASE RESOURCES **************************************************/

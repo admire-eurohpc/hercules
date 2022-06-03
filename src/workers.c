@@ -158,6 +158,9 @@ srv_worker (void * th_argv)
 
 		//Save the identity of the requesting client.
 		comm_msg_recv(&client_id, socket, 0);
+		
+		
+		
 		//Check if a timeout was triggered in the previous receive operation.
 		if ((errno == EAGAIN) && !zmq_msg_size(&client_id))
 		{
@@ -196,9 +199,20 @@ srv_worker (void * th_argv)
 
 			continue;
 		}
+		
+		
+
 		//Save the request to be served.
 		comm_msg_recv(&client_req, socket, 0);
-
+		
+		struct timeval start, end;
+		float delta_us;
+		gettimeofday(&start, NULL);
+		
+		struct timeval start2, end2;
+		float delta_us2;
+		gettimeofday(&start2, NULL);
+		
 		//Determine if more messages are comming.
 		if ((comm_getsockopt(socket, ZMQ_RCVMORE, &more, &more_size)) == -1)
 		{
@@ -206,7 +220,13 @@ srv_worker (void * th_argv)
 			pthread_exit(NULL);
 		}
 
+		gettimeofday(&end2, NULL);
+		delta_us2 = (float) (end2.tv_usec - start2.tv_usec);
+		//printf("\n[SERVER] getsockopt delta_us=%6.3f\n",(delta_us2/1000.0F));
+		
 		//Expeted incomming message format: "SIZE_IN_KB KEY"
+		
+		gettimeofday(&start2, NULL);
 
 		//Reference to the client request.
 		char * req = (char *) zmq_msg_data(&client_req);
@@ -228,6 +248,10 @@ srv_worker (void * th_argv)
 		unsigned char * address_;
 		uint64_t block_size_rtvd;
 
+		gettimeofday(&end2, NULL);
+		delta_us2 = (float) (end2.tv_usec - start2.tv_usec);
+		//printf("\n[SERVER] variables delta_us=%6.3f\n",(delta_us2/1000.0F));
+
 		//Differentiate between READ and WRITE operations. 
 		switch (more)
 		{
@@ -240,43 +264,52 @@ srv_worker (void * th_argv)
 					perror("ERRIMSS_WORKER_SENDCLIENTID");
 					pthread_exit(NULL);
 				}
-
 				switch (block_size_recv)
 				{
 					case READ_OP:
 					{
 						//printf("SRV_WORKER READ_OP\n");
 
-
+						gettimeofday(&start2, NULL);
+						
+						int ret = map->get(key, &address_, &block_size_rtvd);
+						
+						gettimeofday(&end2, NULL);
+						delta_us2 = (float) (end2.tv_usec - start2.tv_usec);
+						//printf("\n[SERVER] map-get delta_us=%6.3f\n",(delta_us2/1000.0F));
+						
 						//Check if there was an associated block to the key.
-						if (!(map->get(key, &address_, &block_size_rtvd)))
+						//if (!(map->get(key, &address_, &block_size_rtvd)))
+						if(ret == 0)
 						{
-							//printf("ERROR2: %s (%ld)\n", key.c_str(), block_size_recv);
-							
+							gettimeofday(&start2, NULL);
 							//Send the error code block.
 							if (comm_send(socket, err_code, strlen(err_code), 0) < 0)
 							{
 								perror("ERRIMSS_WORKER_SENDERR");
 								pthread_exit(NULL);
 							}
+							
+							gettimeofday(&end2, NULL);
+							delta_us2 = (float) (end2.tv_usec - start2.tv_usec);
+							//printf("\n[SERVER] send delta_us=%6.3f\n",(delta_us2/1000.0F));
 						}
 						else
 						{
-							//printf("Read\n");
-							//std::cout <<"key:" << key << '\n';
-							/*int32_t lock = (address_ - buffer_address) / buffer_segment;
-							pthread_mutex_lock(&region_locks[lock]);*/
-
+							gettimeofday(&start2, NULL);
 							//Send the requested block.
 							if (comm_send(socket, address_, block_size_rtvd, 0) < 0)
 							{
 								perror("ERRIMSS_WORKER_SENDBLOCK");
 								pthread_exit(NULL);
 							}
-
-							//pthread_mutex_unlock(&region_locks[lock]);
+							gettimeofday(&end2, NULL);
+							delta_us2 = (float) (end2.tv_usec - start2.tv_usec);
+							//printf("\n[SERVER] send delta_us=%6.3f\n",(delta_us2/1000.0F));
 						}
-
+						gettimeofday(&end, NULL);
+						delta_us = (float) (end.tv_usec - start.tv_usec);
+						//printf("\n[SERVER] [END] delta_us=%6.3f\n",(delta_us/1000.0F));
 						break;
 					}
 
@@ -453,6 +486,86 @@ srv_worker (void * th_argv)
 							}
 							
 
+			            break;
+					}
+					case SPLIT_READV:
+					{
+						//printf("SPLIT_READV CASE\n");
+						//printf("key=%s\n",key.c_str());
+						std::size_t found = key.find(' ');
+						string path;
+						if (found!=std::string::npos){
+							
+							path = key.substr(0,found);
+							key.erase(0,found+1);
+
+							found = key.find(' ');
+							int blocksize = stoi(key.substr(0,found)) * KB;
+							key.erase(0,found+1);
+
+							found = key.find(' ');
+							int start_offset = stoi(key.substr(0,found));
+							key.erase(0,found+1);
+
+							found = key.find(' ');
+							int stats_size = stoi(key.substr(0,found));
+							key.erase(0,found+1);
+
+
+							found = key.find('$');
+							int amount = stoi(key.substr(0,found));
+							int size = amount * blocksize;
+							key.erase(0,found+1);
+							
+							/*printf("amount=%d\n",amount);
+							printf("path=%s\n",path.c_str());
+							printf("blocksize=%d\n",blocksize);
+							printf("start_offset=%d\n",start_offset);
+							printf("size=%d\n",size);
+							printf("rest=%s\n",key.c_str());*/
+
+							unsigned char * buf = (unsigned char *)malloc(size);
+
+							//Needed variables
+							size_t byte_count = 0;
+							int first = 0;
+							int ds = 0;
+							int64_t to_copy = 0;
+							uint32_t filled = 0;
+							size_t to_read = 0;
+							int curr_blk = 0;
+
+							for(int i = 0; i < amount; i++){
+									
+									//substract current block
+									found = key.find('$');
+									int curr_blk = stoi(key.substr(0,found));
+									key.erase(0,found+1);
+									
+									string element = path;
+									element = element + '$' + std::to_string(curr_blk);
+									if (map->get(element, &address_, &block_size_rtvd)==0)
+									{//If dont exist 
+										//Send the error code block.
+										if (comm_send(socket, err_code, strlen(err_code), 0) < 0)
+										{
+											perror("ERRIMSS_WORKER_SENDERR");
+											pthread_exit(NULL);
+										}
+									}//If was already stored:
+									
+									memcpy(buf + byte_count, address_, blocksize);
+									byte_count += blocksize;
+									
+							}
+							//Send the requested block.
+							if (comm_send(socket, buf, byte_count, 0) < 0)
+							{
+								perror("ERRIMSS_WORKER_SENDBLOCK");
+								pthread_exit(NULL);
+							}					
+
+						}
 			            break;
 					}
                     case WHO:
