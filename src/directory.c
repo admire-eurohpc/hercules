@@ -210,15 +210,15 @@ GTree_insert(char * desired_data)
 	if(last_parent!=NULL){
 		
 		
-		char data_search[256] = {0};
+		char * data_search = (char *) calloc(256, sizeof(char));
 		if(desired_data[strlen(desired_data)-1]=='/'){
 			memcpy(data_search, desired_data,strlen(desired_data)-1);
         }else{
 
             memcpy(data_search, desired_data,strlen(desired_data));
         }
-		char father[256] = {0};
-		char * lastson = strrchr(data_search, '/');
+		 char * father = (char *) calloc(256, sizeof(char));
+		 char * lastson = strrchr(data_search, '/');
 		 int copy=(strlen(data_search)-strlen(lastson));
 
 
@@ -227,6 +227,8 @@ GTree_insert(char * desired_data)
 		if(strncmp((char *) last_parent->data, father, strlen((char *) father))==0 && strlen((char*)last_parent->data)==strlen(father)){
 			closest_node = last_parent;
 		}
+		free(father);
+		free(data_search);
 	}
 	
 

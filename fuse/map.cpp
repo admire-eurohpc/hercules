@@ -8,6 +8,7 @@
 
 extern uint64_t IMSS_BLKSIZE;
 #define KB 1024
+#define GB 1073741824
 
 using std::string;
 typedef std::map<std::string, struct elements> Map;
@@ -27,11 +28,7 @@ void* map_create() {
 void map_put(void* map, char* k, int v, struct stat stat, char * aux) {
   
   Map* m = reinterpret_cast<Map*> (map);
-  //char *aux = (char*) malloc(IMSS_BLKSIZE*KB);
-  //printf("insert aux %p\n", aux);
-  //printf("//////////////////////////LOOKUP INSERT FD=%d\n",v);
   struct elements p = {v,stat,aux};
-  //printf("insert aux %p\n", p.aux);
   m->insert(std::pair<std::string, struct elements>(std::string(k),p));
 }
 

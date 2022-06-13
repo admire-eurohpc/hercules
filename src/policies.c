@@ -57,7 +57,7 @@ set_policy (dataset_info * dataset)
 		session_plcy = 3;
 	}
 	else if (!strcmp(dataset->policy, "CRC64b"))
-	{
+	{	
 		session_plcy = 4;
 	}
 	else if (!strcmp(dataset->policy, "LOCAL"))
@@ -95,12 +95,14 @@ find_server (int32_t 	  n_servers,
 			dataset_info new_dataset;
 			//Dataset metadata request.
 			int32_t stat_dataset_res = stat_dataset(fname, &new_dataset);
+
 			if(stat_dataset_res==0){
 				uint16_t crc_ = crc16(fname, strlen(fname));
 				//First server that received a block from the current file.
 				next_server = crc_ % n_servers;
 			}else{
-				next_server = new_dataset.node_0;
+				uint16_t crc_ = crc16(new_dataset.original_name, strlen(new_dataset.original_name));
+				next_server = crc_ % n_servers;
 			}
 
 			//Next server receiving the following block.
@@ -111,8 +113,17 @@ find_server (int32_t 	  n_servers,
 		//Follow a bucketbnn distribution.
 		case BUCKETS_: 
 		{
-			uint16_t crc_ = crc16(fname, strlen(fname));
-
+			uint16_t crc_;
+			dataset_info new_dataset;
+			//Dataset metadata request.
+			int32_t stat_dataset_res = stat_dataset(fname, &new_dataset);
+			if(stat_dataset_res==0){
+				crc_ = crc16(fname, strlen(fname));
+			}else{
+				crc_ = crc16(new_dataset.original_name, strlen(new_dataset.original_name));
+			}
+			
+			
 			//First server that received a block from the current file.
 			uint32_t initial_server = crc_ % n_servers;
 
@@ -146,34 +157,71 @@ find_server (int32_t 	  n_servers,
 		//Follow a hashed distribution.
 		case HASHED_:
 		{
-			//Key identifying the current to-be-sent file block.
-			char key[strlen(fname) + 64];
-			sprintf(key, "%s%c%d", fname, '$', n_msg);
+			dataset_info new_dataset;
+			//Dataset metadata request.
+			int32_t stat_dataset_res = stat_dataset(fname, &new_dataset);
+			if(stat_dataset_res==0){
+		
+				//Key identifying the current to-be-sent file block.
+				char key[strlen(fname) + 64];
+				sprintf(key, "%s%c%d", fname, '$', n_msg);
 
-			uint32_t b    	= 378551;
-			uint32_t a    	= 63689;
-			uint32_t hash 	= 0;
-			uint32_t i    	= 0;
-			uint32_t length = strlen(key);
+				uint32_t b    	= 378551;
+				uint32_t a    	= 63689;
+				uint32_t hash 	= 0;
+				uint32_t i    	= 0;
+				uint32_t length = strlen(key);
 
-			//Create the  hash through the messages's content.
-			for (i = 0; i < length; ++i)	
-			{
-					hash = hash * a + (key[i]);
-					a = a * b;
+				//Create the  hash through the messages's content.
+				for (i = 0; i < length; ++i)	
+				{
+						hash = hash * a + (key[i]);
+						a = a * b;
+				}
+
+				next_server = hash % n_servers;
+			}else{
+				//Key identifying the current to-be-sent file block.
+				char key[strlen(new_dataset.original_name) + 64];
+				sprintf(key, "%s%c%d", new_dataset.original_name, '$', n_msg);
+
+				uint32_t b    	= 378551;
+				uint32_t a    	= 63689;
+				uint32_t hash 	= 0;
+				uint32_t i    	= 0;
+				uint32_t length = strlen(key);
+
+				//Create the  hash through the messages's content.
+				for (i = 0; i < length; ++i)	
+				{
+						hash = hash * a + (key[i]);
+						a = a * b;
+				}
+
+				next_server = hash % n_servers;
+
 			}
-
-			next_server = hash % n_servers;
+		
 		}
 			break;
 
 		//Following another hashed distribution using Redis's CRC16.
 		case CRC16_:
 		{
-			//Key identifying the current to-be-sent file block.
-			char key[strlen(fname) + 64];
-			sprintf(key, "%s%c%d", fname, '$', n_msg);
-			next_server = crc16(key, strlen(key)) % n_servers;
+			dataset_info new_dataset;
+			//Dataset metadata request.
+			int32_t stat_dataset_res = stat_dataset(fname, &new_dataset);
+			if(stat_dataset_res==0){
+
+				//Key identifying the current to-be-sent file block.
+				char key[strlen(fname) + 64];
+				sprintf(key, "%s%c%d", fname, '$', n_msg);
+				next_server = crc16(key, strlen(key)) % n_servers;
+			}else{
+				char key[strlen(new_dataset.original_name) + 64];
+				sprintf(key, "%s%c%d", new_dataset.original_name, '$', n_msg);
+				next_server = crc16(key, strlen(key)) % n_servers;
+			}
 		}
 
 			break;
@@ -181,10 +229,20 @@ find_server (int32_t 	  n_servers,
 		//Following another hashed distribution using Redis's CRC64.
 		case CRC64_:
 		{
-			//Key identifying the current to-be-sent file block.
-			char key[strlen(fname) + 64];
-			sprintf(key, "%s%c%d", fname, '$', n_msg);
-			next_server = crc64(0, (unsigned char *) key, strlen(key)) % n_servers;
+			dataset_info new_dataset;
+			//Dataset metadata request.
+			int32_t stat_dataset_res = stat_dataset(fname, &new_dataset);
+			if(stat_dataset_res==0){
+
+				//Key identifying the current to-be-sent file block.
+				char key[strlen(fname) + 64];
+				sprintf(key, "%s%c%d", fname, '$', n_msg);
+				next_server = crc64(0, (unsigned char *) key, strlen(key)) % n_servers;
+			}else{
+				char key[strlen(new_dataset.original_name) + 64];
+				sprintf(key, "%s%c%d", new_dataset.original_name, '$', n_msg);
+				next_server = crc64(0, (unsigned char *) key, strlen(key)) % n_servers;
+			}
 		}
 
 			break;

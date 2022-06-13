@@ -381,7 +381,7 @@ srv_worker (void * th_argv)
 					}
 					case READV:
 					{
-						printf("READV CASE\n");
+						//printf("READV CASE\n");
 						std::size_t found = key.find('$');
 						string path;
 						if (found!=std::string::npos){
@@ -463,7 +463,7 @@ srv_worker (void * th_argv)
 
 											//Middle block case
 										} else if (curr_blk != end_blk) {
-											//memcpy(buf + byte_count, aux + HEADER, IMSS_BLKSIZE*KB);
+											//memcpy(buf + byte_count, aux + HEADER, IMSS_DATA_BSIZE);
 											memcpy(buf + byte_count, address_, blocksize*KB);
 											byte_count += blocksize*KB;
 											//End block case
@@ -599,7 +599,7 @@ srv_worker (void * th_argv)
 				std::size_t found = key.find(' ');
 				if (found!=std::string::npos){
 					
-					printf("WRITEV CASE\n");
+					//printf("WRITEV CASE\n");
 					string path = key.substr(0,found);
 					key.erase(0,found+1);
 					//std::cout <<"path:" << key << '\n';
@@ -626,12 +626,6 @@ srv_worker (void * th_argv)
 
 						int size = stoi(key);
 
-						/*std::cout <<"curr_blk:" << curr_blk << '\n';
-						std::cout <<"end_blk:" << end_blk << '\n';
-						std::cout <<"start_offset:" << start_offset << '\n';
-						std::cout <<"end_offset:" << end_offset << '\n';
-						std::cout <<"IMSS_DATA_BSIZE:" << IMSS_DATA_BSIZE << '\n';
-						std::cout <<"size:" << size << '\n';*/
 						unsigned char * buf = (unsigned char *)malloc(size);
 						//Receive all blocks into the buffer.
 						comm_recv(socket, buf, size, 0);
@@ -757,7 +751,6 @@ srv_worker (void * th_argv)
 					//If was already stored:
 					else
 					{
-
 						//Receive the block into the buffer.
 						comm_recv(socket, address_, block_size_rtvd, 0);
 
@@ -973,7 +966,9 @@ stat_worker (void * th_argv)
 						}
 						else
 						{
-							imss_info * data = (imss_info *) address_;
+							//dataset_info *dataset = (dataset_info*) address_;
+							//printf("[STAT_SERVER] dataset.original=%s\n",dataset->original_name);
+							//imss_info * data = (imss_info *) address_;
 							//printf("READ_OP SEND data->type=%c\n",data->type);
 							//Send the requested block.
 							if (comm_send(socket, address_, block_size_rtvd, 0) < 0)
@@ -1094,9 +1089,10 @@ stat_worker (void * th_argv)
 					int32_t insert_successful;
 					//Include the new record in the tracking structure.
 					/*dataset_info * data = (dataset_info *) buffer;
+					printf("WRITE_OP key=%s\n",key.c_str());
 					printf("WRITE_OP data->type=%c\n",data->type);
 					printf("WRITE_OP data->servers=%d\n",data->n_servers);
-					printf("WRITE_OP data->node_0=%d\n",data->node_0);*/
+					printf("WRITE_OP original_name=%s\n",data->original_name);*/
 					insert_successful=map->put(key, buffer, block_size_recv);
 					if (insert_successful != 0)
 					{
@@ -1129,6 +1125,7 @@ stat_worker (void * th_argv)
 						//Update where the blocks of a LOCAL dataset have been stored.
 						case LOCAL_DATASET_UPDATE:
 						{
+							printf("[STAT_WORKER] LOCAL DATASET_UPDATE\n");
 							zmq_msg_t data_locations_msg;
 
 							if (zmq_msg_init(&data_locations_msg) != 0)

@@ -74,15 +74,16 @@ class map_records
 			std::unique_lock<std::mutex> lock(mut);
 			//Add a new couple to the map.
 			//printf("total_size=%ld, quantity_occupied=%ld\n",total_size, quantity_occupied);
-			if (quantity_occupied + length > total_size) { //out of space
-			 // printf("[Map record] Out of space  %ld/%ld.\n",quantity_occupied + length, total_size);			  
+			if (quantity_occupied + length > total_size && total_size>0) { //out of space
+				printf("[Map record] Out of space  %ld/%ld.\n",quantity_occupied + length, total_size);			  
 			  return -1;
 			}
 
 
 			struct utsname detect;
 			uname(&detect);
-			//printf("Nodename    - %s add in map=%s\n", detect.nodename, key.c_str());
+			printf("Nodename    - %s add in map=%s\n", detect.nodename, key.c_str());
+			//printf("quantity=%ld total size=%ld\n",quantity_occupied, total_size);
 			quantity_occupied = quantity_occupied + length;
 			buffer.insert({key, value});
 			return 0;
@@ -105,7 +106,7 @@ class map_records
 			it = buffer.find(key);
 			//Check if the value did exist within the map.
 			if(it == buffer.end()){
-				///printf("Nodename-%s NO EXIST=%s\n",detect.nodename, key.c_str());
+				//printf("Nodename-%s NO EXIST=%s\n",detect.nodename, key.c_str());
 				return 0;
 			}
 			
@@ -218,14 +219,14 @@ class map_records
 			std::vector<string>::iterator i;
 			for (i=vec.begin(); i<vec.end(); i++){
 				string key = *i;
-				printf("Nodename    - %s	Rename modify original=%s\n",detect.nodename,key.c_str());
+				//printf("Nodename    - %s	Rename modify original=%s\n",detect.nodename,key.c_str());
 				key.erase(0,old_dir.length()-1);
 				
 				string new_path=rdir_dest;
 				new_path.append(key);
 		
 				auto node = buffer.extract(*i);
-				printf("Nodename    - %s	Rename new=%s\n",detect.nodename, new_path.c_str());
+				//printf("Nodename    - %s	Rename new=%s\n",detect.nodename, new_path.c_str());
 				node.key() = new_path;
 				buffer.insert(std::move(node));
 

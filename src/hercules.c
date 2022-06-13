@@ -177,7 +177,7 @@ imss_server(void * arg_)
         	
 			pthread_mutex_unlock(&backend_buff_mut);
 
-			data_reserved = buffer_KB * KB;
+			data_reserved = buffer_KB * GB;
             map_records buffer_map(data_reserved);
 			//buffer_address = (unsigned char *) malloc(sizeof(char)*data_reserved );
 
@@ -262,7 +262,7 @@ imss_metadata(void * arg_)
 
 	
 	//Map tracking metadata saved records.
-	map_records metadata_map(arg.buffer_size * KB);
+	map_records metadata_map(arg.buffer_size * GB);
 	//Pointer to the allocated metadata buffer memory.
 	unsigned char * pt_met;
 
@@ -275,7 +275,7 @@ imss_metadata(void * arg_)
 	backend_buffer_size -= arg.buffer_size;
 	pthread_mutex_unlock(&backend_buff_mut);
 
-	int64_t data_reserved = arg.buffer_size * KB;
+	int64_t data_reserved = arg.buffer_size * GB;
 
 	pt_met = (unsigned char *) malloc(sizeof(char) * data_reserved);
 

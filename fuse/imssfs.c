@@ -26,7 +26,7 @@ gcc -Wall imss.c `pkg-config fuse --cflags --libs` -o imss
 
 
 #define KB 1024
-
+#define GB 1073741824
 /*
    -----------	IMSS Global variables, filled at the beggining or by default -----------
 */
@@ -41,13 +41,13 @@ char * IMSS_HOSTFILE = NULL; //Not default
 char * IMSS_ROOT = NULL;//Not default
 char * META_HOSTFILE = NULL; //Not default 
 char * POLICY = "RR"; //Default RR
-uint64_t STORAGE_SIZE = 1024*1024*16; //In Kb, Default 16 GB
-uint64_t META_BUFFSIZE = 1024 * 16; //In Kb, Default 16MB
+uint64_t STORAGE_SIZE = 16; //In GB
+uint64_t META_BUFFSIZE = 16; //In GB
 //uint64_t META_BUFFSIZE = 1024 * 1000;
 //uint64_t IMSS_BLKSIZE = 1024; //In Kb, Default 1 MB
-uint64_t IMSS_BLKSIZE = 256;
+uint64_t IMSS_BLKSIZE = 1024;
 //uint64_t IMSS_BUFFSIZE = 1024*1024*2; //In Kb, Default 2Gb
-uint64_t IMSS_BUFFSIZE = 1024*2048; //In Kb, Default 2Gb
+uint64_t IMSS_BUFFSIZE = 2; //In GB
 int32_t REPL_FACTOR = 1; //Default none
 char * MOUNTPOINT[7] = {"imssfs", "-f" , "XXXX", "-s", NULL}; // {"f", mountpoint} Not default ({"f", NULL})
 
@@ -348,7 +348,7 @@ prefetch_function (void * th_argv)
 			//printf("Se activo Prefetch path:%s$%d-$%d\n",prefetch_path, prefetch_first_block, prefetch_last_block);
 			int exist_first_block, exist_last_block, position;
 			char * buf = map_get_buffer_prefetch(map_prefetch, prefetch_path, &exist_first_block, &exist_last_block);
-			int err = readv_multiple(prefetch_ds, prefetch_first_block, prefetch_last_block, buf, IMSS_BLKSIZE, prefetch_offset, IMSS_BLKSIZE * KB * (prefetch_last_block - prefetch_first_block));
+			int err = readv_multiple(prefetch_ds, prefetch_first_block, prefetch_last_block, buf, IMSS_BLKSIZE, prefetch_offset, IMSS_DATA_BSIZE * (prefetch_last_block - prefetch_first_block));
 			if(err==-1){
 				pthread_mutex_unlock(&lock);
 				continue;

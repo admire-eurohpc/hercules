@@ -22,6 +22,7 @@
 #define LOCAL_DATASET_UPDATE	0
 
 #define KB			1024
+#define GB 			1073741824
 
 
 //Set of arguments passed to each server thread.

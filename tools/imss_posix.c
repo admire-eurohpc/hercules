@@ -22,12 +22,15 @@
 #include <dirent.h>
 #include "mapprefetch.hpp"
 #include <math.h>
+#include<sys/utsname.h>
 
 #undef _FILE_OFFSET_BITS
 
 #define KB 1024 
+#define GB 1073741824
 uint32_t deployment = 2;//Default 1=ATACHED, 0=DETACHED ONLY METADATA SERVER 2=DETACHED METADATA AND DATA SERVERS
-char * POLICY = "RR"; //Default RR
+//char * POLICY = "RR"; //Default RR
+char * POLICY = "RR";
 uint16_t IMSS_SRV_PORT = 1; //Not default, 1 will fail
 uint16_t METADATA_PORT = 1; //Not default, 1 will fail
 int32_t  N_SERVERS = 1; //Default
@@ -37,10 +40,10 @@ char     METADATA_FILE[512]; //Not default
 char     IMSS_HOSTFILE[512]; //Not default
 char     IMSS_ROOT[32];
 char     META_HOSTFILE[512];
-uint64_t STORAGE_SIZE = 1024*1024*16; //In Kb, Default 16 GB
-uint64_t META_BUFFSIZE = 1024 * 16; //In Kb, Default 16MB
+uint64_t STORAGE_SIZE = 16; //In GB
+uint64_t META_BUFFSIZE = 16; //In GB
 uint64_t IMSS_BLKSIZE = 1024;
-uint64_t IMSS_BUFFSIZE = 1024*2048; //In Kb, Default 2Gb
+uint64_t IMSS_BUFFSIZE = 2; //In GB
 int32_t REPL_FACTOR = 1; //Default none
 int32_t  IMSS_DEBUG = 0;
 
@@ -112,7 +115,7 @@ prefetch_function (void * th_argv)
 			//printf("Se activo Prefetch path:%s$%d-$%d\n",prefetch_path, prefetch_first_block, prefetch_last_block);
 			int exist_first_block, exist_last_block, position;
 			char * buf = map_get_buffer_prefetch(map_prefetch, prefetch_path, &exist_first_block, &exist_last_block);
-			int err = readv_multiple(prefetch_ds, prefetch_first_block, prefetch_last_block, buf, IMSS_BLKSIZE, prefetch_offset, IMSS_BLKSIZE * KB * (prefetch_last_block - prefetch_first_block));
+			int err = readv_multiple(prefetch_ds, prefetch_first_block, prefetch_last_block, buf, IMSS_BLKSIZE, prefetch_offset, IMSS_DATA_BSIZE * (prefetch_last_block - prefetch_first_block));
 			if(err==-1){
 				pthread_mutex_unlock(&lock);
 				continue;
@@ -131,7 +134,7 @@ prefetch_function (void * th_argv)
 
 
 char * convert_path(const char * name, char * replace){
-        char path[256] = {0};
+        char * path = calloc(256, sizeof(char));	
         strcpy(path,name);
         //printf("path=%s\n",path);
         size_t len = strlen(MOUNT_POINT);
@@ -141,8 +144,9 @@ char * convert_path(const char * name, char * replace){
                 memmove(p, p + len, strlen(p + len) + 1);
             }
         }
-        char * new_path = malloc(sizeof(char*)*256);
-        bzero(new_path, 256);
+        
+        char * new_path = calloc(256, sizeof(char));	
+        
         if(! strncmp(path, "/", strlen("/")) ) {
             strcat(new_path, "imss:/");
         }else{
@@ -279,6 +283,9 @@ imss_posix_init(void)
 
 void __attribute__((destructor)) run_me_last() {
     fprintf(stderr,"DESTRUCTOR EXIT *************\n");
+    struct utsname detect;
+    uname(&detect);
+    printf("Nodename    - %s\n", detect.nodename);
     sleep(1);
 }
 /*
@@ -581,7 +588,7 @@ off_t lseek(int fd, off_t offset, int whence){
     real_lseek = dlsym(RTLD_NEXT,"lseek");
     long ret;
     unsigned long p = 0;
-    char path[256] = {0};
+    char * path = (char *) calloc(256, sizeof(char));
 
     if(map_fd_search_by_val(map_fd, path, fd) == 1) {
        
@@ -607,6 +614,7 @@ off_t lseek(int fd, off_t offset, int whence){
         ret = real_lseek(fd, offset, whence);
         //printf("REAL LSEEK return=%d\n",ret);
     }
+    free(path);
     return ret;
 }
 
@@ -615,28 +623,28 @@ ssize_t write(int fd, const void *buf, size_t size){
     real_write = dlsym(RTLD_NEXT,"write");
     size_t ret;
     unsigned long p = 0;
-    char path[256] = {0};
+    char * path = (char *) calloc(256, sizeof(char));
 
     if(map_fd_search_by_val(map_fd, path, fd) == 1) {
         struct stat ds_stat_n;
         imss_getattr(path, &ds_stat_n);
         map_fd_search(map_fd, path, &fd, &p);
-        //printf("CUSTOM write worked! fd=%d, size=%ld offset=%d\n", fd, size, p); 
+        //printf("CUSTOM write worked! fd=%d, size=%ld offset=%ld\n", fd, size, p); 
         ret=imss_write(path,buf,size,p);
         imss_release(path);
     }else{
         //printf("REAL write worked! fd=%d, size=%ld\n", fd, size); 
         ret = real_write(fd, buf, size);
     }
+    free(path);
     return ret;
 }
 
 ssize_t read(int fd, void *buf, size_t size){
-    //printf("LD_PRELOAD READ fd=%d\n",fd);
     real_read = dlsym(RTLD_NEXT,"read");
     size_t ret;
     unsigned long p = 0;
-    char path[256] = {0};
+    char * path = (char *) calloc(256, sizeof(char));
 
     if(map_fd_search_by_val(map_fd, path, fd) == 1) {
         //printf("CUSTOM read worked! path=%s fd=%d, size=%ld\n",path, fd, size);
@@ -646,7 +654,7 @@ ssize_t read(int fd, void *buf, size_t size){
     }else{
         ret = real_read(fd, buf, size);
     }
-
+    free(path);
     return ret;
 }
 
@@ -674,7 +682,7 @@ int unlink (const char *name){//unlink
         
         
     }else if(! strncmp(name, "imss://", strlen("imss://"))){
-        char path[256] = {0};
+        char * path = (char *) calloc(256, sizeof(char));
         strcpy(path,name);
         int32_t type = get_type(path);
         if(type == 0){
@@ -687,7 +695,7 @@ int unlink (const char *name){//unlink
         }else{
             ret = imss_unlink(path);
         }
-    
+        free(path);
     }else{
         ret = real_unlink(name);
     }
@@ -854,9 +862,8 @@ struct dirent *readdir(DIR *dirp)
     struct dirent *entry = (struct dirent *) malloc(sizeof(struct dirent));
     real_readdir = dlsym(RTLD_NEXT, "readdir");
     size_t ret;
-    //char path[256] = {0};
-    char *path=malloc(256);
-    bzero(path,256);
+
+    char *path = calloc(256, sizeof(char));	
     if(map_fd_search_by_val(map_fd, path, dirfd(dirp)) == 1) {
         char buf[KB*KB]={0};
         char *token;

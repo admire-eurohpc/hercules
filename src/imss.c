@@ -643,8 +643,7 @@ init_imss(char *   imss_uri,
 			return -1;
 		}
 
-		char command[2048]; 
-		memset(command, 0, 2048);
+		char *command = (char *) calloc(2048, sizeof(char));
 		printf("conn_port=%d\n",conn_port);
 		printf("hostfile=%s\n",hostfile);
 
@@ -689,6 +688,7 @@ init_imss(char *   imss_uri,
 			perror("ERRIMSS_INITIMSS_DEPLOY");
 			return -1;
 		}
+		free(command);
 	}
 	//IMSS creation.
 
@@ -807,6 +807,7 @@ init_imss(char *   imss_uri,
 
 	//Add the created struture into the underlying IMSS vector.
 	GInsert (&imssd_pos, &imssd_max_size, (char *) &new_imss, imssd, free_imssd);
+
 	return 0;
 }
 
@@ -1185,8 +1186,11 @@ create_dataset(char *  dataset_uri,
 	new_dataset.size 			= 0;
 	
 	new_dataset.n_servers		= curr_imss.info.num_storages;
-	//int32_t fd = Get_fd(&datasetd_pos, &datasetd_max_size, datasetd, free_datasetd);
-	new_dataset.node_0 = find_server(curr_imss.info.num_storages, 0, dataset_uri, SET);
+	
+	//*****NEXT LINE NEED FOR DIFERENT POLICIES TO WORK IN DISTRIBUTED*****//
+	strcpy(new_dataset.original_name, dataset_uri);
+	//*****BEFORE LINE NEED FOR DIFERENT POLICIES TO WORK IN DISTRIBUTED*****//
+
 	//Size of the message to be sent.
 	uint64_t msg_size = sizeof(dataset_info);
 
@@ -1195,8 +1199,9 @@ create_dataset(char *  dataset_uri,
 	{
 		uint32_t info_size = new_dataset.num_data_elem * sizeof(uint16_t);
 
-		new_dataset.data_locations = (uint16_t *) malloc(info_size);
-		memset(new_dataset.data_locations, 0, info_size);
+		/*new_dataset.data_locations = (uint16_t *) malloc(info_size);
+		memset(new_dataset.data_locations, 0, info_size);*/
+		new_dataset.data_locations = (uint16_t *) calloc(info_size,sizeof(uint16_t));
 
 		//Specify that the created dataset is a LOCAL one.
 		new_dataset.type = 'L';
@@ -1210,8 +1215,7 @@ create_dataset(char *  dataset_uri,
     //Discover the metadata server that handle the new dataset.
     uint32_t m_srv = discover_stat_srv(new_dataset.uri_);
 
-	char formated_uri[REQ_MSG];
-	bzero(formated_uri,REQ_MSG);
+	char formated_uri[REQ_MSG]={0};
 	sprintf(formated_uri, "%lu %s", msg_size, new_dataset.uri_);
 	//Send the dataset URI associated to the dataset metadata structure to be sent.
 	if (comm_send(stat_client[m_srv], formated_uri, REQ_MSG, ZMQ_SNDMORE) < 0)
@@ -1232,9 +1236,11 @@ create_dataset(char *  dataset_uri,
 		new_dataset.num_blocks_written = (uint64_t *) malloc(1*sizeof(uint64_t));
 		*(new_dataset.num_blocks_written) = 0;
 		//Specific blocks written by the client.
-		new_dataset.blocks_written = (uint32_t *) malloc(new_dataset.num_data_elem*sizeof(uint32_t));
 
-		memset(new_dataset.blocks_written, 0, new_dataset.num_data_elem*sizeof(uint32_t));
+		/*new_dataset.blocks_written = (uint32_t *) malloc(new_dataset.num_data_elem*sizeof(uint32_t));
+		memset(new_dataset.blocks_written, 0, new_dataset.num_data_elem*sizeof(uint32_t));*/
+
+		new_dataset.blocks_written = (uint32_t *) calloc(new_dataset.num_data_elem, sizeof(uint32_t));
 	}
 
 //	//Set the specified policy.
@@ -1306,9 +1312,10 @@ open_dataset(char * dataset_uri)
 		new_dataset.num_blocks_written = (uint64_t *) malloc(1*sizeof(uint64_t));
 		*(new_dataset.num_blocks_written) = 0;
 		//Specific blocks written by the client.
-		new_dataset.blocks_written = (uint32_t *) malloc(new_dataset.num_data_elem*sizeof(uint32_t));
+		/*new_dataset.blocks_written = (uint32_t *) malloc(new_dataset.num_data_elem*sizeof(uint32_t));
+		memset(new_dataset.blocks_written, '\0', new_dataset.num_data_elem*sizeof(uint32_t));*/
 
-		memset(new_dataset.blocks_written, '\0', new_dataset.num_data_elem*sizeof(uint32_t));
+		new_dataset.blocks_written = (uint32_t *) calloc(new_dataset.num_data_elem, sizeof(uint32_t));
 	}
 
 //	//Set the specified policy.
@@ -1366,8 +1373,9 @@ release_dataset(int32_t dataset_id)
 		uint64_t blocks_written_size = *(release_dataset.num_blocks_written) * sizeof(uint32_t);
 		uint64_t update_msg_size = 8 + blocks_written_size;
 
-		char update_msg[update_msg_size];
-		memset(update_msg, '\0', update_msg_size);
+		/*char update_msg[update_msg_size];
+		memset(update_msg, '\0', update_msg_size);*/
+		char * update_msg = (char *) calloc(update_msg_size,sizeof(char));
 
 		uint16_t update_value = (release_dataset.local_conn + 1);
 		memcpy(update_msg, release_dataset.blocks_written, blocks_written_size);
@@ -1408,6 +1416,8 @@ release_dataset(int32_t dataset_id)
 		free(release_dataset.blocks_written);
 
 		free(release_dataset.num_blocks_written);
+
+		free(update_msg);
 
 	}
     

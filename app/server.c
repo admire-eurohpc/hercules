@@ -68,7 +68,7 @@ int32_t main(int32_t argc, char **argv)
 	buffer_size	= atoi(argv[3]);
 
     // Default setup for imss uri
-    imss_uri = (char *) malloc(32);
+	imss_uri 	= (char *) calloc(32, sizeof(char));	
     strcpy(imss_uri, "imss://");
 
 
@@ -197,11 +197,8 @@ int32_t main(int32_t argc, char **argv)
 		//ARGV[1] = metadata file.
 		metadata_file	= argv[1];
 
-		//imss_uri	= (char *) malloc(8*sizeof(char));
-		//strcpy(imss_uri, "stat\0");
-
 		//Create the tree_root node.
-		char * root_data = (char *) malloc(8);
+		char * root_data = (char *) calloc(8, sizeof(char));
 		strcpy(root_data,"imss://");
 		tree_root = g_node_new((void *) root_data);
 
@@ -217,7 +214,7 @@ int32_t main(int32_t argc, char **argv)
 	/***************************************************************/
 
 	//Publisher address where the release will be triggered.
-	pub_dir = (char *) malloc(33*sizeof(char));
+	pub_dir = (char *) calloc(33, sizeof(char));
 	sprintf(pub_dir, "inproc://inproc-imss-comms-%d", bind_port);
 	//Publisher socket creation.
 	if ((pub = zmq_socket(context, ZMQ_PUB)) == NULL)
@@ -235,7 +232,6 @@ int32_t main(int32_t argc, char **argv)
 	//Map tracking saved records.
 
 	map_records map(buffer_size*KB);
-
 	int64_t data_reserved;
 	//Pointer to the allocated buffer memory.
 	unsigned char * buffer;
@@ -270,9 +266,8 @@ int32_t main(int32_t argc, char **argv)
 	p_argv arguments[(THREAD_POOL+1)];
 
 	if (argc == 9)
-
-		region_locks = (pthread_mutex_t *) malloc(THREAD_POOL * sizeof(pthread_mutex_t));
-
+		region_locks = (pthread_mutex_t *) calloc(THREAD_POOL, sizeof(pthread_mutex_t));
+	
 	//Execute all threads.
 	for (int32_t i = 0; i < (THREAD_POOL+1); i++)
 	{
@@ -331,7 +326,7 @@ int32_t main(int32_t argc, char **argv)
 		imss_info my_imss;
 
 		strcpy(my_imss.uri_, imss_uri);
-		my_imss.ips = (char **) malloc(num_servers*sizeof(char *));
+		my_imss.ips = (char **) calloc(num_servers, sizeof(char *));
 		my_imss.num_storages 	= num_servers;
 		my_imss.conn_port	= aux_bind_port;
 		my_imss.type	= 'I';//extremely important
@@ -349,7 +344,7 @@ int32_t main(int32_t argc, char **argv)
 		for (int32_t i = 0; i < num_servers; i++)
 		{
 			//Allocate resources in the metadata structure so as to store the current IMSS's IP.
-			(my_imss.ips)[i] = (char *) malloc(LINE_LENGTH);
+			(my_imss.ips)[i] = (char *) calloc(LINE_LENGTH, sizeof(char));
 			size_t l_size = LINE_LENGTH;
 
 			//Save IMSS metadata deployment.

@@ -9,6 +9,7 @@
 
 extern uint64_t IMSS_BLKSIZE;
 #define KB 1024
+#define GB 1073741824
 
 std::mutex mtx;
 struct PrefetchItem {
