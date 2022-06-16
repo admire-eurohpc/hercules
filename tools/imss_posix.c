@@ -48,7 +48,7 @@ int32_t REPL_FACTOR = 1; //Default none
 int32_t  IMSS_DEBUG = 0;
 
 uint16_t PREFETCH = 6;
-uint16_t MULTIPLE_READ = 4;//1=vread with prefetch, 2=vread without prefetch, 
+uint16_t MULTIPLE_READ = 0;//1=vread with prefetch, 2=vread without prefetch, 
                             //3=vread_2x 4=imss_split_readv else sread
 uint16_t MULTIPLE_WRITE = 0;//1=writev, else sread
 char prefetch_path[256];
@@ -642,6 +642,7 @@ ssize_t write(int fd, const void *buf, size_t size){
 
 ssize_t read(int fd, void *buf, size_t size){
     real_read = dlsym(RTLD_NEXT,"read");
+    printf("read=%d\n",fd);
     size_t ret;
     unsigned long p = 0;
     char * path = (char *) calloc(256, sizeof(char));

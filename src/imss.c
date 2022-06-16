@@ -2064,7 +2064,7 @@ split_readv(void * th_argv)
 		}
 		gettimeofday(&end, NULL);
 		delta_us = (float) (end.tv_usec - start.tv_usec);
-	//	printf("\n[CLIENT] [S_SPLIT_READ] recv data delta_us=%6.3f\n",(delta_us/1000.0F));
+		printf("\n[CLIENT] [S_SPLIT_READ] recv data delta_us=%6.3f\n",(delta_us/1000.0F));
 		//Check if the requested key was correctly retrieved.
 		if (strncmp((const char *) arguments->buffer, "$ERRIMSS_NO_KEY_AVAIL$", 22)){
 		}
@@ -2163,7 +2163,7 @@ get_data(int32_t 	 dataset_id,
 {
 	int32_t n_server;
 
-	
+
 	//Server containing the corresponding data to be retrieved.
 	if ((n_server = get_data_location(dataset_id, data_id, GET)) == -1){
 		return -1;
@@ -2228,12 +2228,13 @@ get_data(int32_t 	 dataset_id,
 
 		gettimeofday(&end, NULL);
 		delta_us = (float) (end.tv_usec - start.tv_usec);
-		//printf("\n[CLIENT] [SREAD] send petition delta_us=%6.3f\n",(delta_us/1000.0F));
+		printf("\n[CLIENT] [GET DATA] send petition delta_us=%6.3f\n",(delta_us/1000.0F));
 
 
 		gettimeofday(&start, NULL);
 		//printf("GET_DATA after send petition to read\n");
 		//Receive data related to the previous read request directly into the buffer.
+		printf("GET_DATA comm_recv size=%d\n",curr_dataset.data_entity_size);
 		if (comm_recv(curr_imss.conns.sockets_[repl_servers[i]], buffer, curr_dataset.data_entity_size, 0) == -1)
 		{
 			if (errno != EAGAIN)
@@ -2246,7 +2247,7 @@ get_data(int32_t 	 dataset_id,
 		}
 		gettimeofday(&end, NULL);
 		delta_us = (float) (end.tv_usec - start.tv_usec);
-		//printf("\n[CLIENT] [SREAD] recv data delta_us=%6.3f\n",(delta_us/1000.0F));
+		printf("[CLIENT] [GET DATA] recv data delta_us=%6.3f\n",(delta_us/1000.0F));
 
 		//Check if the requested key was correctly retrieved.
 		if (strncmp((const char *) buffer, "$ERRIMSS_NO_KEY_AVAIL$", 22)){

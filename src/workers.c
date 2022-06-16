@@ -155,10 +155,13 @@ srv_worker (void * th_argv)
 		//Initialize ZeroMQ messages.
 		zmq_msg_init (&client_id);
 		zmq_msg_init (&client_req);
-
+		printf("[SRV_WORKER] waiting_massage\n");
 		//Save the identity of the requesting client.
 		comm_msg_recv(&client_id, socket, 0);
 		
+		struct timeval start, end;
+		float delta_us;
+		gettimeofday(&start, NULL);
 		
 		
 		//Check if a timeout was triggered in the previous receive operation.
@@ -205,9 +208,6 @@ srv_worker (void * th_argv)
 		//Save the request to be served.
 		comm_msg_recv(&client_req, socket, 0);
 		
-		struct timeval start, end;
-		float delta_us;
-		gettimeofday(&start, NULL);
 		
 		struct timeval start2, end2;
 		float delta_us2;
@@ -220,13 +220,6 @@ srv_worker (void * th_argv)
 			pthread_exit(NULL);
 		}
 
-		gettimeofday(&end2, NULL);
-		delta_us2 = (float) (end2.tv_usec - start2.tv_usec);
-		//printf("\n[SERVER] getsockopt delta_us=%6.3f\n",(delta_us2/1000.0F));
-		
-		//Expeted incomming message format: "SIZE_IN_KB KEY"
-		
-		gettimeofday(&start2, NULL);
 
 		//Reference to the client request.
 		char * req = (char *) zmq_msg_data(&client_req);
@@ -242,15 +235,10 @@ srv_worker (void * th_argv)
 		std::string key; 
 		key.assign((const char *) uri_);
 
-		//printf("REQUEST: %s (%ld)\n", key.c_str(), block_size_recv);
-
 		//Information associated to the arriving key.
 		unsigned char * address_;
 		uint64_t block_size_rtvd;
 
-		gettimeofday(&end2, NULL);
-		delta_us2 = (float) (end2.tv_usec - start2.tv_usec);
-		//printf("\n[SERVER] variables delta_us=%6.3f\n",(delta_us2/1000.0F));
 
 		//Differentiate between READ and WRITE operations. 
 		switch (more)
@@ -305,11 +293,11 @@ srv_worker (void * th_argv)
 							}
 							gettimeofday(&end2, NULL);
 							delta_us2 = (float) (end2.tv_usec - start2.tv_usec);
-							//printf("\n[SERVER] send delta_us=%6.3f\n",(delta_us2/1000.0F));
+							printf("[SRV_WORKER] send delta_us=%6.3f\n",(delta_us2/1000.0F));
 						}
 						gettimeofday(&end, NULL);
 						delta_us = (float) (end.tv_usec - start.tv_usec);
-						//printf("\n[SERVER] [END] delta_us=%6.3f\n",(delta_us/1000.0F));
+						printf("[SRV_WORKER] [END] delta_us=%6.3f\n\n",(delta_us/1000.0F));
 						break;
 					}
 

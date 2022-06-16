@@ -110,7 +110,7 @@ class map_records
 				return 0;
 			}
 			
-			//printf("Nodename    - %s	GET-%s \n", detect.nodename, key.c_str());
+			printf("Nodename    - %s	GET-%s \n", detect.nodename, key.c_str());
 			//Assign the values obtained to the provided references.
 			//std::cout <<"Exist " << key << '\n';
 			*(add_) = it->second.first;

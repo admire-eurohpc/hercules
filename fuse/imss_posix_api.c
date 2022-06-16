@@ -354,7 +354,7 @@ int imss_split_readv(const char *path, char *buf, size_t size, off_t offset)
 	end_offset = (offset+size) % IMSS_DATA_BSIZE;
 	size_t to_read = 0;
 
-	//printf("\n[CLIENT] [SPLIT_READ] size=%ld  offset=%ld start block=%ld, end_block=%ld\n",size, offset, curr_blk, end_blk);
+	printf("\n[CLIENT] [SPLIT_READ] size=%ld  offset=%ld start block=%ld, end_block=%ld\n",size, offset, curr_blk, end_blk);
 	//Needed variables
 	size_t byte_count = 0;
 	int64_t rbytes;
@@ -644,7 +644,7 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 		
 		gettimeofday(&end2, NULL);
 		delta_us2 = (float) (end2.tv_usec - start2.tv_usec);
-		//printf("[CLIENT] [SREAD] curr_block=%ld delta_us=%6.3f\n",curr_blk,(delta_us2/1000.0F));
+		printf("[CLIENT] [SREAD] curr_block=%ld delta_us=%6.3f\n",curr_blk,(delta_us2/1000.0F));
 		
 		pthread_mutex_unlock(&lock);
 		if( err != -1){
@@ -689,7 +689,7 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 	}
 	gettimeofday(&end1, NULL);
 	delta_us1 = (float) (end1.tv_usec - start1.tv_usec);
-	//printf("[CLIENT] [SREAD_END] delta_us=%6.3f\n",(delta_us1/1000.0F));
+	printf("[CLIENT] [SREAD_END] delta_us=%6.3f\n",(delta_us1/1000.0F));
 	free(rpath);
 	return byte_count;
 }
