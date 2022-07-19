@@ -98,6 +98,24 @@ The mount call requires the following parameters:
 
 The project repository provides support for running Hercules IMSS overriding I/O calls by using the LD_PRELOAD environment variable. Both data and metadata calls are currently intercepted by the implemented dynamic library.
 
+Initially, it is necesary to set up the configuration environment variables:
+
+`
+export IMSS_MOUNT_POINT=/mnt/imss
+export IMSS_HOSTFILE=./hostfile
+export IMSS_N_SERVERS=3
+export IMSS_SRV_PORT=5555
+export IMSS_BUFFSIZE=1
+export IMSS_META_HOSTFILE=./stat_hostfile
+export IMSS_META_PORT=5569
+export IMSS_META_SERVERS=1
+export IMSS_STORAGE_SIZE=10
+export IMSS_METADATA_FILE=./metadata
+export IMSS_DEPLOYMENT=2
+`
+
+Once, the application can be executed using the aforementioned deployment modes:
+
 `
 LD_PRELOAD=libimss_posix.so ls -l /mnt/imss/
 `
