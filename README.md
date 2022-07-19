@@ -123,7 +123,8 @@ LD_PRELOAD=libimss_posix.so ls -l /mnt/imss/
 
 # Running with MPI
 
-Metadata:
+## Metadata servers
+
 `
 mpirun.mpich -np 1 -f ./stat_hostfile ./server ./metadata 5569 0 //TUCAN
 
@@ -132,7 +133,7 @@ or
 mpiexec -np 1 --hostfile ./stat_hostfile ./server ./metadata 5569 0 //ARM ITALIANOS
 `
 
-Data
+## Data servers
 
 `
 mpirun.mpich -np 4 -f ./hostfile ./server imss:// 5555 0 compute-6-2 5569 4 ./hostfile 1
@@ -142,7 +143,7 @@ or
 mpirun -np 4 --pernode --hostfile ./hostfile ./server imss:// 5555 0 tcnode07 5569 4 ./hostfile 1
 `             
 
-Client
+## Clients
 
 `
 mpirun.mpich -np 1 -f ./clientfile -genv LD_PRELOAD /home/imss/build/tools/libimss_posix.so ./test_simple /mnt/testimss/data.out
