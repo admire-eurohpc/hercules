@@ -101,7 +101,7 @@ The project repository provides support for running Hercules IMSS overriding I/O
 Initially, it is necesary to set up the configuration environment variables:
 
 `
-export IMSS_MOUNT_POINT=/mnt/imss \
+export IMSS_MOUNT_POINT=/mnt/imss <br/>
 export IMSS_HOSTFILE=./hostfile \   
 export IMSS_N_SERVERS=3 \  
 export IMSS_SRV_PORT=5555  \  
