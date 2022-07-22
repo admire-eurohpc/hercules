@@ -14,6 +14,7 @@
 #define WRITEV 			7
 #define READV 			8
 #define SPLIT_READV 	9
+#define SPLIT_WRITEV	10
 
 #define GETDIR			1
 

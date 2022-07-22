@@ -1,7 +1,7 @@
 #include <mpi.h>
 #include <zmq.h>
 #include <stdio.h>
-#include <utility>
+//#include <utility>
 #include <string.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -73,7 +73,7 @@ int32_t main(int32_t argc, char **argv)
 
 
 	//ZeroMQ context intialization.
-	if (!(context = zmq_ctx_new()))
+	if (!(context = comm_ctx_new()))
 	{
 		perror("ERRIMSS_CTX_CREATE");
 		return -1;
@@ -110,7 +110,7 @@ int32_t main(int32_t argc, char **argv)
 		if (!rank)
 		{
 			//Create a ZMQ socket to send the created IMSS structure.
-			if ((socket = zmq_socket(context, ZMQ_DEALER)) == NULL)
+			if ((socket = comm_socket(context, ZMQ_DEALER)) == NULL)
 			{
 				perror("ERRIMSS_SRV_SOCKETCREATE");
 				return -1;
@@ -168,14 +168,14 @@ int32_t main(int32_t argc, char **argv)
 		{
 			if (!rank)
 			{
-				if (zmq_close(socket) == -1)
+				if (comm_close(socket) == -1)
 				{
 					perror("ERRIMSS_SRV_SOCKETCLOSE");
 					return -1;
 				}
 			}
 
-			if (zmq_ctx_destroy(context) == -1)
+			if (comm_ctx_destroy(context) == -1)
 			{
 				perror("ERRIMSS_CTX_DSTRY");
 				return -1;
@@ -217,7 +217,7 @@ int32_t main(int32_t argc, char **argv)
 	pub_dir = (char *) calloc(33, sizeof(char));
 	sprintf(pub_dir, "inproc://inproc-imss-comms-%d", bind_port);
 	//Publisher socket creation.
-	if ((pub = zmq_socket(context, ZMQ_PUB)) == NULL)
+	if ((pub = comm_socket(context, ZMQ_PUB)) == NULL)
 	{
 		perror("ERRIMSS_PUBSOCK_CREATE");
 		return -1;
@@ -377,7 +377,7 @@ int32_t main(int32_t argc, char **argv)
 			return -1;
 
 		//Close the provided socket.
-		if (zmq_close(socket) == -1)
+		if (comm_close(socket) == -1)
 		{
 			perror("ERRIMSS_SRV_SOCKETCLOSE");
 			return -1;
@@ -422,14 +422,14 @@ int32_t main(int32_t argc, char **argv)
 		free(region_locks);
 
 	//Close publisher socket.
-	if (zmq_close(pub) == -1)
+	if (comm_close(pub) == -1)
 	{
 		perror("ERRIMSS_PUBSOCK_CLOSE");
 		return -1;
 	}
 
 	//Close context holding all sockets.
-	if (zmq_ctx_destroy(context) == -1)
+	if (comm_ctx_destroy(context) == -1)
 	{
 		perror("ERRIMSS_CTX_DSTRY");
 		return -1;

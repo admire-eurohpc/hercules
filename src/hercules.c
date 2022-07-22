@@ -167,6 +167,7 @@ imss_server(void * arg_)
 			pthread_mutex_lock(&backend_buff_mut);
 			
 			//Check if there is enough space to create a new IMSS server entity within the backend storage.
+			printf("%ld > %ld",buffer_KB,backend_buffer_size);
 			if (buffer_KB > backend_buffer_size)//Total storage size include data server . Then must be lagger
 			{
 				perror("ERRIMSS_BUFFTOOBIG. Total storage size overpass when allocating a new imss_server_data_buffer");
@@ -267,7 +268,8 @@ imss_metadata(void * arg_)
 	unsigned char * pt_met;
 
 	pthread_mutex_lock(&backend_buff_mut);
-	if (backend_buffer_size < arg.buffer_size)//Total storage size inclue metadata. Then must be lagger
+	printf("%ld > %ld",buffer_KB,backend_buffer_size);
+	if (backend_buffer_size > arg.buffer_size)//Total storage size inclue metadata. Then must be lagger
 	{
 		perror("ERRIMSS_BUFFTOOBIG. Total storage size overpass when allocating a new imss_server_metadata_buffer.");
 		pthread_exit(NULL);
@@ -388,14 +390,14 @@ hercules_init(uint32_t rank,
 	backend_buffer_size = backend_strg_size;
 	connection_port = server_port_num; //FIXME
 	//ZeroMQ context intialization.
-	if ((context = zmq_ctx_new()) == NULL)
+	if ((context = comm_ctx_new()) == NULL)
 	{
 		perror("ERRHERCULES_CTX_CREATE");
 		return -1;
 	}
 
 	//Publisher socket creation.
-	if ((pub = zmq_socket(context, ZMQ_PUB)) == NULL)
+	if ((pub = comm_socket(context, ZMQ_PUB)) == NULL)
 	{
 		perror("ERRHERCULES_PUBSOCK_CREATE");
 		return -1;
@@ -503,7 +505,7 @@ hercules_release()
 	//Publish RELEASE message to all worker threads.
 	zmq_msg_t release_rsc;
 	zmq_msg_init_size(&release_rsc, 8);
-	memcpy(zmq_msg_data(&release_rsc), "RELEASE\0", 8);
+	memcpy(comm_msg_data(&release_rsc), "RELEASE\0", 8);
 
 	if ( comm_msg_send(&release_rsc, pub, 0)== -1)
 	{
@@ -530,7 +532,7 @@ hercules_release()
 	comm_msg_close(&release_rsc);
 
 	//Close publisher socket.
-	if (zmq_close(pub) == -1)
+	if (comm_close(pub) == -1)
 	{
 		perror("ERRHERCULES_PUBSOCK_CLOSE");
 		return -1;
@@ -545,7 +547,7 @@ hercules_release()
 	}
 
 	//Close context holding all sockets.
-	if (zmq_ctx_destroy(context) == -1)
+	if (comm_ctx_destroy(context) == -1)
 	{
 		perror("ERRHERCULES_CTX_DESTROY");
 		return -1;

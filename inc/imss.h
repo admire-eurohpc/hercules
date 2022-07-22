@@ -120,7 +120,7 @@ typedef struct {
 typedef struct {
 
 			int32_t n_server;
-			char *path;
+			const char *path;
 			char *msg;
 			unsigned char * buffer; 
 			int32_t size;
@@ -303,7 +303,7 @@ int32_t delete_dataset(const char * dataset_uri);
 
 	RETURNS:	 0 - Release operation took place successfully.
 				-1 - In case of error.*/
-int32_t writev_multiple(char * buf, int32_t dataset_id,int64_t data_id,
+int32_t writev_multiple(const char * buf, int32_t dataset_id,int64_t data_id,
  int64_t end_blk, int64_t start_offset, int64_t end_offset, int64_t IMSS_DATA_BSIZE, int64_t size);
 
 /*Method renaming a dataset in metadata.
@@ -452,6 +452,10 @@ int32_t get_type(char * uri);
 //Method retriving list of servers to read.
 int32_t
 split_location_servers(int** list_servers,int32_t dataset_id,  int32_t curr_blk, int32_t end_blk);
+
+//Method writing multiple data to a specific server
+void *
+split_writev(void * th_argv);
 
 //Method retrieving multiple data from a specific server
 void *

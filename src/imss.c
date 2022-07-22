@@ -17,6 +17,7 @@
 #include "workers.h"
 #include "policies.h"
 #include <sys/time.h>
+#include<sys/utsname.h>
 
 
 /**********************************************************************************/
@@ -76,8 +77,9 @@ conn_crt_(void **  socket,
 	  int32_t  monitor,
 	  void **  socket_mon)
 {
+	
 	//Create the actual ZMQ socket.
-	if ((*socket = zmq_socket(ctx, ZMQ_DEALER)) == NULL)
+	if ((*socket = comm_socket(ctx, ZMQ_DEALER)) == NULL)
 	{
 		perror("ERRIMSS_CONN_SOCKET_CRT");
 		return -1;
@@ -86,17 +88,18 @@ conn_crt_(void **  socket,
 	//Receive timeout in milliseconds.
 	//int32_t rcvtimeo = TIMEOUT_MS;
 	int32_t rcvtimeo = -1;
-
+	
 	//Monitor the current socket if it was requested.
 	if (monitor)
 	{
+		printf("**********inside monitor case\n");
 		if (zmq_socket_monitor(*socket, "inproc://monitor-socket", ZMQ_EVENT_CONNECTED) == -1)
 		{
 			perror("ERRIMSS_CONN_MONITOR");
 			return -1;
 		}
 		
-		if ((*socket_mon = zmq_socket(ctx, ZMQ_PAIR)) == NULL)
+		if ((*socket_mon = comm_socket(ctx, ZMQ_PAIR)) == NULL)
 		{
 			perror("ERRIMSS_CONN_MONSOCKET");
 			return -1;
@@ -132,6 +135,10 @@ conn_crt_(void **  socket,
 	//Connection address.
 	char addr_[LINE_LENGTH]; 
 	sprintf(addr_, "%s%s%c%d", "tcp://", ip_, ':', port);
+	struct utsname detect;
+	uname(&detect);
+
+	//printf("[CLIENT]:%s connection: %s  monitor=%d ident=%d recvtimeo=%d\n",detect.nodename,addr_,monitor,ident_,rcvtimeo);
 	//sprintf(addr_, "%s%d", "inproc://kk-", port);
 	//Connect to the specified endpoint.
 	if (comm_connect(*socket, (const char *) addr_) == -1)
@@ -156,7 +163,7 @@ int32_t
 conn_dstr_(void * socket)
 {
 	//Close the provided socket.
-	if (zmq_close(socket) == -1)
+	if (comm_close(socket) == -1)
 	{
 		perror("ERRIMSS_CONN_SCKT_CLOSE");
 		return -1;
@@ -392,7 +399,7 @@ stat_init(char *   stat_hostfile,
 	}
 
 	//Create ZMQ application context.
-	if ((ctx = zmq_ctx_new()) == NULL)
+	if ((ctx = comm_ctx_new()) == NULL)
 	{
 		perror("ERRIMSS_CREATE_CONTEXT");
 		return -1;
@@ -437,6 +444,8 @@ stat_init(char *   stat_hostfile,
 		n_chars = getline(&stat_node, &l_size, stat_nodes);
 		//Erase the new line character ('\n') from the string.
 		stat_node[n_chars - 1] = '\0';
+		printf("stat_client=%s\n",stat_node);
+		printf("i=%d, stat_node=%s, port=%d, rank=%d\n",i,stat_node, port, rank);
 		//Create the connection to the metadata server dispatcher thread.
 		if (conn_crt_(stat_client + i, stat_node, port, rank, 0, NULL) == -1)
 
@@ -457,6 +466,7 @@ stat_init(char *   stat_hostfile,
 		    perror("ERRIMSS_STAT_ACK");
 		    return -1;
 		}
+
 		//Close the previous connection.
 		if (conn_dstr_(stat_client[i]) == -1)
 
@@ -470,7 +480,7 @@ stat_init(char *   stat_hostfile,
 		char sep_;
 
 		//Read the previous information from the message received.
-		sscanf((const char *) zmq_msg_data(&connection_info), "%d%c%d", &stat_port, &sep_, &stat_id);
+		sscanf((const char *) comm_msg_data(&connection_info), "%d%c%d", &stat_port, &sep_, &stat_id);
 		comm_msg_close(&connection_info);
 
 		//Create the connection to the metadata server dispatcher thread.
@@ -524,7 +534,8 @@ int32_t stat_release()
         }
     }
 
-	if (zmq_ctx_destroy(ctx) == -1)
+	//if (comm_ctx_destroy(ctx) == -1)
+	if (comm_ctx_destroy(ctx) == -1)
 	{
 		perror("ERRIMSS_CLOSE_CONTEXT");
 		return -1;
@@ -566,7 +577,7 @@ get_dir(char * 	 requested_uri,
 	}
 	//Retrieve the set of elements within the requested uri.
 	zmq_msg_t uri_elements;
-	if (zmq_msg_init(&uri_elements) != 0)
+	if (comm_msg_init(&uri_elements) != 0)
 	{
 		perror("ERRIMSS_GETDIR_MSGINIT");
 		return -1;
@@ -576,7 +587,7 @@ get_dir(char * 	 requested_uri,
 		perror("ERRIMSS_GETDIR_RECV");
 		return -1;
 	}
-	char * elements = (char *) zmq_msg_data(&uri_elements);
+	char * elements = (char *) comm_msg_data(&uri_elements);
 
 	if (!strncmp("$ERRIMSS_NO_KEY_AVAIL$", elements, 22))
 	{
@@ -772,7 +783,7 @@ init_imss(char *   imss_uri,
 		//Separator.
 		char sep_;
 		//Read the previous information from the message received.
-		sscanf((const char *) zmq_msg_data(&connection_info), "%d%c%d", &imss_port, &sep_, &imss_id);
+		sscanf((const char *) comm_msg_data(&connection_info), "%d%c%d", &imss_port, &sep_, &imss_id);
 		comm_msg_close(&connection_info);
 
 		//Create the connection to the metadata server dispatcher thread.
@@ -898,7 +909,7 @@ open_imss(char * imss_uri)
 		char sep_;
 
 		//Read the previous information from the message received.
-		sscanf((const char *) zmq_msg_data(&connection_info), "%d%c%d", &imss_port, &sep_, &imss_id);
+		sscanf((const char *) comm_msg_data(&connection_info), "%d%c%d", &imss_port, &sep_, &imss_id);
 
 		comm_msg_close(&connection_info);
 
@@ -1055,13 +1066,13 @@ get_deployed(char * endpoint)
 	//Socket used for the request.
 	void * probe_socket;
 
-	if ((probe_ctx = zmq_ctx_new()) == NULL)
+	if ((probe_ctx = comm_ctx_new()) == NULL)
 	{
 		perror("ERRIMSS_GETDEPLOYED_CTXCREATE");
 		return NULL;
 	}
 
-	if ((probe_socket = zmq_socket(probe_ctx, ZMQ_DEALER)) == NULL)
+	if ((probe_socket = comm_socket(probe_ctx, ZMQ_DEALER)) == NULL)
 	{
 		perror("ERRIMSS_GETDEPLOYED_SOCKETCRT");
 		return NULL;
@@ -1118,8 +1129,8 @@ get_deployed(char * endpoint)
 		return NULL;
 	}
 
-	zmq_close(probe_socket);
-	zmq_ctx_destroy(probe_ctx);
+	comm_close(probe_socket);
+	comm_ctx_destroy(probe_ctx);
 
 	return deployed_uri;
 }
@@ -1402,7 +1413,7 @@ release_dataset(int32_t dataset_id)
 			return -1;
 		}
 
-		if (strcmp((char *) zmq_msg_data(&update_result), "UPDATED!"))
+		if (strcmp((char *) comm_msg_data(&update_result), "UPDATED!"))
 		{
 			perror("ERRIMSS_RELDATASET_UPDATE");
 			return -1;
@@ -1466,7 +1477,7 @@ delete_dataset(const char * 	    dataset_uri)
 
 	//Actual message content plus message size.
 
-	unsigned char * msg_data = (unsigned char *) zmq_msg_data(&msg_struct);
+	unsigned char * msg_data = (unsigned char *) comm_msg_data(&msg_struct);
 
 	comm_msg_close(&msg_struct);
 	
@@ -1539,7 +1550,7 @@ rename_dataset_metadata_dir_dir(char * old_dir, char * rdir_dest){
 
 	//Actual message content plus message size.
 
-	unsigned char * msg_data = (unsigned char *) zmq_msg_data(&msg_struct);
+	unsigned char * msg_data = (unsigned char *) comm_msg_data(&msg_struct);
 
 	comm_msg_close(&msg_struct);
 
@@ -1597,7 +1608,7 @@ rename_dataset_metadata(char * old_dataset_uri, char * new_dataset_uri){
 
 	//Actual message content plus message size.
 
-	unsigned char * msg_data = (unsigned char *) zmq_msg_data(&msg_struct);
+	unsigned char * msg_data = (unsigned char *) comm_msg_data(&msg_struct);
 
 	comm_msg_close(&msg_struct);
 
@@ -1765,7 +1776,7 @@ int32_t 	 dataset_id,	 int32_t 	 data_id)
 
 		//Actual message content plus message size.
 
-		unsigned char * msg_data = (unsigned char *) zmq_msg_data(&msg_struct);
+		unsigned char * msg_data = (unsigned char *) comm_msg_data(&msg_struct);
 
 		comm_msg_close(&msg_struct);		
 		}
@@ -1849,7 +1860,7 @@ int32_t 	 dataset_id,	 int32_t 	 data_id)
 
 		//Actual message content plus message size.
 
-		unsigned char * msg_data = (unsigned char *) zmq_msg_data(&msg_struct);
+		unsigned char * msg_data = (unsigned char *) comm_msg_data(&msg_struct);
 
 		comm_msg_close(&msg_struct);		
 		}
@@ -1859,7 +1870,7 @@ int32_t 	 dataset_id,	 int32_t 	 data_id)
 
 //Method storing a specific data element.
 int32_t
-writev_multiple(char * buf, int32_t dataset_id,int64_t data_id,
+writev_multiple(const char * buf, int32_t dataset_id,int64_t data_id,
  int64_t end_blk, int64_t start_offset, int64_t end_offset, int64_t IMSS_DATA_BSIZE, int64_t size)
 {
 	
@@ -1890,7 +1901,7 @@ writev_multiple(char * buf, int32_t dataset_id,int64_t data_id,
 
 		//printf("BLOCK %ld SENT TO %d SERVER with key: %s (%d)\n", data_id, n_server_, key, key_length);
 
-		//Send read request message specifying the block URI.
+
 		//if (comm_send(curr_imss.conns.sockets_[n_server_], key, KEY, ZMQ_SNDMORE) < 0)
 		if (comm_send(curr_imss.conns.sockets_[n_server_], key, key_length, ZMQ_SNDMORE) != key_length)
 		{
@@ -1898,8 +1909,8 @@ writev_multiple(char * buf, int32_t dataset_id,int64_t data_id,
 			return -1;
 		}
 
-		//Send read request message specifying the block data.
-		if (comm_send (curr_imss.conns.sockets_[n_server_], buf, size, 0) != size)
+
+		if (comm_send (curr_imss.conns.sockets_[n_server_], (const void *) buf, size, 0) != size)
 		{
 			perror("ERRIMSS_SETDATA_SEND");
 			return -1;
@@ -1998,6 +2009,54 @@ readv_multiple(int32_t 	 dataset_id,
 }
 
 void *
+split_writev(void * th_argv)
+{
+	//Cast from generic pointer type to p_argv struct type pointer.
+	thread_argv * arguments = (thread_argv *) th_argv;
+	
+	int32_t n_server;
+
+
+	char key_[arguments->lenght_key + KEY];
+	//Key related to the requested data element.
+	sprintf(key_, "%d [OP]=2 %s %ld %ld %d %s", curr_dataset.data_entity_size, 
+	arguments->path, arguments->BLKSIZE, arguments->start_offset, 
+	arguments->stats_size, arguments->msg);
+
+	int key_length = strlen(key_)+1;
+	char key[key_length];
+	memcpy((void *) key, (void *) key_, key_length);
+	key[key_length-1] = '\0';
+
+	int32_t curr_imss_storages = curr_imss.info.num_storages;
+
+	//Send the data block to every server implementing redundancy.
+	for (int32_t i = 0; i < curr_dataset.repl_factor; i++)
+	{
+		//Server receiving the current data block.
+		uint32_t n_server_ = (arguments->n_server + i*(curr_imss_storages/curr_dataset.repl_factor)) % curr_imss_storages;
+
+		//printf("BLOCK %ld SENT TO %d SERVER with key: %s (%d)\n", data_id, n_server_, key, key_length);
+
+
+		//if (comm_send(curr_imss.conns.sockets_[n_server_], key, KEY, ZMQ_SNDMORE) < 0)
+		if (comm_send(curr_imss.conns.sockets_[n_server_], key, key_length, ZMQ_SNDMORE) != key_length)
+		{
+			perror("ERRIMSS_SETDATA_REQ");
+		}
+
+
+		if (comm_send (curr_imss.conns.sockets_[n_server_], arguments->buffer, arguments->size*arguments->BLKSIZE*KB, 0) != arguments->size*arguments->BLKSIZE*KB)
+		{
+			perror("ERRIMSS_SETDATA_SEND");
+
+		}
+	}
+
+	pthread_exit(NULL);
+}
+
+void *
 split_readv(void * th_argv)
 {
 	//Cast from generic pointer type to p_argv struct type pointer.
@@ -2031,7 +2090,9 @@ split_readv(void * th_argv)
 //	printf("[CLIENT] [Split_readv]\n");
 	char key_[arguments->lenght_key + KEY];
 	//Key related to the requested data element.
-	sprintf(key_, "9 %s %ld %ld %d %s",arguments->path, arguments->BLKSIZE, arguments->start_offset, arguments->stats_size, arguments->msg);
+	sprintf(key_, "9 %s %ld %ld %d %s",
+	arguments->path, arguments->BLKSIZE, arguments->start_offset, 
+	arguments->stats_size, arguments->msg);
 	int key_length = strlen(key_)+1;
 	char key[key_length];
 	memcpy((void *) key, (void *) key_, key_length);
@@ -2050,8 +2111,8 @@ split_readv(void * th_argv)
 			perror("ERRIMSS_GETDATA_REQ");
 		}
 		struct timeval start, end;
-		float delta_us;
-		gettimeofday(&start, NULL);
+		/*long delta_us;
+		gettimeofday(&start, NULL);*/
 		//Receive data related to the previous read request directly into the buffer.
 		if (comm_recv(curr_imss.conns.sockets_[repl_servers[i]], arguments->buffer, arguments->size*arguments->BLKSIZE*KB, 0) == -1)
 		{
@@ -2063,8 +2124,8 @@ split_readv(void * th_argv)
 				break;
 		}
 		gettimeofday(&end, NULL);
-		delta_us = (float) (end.tv_usec - start.tv_usec);
-		printf("\n[CLIENT] [S_SPLIT_READ] recv data delta_us=%6.3f\n",(delta_us/1000.0F));
+		/*delta_us = (long) (end.tv_usec - start.tv_usec);
+		printf("\n[CLIENT] [S_SPLIT_READ] recv data delta_us=%6.3f\n",(delta_us/1000.0F));*/
 		//Check if the requested key was correctly retrieved.
 		if (strncmp((const char *) arguments->buffer, "$ERRIMSS_NO_KEY_AVAIL$", 22)){
 		}
@@ -2215,9 +2276,9 @@ get_data(int32_t 	 dataset_id,
 
 		//Send read request message specifying the block URI.
 		
-		struct timeval start, end;
-		float delta_us;
-		gettimeofday(&start, NULL);
+	/*	struct timeval start, end;
+		long delta_us;
+		gettimeofday(&start, NULL);*/
 
 		//if (comm_send(curr_imss.conns.sockets_[repl_servers[i]], key, KEY, 0) < 0)
 		if (comm_send(curr_imss.conns.sockets_[repl_servers[i]], key, key_length, 0) != key_length)
@@ -2226,15 +2287,15 @@ get_data(int32_t 	 dataset_id,
 			return -1;
 		}
 
-		gettimeofday(&end, NULL);
-		delta_us = (float) (end.tv_usec - start.tv_usec);
-		printf("\n[CLIENT] [GET DATA] send petition delta_us=%6.3f\n",(delta_us/1000.0F));
+	/*	gettimeofday(&end, NULL);
+		delta_us = (long) (end.tv_usec - start.tv_usec);
+		printf("\n[CLIENT] [GET DATA] send petition delta_us=%6.3f\n",(delta_us/1000.0F));*/
 
 
-		gettimeofday(&start, NULL);
+	//	gettimeofday(&start, NULL);
 		//printf("GET_DATA after send petition to read\n");
 		//Receive data related to the previous read request directly into the buffer.
-		printf("GET_DATA comm_recv size=%d\n",curr_dataset.data_entity_size);
+	//	printf("GET_DATA comm_recv size=%d\n",curr_dataset.data_entity_size);
 		if (comm_recv(curr_imss.conns.sockets_[repl_servers[i]], buffer, curr_dataset.data_entity_size, 0) == -1)
 		{
 			if (errno != EAGAIN)
@@ -2245,9 +2306,9 @@ get_data(int32_t 	 dataset_id,
 			else
 				break;
 		}
-		gettimeofday(&end, NULL);
-		delta_us = (float) (end.tv_usec - start.tv_usec);
-		printf("[CLIENT] [GET DATA] recv data delta_us=%6.3f\n",(delta_us/1000.0F));
+	/*	gettimeofday(&end, NULL);
+		delta_us = (long) (end.tv_usec - start.tv_usec);
+		printf("[CLIENT] [GET DATA] recv data delta_us=%6.3f\n",(delta_us/1000.0F));*/
 
 		//Check if the requested key was correctly retrieved.
 		if (strncmp((const char *) buffer, "$ERRIMSS_NO_KEY_AVAIL$", 22)){
@@ -2354,11 +2415,21 @@ set_data(int32_t 	 dataset_id,
 	 unsigned char * buffer)
 {
 	int32_t n_server;
+	
+/*	struct timeval start, end;
+	long delta_us;
+	gettimeofday(&start, NULL);*/
+
 	//Server containing the corresponding data to be written.
 	if ((n_server = get_data_location(dataset_id, data_id, SET)) == -1) {
         perror("ERRIMSS_GET_DATA_LOCATION");
 		return -1;
 	}
+
+/*	gettimeofday(&end, NULL);
+	delta_us = (long) (end.tv_usec - start.tv_usec);
+	printf("[CLIENT] [SWRITE GET_DATA_LOCATION] delta_us=%6.3f\n",(delta_us/1000.0F));*/
+		
 
 	char key_[KEY];
 	//Key related to the requested data element.
@@ -2379,6 +2450,8 @@ set_data(int32_t 	 dataset_id,
 
 		//printf("BLOCK %d SENT TO %d SERVER with key: %s (%d)\n", data_id, n_server_, key, key_length);
 
+
+	//	gettimeofday(&start, NULL);
 		//Send read request message specifying the block URI.
 		//if (comm_send(curr_imss.conns.sockets_[n_server_], key, KEY, ZMQ_SNDMORE) < 0)
 		if (comm_send(curr_imss.conns.sockets_[n_server_], key, key_length, ZMQ_SNDMORE) != key_length)
@@ -2386,12 +2459,21 @@ set_data(int32_t 	 dataset_id,
 			perror("ERRIMSS_SETDATA_REQ");
 			return -1;
 		}
+	/*	gettimeofday(&end, NULL);
+		delta_us = (long) (end.tv_usec - start.tv_usec);
+		printf("[CLIENT] [SWRITE SEND_OP] delta_us=%6.3f\n",(delta_us/1000.0F));*/
+		
+
+	//	gettimeofday(&start, NULL);
 		//Send read request message specifying the block data.
 		if (comm_send (curr_imss.conns.sockets_[n_server_], buffer, curr_dataset.data_entity_size, 0) != curr_dataset.data_entity_size)
 		{
 			perror("ERRIMSS_SETDATA_SEND");
 			return -1;
 		}
+	/*	gettimeofday(&end, NULL);
+		delta_us = (long) (end.tv_usec - start.tv_usec);
+		printf("[CLIENT] [SWRITE SEND_DATA] delta_us=%6.3f\n",(delta_us/1000.0F));*/
 	}
 
 	return 0;
@@ -2605,7 +2687,7 @@ get_type(char * uri)
 	}
 
 	//Access the information received.
-	imss_info * data = (imss_info *) zmq_msg_data(&entity_info);
+	imss_info * data = (imss_info *) comm_msg_data(&entity_info);
 
 	//printf("get_type path =%s, type =%c \n",uri,data->type);
 
@@ -2637,6 +2719,7 @@ split_location_servers(int** list_servers,int32_t dataset_id,  int32_t curr_blk,
 		if ((n_server = get_data_location(dataset_id, curr_blk, GET)) == -1){
 			return -1;
 		}
+		//printf("list_servers[%d][%d]=%d\n",n_server,i,curr_blk);
 		list_servers[n_server][i]=curr_blk;
 		curr_blk++;
 	}

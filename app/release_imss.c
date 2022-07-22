@@ -8,7 +8,7 @@ int32_t main(int32_t argc, char **argv)
 {
 	void * context;
 	//ZeroMQ context intialization.
-	if (!(context = zmq_ctx_new()))
+	if (!(context = comm_ctx_new()))
 	{
 		perror("ERRIMSSRLS_CTX_CREATE");
 		return -1;
@@ -22,7 +22,7 @@ int32_t main(int32_t argc, char **argv)
 	for (int32_t i = 1; i < argc; i++)
 	{
 		//Create the actual ZMQ socket.
-		if ((sockets[i-1] = zmq_socket(context, ZMQ_DEALER)) == NULL)
+		if ((sockets[i-1] = comm_socket(context, ZMQ_DEALER)) == NULL)
 		{
 			perror("ERRIMSSRLS_SOCKET_CRT");
 			return -1;
@@ -61,7 +61,7 @@ int32_t main(int32_t argc, char **argv)
 		}
 	}
 
-	if (zmq_ctx_destroy(context) == -1)
+	if (comm_ctx_destroy(context) == -1)
 	{
 		perror("ERRIMSSRLS_CTX_DSTRY");
 		return -1;

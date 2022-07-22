@@ -55,7 +55,7 @@ server_conn(void ** router,
 	    void ** subscriber)
 {
 	//Router socket creation.
-	if ((*router = zmq_socket (context, ZMQ_ROUTER)) == NULL)
+	if ((*router = comm_socket (context, ZMQ_ROUTER)) == NULL)
 	{
 		perror("ERRIMSS_THREAD_CRTROUTER");
 		return -1;
@@ -90,7 +90,7 @@ server_conn(void ** router,
 	}
 
 	//Subscriber socket creation.
-	if ((*subscriber = zmq_socket (context, ZMQ_SUB)) == NULL)
+	if ((*subscriber = comm_socket (context, ZMQ_SUB)) == NULL)
 	{
 		perror("ERRIMSS_THREAD_CRTSUB");
 		return -1;
@@ -155,13 +155,13 @@ srv_worker (void * th_argv)
 		//Initialize ZeroMQ messages.
 		zmq_msg_init (&client_id);
 		zmq_msg_init (&client_req);
-		printf("[SRV_WORKER] waiting_massage\n");
+
 		//Save the identity of the requesting client.
 		comm_msg_recv(&client_id, socket, 0);
 		
-		struct timeval start, end;
-		float delta_us;
-		gettimeofday(&start, NULL);
+		/*struct timeval start, end;
+		long delta_us;
+		gettimeofday(&start, NULL);*/
 		
 		
 		//Check if a timeout was triggered in the previous receive operation.
@@ -172,13 +172,13 @@ srv_worker (void * th_argv)
 			//If something was published, close sockets and exit.
 			if (comm_msg_recv(&release, sub, ZMQ_DONTWAIT) > 0)
 			{
-				if (zmq_close(socket) == -1)
+				if (comm_close(socket) == -1)
 				{
 					perror("ERRIMSS_WORKER_ROUTERCLOSE");
 					pthread_exit(NULL);
 				}
 
-				if (zmq_close(sub) == -1)
+				if (comm_close(sub) == -1)
 				{
 					perror("ERRIMSS_WORKER_SUBCLOSE");
 					pthread_exit(NULL);
@@ -209,9 +209,9 @@ srv_worker (void * th_argv)
 		comm_msg_recv(&client_req, socket, 0);
 		
 		
-		struct timeval start2, end2;
-		float delta_us2;
-		gettimeofday(&start2, NULL);
+		/*struct timeval start2, end2;
+		long delta_us2;
+		gettimeofday(&start2, NULL);*/
 		
 		//Determine if more messages are comming.
 		if ((comm_getsockopt(socket, ZMQ_RCVMORE, &more, &more_size)) == -1)
@@ -222,7 +222,7 @@ srv_worker (void * th_argv)
 
 
 		//Reference to the client request.
-		char * req = (char *) zmq_msg_data(&client_req);
+		char * req = (char *) comm_msg_data(&client_req);
 		char number[16];
 		sscanf(req, "%s", number);
 		int32_t number_length = (int32_t) strlen(number);
@@ -239,7 +239,6 @@ srv_worker (void * th_argv)
 		unsigned char * address_;
 		uint64_t block_size_rtvd;
 
-
 		//Differentiate between READ and WRITE operations. 
 		switch (more)
 		{
@@ -247,7 +246,7 @@ srv_worker (void * th_argv)
 			case READ_OP:
 			{
 				//Specify client to be answered.
-				if (comm_send(socket, (int *) zmq_msg_data(&client_id), sizeof(int), ZMQ_SNDMORE) < 0)
+				if (comm_send(socket, (int *) comm_msg_data(&client_id), sizeof(int), ZMQ_SNDMORE) < 0)
 				{
 					perror("ERRIMSS_WORKER_SENDCLIENTID");
 					pthread_exit(NULL);
@@ -258,19 +257,15 @@ srv_worker (void * th_argv)
 					{
 						//printf("SRV_WORKER READ_OP\n");
 
-						gettimeofday(&start2, NULL);
 						
 						int ret = map->get(key, &address_, &block_size_rtvd);
 						
-						gettimeofday(&end2, NULL);
-						delta_us2 = (float) (end2.tv_usec - start2.tv_usec);
-						//printf("\n[SERVER] map-get delta_us=%6.3f\n",(delta_us2/1000.0F));
 						
 						//Check if there was an associated block to the key.
 						//if (!(map->get(key, &address_, &block_size_rtvd)))
 						if(ret == 0)
 						{
-							gettimeofday(&start2, NULL);
+							//gettimeofday(&start2, NULL);
 							//Send the error code block.
 							if (comm_send(socket, err_code, strlen(err_code), 0) < 0)
 							{
@@ -278,26 +273,27 @@ srv_worker (void * th_argv)
 								pthread_exit(NULL);
 							}
 							
-							gettimeofday(&end2, NULL);
-							delta_us2 = (float) (end2.tv_usec - start2.tv_usec);
-							//printf("\n[SERVER] send delta_us=%6.3f\n",(delta_us2/1000.0F));
+							/*gettimeofday(&end2, NULL);
+							delta_us2 = (long) (end2.tv_usec - start2.tv_usec);
+							printf("\n[SRV_WORKER] [READ] send delta_us=%6.3f\n",(delta_us2/1000.0F));*/
 						}
 						else
 						{
-							gettimeofday(&start2, NULL);
+							/*double elapsedTime;
+							gettimeofday(&start2, NULL);*/
 							//Send the requested block.
+							//printf("[SRV_WORKER] [READ] size send=%ld\n",block_size_rtvd);
 							if (comm_send(socket, address_, block_size_rtvd, 0) < 0)
 							{
 								perror("ERRIMSS_WORKER_SENDBLOCK");
 								pthread_exit(NULL);
 							}
-							gettimeofday(&end2, NULL);
-							delta_us2 = (float) (end2.tv_usec - start2.tv_usec);
-							printf("[SRV_WORKER] send delta_us=%6.3f\n",(delta_us2/1000.0F));
+							/*gettimeofday(&end2, NULL);
+							elapsedTime = (end2.tv_sec - start2.tv_sec) * 1000.0;      // sec to ms
+                            elapsedTime += (end2.tv_usec - start2.tv_usec) / 1000.0;   // us to ms
+							delta_us2 = (long) (end2.tv_usec - start2.tv_usec);
+							printf("[SRV_WORKER] [READ]  NEW send delta_us=%6.3f\n", elapsedTime  );*/
 						}
-						gettimeofday(&end, NULL);
-						delta_us = (float) (end.tv_usec - start.tv_usec);
-						printf("[SRV_WORKER] [END] delta_us=%6.3f\n\n",(delta_us/1000.0F));
 						break;
 					}
 
@@ -583,11 +579,19 @@ srv_worker (void * th_argv)
 
 				struct utsname detect;
 				uname(&detect);
-
+				
+				int op;
 				std::size_t found = key.find(' ');
-				if (found!=std::string::npos){
-					
-					//printf("WRITEV CASE\n");
+				std::size_t found2 = key.find("[OP]=");
+				if(found2!=std::string::npos){
+					op = stoi(key.substr(found2+5,(found-(found2+5))));
+					key.erase(0,found+1);
+				}
+				
+
+				//if (found!=std::string::npos){
+				if (found!=std::string::npos && found2==std::string::npos){	
+					printf("WRITEV CASE\n");
 					string path = key.substr(0,found);
 					key.erase(0,found+1);
 					//std::cout <<"path:" << key << '\n';
@@ -707,11 +711,101 @@ srv_worker (void * th_argv)
 						}
 					
 						free(buf);
-				}else{
+
+
+
+				}else if(found!=std::string::npos && op == 2){
+					string path;
+					std::size_t found = key.find(' ');
+					//printf("Nodename	-%s SPLIT WRITEV\n",detect.nodename);
+
+					path = key.substr(0,found);
+					key.erase(0,found+1);
+
+					found = key.find(' ');
+					int blocksize = stoi(key.substr(0,found)) * KB;
+					key.erase(0,found+1);
+
+					found = key.find(' ');
+					int start_offset = stoi(key.substr(0,found));
+					key.erase(0,found+1);
+
+					found = key.find(' ');
+					int stats_size = stoi(key.substr(0,found));
+					key.erase(0,found+1);
+
+
+					found = key.find('$');
+					int amount = stoi(key.substr(0,found));
+					int size = amount * blocksize;
+					key.erase(0,found+1);
+					
+					/*printf("amount=%d\n",amount);
+					printf("path=%s\n",path.c_str());
+					printf("blocksize=%d\n",blocksize);
+					printf("start_offset=%d\n",start_offset);
+					printf("size=%d\n",size);
+					printf("rest=%s\n",key.c_str());*/
+
+					//Receive all blocks into the buffer.
+					unsigned char * buf = (unsigned char *)malloc(size);
+					int size_recv = comm_recv(socket, buf, size, 0);
+					int32_t insert_successful;
+
+					//printf("Nodename	-%s size_recv=%d\n",detect.nodename,size_recv);
+					//printf("Salida buf full=%c\n",buf[100]);
+
+					int32_t byte_count = 0;
+					for(int i = 0; i < amount; i++){
+						//substract current block
+									found = key.find('$');
+									int curr_blk = stoi(key.substr(0,found));
+									key.erase(0,found+1);
+									
+									string element = path;
+									element = element + '$' + std::to_string(curr_blk);
+									//printf("\n element=%s\n",element.c_str());
+
+									if (map->get(element, &address_, &block_size_rtvd)==0){
+										
+										//If dont exist 
+										unsigned char * buffer = (unsigned char *)aligned_alloc(1024, blocksize);
+										
+										memcpy(buffer, buf + byte_count, blocksize);
+										
+										//printf("Salida buffer part=%c\n",buffer[100]);
+										insert_successful=map->put(element, buffer, block_size_recv);
+										
+										if (insert_successful != 0)
+										{
+											perror("ERRIMSS_WORKER_MAPPUT");
+											//pthread_exit(NULL);
+											continue;
+										}
+									}else{
+										//If already exits
+										
+										memcpy(address_, buf + byte_count, blocksize);
+										//printf("Alreadt exitsSalida buffer part=%c\n",buf[100]);
+									}
+						byte_count = byte_count + blocksize;
+						//printf("Nodename	-%s byte_count=%d\n",detect.nodename,byte_count);
+					}
+				}
+				else{
 					//printf("WRITE NORMAL CASE\n");
+					
+						//gettimeofday(&start2, NULL);
+						
+						int ret = map->get(key, &address_, &block_size_rtvd);
+						
+						/*gettimeofday(&end2, NULL);
+						delta_us2 = (long) (end2.tv_usec - start2.tv_usec);
+						printf("\n[SRV_WORKER] [WRITE] map-get delta_us=%6.3f\n",(delta_us2/1000.0F));*/
 					//If the record was not already stored, add the block.
-					if (!map->get(key, &address_, &block_size_rtvd))
-					{
+					//if (!map->get(key, &address_, &block_size_rtvd))
+					
+					if(ret == 0){
 						
 						//unsigned char * buffer = (unsigned char *) malloc(block_size_recv);
 						unsigned char * buffer = (unsigned char *)aligned_alloc(1024, block_size_recv);
@@ -720,9 +814,14 @@ srv_worker (void * th_argv)
 						comm_recv(socket, buffer, block_size_recv, 0);
 						struct stat * stats = (struct stat *) buffer;
 						int32_t insert_successful;
+
+						//gettimeofday(&start2, NULL);
 						//Include the new record in the tracking structure.
 						insert_successful=map->put(key, buffer, block_size_recv);
-						
+						/*gettimeofday(&end2, NULL);
+						delta_us2 = (long) (end2.tv_usec - start2.tv_usec);
+						printf("\n[SRV_WORKER] [WRITE] map-put delta_us=%6.3f\n",(delta_us2/1000.0F));*/
+
 						//Include the new record in the tracking structure.
 						if (insert_successful != 0)
 						{
@@ -739,8 +838,12 @@ srv_worker (void * th_argv)
 					//If was already stored:
 					else
 					{
+						//gettimeofday(&start2, NULL);
 						//Receive the block into the buffer.
 						comm_recv(socket, address_, block_size_rtvd, 0);
+						/*gettimeofday(&end2, NULL);
+						delta_us2 = (long) (end2.tv_usec - start2.tv_usec);
+						printf("\n[SRV_WORKER] [WRITE] recv delta_us=%6.3f\n",(delta_us2/1000.0F));*/
 
 						//pthread_mutex_unlock(&region_locks[lock]);
 					}
@@ -816,8 +919,11 @@ stat_worker (void * th_argv)
 	//Code to be sent if the requested to-be-read key does not exist.
 	char err_code[] = "$ERRIMSS_NO_KEY_AVAIL$";
 
+	/*struct timeval start, end;
+	long delta_us;*/
+	
 	for (;;)
-	{
+	{ 
 		//Initialize ZeroMQ messages.
 		zmq_msg_init (&client_id);
 		zmq_msg_init (&client_req);
@@ -832,13 +938,13 @@ stat_worker (void * th_argv)
 			//If something was published, close sockets and exit.
 			if (comm_msg_recv(&release, sub, ZMQ_DONTWAIT) > 0)
 			{
-				if (zmq_close(socket) == -1)
+				if (comm_close(socket) == -1)
 				{
 					perror("ERRIMSS_WORKER_ROUTERCLOSE");
 					pthread_exit(NULL);
 				}
 
-				if (zmq_close(sub) == -1)
+				if (comm_close(sub) == -1)
 				{
 					perror("ERRIMSS_WORKER_SUBCLOSE");
 					pthread_exit(NULL);
@@ -871,7 +977,7 @@ stat_worker (void * th_argv)
 		int32_t req_size = zmq_msg_size(&client_req);
 
 		char raw_msg[req_size+1];
-		memcpy((void*) raw_msg,(void*) zmq_msg_data(&client_req), req_size);
+		memcpy((void*) raw_msg,(void*) comm_msg_data(&client_req), req_size);
 		raw_msg[req_size] = '\0';
 
 		//printf("*********worker_metadata raw_msg %s\n",raw_msg);
@@ -898,7 +1004,7 @@ stat_worker (void * th_argv)
 			case READ_OP:
 			{
 				//Specify client to be answered.
-				if (comm_send(socket, (int *) zmq_msg_data(&client_id), sizeof(int), ZMQ_SNDMORE) < 0)
+				if (comm_send(socket, (int *) comm_msg_data(&client_id), sizeof(int), ZMQ_SNDMORE) < 0)
 				{
 					perror("ERRIMSS_WORKER_SENDCLIENTID");
 					pthread_exit(NULL);
@@ -914,7 +1020,11 @@ stat_worker (void * th_argv)
 						zmq_msg_t msg;
 						//Retrieve all elements inside the requested directory.
 						pthread_mutex_lock(&tree_mut);
+					
+
 						buffer = GTree_getdir((char *) key.c_str(), &numelems_indir);
+
+					
 						pthread_mutex_unlock(&tree_mut);
 						if (buffer == NULL)
 						{
@@ -926,8 +1036,9 @@ stat_worker (void * th_argv)
 							
 							break;
 						}
+
 						zmq_msg_init_size (&msg,  (numelems_indir*URI_));
-						memcpy(zmq_msg_data(&msg), buffer, (numelems_indir*URI_));
+						memcpy(comm_msg_data(&msg), buffer, (numelems_indir*URI_));
 
 						//Send the serialized set of elements within the requested directory.
 						if (comm_msg_send(&msg, socket, 0) < 0)
@@ -935,6 +1046,8 @@ stat_worker (void * th_argv)
 							perror("ERRIMSS_WORKER_SENDBLOCK");
 							pthread_exit(NULL);
 						}
+
+
 						free(buffer);
 
 						break;
@@ -943,8 +1056,12 @@ stat_worker (void * th_argv)
 					{
 						//printf("STAT_WORKER READ_OP\n");
 						//Check if there was an associated block to the key.
-						if (!(map->get(key, &address_, &block_size_rtvd)))
-						{
+
+
+						int err = map->get(key, &address_, &block_size_rtvd);
+	
+						//if (!(map->get(key, &address_, &block_size_rtvd)))
+						if(err==0){
 							//Send the error code block.
 							if (comm_send(socket, err_code, strlen(err_code), 0) < 0)
 							{
@@ -959,8 +1076,11 @@ stat_worker (void * th_argv)
 							//imss_info * data = (imss_info *) address_;
 							//printf("READ_OP SEND data->type=%c\n",data->type);
 							//Send the requested block.
-							if (comm_send(socket, address_, block_size_rtvd, 0) < 0)
-							{
+
+							err = comm_send(socket, address_, block_size_rtvd, 0);
+						
+							//if (comm_send(socket, address_, block_size_rtvd, 0) < 0)
+							if(err < 0){
 								perror("ERRIMSS_WORKER_SENDBLOCK");
 								pthread_exit(NULL);
 							}
@@ -1128,7 +1248,7 @@ stat_worker (void * th_argv)
 								pthread_exit(NULL);
 							}
 
-							char * data_ref   = (char *) zmq_msg_data(&data_locations_msg);
+							char * data_ref   = (char *) comm_msg_data(&data_locations_msg);
 							uint32_t data_size = zmq_msg_size(&data_locations_msg);
 
 							//Value to be written in certain positions of the vector.
@@ -1154,7 +1274,7 @@ stat_worker (void * th_argv)
 							}
 
 							//Specify client to be answered.
-							if (comm_send(socket, (int *) zmq_msg_data(&client_id), sizeof(int), ZMQ_SNDMORE) < 0)
+							if (comm_send(socket, (int *) comm_msg_data(&client_id), sizeof(int), ZMQ_SNDMORE) < 0)
 							{
 								perror("ERRIMSS_WORKER_DATALOCATANSWER1");
 								pthread_exit(NULL);
@@ -1240,13 +1360,13 @@ srv_attached_dispatcher(void * th_argv)
 			//If something was published, close sockets and exit.
 			if (comm_msg_recv(&release, sub, ZMQ_DONTWAIT) > 0)
 			{
-				if (zmq_close(socket) == -1)
+				if (comm_close(socket) == -1)
 				{
 					perror("ERRIMSS_SRVDISP_ROUTERCLS");
 					pthread_exit(NULL);
 				}
 
-				if (zmq_close(sub) == -1)
+				if (comm_close(sub) == -1)
 				{
 					perror("ERRIMSS_SRVDISP_SUBCLS");
 					pthread_exit(NULL);
@@ -1267,7 +1387,7 @@ srv_attached_dispatcher(void * th_argv)
 		//Save the request to be served.
 		comm_msg_recv(&client_req, socket, 0);
 
-		int32_t c_id = *((int32_t *) zmq_msg_data(&client_id));
+		int32_t c_id = *((int32_t *) comm_msg_data(&client_id));
 		//Specify client to answered to.
 		if (comm_send(socket, &c_id, sizeof(int32_t), ZMQ_SNDMORE) < 0)
 		{
@@ -1278,14 +1398,14 @@ srv_attached_dispatcher(void * th_argv)
 		//printf("REQUEST RECEIVED: %s\n", (char *) zmq_msg_data(&client_req));
 
 		//Check if the client is requesting connection resources.
-		if (!strncmp((char *) zmq_msg_data(&client_req), "HELLO!", 6))
+		if (!strncmp((char *) comm_msg_data(&client_req), "HELLO!", 6))
 		{
 
-			if (strncmp((char *) zmq_msg_data(&client_req), "HELLO!JOIN", 10) != 0)
+			if (strncmp((char *) comm_msg_data(&client_req), "HELLO!JOIN", 10) != 0)
 			{
 				//Retrieve the buffer size that will be asigned to the current server process.
 				char buff[6];
-				sscanf((char *) zmq_msg_data(&client_req), "%s %ld %s", buff, &buffer_KB, att_imss_uri);
+				sscanf((char *) comm_msg_data(&client_req), "%s %ld %s", buff, &buffer_KB, att_imss_uri);
 				strcpy(arguments->my_uri, att_imss_uri);
 
 				//printf("MU URI: %s\n", att_imss_uri);
@@ -1314,7 +1434,7 @@ srv_attached_dispatcher(void * th_argv)
 			continue;
 		}
 		//Check if someone is requesting identity resources.
-		else if (*((int32_t *) zmq_msg_data(&client_req)) == WHO)
+		else if (*((int32_t *) comm_msg_data(&client_req)) == WHO)
 		{
 		    //Provide the uri of this instance.
 		    if (comm_send(socket, arguments->my_uri, strlen(arguments->my_uri), 0) < 0)
@@ -1370,13 +1490,13 @@ dispatcher(void * th_argv)
 			//If something was published, close sockets and exit.
 			if (comm_msg_recv(&release, sub, ZMQ_DONTWAIT) > 0)
 			{
-				if (zmq_close(socket) == -1)
+				if (comm_close(socket) == -1)
 				{
 					perror("ERRIMSS_STATDISP_ROUTERCLS");
 					pthread_exit(NULL);
 				}
 
-				if (zmq_close(sub) == -1)
+				if (comm_close(sub) == -1)
 				{
 					perror("ERRIMSS_STATDISP_SUBCLS");
 					pthread_exit(NULL);
@@ -1397,7 +1517,7 @@ dispatcher(void * th_argv)
 		//Save the request to be served.
 		comm_msg_recv(&client_req, socket, 0);
 
-        int32_t c_id = *((int32_t *) zmq_msg_data(&client_id));
+        int32_t c_id = *((int32_t *) comm_msg_data(&client_id));
 
         //Specify client to answered to.
         if (comm_send(socket, &c_id, sizeof(int32_t), ZMQ_SNDMORE) < 0)
@@ -1407,7 +1527,7 @@ dispatcher(void * th_argv)
         }
 
 		//Check if the client is requesting connection resources.
-		if (!strncmp((char *) zmq_msg_data(&client_req), "HELLO!", 6))
+		if (!strncmp((char *) comm_msg_data(&client_req), "HELLO!", 6))
 		{
             //Message containing the client's communication ID plus its connection port.
             char response_[32]; memset(response_, '\0', 32);
@@ -1426,7 +1546,7 @@ dispatcher(void * th_argv)
             continue;
         }
         //Check if someone is requesting identity resources.
-		else if (*((int32_t *) zmq_msg_data(&client_req)) == WHO)
+		else if (*((int32_t *) comm_msg_data(&client_req)) == WHO)
         {
             //Provide the uri of this instance.
             if (comm_send(socket, arguments->my_uri, strlen(arguments->my_uri), 0) < 0)

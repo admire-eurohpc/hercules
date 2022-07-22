@@ -134,7 +134,7 @@ recv_dynamic_struct(void *  socket,
 
 	//Actual message content plus message size.
 
-	unsigned char * msg_data = (unsigned char *) zmq_msg_data(&msg_struct);
+	unsigned char * msg_data = (unsigned char *) comm_msg_data(&msg_struct);
 
 	//Formalize the received information.
 
@@ -215,7 +215,7 @@ int comm_msg_recv (zmq_msg_t *msg, void *socket, int flags)
 	if(ret <0){
 		perror("FAIL ZMQ_MSG_RECV");
 	}
-	if(errno=EAGAIN){
+	if(errno==EAGAIN){
 		errno=0;
 	}
 	return ret;
@@ -229,7 +229,7 @@ int comm_recv (void *socket, void *buf, size_t len, int flags)
 	if(ret <0){
 		perror("FAIL ZMQ__RECV");
 	}
-	if(errno=EAGAIN){
+	if(errno==EAGAIN){
 		errno=0;
 	}
 	return ret;
@@ -242,20 +242,20 @@ int comm_msg_send (zmq_msg_t *msg, void *socket, int flags)
 	if(ret <0){
 		perror("FAIL ZMQ_MSG_SEND");
 	}
-	if(errno=EAGAIN){
+	if(errno==EAGAIN){
 		errno=0;
 	}
 	return ret;
 }
 
 //Method zmq_comm_send printing error if there is
-int comm_send (void *socket, void *buf, size_t len, int flags)
+int comm_send (void *socket, const void *buf, size_t len, int flags)
 {
 	int ret = zmq_send (socket, buf, len, flags);
 	if(ret <0){
 		perror("FAIL ZMQ_SEND");
 	}
-	if(errno=EAGAIN){
+	if(errno==EAGAIN){
 		errno=0;
 	}
 	return ret;
@@ -267,7 +267,7 @@ int comm_setsockopt (void *socket, int option_name, const void *option_value, si
 	if(ret <0){
 		perror("FAIL ZMQ_SETSOCKOPT");
 	}
-	if(errno=EAGAIN){
+	if(errno==EAGAIN){
 		errno=0;
 	}
 	return ret;
@@ -279,7 +279,7 @@ int comm_bind (void *socket, const char *endpoint){
 	if(ret <0){
 		perror("FAIL ZMQ_BIND");
 	}
-	if(errno=EAGAIN){
+	if(errno==EAGAIN){
 		errno=0;
 	}
 	return ret;
@@ -290,7 +290,7 @@ int comm_getsockopt (void *socket, int option_name, void *option_value, size_t *
 	if(ret <0){
 		perror("FAIL ZMQ_GETSOCKET");
 	}
-	if(errno=EAGAIN){
+	if(errno==EAGAIN){
 		errno=0;
 	}
 	return ret;
@@ -301,7 +301,7 @@ int comm_msg_close (zmq_msg_t *msg){
 	if(ret <0){
 		perror("FAIL ZMQ_MSG_CLOSE");
 	}
-	if(errno=EAGAIN){
+	if(errno==EAGAIN){
 		errno=0;
 	}
 	return ret;
@@ -312,7 +312,7 @@ int comm_close (void *socket){
 	if(ret <0){
 		perror("FAIL ZMQ_CLOSE");
 	}
-	if(errno=EAGAIN){
+	if(errno==EAGAIN){
 		errno=0;
 	}
 	return ret;
@@ -323,7 +323,7 @@ int comm_msg_init (zmq_msg_t *msg){
 	if(ret <0){
 		perror("FAIL ZMQ_MSG_INIT");
 	}
-	if(errno=EAGAIN){
+	if(errno==EAGAIN){
 		errno=0;
 	}
 	return ret;
@@ -334,7 +334,7 @@ int comm_connect (void *socket, const char *endpoint){
 	if(ret <0){
 		perror("FAIL ZMQ_CONNECT");
 	}
-	if(errno=EAGAIN){
+	if(errno==EAGAIN){
 		errno=0;
 	}
 	return ret;
@@ -345,7 +345,7 @@ int comm_ctx_set (void *context, int option_name, int option_value){
 	if(ret <0){
 		perror("FAIL ZMQ_CTX_SET");
 	}
-	if(errno=EAGAIN){
+	if(errno==EAGAIN){
 		errno=0;
 	}
 	return ret;
@@ -356,7 +356,51 @@ int comm_msg_init_data (zmq_msg_t *msg, void *data, size_t size, zmq_free_fn *ff
 	if(ret <0){
 		perror("FAIL ZMQ_MSG_INIT_DATA");
 	}
-	if(errno=EAGAIN){
+	if(errno==EAGAIN){
+		errno=0;
+	}
+	return ret;
+}
+
+void * comm_ctx_new (){
+	 void * ret =  zmq_ctx_new();
+	if(ret == NULL){
+		perror("FAIL ZMQ_CTX_NEW");
+	}
+	if(errno==EAGAIN){
+		errno=0;
+	}
+	return ret;
+}
+
+int comm_ctx_destroy (void *context){
+	int ret = zmq_ctx_destroy(context);
+	if(ret <0){
+		perror("FAIL ZMQ_CTX_DESTROY");
+	}
+	if(errno==EAGAIN){
+		errno=0;
+	}
+	return ret;
+}
+
+void * comm_msg_data (zmq_msg_t * uri_elements){
+	 void * ret =  zmq_msg_data(uri_elements);
+	if(ret == NULL){
+		perror("FAIL ZMQ_MSG_DATA");
+	}
+	if(errno==EAGAIN){
+		errno=0;
+	}
+	return ret;
+}
+
+void *comm_socket (void *context, int type){
+	 void * ret =  zmq_socket(context, type);
+	if(ret == NULL){
+		perror("FAIL ZMQ_SOCKET");
+	}
+	if(errno==EAGAIN){
 		errno=0;
 	}
 	return ret;

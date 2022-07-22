@@ -42,15 +42,20 @@ char     IMSS_ROOT[32];
 char     META_HOSTFILE[512];
 uint64_t STORAGE_SIZE = 16; //In GB
 uint64_t META_BUFFSIZE = 16; //In GB
-uint64_t IMSS_BLKSIZE = 1024;
+uint64_t IMSS_BLKSIZE = 1024;//In KB 
 uint64_t IMSS_BUFFSIZE = 2; //In GB
 int32_t REPL_FACTOR = 1; //Default none
 int32_t  IMSS_DEBUG = 0;
 
 uint16_t PREFETCH = 6;
+
+uint16_t threshold_read_servers = 4;
+uint16_t BEST_PERFORMANCE_READ = 1;//if 1    then n_servers < threshold => SREAD, else if n_servers > threshold => SPLIT_READV 
+                                   //if 0 only one method of read applied specified in MULTIPLE_READ
+
 uint16_t MULTIPLE_READ = 0;//1=vread with prefetch, 2=vread without prefetch, 
-                            //3=vread_2x 4=imss_split_readv else sread
-uint16_t MULTIPLE_WRITE = 0;//1=writev, else sread
+                            //3=vread_2x 4=imss_split_readv(distributed) else sread
+uint16_t MULTIPLE_WRITE = 0;//1=writev(only 1 server), 2=imss_split_writev(distributed) else swrite
 char prefetch_path[256];
 int32_t prefetch_first_block = -1; 
 int32_t prefetch_last_block = -1;
@@ -64,7 +69,7 @@ pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 
 uint64_t IMSS_DATA_BSIZE;
 
-int running = 0;
+int LD_PRELOAD = 0;
 void * map;
 void * map_prefetch;
 
@@ -99,6 +104,8 @@ static int (*real_fchownat)(int dirfd, const char *pathname, uid_t owner, gid_t 
 static DIR *(*real_opendir)(const char *name) = NULL;
 static struct dirent *(*real_readdir)(DIR *dirp) = NULL;
 static int (*real_closedir)(DIR *dirp) = NULL;
+
+
 
 void *
 prefetch_function (void * th_argv)
@@ -228,7 +235,7 @@ imss_posix_init(void)
     fprintf(stderr," -- IMSS_BUFFSIZE: %ld\n", IMSS_BUFFSIZE );
     fprintf(stderr," -- META_HOSTFILE: %s\n", META_HOSTFILE);
     fprintf(stderr," -- IMSS_META_PORT: %d\n",  METADATA_PORT);
-    fprintf(stderr," -- IMSS_META_SERVERS: %d\n",  METADATA_PORT);
+    fprintf(stderr," -- IMSS_META_SERVERS: %d\n",  N_META_SERVERS);
     fprintf(stderr," -- IMSS_BLKSIZE: %ld\n",  IMSS_BLKSIZE);
     fprintf(stderr," -- IMSS_STORAGE_SIZE: %ld\n",  STORAGE_SIZE);
     fprintf(stderr," -- IMSS_METADATA_FILE: %s\n",  METADATA_FILE);
@@ -266,18 +273,20 @@ imss_posix_init(void)
 
     map_prefetch = map_create_prefetch();
     map = map_create();
-    
-    int ret;
-    pthread_attr_t tattr;
-    ret = pthread_attr_init(&tattr);
-    ret = pthread_attr_setdetachstate(&tattr,PTHREAD_CREATE_DETACHED);
+    if(MULTIPLE_READ==1){
+        int ret;
 
-    if (pthread_create(&prefetch_t, &tattr, prefetch_function, NULL) == -1)
-    {
-        perror("ERRIMSS_PREFETCH_DEPLOY");
-        pthread_exit(NULL);
+        pthread_attr_t tattr;
+        ret = pthread_attr_init(&tattr);
+        ret = pthread_attr_setdetachstate(&tattr,PTHREAD_CREATE_DETACHED);
+
+        if (pthread_create(&prefetch_t, &tattr, prefetch_function, NULL) == -1)
+        {
+            perror("ERRIMSS_PREFETCH_DEPLOY");
+            pthread_exit(NULL);
+        }
     }
-    fprintf(stderr,"IMSS client running\n");
+    fprintf(stderr,"IMSS client \n");
     
 }
 
@@ -288,6 +297,16 @@ void __attribute__((destructor)) run_me_last() {
     printf("Nodename    - %s\n", detect.nodename);
     sleep(1);
 }
+
+void check_ld_preload(void){
+
+    if(LD_PRELOAD==0){
+        printf("\nActivating... ld_preload=%d\n\n",LD_PRELOAD);
+        LD_PRELOAD=1;
+        imss_posix_init();
+    }
+}
+
 /*
 void exit_group(int status){
     fprintf(stderr,"EXIT GROUP *************\n");
@@ -311,6 +330,7 @@ int atexit(void (*function)(void)){
 int
 close(int fd)
 {
+
     //printf("close worked! fd=%d\n", fd);
     real_close = dlsym(RTLD_NEXT,"close");
     int ret = 0;   
@@ -368,7 +388,7 @@ int __lxstat(int fd, const char *pathname, struct stat *buf)
     char * workdir = getenv("PWD");
     real__lxstat = dlsym(RTLD_NEXT, "__lxstat");
     if(! strncmp(pathname, MOUNT_POINT, strlen(MOUNT_POINT)) || ! strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT))) {
-        printf("__lxstat WORKED!\n");
+        //printf("__lxstat WORKED!\n");
         char * new_path; 
         new_path = convert_path(pathname, MOUNT_POINT);
         //int exist = map_fd_search(map_fd, new_path, &ret, &p);
@@ -405,7 +425,7 @@ int stat(const char *pathname, struct stat *buf){
     char * workdir = getenv("PWD");
     real_stat = dlsym(RTLD_NEXT, "stat");
     if(! strncmp(pathname, MOUNT_POINT, strlen(MOUNT_POINT)) || ! strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT))) {
-        printf("stat WORKED!\n");
+        //printf("stat WORKED!\n");
         char * new_path; 
         new_path = convert_path(pathname, MOUNT_POINT);
         //int exist = map_fd_search(map_fd, new_path, &ret, &p);
@@ -428,7 +448,7 @@ return 0;
 int __open_2(const char *pathname, int flags, ...){
     real__open_2 = dlsym(RTLD_NEXT,"__open_2");
     int ret;
-    int ret_ds;
+    uint64_t ret_ds;
     unsigned long p = 0;
     va_list valist;
     va_start(valist, flags);
@@ -473,7 +493,7 @@ int open64(const char *pathname, int flags, ...)
 {
     real_open64 = dlsym(RTLD_NEXT,"open64");
     int ret;
-    int ret_ds;
+    uint64_t ret_ds;
     unsigned long p = 0;
     va_list valist;
     va_start(valist, flags);
@@ -519,7 +539,7 @@ int open(const char *pathname, int flags, ...)
     //printf("***************open worked!=%s\n",pathname);
     real_open = dlsym(RTLD_NEXT,"open");
     int ret;
-    int ret_ds;
+    uint64_t ret_ds;
     unsigned long p = 0;
     va_list valist;
     va_start(valist, flags);
@@ -642,7 +662,7 @@ ssize_t write(int fd, const void *buf, size_t size){
 
 ssize_t read(int fd, void *buf, size_t size){
     real_read = dlsym(RTLD_NEXT,"read");
-    printf("read=%d\n",fd);
+    //printf("read=%d\n",fd);
     size_t ret;
     unsigned long p = 0;
     char * path = (char *) calloc(256, sizeof(char));
@@ -651,7 +671,7 @@ ssize_t read(int fd, void *buf, size_t size){
         //printf("CUSTOM read worked! path=%s fd=%d, size=%ld\n",path, fd, size);
         map_fd_search(map_fd, path, &fd, &p);
         ret = imss_read(path,buf,size,p);
-       // printf("END LD_PRELOAD IMSS_READ ret=%ld, size=%d\n\n",ret, size);
+        //printf("END LD_PRELOAD IMSS_READ ret=%ld, size=%ld\n\n",ret, size);
     }else{
         ret = real_read(fd, buf, size);
     }

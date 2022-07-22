@@ -82,7 +82,7 @@ class map_records
 
 			struct utsname detect;
 			uname(&detect);
-			printf("Nodename    - %s add in map=%s\n", detect.nodename, key.c_str());
+			//printf("Nodename    - %s add in map=%s\n", detect.nodename, key.c_str());
 			//printf("quantity=%ld total size=%ld\n",quantity_occupied, total_size);
 			quantity_occupied = quantity_occupied + length;
 			buffer.insert({key, value});
@@ -110,7 +110,7 @@ class map_records
 				return 0;
 			}
 			
-			printf("Nodename    - %s	GET-%s \n", detect.nodename, key.c_str());
+			//printf("Nodename    - %s	GET-%s \n", detect.nodename, key.c_str());
 			//Assign the values obtained to the provided references.
 			//std::cout <<"Exist " << key << '\n';
 			*(add_) = it->second.first;

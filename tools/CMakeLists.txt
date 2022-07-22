@@ -13,6 +13,7 @@ add_library (imss_posix SHARED imss_posix.c mapfd.cpp ../fuse/map.cpp)
 #set(CMAKE_C_FLAGS "-fPIC -D_FILE_OFFSET_BITS=64 -lulockmgr -DFUSE")
 set(CMAKE_C_FLAGS "-fPIC -lulockmgr -DFUSE")
 
+
 target_include_directories(imss_posix PRIVATE ../fuse  .)
 
 target_link_libraries(mount.imss  ${CMAKE_THREAD_LIBS_INIT} zmq ${GLIB_LIBRARIES} ${FUSE_LIBRARIES} imss_static)

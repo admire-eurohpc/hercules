@@ -52,6 +52,10 @@ int32_t REPL_FACTOR = 1; //Default none
 char * MOUNTPOINT[7] = {"imssfs", "-f" , "XXXX", "-s", NULL}; // {"f", mountpoint} Not default ({"f", NULL})
 
 uint16_t PREFETCH = 6;
+uint16_t threshold_read_servers = 4;
+uint16_t BEST_PERFORMANCE_READ = 0;//if 1    then n_servers < threshold => SREAD, else if n_servers > threshold => SPLIT_READV 
+                                   //if 0 only one method of read applied specified in MULTIPLE_READ
+
 uint16_t MULTIPLE_READ = 0;//1=vread with prefetch, 2=vread without prefetch, 3=vread_2x else sread
 uint16_t MULTIPLE_WRITE = 0;//1=writev, else sread
 char prefetch_path[256];
