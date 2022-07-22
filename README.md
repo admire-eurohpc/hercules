@@ -126,11 +126,11 @@ LD_PRELOAD=libimss_posix.so ls -l /mnt/imss/
 ## Metadata servers
 
 `
-mpirun.mpich -np 1 -f ./stat_hostfile ./server ./metadata 5569 0 //TUCAN
+mpirun.mpich -np 1 -f ./stat_hostfile ./server ./metadata 5569 0 
 
 or
 
-mpiexec -np 1 --hostfile ./stat_hostfile ./server ./metadata 5569 0 //ARM ITALIANOS
+mpiexec -np 1 --hostfile ./stat_hostfile ./server ./metadata 5569 0 
 `
 
 ## Data servers
