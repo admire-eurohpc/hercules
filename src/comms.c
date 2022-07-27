@@ -120,7 +120,7 @@ recv_dynamic_struct(void *  socket,
 
 	zmq_msg_t msg_struct;
 
-	if (zmq_msg_init(&msg_struct) != 0)
+	if (comm_msg_init(&msg_struct) != 0)
 	{
 		perror("ERRIMSS_RECVDYNAMSTRUCT_INIT");
 		return -1;
@@ -187,7 +187,7 @@ recv_dynamic_struct(void *  socket,
 
 			//If the size of the message received was bigger than sizeof(dataset_info), something more came with it.
 
-			if (zmq_msg_size(&msg_struct) > sizeof(dataset_info))
+			if (comm_msg_size(&msg_struct) > sizeof(dataset_info))
 			{
 				msg_data += sizeof(dataset_info);
 
@@ -329,6 +329,17 @@ int comm_msg_init (zmq_msg_t *msg){
 	return ret;
 }
 
+int comm_msg_init_size (zmq_msg_t *msg, size_t size){
+	int ret = zmq_msg_init_size (msg, size);
+	if(ret <0){
+		perror("FAIL ZMQ_MSG_INIT");
+	}
+	if(errno==EAGAIN){
+		errno=0;
+	}
+	return ret;
+}
+
 int comm_connect (void *socket, const char *endpoint){
 	int ret = zmq_connect (socket, endpoint);
 	if(ret <0){
@@ -399,6 +410,28 @@ void *comm_socket (void *context, int type){
 	 void * ret =  zmq_socket(context, type);
 	if(ret == NULL){
 		perror("FAIL ZMQ_SOCKET");
+	}
+	if(errno==EAGAIN){
+		errno=0;
+	}
+	return ret;
+}
+
+int comm_socket_monitor (void *socket, const char *endpoint, int events){
+	int ret = zmq_socket_monitor(socket,endpoint,events);
+	if(ret <0){
+		perror("FAIL ZMQ_CTX_DESTROY");
+	}
+	if(errno==EAGAIN){
+		errno=0;
+	}
+	return ret;
+}
+
+size_t comm_msg_size (zmq_msg_t *msg){
+	size_t ret = zmq_msg_size(msg);
+	if(ret <0){
+		perror("FAIL ZMQ_CTX_DESTROY");
 	}
 	if(errno==EAGAIN){
 		errno=0;

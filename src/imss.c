@@ -93,7 +93,7 @@ conn_crt_(void **  socket,
 	if (monitor)
 	{
 		printf("**********inside monitor case\n");
-		if (zmq_socket_monitor(*socket, "inproc://monitor-socket", ZMQ_EVENT_CONNECTED) == -1)
+		if (comm_socket_monitor(*socket, "inproc://monitor-socket", ZMQ_EVENT_CONNECTED) == -1)
 		{
 			perror("ERRIMSS_CONN_MONITOR");
 			return -1;
@@ -460,7 +460,7 @@ stat_init(char *   stat_hostfile,
 		}
 		//ZMQ message retrieving the connection information.
 		zmq_msg_t connection_info;
-		zmq_msg_init (&connection_info);
+		comm_msg_init (&connection_info);
 		if (comm_msg_recv(&connection_info, stat_client[i], 0) == -1)
 		{
 		    perror("ERRIMSS_STAT_ACK");
@@ -595,7 +595,7 @@ get_dir(char * 	 requested_uri,
 		fprintf(stderr, "ERRIMSS_GETDIR_NODIR\n");
 		return -1;
 	}
-	uint32_t elements_size = zmq_msg_size(&uri_elements);
+	uint32_t elements_size = comm_msg_size(&uri_elements);
 
 	//*buffer = (char *) malloc(sizeof(char)*elements_size);
 	//memcpy(*buffer, elements, elements_size);
@@ -766,7 +766,7 @@ init_imss(char *   imss_uri,
 		}
 		//ZMQ message retrieving the connection information.
 		zmq_msg_t connection_info;
-		zmq_msg_init (&connection_info);
+		comm_msg_init (&connection_info);
 		if (comm_msg_recv(&connection_info, new_imss.conns.sockets_[i], 0) == -1)
 		{
 			perror("ERRIMSS_INITIMSS_CONNINFOINIT");
@@ -889,7 +889,7 @@ open_imss(char * imss_uri)
 
 		//ZMQ message retrieving the connection information.
 		zmq_msg_t connection_info;
-		zmq_msg_init (&connection_info);
+		comm_msg_init (&connection_info);
 		if (comm_msg_recv(&connection_info, new_imss.conns.sockets_[i], 0) == -1)
 		{
 			perror("ERRIMSS_OPENIMSS_CONNINFOOPEN");
@@ -1401,7 +1401,7 @@ release_dataset(int32_t dataset_id)
 
 		zmq_msg_t update_result;
 
-		if (zmq_msg_init(&update_result) != 0)
+		if (comm_msg_init(&update_result) != 0)
 		{
 			perror("ERRIMSS_RELDATASET_INITUPDATERES");
 			return -1;
@@ -1462,7 +1462,7 @@ delete_dataset(const char * 	    dataset_uri)
 
 	zmq_msg_t msg_struct;
 
-	if (zmq_msg_init(&msg_struct) != 0)
+	if (comm_msg_init(&msg_struct) != 0)
 	{
 		perror("ERRIMSS_RECVDYNAMSTRUCT_INIT");
 		return -1;
@@ -1535,7 +1535,7 @@ rename_dataset_metadata_dir_dir(char * old_dir, char * rdir_dest){
 
 	zmq_msg_t msg_struct;
 
-	if (zmq_msg_init(&msg_struct) != 0)
+	if (comm_msg_init(&msg_struct) != 0)
 	{
 		perror("ERRIMSS_RECVDYNAMSTRUCT_INIT");
 		return -1;
@@ -1593,7 +1593,7 @@ rename_dataset_metadata(char * old_dataset_uri, char * new_dataset_uri){
 
 	zmq_msg_t msg_struct;
 
-	if (zmq_msg_init(&msg_struct) != 0)
+	if (comm_msg_init(&msg_struct) != 0)
 	{
 		perror("ERRIMSS_RECVDYNAMSTRUCT_INIT");
 		return -1;
@@ -1761,7 +1761,7 @@ int32_t 	 dataset_id,	 int32_t 	 data_id)
 		}	
 		zmq_msg_t msg_struct;
 
-		if (zmq_msg_init(&msg_struct) != 0)
+		if (comm_msg_init(&msg_struct) != 0)
 		{
 			perror("ERRIMSS_RECVDYNAMSTRUCT_INIT");
 			return -1;
@@ -1844,7 +1844,7 @@ int32_t 	 dataset_id,	 int32_t 	 data_id)
 		}	
 		zmq_msg_t msg_struct;
 
-		if (zmq_msg_init(&msg_struct) != 0)
+		if (comm_msg_init(&msg_struct) != 0)
 		{
 			perror("ERRIMSS_RECVDYNAMSTRUCT_INIT");
 			return -1;
@@ -2678,7 +2678,7 @@ get_type(char * uri)
 	}
 
 	zmq_msg_t entity_info;
-	zmq_msg_init (&entity_info);
+	comm_msg_init (&entity_info);
 	//Receive the answer.
 	if (comm_msg_recv(&entity_info, stat_client[m_srv], 0) == -1)
 	{

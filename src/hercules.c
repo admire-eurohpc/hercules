@@ -504,7 +504,7 @@ hercules_release()
 {
 	//Publish RELEASE message to all worker threads.
 	zmq_msg_t release_rsc;
-	zmq_msg_init_size(&release_rsc, 8);
+	comm_msg_init_size(&release_rsc, 8);
 	memcpy(comm_msg_data(&release_rsc), "RELEASE\0", 8);
 
 	if ( comm_msg_send(&release_rsc, pub, 0)== -1)

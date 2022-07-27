@@ -153,8 +153,8 @@ srv_worker (void * th_argv)
 	for (;;)
 	{
 		//Initialize ZeroMQ messages.
-		zmq_msg_init (&client_id);
-		zmq_msg_init (&client_req);
+		comm_msg_init (&client_id);
+		comm_msg_init (&client_req);
 
 		//Save the identity of the requesting client.
 		comm_msg_recv(&client_id, socket, 0);
@@ -165,9 +165,9 @@ srv_worker (void * th_argv)
 		
 		
 		//Check if a timeout was triggered in the previous receive operation.
-		if ((errno == EAGAIN) && !zmq_msg_size(&client_id))
+		if ((errno == EAGAIN) && !comm_msg_size(&client_id))
 		{
-			zmq_msg_init (&release);
+			comm_msg_init (&release);
 
 			//If something was published, close sockets and exit.
 			if (comm_msg_recv(&release, sub, ZMQ_DONTWAIT) > 0)
@@ -925,16 +925,16 @@ stat_worker (void * th_argv)
 	for (;;)
 	{ 
 		//Initialize ZeroMQ messages.
-		zmq_msg_init (&client_id);
-		zmq_msg_init (&client_req);
+		comm_msg_init (&client_id);
+		comm_msg_init (&client_req);
 		//Save the identity of the requesting client.
 		comm_msg_recv(&client_id, socket, 0);
 
 		//Check if a timeout was triggered in the previous receive operation.
-		if ((errno == EAGAIN) && !zmq_msg_size(&client_id))
+		if ((errno == EAGAIN) && !comm_msg_size(&client_id))
 		{
-			//printf("zmq_msg_size=%ld\n",zmq_msg_size(&client_id));
-			zmq_msg_init (&release);
+
+			comm_msg_init (&release);
 			//If something was published, close sockets and exit.
 			if (comm_msg_recv(&release, sub, ZMQ_DONTWAIT) > 0)
 			{
@@ -974,7 +974,7 @@ stat_worker (void * th_argv)
 		}
 
 		//Expeted incomming message format: "SIZE_IN_KB KEY"
-		int32_t req_size = zmq_msg_size(&client_req);
+		int32_t req_size = comm_msg_size(&client_req);
 
 		char raw_msg[req_size+1];
 		memcpy((void*) raw_msg,(void*) comm_msg_data(&client_req), req_size);
@@ -1037,7 +1037,7 @@ stat_worker (void * th_argv)
 							break;
 						}
 
-						zmq_msg_init_size (&msg,  (numelems_indir*URI_));
+						comm_msg_init_size (&msg,  (numelems_indir*URI_));
 						memcpy(comm_msg_data(&msg), buffer, (numelems_indir*URI_));
 
 						//Send the serialized set of elements within the requested directory.
@@ -1236,7 +1236,7 @@ stat_worker (void * th_argv)
 							printf("[STAT_WORKER] LOCAL DATASET_UPDATE\n");
 							zmq_msg_t data_locations_msg;
 
-							if (zmq_msg_init(&data_locations_msg) != 0)
+							if (comm_msg_init(&data_locations_msg) != 0)
 							{
 								perror("ERRIMSS_WORKER_DATALOCATINIT");
 								pthread_exit(NULL);
@@ -1249,7 +1249,7 @@ stat_worker (void * th_argv)
 							}
 
 							char * data_ref   = (char *) comm_msg_data(&data_locations_msg);
-							uint32_t data_size = zmq_msg_size(&data_locations_msg);
+							uint32_t data_size = comm_msg_size(&data_locations_msg);
 
 							//Value to be written in certain positions of the vector.
 							uint16_t * update_value = (uint16_t *) (data_size + data_ref - 8);
@@ -1346,16 +1346,16 @@ srv_attached_dispatcher(void * th_argv)
 
 	for (;;)
 	{
-		zmq_msg_init (&client_id);
-		zmq_msg_init (&client_req);
+		comm_msg_init (&client_id);
+		comm_msg_init (&client_req);
 
 		//Save the identity of the requesting client.
 		comm_msg_recv(&client_id, socket, 0);
 
 		//Check if a timeout was triggered in the previous receive operation.
-		if ((errno == EAGAIN) && !zmq_msg_size(&client_id))
+		if ((errno == EAGAIN) && !comm_msg_size(&client_id))
 		{
-			zmq_msg_init (&release);
+			comm_msg_init (&release);
 
 			//If something was published, close sockets and exit.
 			if (comm_msg_recv(&release, sub, ZMQ_DONTWAIT) > 0)
@@ -1476,16 +1476,16 @@ dispatcher(void * th_argv)
 
 	for (;;)
 	{
-		zmq_msg_init (&client_id);
-		zmq_msg_init (&client_req);
+		comm_msg_init (&client_id);
+		comm_msg_init (&client_req);
 
 		//Save the identity of the requesting client.
 		comm_msg_recv(&client_id, socket, 0);
 
 		//Check if a timeout was triggered in the previous receive operation.
-		if ((errno == EAGAIN) && !zmq_msg_size(&client_id))
+		if ((errno == EAGAIN) && !comm_msg_size(&client_id))
 		{
-			zmq_msg_init (&release);
+			comm_msg_init (&release);
 
 			//If something was published, close sockets and exit.
 			if (comm_msg_recv(&release, sub, ZMQ_DONTWAIT) > 0)

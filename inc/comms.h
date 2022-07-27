@@ -37,6 +37,8 @@ int comm_close (void *socket);
 
 int comm_msg_init (zmq_msg_t *msg);
 
+int comm_msg_init_size (zmq_msg_t *msg, size_t size);
+
 int comm_connect (void *socket, const char *endpoint);
 
 int comm_ctx_set (void *context, int option_name, int option_value);
@@ -50,5 +52,9 @@ int comm_ctx_destroy (void *context);
 void * comm_msg_data (zmq_msg_t * uri_elements);
 
 void *comm_socket (void *context, int type);
+
+int comm_socket_monitor (void *socket, const char *endpoint, int events);
+
+size_t comm_msg_size (zmq_msg_t *msg);
 
 #endif
