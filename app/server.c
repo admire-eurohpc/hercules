@@ -1,7 +1,6 @@
 #include <mpi.h>
 #include <zmq.h>
 #include <stdio.h>
-//#include <utility>
 #include <string.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -16,12 +15,6 @@
 #include "records.hpp"
 
 
-//ZeroMQ context entity conforming all sockets.
-extern void * 		context;
-//INPROC bind address for pub-sub communications.
-extern char * 		pub_dir;
-//Publisher socket.
-extern void * 		pub;
 //Pointer to the tree's root node.
 extern GNode * 		tree_root;
 extern pthread_mutex_t 	tree_mut;
@@ -29,21 +22,26 @@ extern pthread_mutex_t 	tree_mut;
 char * 			imss_uri;
 
 //Initial buffer address.
-extern unsigned char *   buffer_address;
+extern char *   buffer_address;
 //Set of locks dealing with the memory buffer access.
 extern pthread_mutex_t * region_locks;
 //Segment size (amount of memory assigned to each thread).
 extern uint64_t 	 buffer_segment;
 
+/* UCP objects */
+ucp_context_h ucp_context;
+ucp_worker_h  ucp_worker;
+
+ucp_ep_h     pub_ep;
 
 int32_t main(int32_t argc, char **argv)
 {
 	int32_t provide, world_size, rank;
-	//Notify that threads will be deployed along the MPI process execution.
+	// Notify that threads will be deployed along the MPI process execution.
 	MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &provide);
-	//Obtain identifier inside the group.
-        MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-        //Obtain the current number of processes in the group.
+	// Obtain identifier inside the group.
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    // Obtain the current number of processes in the group.
 	MPI_Comm_size(MPI_COMM_WORLD, &world_size);
 
 	uint16_t bind_port, aux_bind_port;
@@ -53,6 +51,11 @@ int32_t main(int32_t argc, char **argv)
 	int64_t  buffer_size, stat_port, num_servers;
 	void * 	 socket;
 
+	ucs_status_t status;
+    ucp_ep_h     client_ep;
+
+    ucp_am_handler_param_t param;
+    int              ret;
 	/***************************************************************/
 	/******************** PARSE INPUT ARGUMENTS ********************/
 	/***************************************************************/
@@ -71,14 +74,12 @@ int32_t main(int32_t argc, char **argv)
 	imss_uri 	= (char *) calloc(32, sizeof(char));	
     strcpy(imss_uri, "imss://");
 
-
-	//ZeroMQ context intialization.
-	if (!(context = comm_ctx_new()))
-	{
-		perror("ERRIMSS_CTX_CREATE");
-		return -1;
-	}
-
+     /* Initialize the UCX required objects */
+    ret = init_context(&ucp_context, &ucp_worker, CLIENT_SERVER_SEND_RECV_STREAM);
+    if (ret != 0) {
+        perror("ERRIMSS_INIT_CONTEXT");
+        return -1;
+    }
 
 	/* CHECK THIS OUT!
 	***************************************************
@@ -87,11 +88,6 @@ int32_t main(int32_t argc, char **argv)
 	//IMSS server.
 	if (argc == 9)
 	{
-		if (comm_ctx_set(context, ZMQ_IO_THREADS, atoi(argv[8])))
-		{
-			perror("ERRIMSS_CTX_SETIOTHRS");
-			return -1;
-		}
 
 		//ARGV[1] = IMSS name.
 		imss_uri	= argv[1];
@@ -104,45 +100,40 @@ int32_t main(int32_t argc, char **argv)
 		//ARGV[9] = IMSS' MPI deployment file.
 		deployfile	= argv[7];
 
-		int32_t imss_exists;
+		int32_t imss_exists = 0;
 
 		//Check if the provided URI has been already reserved by any other instance.
 		if (!rank)
 		{
-			//Create a ZMQ socket to send the created IMSS structure.
-			if ((socket = comm_socket(context, ZMQ_DEALER)) == NULL)
-			{
-				perror("ERRIMSS_SRV_SOCKETCREATE");
-				return -1;
-			}
-
-			int32_t identity = -1;
-			//Set communication id.
-			if (comm_setsockopt(socket, ZMQ_IDENTITY, &identity, sizeof(int32_t)) == -1)
-			{
-				perror("ERRIMSS_SRV_SETIDENT");
-				return -1;
-			}
-
-			//Connection address.
-			char stat_address[LINE_LENGTH];
-			sprintf(stat_address, "%s%s%c%ld%c", "tcp://", stat_add, ':', stat_port+1, '\0');
-			//sprintf(stat_address, "%s%s%c%ld%c", "inproc://", stat_add, ':', stat_port+1, '\0');
-			printf("stat_address=%s\n",stat_address);
+			printf("stat_address=%s\n",stat_add);
 			//Connect to the specified endpoint.
-			if (comm_connect(socket, (const char *) stat_address) == -1)
-			{
-				perror("ERRIMSS_SRV_CONNECT");
-				return -1;
-			}
+
+            status = start_client(ucp_worker, stat_add, stat_port + 1, &client_ep); // port, rank,
+            if (status != UCS_OK) {
+                fprintf(stderr, "failed to start client (%s)\n", ucs_status_string(status));
+                return -1;
+            }
+
+            uint32_t id = CLOSE_EP;
+            if (send_stream(ucp_worker, client_ep, (char*) &id, sizeof(uint32_t)) < 0)
+            {
+                perror("ERRIMSS_DATASET_REQ");
+                return -1;
+            }
+          
+		    char mode[] = "GET\0";
+            if (send_stream(ucp_worker, client_ep, mode, MODE_SIZE) < 0)
+            {
+                perror("ERRIMSS_DATASET_REQ");
+                return -1;
+            }
 
 			//Formated imss uri to be sent to the metadata server.
-			char formated_uri[strlen(imss_uri)+2];
+			char formated_uri[REQUEST_SIZE];
 			sprintf(formated_uri, "0 %s%c", imss_uri, '\0');
-			size_t formated_uri_length = strlen(formated_uri);
 
 			//Send the request.
-			if (comm_send(socket, formated_uri, formated_uri_length, 0)  != formated_uri_length)
+			if (send_stream(ucp_worker, client_ep, formated_uri, REQUEST_SIZE) < 0)
 			{
 				perror("ERRIMSS_DATASET_REQ");
 				return -1;
@@ -151,43 +142,27 @@ int32_t main(int32_t argc, char **argv)
 			imss_info imss_info_;
 
 			//Receive the associated structure.
-			imss_exists = recv_dynamic_struct(socket, &imss_info_, IMSS_INFO);
+			ret = recv_dynamic_stream(ucp_worker, client_ep, &imss_info_, BUFFER);
 
-			if (imss_exists)
+			if (ret >= sizeof(imss_info))
 			{
+				imss_exists = 1;
 				for (int32_t i = 0; i < imss_info_.num_storages; i++)
-
 					free(imss_info_.ips[i]);
-
 				free(imss_info_.ips);
 			}
+
+			ep_close(ucp_worker, client_ep, UCP_EP_CLOSE_MODE_FLUSH);
 		}
 
 		MPI_Bcast(&imss_exists, 1, MPI_INT, 0, MPI_COMM_WORLD);
 		if (imss_exists)
 		{
 			if (!rank)
-			{
-				if (comm_close(socket) == -1)
-				{
-					perror("ERRIMSS_SRV_SOCKETCLOSE");
-					return -1;
-				}
-			}
-
-			if (comm_ctx_destroy(context) == -1)
-			{
-				perror("ERRIMSS_CTX_DSTRY");
-				return -1;
-			}
-
-			if (!rank)
-
 				fprintf(stderr, "ERRIMSS_IMSSURITAKEN");
 
 			MPI_Barrier(MPI_COMM_WORLD);
 			MPI_Finalize();	
-
 			return 0;
 		}
 	}
@@ -208,33 +183,46 @@ int32_t main(int32_t argc, char **argv)
 			pthread_exit(NULL);
 		}
 	}
+   
 
 	/***************************************************************/
 	/******************** INPROC COMMUNICATIONS ********************/
 	/***************************************************************/
+	ucx_server_ctx_t context;
+    ucp_worker_h     ucp_data_worker;
 
-	//Publisher address where the release will be triggered.
-	pub_dir = (char *) calloc(33, sizeof(char));
-	sprintf(pub_dir, "inproc://inproc-imss-comms-%d", bind_port);
-	//Publisher socket creation.
-	if ((pub = comm_socket(context, ZMQ_PUB)) == NULL)
-	{
-		perror("ERRIMSS_PUBSOCK_CREATE");
-		return -1;
-	}
-	//Bind the previous pub socket for inprocess communications.
-	if (comm_bind(pub, pub_dir) == -1)
-	{
-		perror("ERRIMSS_PUBSOCK_BIND");
-		return -1;
-	}
 
-	//Map tracking saved records.
+    ret = init_worker(ucp_context, &ucp_data_worker);
+    if (ret != 0) {
+        perror("ERRIMSS_WORKER_INIT");
+        pthread_exit(NULL);
+    }
 
-	map_records map(buffer_size*KB);
+    /* Initialize the server's context. */
+    context.conn_request = NULL;
+
+    status = start_server(ucp_worker, &context, &context.listener, NULL, 0);
+    //status = start_server(ucp_worker, &context, &context.listener, NULL, bind_port + 1000);
+    if (status != UCS_OK) {
+        perror("ERRIMSS_STAR_SERVER");
+        pthread_exit(NULL);
+    } 
+/*
+    while (context.conn_request == NULL) {
+            ucp_worker_progress(ucp_worker);
+    }
+    status = server_create_ep(ucp_data_worker, context.conn_request, &pub_ep);
+    if (status != UCS_OK) {
+            perror("ERRIMSS_SERVER_CREATE_EP");
+            pthread_exit(NULL);
+    }
+*/
+    //Map tracking saved records.
+	std::shared_ptr<map_records> map(new map_records(buffer_size*KB));
+
 	int64_t data_reserved;
 	//Pointer to the allocated buffer memory.
-	unsigned char * buffer;
+	char * buffer;
 	//Size of the buffer involved.
 	uint64_t size = (uint64_t) buffer_size*KB;
 	//Check if the requested data is available in the current node.
@@ -249,8 +237,7 @@ int32_t main(int32_t argc, char **argv)
 
 	if (argc == 4)
 	{
-		if ((buffer_address = metadata_read(metadata_file, &map, buffer, &bytes_written)) == NULL)
-
+		if ((buffer_address = metadata_read(metadata_file, map.get(), buffer, &bytes_written)) == NULL)
 			return -1;
 
 		//Obtain the remaining free amount of data reserved to the buffer after the metadata read operation.
@@ -273,6 +260,8 @@ int32_t main(int32_t argc, char **argv)
 	{
 		//Add port number to thread arguments.
 		arguments[i].port = (bind_port)++;
+		arguments[i].ucp_context = ucp_context;
+		arguments[i].ucp_worker = ucp_worker;
         //Add the instance URI to the thread arguments.
         strcpy(arguments[i].my_uri, imss_uri);
 
@@ -290,14 +279,15 @@ int32_t main(int32_t argc, char **argv)
 		else
 		{
 			//Add the reference to the map into the set of thread arguments.
-			arguments[i].map = &map;
+			arguments[i].map = map;
 			//Specify the address used by each thread to write inside the buffer.
-			arguments[i].pt = (unsigned char *) ((i-1)*buffer_segment + buffer_address);
+			arguments[i].pt = (char *) ((i-1)*buffer_segment + buffer_address);
+			arguments[i].ucp_context = ucp_context;
+            arguments[i].ucp_worker = ucp_worker;
 
 			//IMSS server.
 			if (argc == 9)
 			{	
-				printf("Cree un srv_worker server\n");
 				if (pthread_create(&threads[i], NULL, srv_worker, (void *) &arguments[i]) == -1)
 				{
 					//Notify thread error deployment.
@@ -308,7 +298,6 @@ int32_t main(int32_t argc, char **argv)
 			//Metadata server.
 			else
 			{
-				printf("Cree un stat_worker server\n");
 				if (pthread_create(&threads[i], NULL, stat_worker, (void *) &arguments[i]) == -1)
 				{
 					//Notify thread error deployment.
@@ -361,33 +350,40 @@ int32_t main(int32_t argc, char **argv)
 			return -1;
 		}
 
-		char key_plus_size[KEY+16];
+        status = start_client(ucp_worker, stat_add, stat_port + 1, &client_ep); // port, rank,
+        if (status != UCS_OK) {
+           fprintf(stderr, "failed to start client (%s)\n", ucs_status_string(status));
+           return -1;
+        }
+    
+		char key_plus_size[REQUEST_SIZE];
 		//Send the created structure to the metadata server.
 		sprintf(key_plus_size, "%lu %s", (sizeof(imss_info)+my_imss.num_storages*LINE_LENGTH), my_imss.uri_);
 
-		if (comm_send(socket, key_plus_size, KEY+16, ZMQ_SNDMORE) != (KEY+16))
+        uint32_t id = CLOSE_EP;
+        send_stream(ucp_worker, client_ep, (char *) &id, sizeof(uint32_t));
+
+        char mode[] = "SET\0";
+        send_stream(ucp_worker, client_ep, mode, MODE_SIZE);
+
+   
+		if (send_stream(ucp_worker, client_ep, key_plus_size, REQUEST_SIZE) < 0) // SNDMORE
 		{
 			perror("ERRIMSS_SRV_SENDKEY");
 			return -1;
 		}
 
 		//Send the new IMSS metadata structure to the metadata server entity.
-		if (send_dynamic_struct(socket, (void *) &my_imss, IMSS_INFO) == -1)
-
+		if (send_dynamic_stream(ucp_worker, client_ep, (char *) &my_imss, IMSS_INFO) == -1)
 			return -1;
 
-		//Close the provided socket.
-		if (comm_close(socket) == -1)
-		{
-			perror("ERRIMSS_SRV_SOCKETCLOSE");
-			return -1;
-		}
+        //ep_close(ucp_worker, pub_ep, UCP_EP_CLOSE_MODE_FLUSH);
 
 		for (int32_t i = 0; i < num_servers; i++)
-
 			free(my_imss.ips[i]);
-
 		free(my_imss.ips);
+
+		ep_close(ucp_worker, client_ep, UCP_EP_CLOSE_MODE_FLUSH);
 	}
 
 	//Wait for threads to finish.
@@ -403,7 +399,7 @@ int32_t main(int32_t argc, char **argv)
 	//Write the metadata structures retrieved by the metadata server threads.
 	if (argc == 4)
 	{
-		if (metadata_write(metadata_file, buffer, &map, arguments, buffer_segment, bytes_written) == -1)
+		if (metadata_write(metadata_file, buffer, map.get(), arguments, buffer_segment, bytes_written) == -1)
 
 			return -1;
 
@@ -422,24 +418,11 @@ int32_t main(int32_t argc, char **argv)
 		free(region_locks);
 
 	//Close publisher socket.
-	if (comm_close(pub) == -1)
-	{
-		perror("ERRIMSS_PUBSOCK_CLOSE");
-		return -1;
-	}
-
-	//Close context holding all sockets.
-	if (comm_ctx_destroy(context) == -1)
-	{
-		perror("ERRIMSS_CTX_DSTRY");
-		return -1;
-	}
+	//ep_close(ucp_worker, pub_ep, UCP_EP_CLOSE_MODE_FORCE);
 
 	//Free the memory buffer.
 	free(buffer);
 	//Free the publisher release address.
-	free(pub_dir);
-
 	MPI_Barrier(MPI_COMM_WORLD);
 	MPI_Finalize();
 

@@ -11,8 +11,6 @@ using std::string;
 typedef std::map<std::string,std::pair< int, long>> Map;
 std::mutex fdlock;
 
-
-
 extern "C" {
 
 void* map_fd_create() {
@@ -23,8 +21,6 @@ void map_fd_put(void* map, char* k, int v, unsigned long p) {
   std::unique_lock<std::mutex> lck (fdlock);
   Map* m = reinterpret_cast<Map*> (map);
   std::pair<int, int> value(v, p);
-  //std::cout <<"add in mapfd:" << k << " fd:" << v <<'\n';
-  //printf("add in map_fd:%s fd:%d\n",k,v);
   m->insert({k, value});
 }
 
@@ -34,7 +30,6 @@ void map_fd_update_value(void* map, char* k, int v, unsigned long p) {
    auto search = m->find(std::string(k));
      
     if (search != m->end()) {
-        //printf("map-fd_update=%ld\n",p);
         search->second.first = v;
         search->second.second = p;
     }
@@ -65,13 +60,10 @@ int map_fd_search_by_val(void* map, char* path, int v) {
     Map* m = reinterpret_cast<Map*> (map);
     // Traverse the map
     for (auto& it : *m) {
-        //printf("Search by val: %s ,fd=%d\n", it.first.c_str(), it.second);
         // If mapped value is K,
         // then print the key value
         if (it.second.first == v) {
             strcpy(path,(char*)it.first.c_str());
-            
-            //std::cout << "Search by val " << it.first << '\n';
             return 1;
         }
     }
@@ -91,7 +83,6 @@ int map_fd_search_by_val_close(void* map, int v) {
     }
 
     if(remove != ""){
-        //printf("map_fd remove=%s fd=%d\n",remove.c_str(), v);
         m->erase(remove);
         return 1;
     }

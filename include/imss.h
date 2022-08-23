@@ -2,19 +2,14 @@
 #define IMSS_WRAP_
 
 #include <stdint.h>
-
-
-
+#include <ucp/api/ucp.h>
 
 
 //Maximum number of bytes assigned to a dataset or IMSS URI.
-#define URI_		256
+#define URI_		128
 
 //Maximum number of bytes retrieved from the imss deployment file per line.
 #define LINE_LENGTH	512
-
-//Maximum number of milliseconds that a zmq_recv operation will be waiting until it raises a timeout.
-#define TIMEOUT_MS	10000
 
 //Replication factor assigned to each dataset in creation time.
 #define NONE  1
@@ -63,9 +58,11 @@ typedef struct {
 typedef struct {
 
 	//Set of actual sockets.
-	void ** sockets_;
+	ucp_ep_h* eps_;
 	//Socket connecting the corresponding client to the server running in the same node.
 	int32_t matching_server;
+
+	uint32_t *id;
 
 } imss_conn;
 
@@ -122,7 +119,7 @@ typedef struct {
 			int32_t n_server;
 			const char *path;
 			char *msg;
-			unsigned char * buffer; 
+			char * buffer; 
 			int32_t size;
 			uint64_t BLKSIZE;
 			int64_t    start_offset;
@@ -377,7 +374,7 @@ int32_t
 readv_multiple(int32_t 	 dataset_id,
 	int32_t 	 curr_block,
 	 int32_t 	 prefetch,
-	 unsigned char * buffer,
+	  char * buffer,
 	  uint64_t 	 BLOCKSIZE,
 	  int64_t    start_offset,
 	  int64_t	size);
@@ -391,9 +388,9 @@ readv_multiple(int32_t 	 dataset_id,
 	RETURNS:	 0 - The requested block was successfully retrieved.
 			-1 - In case of error.
 */
-int32_t get_data(int32_t dataset_id, int32_t data_id, unsigned char * buffer);
+int32_t get_data(int32_t dataset_id, int32_t data_id, char * buffer);
 
-int32_t get_ndata(int32_t dataset_id, int32_t data_id, unsigned char * buffer, int64_t * len);
+int32_t get_ndata(int32_t dataset_id, int32_t data_id, char * buffer, int64_t * len);
 /* Method storing a specific data element.
 
 	RECEIVES:	dataset_id - Number identifying the concerned dataset among the client's session.
@@ -403,7 +400,7 @@ int32_t get_ndata(int32_t dataset_id, int32_t data_id, unsigned char * buffer, i
 	RETURNS:	 0 - The requested block was successfully stored.
 			-1 - In case of error.
 */
-int32_t set_data(int32_t dataset_id, int32_t data_id, unsigned char * buffer);
+int32_t set_data(int32_t dataset_id, int32_t data_id, char * buffer);
 
 /* Method retrieving the location of a specific data object.
 
@@ -433,7 +430,7 @@ int32_t set_data(int32_t dataset_id, int32_t data_id, unsigned char * buffer);
 int32_t
 set_ndata(int32_t 	 dataset_id,
 	 int32_t 	 data_id,
-	 unsigned char * buffer,
+	 char * buffer,
 	 uint32_t size);
 
 char ** get_dataloc(const char * dataset, int32_t data_id, int32_t * num_storages);

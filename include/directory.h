@@ -2,7 +2,6 @@
 #define IMSS_DIRECTORY
 
 #include <glib.h>
-#include "records.hpp"
 
 //Wrapper to the GTree_search_ function that compares if the parent node is requested.
 int32_t GTree_search(GNode * parent_node, char * desired_data, GNode ** found_node);

@@ -1,4 +1,3 @@
-#include <zmq.h>
 #include <stdio.h>
 #include <utility>
 #include <string.h>
@@ -52,14 +51,9 @@ pthread_t server_th;
 //IMSS metadata server thread.
 pthread_t metadata_th;
 //ZeroMQ context entity conforming all sockets.
-extern void * context;
-//PUB socket for ITC.
-extern void * pub;
-//IPC bind address for pub-sub communications.
-extern char * pub_dir;
 
 //Initial buffer address.
-extern unsigned char *   buffer_address;
+extern char *   buffer_address;
 //Set of locks dealing with the memory buffer access.
 extern pthread_mutex_t * region_locks;
 //Segment size (amount of memory assigned to each thread).
@@ -179,7 +173,7 @@ imss_server(void * arg_)
 			pthread_mutex_unlock(&backend_buff_mut);
 
 			data_reserved = buffer_KB * GB;
-            map_records buffer_map(data_reserved);
+            std::shared_ptr<map_records> buffer_map(new map_records(data_reserved));
 			//buffer_address = (unsigned char *) malloc(sizeof(char)*data_reserved );
 
 			buffer_segment = data_reserved/THREAD_POOL;
@@ -190,7 +184,7 @@ imss_server(void * arg_)
 		{
 			arguments[i].port = (arg.port)++;
 			//Add the reference to the map into the set of thread arguments.
-			arguments[i].map = &buffer_map;
+			arguments[i].map = buffer_map;
 			//Specify the address used by each thread to write inside the buffer.
 			arguments[i].pt = 0;
             //URI of the corresponding IMSS instance.
@@ -205,7 +199,7 @@ imss_server(void * arg_)
 		}
 	
 
-	if (pthread_create(&thread_garbage_collector, NULL, garbage_collector, (void *) &buffer_map) == -1)
+	if (pthread_create(&thread_garbage_collector, NULL, garbage_collector, (void *) buffer_map.get()) == -1)
 	{
 		perror("ERRIMSS_GARBAGECOLLECTOR_DEPLOY");
 		pthread_exit(NULL);
@@ -263,9 +257,9 @@ imss_metadata(void * arg_)
 
 	
 	//Map tracking metadata saved records.
-	map_records metadata_map(arg.buffer_size * GB);
+	std::shared_ptr<map_records> metadata_map(new map_records(arg.buffer_size * GB));
 	//Pointer to the allocated metadata buffer memory.
-	unsigned char * pt_met;
+	char * pt_met;
 
 	pthread_mutex_lock(&backend_buff_mut);
 	printf("%ld > %ld",buffer_KB,backend_buffer_size);
@@ -279,7 +273,7 @@ imss_metadata(void * arg_)
 
 	int64_t data_reserved = arg.buffer_size * GB;
 
-	pt_met = (unsigned char *) malloc(sizeof(char) * data_reserved);
+	pt_met = (char *) malloc(sizeof(char) * data_reserved);
 
 	if (pthread_mutex_init(&tree_mut, NULL) != 0)
 	{
@@ -293,12 +287,12 @@ imss_metadata(void * arg_)
 	tree_root = g_node_new((void *) root_data);
 
 	//Address pointing to the end of the last metadata record.
-	unsigned char * offset = pt_met;
+	char * offset = pt_met;
 
 	//Metadata bytes written into the buffer.
 	uint64_t bytes_written;
 	
-	if ((offset = metadata_read(arg.metadata_file, &metadata_map, pt_met, &bytes_written)) == NULL)
+	if ((offset = metadata_read(arg.metadata_file, metadata_map.get(), pt_met, &bytes_written)) == NULL)
 		pthread_exit(NULL);
 
 	//Obtain the remaining free amount of data reserved to the buffer after the metadata read operation.
@@ -334,7 +328,7 @@ imss_metadata(void * arg_)
 		else
 		{
 			//Add the reference to the map into the set of thread arguments.
-			arguments[i].map = &metadata_map;
+			arguments[i].map = metadata_map;
 			//Specify the address used by each thread to write inside the buffer.
 			arguments[i].pt = 0;
             //arguments[i].total_size = buffer_segment_;
@@ -358,7 +352,7 @@ imss_metadata(void * arg_)
 	}
 
 	//Save the current metadata information into a file.
-	if (metadata_write(arg.metadata_file, pt_met, &metadata_map, arguments, buffer_segment_, bytes_written) == -1)
+	if (metadata_write(arg.metadata_file, pt_met, metadata_map.get(), arguments, buffer_segment_, bytes_written) == -1)
 		pthread_exit(NULL);
 
 	//Freeing all resources of the tree structure.
@@ -389,27 +383,6 @@ hercules_init(uint32_t rank,
 	//Save the total number of bytes that were assigned to the backend storage.
 	backend_buffer_size = backend_strg_size;
 	connection_port = server_port_num; //FIXME
-	//ZeroMQ context intialization.
-	if ((context = comm_ctx_new()) == NULL)
-	{
-		perror("ERRHERCULES_CTX_CREATE");
-		return -1;
-	}
-
-	//Publisher socket creation.
-	if ((pub = comm_socket(context, ZMQ_PUB)) == NULL)
-	{
-		perror("ERRHERCULES_PUBSOCK_CREATE");
-		return -1;
-	}
-	pub_dir = (char *) malloc(32*sizeof(char));
-	sprintf(pub_dir, "inproc://hercules_comms-%d", rank);
-
-	if ( comm_bind(pub, pub_dir) == -1)
-	{
-		perror("ERRHERCULES_PUBSOCK_BIND");
-		return -1;
-	}
 	//Initialize communication resources.
 	if (pthread_mutex_init(&comms_mut, NULL) != 0)
 	{
@@ -503,15 +476,13 @@ int32_t
 hercules_release()
 {
 	//Publish RELEASE message to all worker threads.
-	zmq_msg_t release_rsc;
-	zmq_msg_init_size(&release_rsc, 8);
-	memcpy(comm_msg_data(&release_rsc), "RELEASE\0", 8);
+	//memcpy(comm_msg_data(&release_rsc), "RELEASE\0", 8);
 
-	if ( comm_msg_send(&release_rsc, pub, 0)== -1)
-	{
-		perror("ERRHERCULES_PUBLISH_RELEASEMSG");
-		return -1;
-	}
+	//if ( comm_msg_send(&release_rsc, pub, 0)== -1)
+	//{
+	//	perror("ERRHERCULES_PUBLISH_RELEASEMSG");
+	//	return -1;
+	//}
 
 	//Join threads.
 	if (metadata_server_deployed)
@@ -529,27 +500,20 @@ hercules_release()
 		return -1;
 	}
 
-	comm_msg_close(&release_rsc);
+	//comm_msg_close(&release_rsc);
 
 	//Close publisher socket.
-	if (comm_close(pub) == -1)
-	{
-		perror("ERRHERCULES_PUBSOCK_CLOSE");
-		return -1;
-	}
+	//if (comm_close(pub) == -1)
+	//{
+	//	perror("ERRHERCULES_PUBSOCK_CLOSE");
+	//	return -1;
+	//}
 
-	free(pub_dir);
+	//free(pub_dir);
 
 	if (pthread_mutex_destroy(&backend_buff_mut) != 0)
 	{
 		perror("ERRHERCULES_BACKENDMUT_DESTROY");
-		return -1;
-	}
-
-	//Close context holding all sockets.
-	if (comm_ctx_destroy(context) == -1)
-	{
-		perror("ERRHERCULES_CTX_DESTROY");
 		return -1;
 	}
 

@@ -11,7 +11,7 @@
 
 
 // Method allocating a certain memory region to a buffer process.
-int64_t memalloc (int64_t req_mem, unsigned char ** reference)
+int64_t memalloc (int64_t req_mem, char ** reference)
 {
 	// Available memory in the system.
 	int64_t mem_avail;
@@ -70,7 +70,7 @@ int64_t memalloc (int64_t req_mem, unsigned char ** reference)
 	if (mem_avail >= req_mem)
 	{
 		// Reserve the requested memory amount.
-		*reference = (unsigned char *) malloc(req_mem * sizeof(char));
+		*reference = (char *) malloc(req_mem * sizeof(char));
 	}
 	else
 	{
@@ -81,7 +81,7 @@ int64_t memalloc (int64_t req_mem, unsigned char ** reference)
 
 		//req_mem -= (req_mem % block_size);
 
-		*reference = (unsigned char *) malloc(req_mem * sizeof(char));
+		*reference = (char *) malloc(req_mem * sizeof(char));
 	}
 
 	return req_mem;

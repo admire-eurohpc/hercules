@@ -1,4 +1,3 @@
-#include <zmq.h>
 #include <glib.h>
 #include <netdb.h> 
 #include <errno.h>
@@ -17,8 +16,10 @@
 #include "workers.h"
 #include "policies.h"
 #include <sys/time.h>
-#include<sys/utsname.h>
+#include <sys/utsname.h>
+#include <time.h>
 
+#include <ucp/api/ucp.h>
 
 /**********************************************************************************/
 /******************************** GLOBAL VARIABLES ********************************/
@@ -26,10 +27,9 @@
 
 int32_t 	process_rank;		//Process identifier within the deployment.
 
-void * 		ctx;			//Applications' comms context.
-
 uint32_t    n_stat_servers;     //Number of metadata servers available.
-void ** 	stat_client;		//Metadata server sockets.
+ucp_ep_h * 	stat_client;		//Metadata server sockets.
+uint32_t *  stat_ids;
 void * 		stat_mon;		    //Metadata monitoring socket.
 
 int32_t		current_dataset;	//Dataset whose policy has been set last.
@@ -62,145 +62,19 @@ extern uint16_t	connection_port; //FIXME
 char        att_deployment[URI_];
 
 
+int32_t  IMSS_DEBUG = 0;
 
-/**********************************************************************************/
-/*********************** IMSS INTERNAL MANAGEMENT FUNCTIONS ***********************/
-/**********************************************************************************/
-
-
-//Method creating a ZMQ socket connection of type DEALER over a certain ip + port couple.
-int32_t
-conn_crt_(void **  socket,
-	  char *   ip_,
-	  uint16_t port,
-	  int32_t  ident_,
-	  int32_t  monitor,
-	  void **  socket_mon)
-{
-	
-	//Create the actual ZMQ socket.
-	if ((*socket = comm_socket(ctx, ZMQ_DEALER)) == NULL)
-	{
-		perror("ERRIMSS_CONN_SOCKET_CRT");
-		return -1;
-	}
-
-	//Receive timeout in milliseconds.
-	//int32_t rcvtimeo = TIMEOUT_MS;
-	int32_t rcvtimeo = -1;
-	
-	//Monitor the current socket if it was requested.
-	if (monitor)
-	{
-		printf("**********inside monitor case\n");
-		if (zmq_socket_monitor(*socket, "inproc://monitor-socket", ZMQ_EVENT_CONNECTED) == -1)
-		{
-			perror("ERRIMSS_CONN_MONITOR");
-			return -1;
-		}
-		
-		if ((*socket_mon = comm_socket(ctx, ZMQ_PAIR)) == NULL)
-		{
-			perror("ERRIMSS_CONN_MONSOCKET");
-			return -1;
-		}
-
-		if (comm_setsockopt(*socket_mon, ZMQ_RCVTIMEO, &rcvtimeo, sizeof(int32_t)) == -1)
-		{
-			perror("ERRIMSS_CONN_MONSOCKET_RCVTIMEO");
-			return -1;
-		}
-
-		if (comm_connect(*socket_mon, "inproc://monitor-socket") == -1)
-		{
-			perror("ERRIMSS_CONN_MONCONNECT");
-			return -1;
-		}
-	}
-
-	//Set communication id.
-	if (comm_setsockopt(*socket, ZMQ_IDENTITY, &ident_, sizeof(int32_t)) == -1)
-	{
-		perror("ERRIMSS_CONN_SETSOCKET_IDEN");
-		return -1;
-	}
-
-	//Set a timeout to receive operations.
-	if (comm_setsockopt(*socket, ZMQ_RCVTIMEO, &rcvtimeo, sizeof(int32_t)) == -1)
-	{
-		perror("ERRIMSS_CONN_SETSOCKET_RCVTIMEO");
-		return -1;
-	}
-
-	//Connection address.
-	char addr_[LINE_LENGTH]; 
-	sprintf(addr_, "%s%s%c%d", "tcp://", ip_, ':', port);
-	struct utsname detect;
-	uname(&detect);
-
-	//printf("[CLIENT]:%s connection: %s  monitor=%d ident=%d recvtimeo=%d\n",detect.nodename,addr_,monitor,ident_,rcvtimeo);
-	//sprintf(addr_, "%s%d", "inproc://kk-", port);
-	//Connect to the specified endpoint.
-	if (comm_connect(*socket, (const char *) addr_) == -1)
-	{
-		perror("ERRIMSS_CONN_CONNECT");
-		return -1;
-	}
-
-	int32_t send_hwm = 0;
-	//Unset limit in the number of messages to be enqueued in the socket's receiving buffer.
-	if (comm_setsockopt(*socket, ZMQ_SNDHWM, &send_hwm, sizeof(int32_t)) == -1)
-	{
-		perror("ERRIMSS_CONN_SETSOCKET_HWM");
-		return -1;
-	}
-
-	return 0;
-}
-
-//Method destroying an existing ZMQ socke connection.
-int32_t
-conn_dstr_(void * socket)
-{
-	//Close the provided socket.
-	if (comm_close(socket) == -1)
-	{
-		perror("ERRIMSS_CONN_SCKT_CLOSE");
-		return -1;
-	}
-
-	return 0;
-}
-
-
-
-////Method stating if a socket has been connected to an endpoint.
-//int32_t
-//socket_connected(void ** monitor)
-//{
-//	zmq_msg_t event_msg;
-//	zmq_msg_init (&event_msg);
-//	//Message storing the event.
-//	if (comm_msg_recv(&event_msg, *monitor, 0) == -1)
-//
-//		return -1;
-//
-//	//Elements formalizing the retrieved data.
-//	uint8_t * data = (uint8_t *) zmq_msg_data(&event_msg);
-//	uint16_t event = *(uint16_t *) data;
-//	comm_msg_close(&event_msg);
-//
-//	return event == ZMQ_EVENT_CONNECTED;
-//}
-
+/* UCP objects */
+ucp_context_h ucp_context_client;
+ucp_worker_h  ucp_worker_client;
 
 //Method inserting an element into a certain control GArray vector.
 int32_t
 GInsert (int32_t * pos,
-	 int32_t * max, 
-	 char *    item,
-	 GArray *  garray_insert,
-	 GArray *  garray_free)
+		int32_t * max, 
+		char *    item,
+		GArray *  garray_insert,
+		GArray *  garray_free)
 {
 	//Position where the element will be inserted.
 	int32_t inserted_pos = -1;
@@ -241,9 +115,9 @@ GInsert (int32_t * pos,
 //Method inserting an element into a certain control GArray vector.
 int32_t
 Get_fd (int32_t * pos,
-	 int32_t * max, 
-	 GArray *  garray_insert,
-	 GArray *  garray_free)
+		int32_t * max, 
+		GArray *  garray_insert,
+		GArray *  garray_free)
 {
 	//Position where the element will be inserted.
 	int32_t inserted_pos = -1;
@@ -271,8 +145,8 @@ Get_fd (int32_t * pos,
 		if (*pos < garray_insert->len)
 			//g_array_remove_index(garray_insert, *pos);
 
-		//g_array_insert_val(garray_insert, *pos, *item);
-		inserted_pos = *pos;
+			//g_array_insert_val(garray_insert, *pos, *item);
+			inserted_pos = *pos;
 	}
 
 	return inserted_pos;
@@ -283,7 +157,7 @@ int32_t
 imss_check(char * dataset_uri)
 {
 	imss imss_;
-	
+
 	//Traverse the whole set of IMSS structures in order to find the one.
 	for (int32_t i = 0; i < imssd->len; i++)
 	{
@@ -291,36 +165,30 @@ imss_check(char * dataset_uri)
 
 		int32_t imss_uri_len = strlen(imss_.info.uri_);
 		if ((imss_uri_len > 0) && !strncmp(dataset_uri, imss_.info.uri_, imss_uri_len))
-
 			return i;
 	}
-
 	return -1;
 }
 
 //Method searching for a certain IMSS in the vector.
 int32_t
 find_imss(char * imss_uri,
-	  imss * imss_)
+		imss * imss_)
 {
 	//Search for a certain IMSS within the vector.
-
 	for (int32_t i = 0; i < imssd->len; i++)
 	{
 		*imss_ = g_array_index(imssd, imss, i);
-
 		if (!strncmp(imss_uri, imss_->info.uri_, URI_))
-
 			return i;
 	}
-
 	return -1;
 }
 
 //Method deleting a certains IMSS in the vector
 int32_t
 delete_imss(char * imss_uri,
-	  imss * imss_)
+		imss * imss_)
 {
 	int32_t pos = find_imss(imss_uri, imss_);
 	if(pos != -1){
@@ -342,14 +210,14 @@ delete_imss(char * imss_uri,
 //Method creating a communication channel with the IMSS metadata server. Besides, the stat_imss method initializes a set of elements that will be used through the session.
 int32_t
 stat_init(char *   stat_hostfile,
-          uint16_t port,
-          int32_t  num_stat_servers,
-          int32_t  rank)
+		uint16_t port,
+		int32_t  num_stat_servers,
+		int32_t  rank)
 {
-    //Number of metadata servers to connect to.
-    n_stat_servers = num_stat_servers;
-    //Initialize memory required to deal with metadata sockets.
-    stat_client = (void **) malloc(n_stat_servers * sizeof(void *));
+	//Number of metadata servers to connect to.
+	n_stat_servers = num_stat_servers;
+	//Initialize memory required to deal with metadata sockets.
+	stat_client = (ucp_ep_h *) malloc(n_stat_servers * sizeof(ucp_ep_h));
 	//Dataset whose policy was set last.
 	current_dataset = -1;
 	//Rank of the current process.
@@ -362,7 +230,18 @@ stat_init(char *   stat_hostfile,
 	imssd_max_size = ELEMENTS;
 	//Current size of the dataset array.
 	datasetd_max_size = ELEMENTS;
-	
+	int ret = 0;
+
+    if (getenv("IMSS_DEBUG") != NULL) {
+        IMSS_DEBUG = 1;
+    }
+    /* Initialize the UCX required objects */
+    ret = init_context(&ucp_context_client, &ucp_worker_client, CLIENT_SERVER_SEND_RECV_STREAM);
+    if (ret != 0) {
+        perror("ERRIMSS_INIT_CONTEXT");
+        return -1;
+    }
+
 	memset(&empty_dataset, 0, sizeof(dataset_info));
 	memset(&empty_imss, 0, sizeof(imss));
 	memset(&att_deployment, 0, URI_);
@@ -390,19 +269,12 @@ stat_init(char *   stat_hostfile,
 		perror("ERRIMSS_STATINIT_GARRAYDATASETREG");
 		return -1;
 	}
-	
+
 	//Fill the free positions arrays.
 	for (int32_t i = 0; i < ELEMENTS; i++)
 	{
 		g_array_insert_val(free_imssd, i, i);
 		g_array_insert_val(free_datasetd, i, i);
-	}
-
-	//Create ZMQ application context.
-	if ((ctx = comm_ctx_new()) == NULL)
-	{
-		perror("ERRIMSS_CREATE_CONTEXT");
-		return -1;
 	}
 
 	//Retrieve the hostname where the current process is running.
@@ -421,7 +293,7 @@ stat_init(char *   stat_hostfile,
 	}
 
 	strcpy(client_ip, inet_ntoa(*((struct in_addr*) host_entry->h_addr_list[0])));
-	
+
 	//FILE entity managing the IMSS metadata hostfile.
 	FILE * stat_nodes;
 	//Number of characters successfully read from the line.
@@ -434,59 +306,76 @@ stat_init(char *   stat_hostfile,
 		return -1;
 	}
 
+    stat_ids = (uint32_t *) malloc (n_stat_servers * sizeof(uint32_t));
+
 	char * stat_node = (char *) malloc(LINE_LENGTH);
 	//Connect to all servers.
 	for (int i = 0; i < n_stat_servers; i++)
 	{
+        ucs_status_t status;
+        ucp_ep_h     client_ep;
 		size_t l_size = LINE_LENGTH;
 
 		//Save IMSS metadata deployment.
 		n_chars = getline(&stat_node, &l_size, stat_nodes);
 		//Erase the new line character ('\n') from the string.
 		stat_node[n_chars - 1] = '\0';
-		printf("stat_client=%s\n",stat_node);
-		printf("i=%d, stat_node=%s, port=%d, rank=%d\n",i,stat_node, port, rank);
-		//Create the connection to the metadata server dispatcher thread.
-		if (conn_crt_(stat_client + i, stat_node, port, rank, 0, NULL) == -1)
+		if (IMSS_DEBUG) {
+			printf("stat_client=%s\n",stat_node);
+		    printf("i=%d, stat_node=%s, port=%d, rank=%d\n",i,stat_node, port, rank);
+		}
+        status = start_client(ucp_worker_client, stat_node, port, &client_ep); // port, rank,
+        if (status != UCS_OK) {
+            fprintf(stderr, "failed to start client (%s)\n", ucs_status_string(status));
+            return -1;
+        }
 
-		    return -1;
-		//ZMQ message requesting a connection to the metadata server.
-		char request[] = "HELLO!\0";
+		char request[REQUEST_SIZE] = "HELLO!\0";
 		//Send the metadata server connection request.
-		if (comm_send(stat_client[i], request, 7, 0)  != 7)
+        
+        if (send_stream(ucp_worker_client, client_ep, (char*) &rank, sizeof(uint32_t)) < 0)
+        {
+			perror("ERRIMSS_STAT_HELLO");
+            return -1;
+        }
+
+        char mode[] = "GET";
+		if (send_stream(ucp_worker_client, client_ep, mode, MODE_SIZE) < 0)
+        {
+            perror("ERRIMSS_STAT_HELLO");
+            return -1;
+        }
+
+		if (send_stream(ucp_worker_client, client_ep, request, REQUEST_SIZE) < 0)
 		{
-		    perror("ERRIMSS_STAT_HELLO");
-		    return -1;
-		}
-		//ZMQ message retrieving the connection information.
-		zmq_msg_t connection_info;
-		zmq_msg_init (&connection_info);
-		if (comm_msg_recv(&connection_info, stat_client[i], 0) == -1)
-		{
-		    perror("ERRIMSS_STAT_ACK");
-		    return -1;
+			perror("ERRIMSS_STAT_HELLO");
+			return -1;
 		}
 
-		//Close the previous connection.
-		if (conn_dstr_(stat_client[i]) == -1)
+		char connection_info[RESPONSE_SIZE];
+        if (recv_stream(ucp_worker_client, client_ep, connection_info, RESPONSE_SIZE) < 0)
+        {
+            perror("ERRIMSS_STAT_HELLO");
+            return -1;
+        }
 
-		    return -1;
+        /* Close the endpoint to the server */
+        ep_close(ucp_worker_client, client_ep, UCP_EP_CLOSE_MODE_FLUSH);
 
 		//Port that the new client must connect to.
 		int32_t stat_port;
-		//ID that the new client must take.
-		int32_t stat_id;
 		//Separator.
 		char sep_;
 
 		//Read the previous information from the message received.
-		sscanf((const char *) comm_msg_data(&connection_info), "%d%c%d", &stat_port, &sep_, &stat_id);
-		comm_msg_close(&connection_info);
+		sscanf(connection_info, "%d%c%d", &stat_port, &sep_, &stat_ids[i]);
 
-		//Create the connection to the metadata server dispatcher thread.
-		if (conn_crt_(stat_client + i, stat_node, stat_port, stat_id, 0, NULL) == -1)
-
-		    return -1;
+		// Create the connection to the metadata server dispatcher thread.
+        status = start_client(ucp_worker_client, stat_node, stat_port, stat_client + i);
+        if (status != UCS_OK) {
+            fprintf(stderr, "failed to start client (%s)\n", ucs_status_string(status));
+            return -1;
+        }
 	}
 	//Close the file.
 	if (fclose(stat_nodes) != 0)
@@ -512,35 +401,41 @@ int32_t stat_release()
 
 		The "g_array_free(GArray *, FALSE)" function will be returning the content
 		iself if something was stored or NULL otherwise.
-	*/
+	 */
 
 	g_array_free (imssd, FALSE);
-
 	g_array_free (free_imssd, FALSE);
-
 	g_array_free (datasetd, FALSE);
-
 	g_array_free (free_datasetd, FALSE);
-
-	//WARNING! zmq_ctx_destroy will block unless all associated sockets have been released.
 
 	//Disconnect from all metadata servers.
 	for (int i = 0; i < n_stat_servers; i++)
-    {
-        if (conn_dstr_(stat_client[i]) == -1)
-        {
-            perror("ERRIMSS_CLOSE_SOCKET");
-            return -1;
-        }
-    }
-
-	//if (comm_ctx_destroy(ctx) == -1)
-	if (comm_ctx_destroy(ctx) == -1)
 	{
-		perror("ERRIMSS_CLOSE_CONTEXT");
-		return -1;
+		if (send_stream(ucp_worker_client, stat_client[i], (char*) &process_rank, sizeof(uint32_t)) < 0)
+		{
+			perror("ERRIMSS_STAT_HELLO");
+			return -1;
+		}
+
+		char mode[] = "GET";
+		if (send_stream(ucp_worker_client, stat_client[i], mode, MODE_SIZE) < 0)
+		{
+			perror("ERRIMSS_STAT_HELLO");
+			return -1;
+		}
+
+		char release_msg[] = "2 RELEASE\0";
+
+		if (send_stream(ucp_worker_client, stat_client[i], release_msg, REQUEST_SIZE) < 0)
+		{
+			perror("ERRIMSS_RLSIMSS_SENDREQ");
+			return -1;
+		}
+		ep_close(ucp_worker_client, stat_client[i], UCP_EP_CLOSE_MODE_FLUSH);
 	}
 
+	ucp_worker_destroy(ucp_worker_client);
+	ucp_cleanup(ucp_context_client);
 	return 0;
 }
 
@@ -548,74 +443,83 @@ int32_t stat_release()
 uint32_t
 discover_stat_srv(char * _uri)
 {
-    //Calculate a crc from the provided URI.
-    uint64_t crc_ = crc64(0, (unsigned char *) _uri, strlen(_uri));
+	//Calculate a crc from the provided URI.
+	uint64_t crc_ = crc64(0, (unsigned char *) _uri, strlen(_uri));
 
-    //Return the metadata server within the set that shall deal with the former entity.
-    return crc_ % n_stat_servers;
+	//Return the metadata server within the set that shall deal with the former entity.
+	return crc_ % n_stat_servers;
 }
 
 //FIXME: fix implementation for multiple servers.
 //Method retrieving the whole set of elements contained by a specific URI.
 uint32_t
 get_dir(char * 	 requested_uri,
-	char **  buffer,
-	char *** items)
+		char **  buffer,
+		char *** items)
 {
-    //Discover the metadata server that shall deal with the former URI.
-    uint32_t m_srv = discover_stat_srv(requested_uri);
+	int ret = 0;
+	//Discover the metadata server that shall deal with the former URI.
+	uint32_t m_srv = discover_stat_srv(requested_uri);
 
 	//GETDIR request.
-	char getdir_req[256];
+	char getdir_req[REQUEST_SIZE];
 	sprintf(getdir_req, "%d %s%c", GETDIR, requested_uri, '\0');
 
+	if (send_stream(ucp_worker_client, stat_client[m_srv], (char *) &stat_ids[m_srv], sizeof(uint32_t)) < 0)
+	{
+		perror("ERRIMSS_STAT_HELLO");
+		return -1;
+	}
+
+	char mode[] = "GET";
+	if (send_stream(ucp_worker_client, stat_client[m_srv], mode, MODE_SIZE) < 0)
+	{
+		perror("ERRIMSS_STAT_HELLO");
+		return -1;
+	}
+
 	//Send the request.
-	if (comm_send(stat_client[m_srv], getdir_req, strlen(getdir_req), 0)  == -1)
+	if (send_stream(ucp_worker_client, stat_client[m_srv], getdir_req, REQUEST_SIZE) < 0)
 	{
 		perror("ERRIMSS_GETDIR_REQ");
 		return -1;
 	}
+
+	char elements[RESPONSE_SIZE];
+
 	//Retrieve the set of elements within the requested uri.
-	zmq_msg_t uri_elements;
-	if (comm_msg_init(&uri_elements) != 0)
-	{
-		perror("ERRIMSS_GETDIR_MSGINIT");
-		return -1;
-	}
-	if (comm_msg_recv(&uri_elements, stat_client[m_srv], 0) == -1)
+	ret = recv_dynamic_stream(ucp_worker_client, stat_client[m_srv], elements, BUFFER);
+	if (ret < 0)
 	{
 		perror("ERRIMSS_GETDIR_RECV");
 		return -1;
 	}
-	char * elements = (char *) comm_msg_data(&uri_elements);
 
 	if (!strncmp("$ERRIMSS_NO_KEY_AVAIL$", elements, 22))
 	{
-		comm_msg_close(&uri_elements);
 		fprintf(stderr, "ERRIMSS_GETDIR_NODIR\n");
 		return -1;
 	}
-	uint32_t elements_size = zmq_msg_size(&uri_elements);
+	uint32_t elements_size = ret; 
 
 	//*buffer = (char *) malloc(sizeof(char)*elements_size);
 	//memcpy(*buffer, elements, elements_size);
 	//elements = *buffer;
 
-	
-	
 	uint32_t num_elements = elements_size/URI_;
 	*items = (char **) malloc(sizeof(char *) * num_elements);
 
 	//Identify each element within the buffer provided.
+	char * curr = elements;
 	for (int32_t i = 0; i < num_elements; i++)
 	{
 		(*items)[i] = (char *) malloc (URI_);
-		memcpy((*items)[i], elements, URI_);
+		memcpy((*items)[i], curr, URI_);
 		//(*items)[i] = elements;
 
-		elements += URI_;
+		curr += URI_;
 	}
-	comm_msg_close(&uri_elements);
+
 	return num_elements;
 }
 
@@ -628,16 +532,22 @@ get_dir(char * 	 requested_uri,
 //Method initializing an IMSS deployment.
 int32_t
 init_imss(char *   imss_uri,
-	  char *   hostfile,
-	  char *   meta_hostfile,
-	  int32_t  n_servers,
-	  uint16_t conn_port,
-	  uint64_t buff_size,
-	  uint32_t deployment,
-	  char *   binary_path,
-	  uint16_t metadata_port)
+		char *   hostfile,
+		char *   meta_hostfile,
+		int32_t  n_servers,
+		uint16_t conn_port,
+		uint64_t buff_size,
+		uint32_t deployment,
+		char *   binary_path,
+		uint16_t metadata_port)
 {
+	int ret = 0;
 	imss_info aux_imss;
+
+	if (getenv("IMSS_DEBUG") != NULL) {
+		IMSS_DEBUG = 1;
+	}
+
 	//Check if the new IMSS uri has been already assigned.
 	int32_t existing_imss = stat_imss(imss_uri, &aux_imss);
 	if (existing_imss) 
@@ -669,10 +579,10 @@ init_imss(char *   imss_uri,
 			perror("stat");
 			return 0;
 		}
-	
+
 		char *textRead = (char*)malloc(sb.st_size);
 		int i = 1;
-	
+
 		while (fscanf(in_file, "%[^\n] ", textRead) != EOF)
 		{
 			//printf("Line %d is  %s\n",i, textRead);
@@ -683,14 +593,14 @@ init_imss(char *   imss_uri,
 		//Original
 		//sprintf(command, "mpirun -np %d -f %s %s %s %d %lu foo %d %d %s &", n_servers, hostfile, binary_path, imss_uri, conn_port, buff_size, 0, n_servers, "");
 		//sprintf(command, "mpirun -np %d -hostfile %s %s %s %d %lu foo %d %d %s &", n_servers, hostfile, binary_path, imss_uri, conn_port, buff_size, 0, n_servers, "");
-		
+
 		//Imss server(data)
 		//mpirun -np $num_servers -f $imss_hostfile $server_binary $imss_uri $imss_port_number $imss_buffer_size $metadata_server_address $metadata_server_port $num_servers $imss_hostfile $io_threads &
-								 																					//["imss://", "5555", "1048576000", "compute-6-2", "5569", "1", "./hostfile", "1"]
+		//["imss://", "5555", "1048576000", "compute-6-2", "5569", "1", "./hostfile", "1"]
 		//sprintf(command, "mpirun -np %d -hostfile %s %s %s %d %lu %s %d %d %s %d &", n_servers, hostfile, binary_path, imss_uri, conn_port, buff_size, meta_hostfile, metadata_port, n_servers ,hostfile, THREAD_POOL);
 		sprintf(command, "mpirun.mpich -np %d -f %s %s %s %d %lu %s %d %d %s %d &", 2, hostfile, binary_path, imss_uri, conn_port, buff_size, textRead,metadata_port, 2 ,hostfile, THREAD_POOL);
 
-	sprintf(command, "mpirun -np %d -hostfile %s %s %s %d %lu %s %d %d", n_servers, hostfile, binary_path, imss_uri, conn_port, buff_size ,"compute-6-2", 5569, n_servers);
+		sprintf(command, "mpirun -np %d -hostfile %s %s %s %d %lu %s %d %d", n_servers, hostfile, binary_path, imss_uri, conn_port, buff_size ,"compute-6-2", 5569, n_servers);
 
 		printf("command=%s\n",command);
 		//Perform the deployment (FROM LINUX MAN PAGES: "system() returns after the command has been completed").
@@ -716,7 +626,7 @@ init_imss(char *   imss_uri,
 	new_imss.info.ips           = (char **) malloc(n_servers * sizeof(char *));
 
 	//Resources required to connect to the corresponding IMSS.
-	new_imss.conns.sockets_ = (void **) malloc(n_servers * sizeof(void *));
+	new_imss.conns.eps_ = (ucp_ep_h *) malloc(n_servers * sizeof(ucp_ep_h));
 
 	//FILE entity managing the IMSS hostfile.
 	FILE * svr_nodes;
@@ -730,9 +640,13 @@ init_imss(char *   imss_uri,
 	int n_chars;
 
 	new_imss.conns.matching_server = -1;
+
+	new_imss.conns.id = (uint32_t *) malloc (n_servers * sizeof(uint32_t));
+
 	//Connect to all servers.
 	for (int i = 0; i < n_servers; i++)
 	{
+		ucs_status_t status;
 		//Allocate resources in the metadata structure so as to store the current IMSS's IP.
 		(new_imss.info.ips)[i] = (char *) malloc(LINE_LENGTH);
 		size_t l_size = LINE_LENGTH;
@@ -749,32 +663,43 @@ init_imss(char *   imss_uri,
 			strcpy(att_deployment, imss_uri);
 		}
 		//Create the connection to the IMSS server dispatcher thread.
-		if (conn_crt_(&(new_imss.conns.sockets_[i]), (new_imss.info.ips)[i], new_imss.info.conn_port, process_rank, 0, NULL) == -1)
-
+		status = start_client(ucp_worker_client, (new_imss.info.ips)[i], new_imss.info.conn_port, &(new_imss.conns.eps_[i])); // port, rank,
+		if (status != UCS_OK) {
+			fprintf(stderr, "failed to start client (%s)\n", ucs_status_string(status));
 			return -1;
+		}
 
-        uint32_t request_size = 16 + URI_;
-		char     request[request_size];
+		process_rank = CLOSE_EP;
+		if (send_stream(ucp_worker_client, new_imss.conns.eps_[i], (char*) &process_rank, sizeof(uint32_t)) < 0)
+		{
+			perror("ERRIMSS_STAT_HELLO");
+			return -1;
+		} 
 
-		//ZMQ message requesting a connection to the metadata server.
+		char mode[] = "GET";
+		if (send_stream(ucp_worker_client, new_imss.conns.eps_[i], mode, MODE_SIZE) < 0)
+		{
+			perror("ERRIMSS_STAT_HELLO");
+			return -1;
+		}
+
+		char request[REQUEST_SIZE];
 		sprintf(request, "%s %ld %s%c", "HELLO!", buff_size, imss_uri, '\0');
 		//Send the IMSS server connection request.
-		if (comm_send(new_imss.conns.sockets_[i], request, request_size, 0)  != request_size)
+		if (send_stream(ucp_worker_client, new_imss.conns.eps_[i], request, REQUEST_SIZE) < 0)
 		{
 			perror("ERRIMSS_INITIMSS_HELLO");
 			return -1;
 		}
 		//ZMQ message retrieving the connection information.
-		zmq_msg_t connection_info;
-		zmq_msg_init (&connection_info);
-		if (comm_msg_recv(&connection_info, new_imss.conns.sockets_[i], 0) == -1)
+		char connection_info[RESPONSE_SIZE];
+		if (recv_stream(ucp_worker_client, new_imss.conns.eps_[i], connection_info, RESPONSE_SIZE) < 0)
 		{
 			perror("ERRIMSS_INITIMSS_CONNINFOINIT");
 			return -1;
 		}
 		//Close the previous connection.
-		if (conn_dstr_((new_imss.conns.sockets_[i])) == -1)
-			return -1;
+		ep_close(ucp_worker_client, new_imss.conns.eps_[i], UCP_EP_CLOSE_MODE_FLUSH);
 
 		//Port that the new client must connect to.
 		int32_t imss_port;
@@ -783,13 +708,14 @@ init_imss(char *   imss_uri,
 		//Separator.
 		char sep_;
 		//Read the previous information from the message received.
-		sscanf((const char *) comm_msg_data(&connection_info), "%d%c%d", &imss_port, &sep_, &imss_id);
-		comm_msg_close(&connection_info);
+		sscanf(connection_info, "%d%c%d", &imss_port, &sep_, &new_imss.conns.id[i]);
 
 		//Create the connection to the metadata server dispatcher thread.
-		if (conn_crt_(&(new_imss.conns.sockets_[i]), (new_imss.info.ips)[i], imss_port, imss_id, 0, NULL) == -1)
-
+		status = start_client(ucp_worker_client, (new_imss.info.ips)[i], imss_port, &(new_imss.conns.eps_[i])); // port, rank,
+		if (status != UCS_OK) {
+			fprintf(stderr, "failed to start client (%s)\n", ucs_status_string(status));
 			return -1;
+		}
 	}
 	//Close the file.
 	if (fclose(svr_nodes) != 0)
@@ -798,22 +724,35 @@ init_imss(char *   imss_uri,
 		return -1;
 	}
 
-    //Discover the metadata server that shall deal with the new IMSS instance.
-    uint32_t m_srv = discover_stat_srv(new_imss.info.uri_);
+	//Discover the metadata server that shall deal with the new IMSS instance.
+	uint32_t m_srv = discover_stat_srv(new_imss.info.uri_);
 
 	//Send the created structure to the metadata server.
-	char key_plus_size[KEY+16];
+	char key_plus_size[REQUEST_SIZE];
 	sprintf(key_plus_size, "%lu %s", (sizeof(imss_info)+new_imss.info.num_storages*LINE_LENGTH), new_imss.info.uri_);
 
-	if (comm_send(stat_client[m_srv], key_plus_size, KEY+16, ZMQ_SNDMORE) != (KEY+16))
+
+	if (send_stream(ucp_worker_client, stat_client[m_srv], (char *) &stat_ids[m_srv], MODE_SIZE) < 0) // SNDMORE
+	{
+		perror("ERRIMSS_INITIMSS_SENDKEY");
+		return -1;
+	}    
+
+	char mode2[] = "SET";
+	if (send_stream(ucp_worker_client, stat_client[m_srv], mode2, MODE_SIZE) < 0) // SNDMORE
+	{
+		perror("ERRIMSS_INITIMSS_SENDKEY");
+		return -1;
+	}
+
+	if (send_stream(ucp_worker_client, stat_client[m_srv], key_plus_size, REQUEST_SIZE) < 0) // SNDMORE
 	{
 		perror("ERRIMSS_INITIMSS_SENDKEY");
 		return -1;
 	}
 
 	//Send the new IMSS metadata structure to the metadata server entity.
-	if (send_dynamic_struct(stat_client[m_srv], (void *) &new_imss.info, IMSS_INFO) == -1)
-
+	if (send_dynamic_stream(ucp_worker_client, stat_client[m_srv], (void *) &new_imss.info, IMSS_INFO) < 0)
 		return -1;
 
 	//Add the created struture into the underlying IMSS vector.
@@ -837,69 +776,77 @@ open_imss(char * imss_uri)
 	switch (imss_existance)
 	{
 		case 0:
-		{
-			fprintf(stderr, "ERRIMSS_OPENIMSS_NOTEXISTS\n");
-			return -1;
-		}
+			{
+				fprintf(stderr, "ERRIMSS_OPENIMSS_NOTEXISTS\n");
+				return -1;
+			}
 		case 2:
-		{
-			imss check_imss = g_array_index(imssd, imss, found_in);
+			{
+				imss check_imss = g_array_index(imssd, imss, found_in);
 
-			if (check_imss.conns.matching_server != -2)
+				if (check_imss.conns.matching_server != -2)
+					return -2;
 
-				return -2;
+				for (int32_t i = 0; i < check_imss.info.num_storages; i++)
+					free(check_imss.info.ips[i]);
 
-			for (int32_t i = 0; i < check_imss.info.num_storages; i++)
-
-				free(check_imss.info.ips[i]);
-
-			free(check_imss.info.ips);
-
-			not_initialized = 1;
-
-			break;
-		}
+				free(check_imss.info.ips);
+				not_initialized = 1;
+				break;
+			}
 		case -1:
-		{
-			return -1;
-		}
+			{
+				return -1;
+			}
 	}
 
-	new_imss.conns.sockets_ = (void **) malloc(new_imss.info.num_storages*sizeof(void*));
+	new_imss.conns.eps_ = (ucp_ep_h *) malloc(new_imss.info.num_storages*sizeof(ucp_ep_h));
+	new_imss.conns.id = (uint32_t *) malloc(new_imss.info.num_storages*sizeof(uint32_t));
 
 	new_imss.conns.matching_server = -1;
 
 	//Connect to the requested IMSS.
 	for  (int32_t i = 0; i < new_imss.info.num_storages; i++)
 	{
-		//Create the connection to the IMSS server dispatcher thread.
-		if (conn_crt_(&(new_imss.conns.sockets_[i]), (new_imss.info.ips)[i], new_imss.info.conn_port, process_rank, 0, NULL) == -1)
-
+		ucs_status_t status;
+		status = start_client(ucp_worker_client, (new_imss.info.ips)[i], new_imss.info.conn_port,  &(new_imss.conns.eps_[i])); // port, rank,
+		if (status != UCS_OK) {
+			fprintf(stderr, "failed to start client (%s)\n", ucs_status_string(status));
 			return -1;
+		}
 
-		//ZMQ message requesting a connection to the dispatcher thread.
-		char request[16];
+		if (send_stream(ucp_worker_client, new_imss.conns.eps_[i], (char*) &process_rank, sizeof(uint32_t)) < 0)
+		{
+			perror("ERRIMSS_STAT_HELLO");
+			return -1;
+		}
+
+		char mode[] = "GET";
+		if (send_stream(ucp_worker_client, new_imss.conns.eps_[i], mode, MODE_SIZE) < 0)
+		{
+			perror("ERRIMSS_STAT_HELLO");
+			return -1;
+		}
+
+		char request[REQUEST_SIZE];
 		sprintf(request, "%s", "HELLO!JOIN");
 		//Send the IMSS server connection request.
-		if (comm_send(new_imss.conns.sockets_[i], request, 16, 0)  != 16)
+		if (send_stream(ucp_worker_client, new_imss.conns.eps_[i], request, REQUEST_SIZE) < 0)
 		{
 			perror("ERRIMSS_OPENIMSS_HELLO");
 			return -1;
 		}
 
 		//ZMQ message retrieving the connection information.
-		zmq_msg_t connection_info;
-		zmq_msg_init (&connection_info);
-		if (comm_msg_recv(&connection_info, new_imss.conns.sockets_[i], 0) == -1)
+		char connection_info[RESPONSE_SIZE];
+		if (recv_stream(ucp_worker_client, new_imss.conns.eps_[i], connection_info, RESPONSE_SIZE) < 0)
 		{
 			perror("ERRIMSS_OPENIMSS_CONNINFOOPEN");
 			return -1;
 		}
 
 		//Close the previous connection.
-		if (conn_dstr_((new_imss.conns.sockets_[i])) == -1)
-
-			return -1;
+		ep_close(ucp_worker_client, new_imss.conns.eps_[i], UCP_EP_CLOSE_MODE_FLUSH);
 
 		//Port that the new client must connect to.
 		int32_t imss_port;
@@ -909,20 +856,21 @@ open_imss(char * imss_uri)
 		char sep_;
 
 		//Read the previous information from the message received.
-		sscanf((const char *) comm_msg_data(&connection_info), "%d%c%d", &imss_port, &sep_, &imss_id);
-
-		comm_msg_close(&connection_info);
+		sscanf(connection_info, "%d%c%d", &imss_port, &sep_, &imss_id);
 
 		//Create the connection to the metadata server dispatcher thread.
-		if (conn_crt_(&(new_imss.conns.sockets_[i]), (new_imss.info.ips)[i], imss_port, imss_id, 0, NULL) == -1)
-
+		status = start_client(ucp_worker_client, (new_imss.info.ips)[i], imss_port,  &(new_imss.conns.eps_[i])); // port, rank,
+		if (status != UCS_OK) {
+			fprintf(stderr, "failed to start client (%s)\n", ucs_status_string(status));
 			return -1;
+		}
+
+		new_imss.conns.id[i] = imss_id;
 
 		//Save the current socket value when the IMSS ip matches the clients' one.
 		if (!strncmp((new_imss.info.ips)[i], client_node, len_client_node) || !strncmp((new_imss.info.ips)[i], client_ip, strlen(new_imss.info.ips[i])))
 		{
 			new_imss.conns.matching_server = i;
-
 			strcpy(att_deployment, imss_uri);
 		}
 
@@ -946,7 +894,7 @@ open_imss(char * imss_uri)
 // Method releasing client-side and/or server-side resources related to a certain IMSS instance. 
 int32_t
 release_imss(char *   imss_uri,
-	     uint32_t release_op)
+		uint32_t release_op)
 {
 	//Search for the requested IMSS.
 
@@ -965,21 +913,29 @@ release_imss(char *   imss_uri,
 		//Request IMSS instance closure per server if the instance is a DETACHED one and the corresponding argumet was provided.
 		if (release_op == CLOSE_DETACHED)
 		{
+			if (send_stream(ucp_worker_client, imss_.conns.eps_[i], (char*) &process_rank, sizeof(uint32_t)) < 0)
+			{
+				perror("ERRIMSS_STAT_HELLO");
+				return -1;
+			}
+
+			char mode[] = "GET";
+			if (send_stream(ucp_worker_client, imss_.conns.eps_[i], mode, MODE_SIZE) < 0)
+			{
+				perror("ERRIMSS_STAT_HELLO");
+				return -1;
+			}
+
 			char release_msg[] = "2 RELEASE\0";
 
-			if (comm_send(imss_.conns.sockets_[i], release_msg, strlen(release_msg), 0) < 0)
+			if (send_stream(ucp_worker_client, imss_.conns.eps_[i], release_msg, REQUEST_SIZE) < 0)
 			{
 				perror("ERRIMSS_RLSIMSS_SENDREQ");
 				return -1;
 			}
 		}
 
-		if (conn_dstr_((imss_.conns.sockets_[i])) == -1)
-		{
-			perror("ERRIMSS_RLSIMSS_CONNDSTRY");
-			return -1;
-		}
-
+		ep_close(ucp_worker_client, imss_.conns.eps_[i], UCP_EP_CLOSE_MODE_FLUSH);
 		free(imss_.info.ips[i]);
 	}
 
@@ -1000,139 +956,76 @@ release_imss(char *   imss_uri,
 //Method retrieving information related to a certain IMSS instance.
 int32_t
 stat_imss(char *      imss_uri,
-	  imss_info * imss_info_)
+		imss_info * imss_info_)
 {
 	//Check for the IMSS info structure in the local vector.
 	int32_t imss_found_in;
 	imss searched_imss;
+	int ret = 0;
 
 	if ((imss_found_in = find_imss(imss_uri, &searched_imss)) != -1)
 	{
 		memcpy(imss_info_, &searched_imss.info, sizeof(imss_info));
-
 		imss_info_->ips = (char **) malloc((imss_info_->num_storages)*sizeof(char *));
-
 		for (int32_t i = 0; i < imss_info_->num_storages; i++)
 		{
 			imss_info_->ips[i] = (char *) malloc(LINE_LENGTH*sizeof(char));
-
 			strcpy(imss_info_->ips[i], searched_imss.info.ips[i]);
 		}
 
 		return 2;
 	}
-	
-	//Formated imss uri to be sent to the metadata server.
-	char formated_uri[strlen(imss_uri)+2];
-	sprintf(formated_uri, "0 %s%c", imss_uri, '\0');
-	size_t formated_uri_length = strlen(formated_uri);
 
-    //Discover the metadata server that handles the IMSS instance.
-    uint32_t m_srv = discover_stat_srv(imss_uri);
+	//Formated imss uri to be sent to the metadata server.
+	char formated_uri[REQUEST_SIZE];
+	sprintf(formated_uri, "0 %s%c", imss_uri, '\0');
+
+	//Discover the metadata server that handles the IMSS instance.
+	uint32_t m_srv = discover_stat_srv(imss_uri);
+
+	if (send_stream(ucp_worker_client, stat_client[m_srv], (char *) &stat_ids[m_srv], sizeof(uint32_t)) < 0)
+	{
+		perror("ERRIMSS_STAT_HELLO");
+		return -1;
+	}
+
+	char mode[] = "GET";
+	if (send_stream(ucp_worker_client, stat_client[m_srv], mode, MODE_SIZE) < 0)
+	{
+		fprintf(stderr, "ERRIMSS_IMSS_REQ\n");
+		return -1;
+	}
 
 	//Send the request.
-	if (  comm_send(stat_client[m_srv], formated_uri, formated_uri_length, 0) != formated_uri_length)
+	if (send_stream(ucp_worker_client, stat_client[m_srv], formated_uri, REQUEST_SIZE) < 0)
 	{
 		fprintf(stderr, "ERRIMSS_IMSS_REQ\n");
 		return -1;
 	}
 
 	//Receive the associated structure.
-	return recv_dynamic_struct(stat_client[m_srv], imss_info_, IMSS_INFO);
+	char res[RESPONSE_SIZE];
+	ret = recv_dynamic_stream(ucp_worker_client, stat_client[m_srv], (char *)imss_info_, IMSS_INFO);
+	if (ret < sizeof(imss_info))
+		return 0;
+	return 1;
 }
 
 //Method providing the URI of the attached IMSS instance.
-char *
-get_deployed()
-{
-    if (att_deployment[0] != '\0')
-    {
-        char * att_dep_uri = (char *) malloc(URI_ * sizeof(char));
+char * get_deployed() {
+	if (att_deployment[0] != '\0')
+	{
+		char * att_dep_uri = (char *) malloc(URI_ * sizeof(char));
+		strcpy(att_dep_uri, att_deployment);
+		return att_dep_uri;
+	}
 
-        strcpy(att_dep_uri, att_deployment);
-
-        return att_dep_uri;
-    }
-
-    return NULL;
+	return NULL;
 }
 
 //Method providing the URI of the instance deployed in some endpoint.
-char *
-get_deployed(char * endpoint)
-{
-	//Context used for the request.
-	void * probe_ctx;
-	//Socket used for the request.
-	void * probe_socket;
-
-	if ((probe_ctx = comm_ctx_new()) == NULL)
-	{
-		perror("ERRIMSS_GETDEPLOYED_CTXCREATE");
-		return NULL;
-	}
-
-	if ((probe_socket = comm_socket(probe_ctx, ZMQ_DEALER)) == NULL)
-	{
-		perror("ERRIMSS_GETDEPLOYED_SOCKETCRT");
-		return NULL;
-	}
-
-    int32_t ident_ = 9999999;
-    //Set communication id.
-    if (comm_setsockopt(probe_socket, ZMQ_IDENTITY, &ident_, sizeof(int32_t)) == -1)
-    {
-        perror("ERRIMSS_GETDEPLOYED_SETIDEN");
-        return NULL;
-    }
-
-	//uint32_t timeout = 1000;
-	uint32_t timeout = -1;
-	//Set a timeout to receive the requested URI.
-	if (comm_setsockopt(probe_socket, ZMQ_RCVTIMEO, &timeout, sizeof(uint32_t)) == -1)
-	{
-		perror("ERRIMSS_GETDEPLOYED_SETRCVTIMEO");
-		return NULL;
-	}
-
-	//Connection address.
-	char addr_[LINE_LENGTH]; 
-	
-	sprintf(addr_, "tcp://%s", endpoint);
-	//sprintf(addr_, "inproc://kk-%s", endpoint);
-	//Connect to the specified endpoint.
-	if (comm_connect(probe_socket, (const char *) addr_) == -1)
-	{
-		perror("ERRIMSS_GETDEPLOYED_CONNECT");
-		return NULL;
-	}
-
-	char who_request[16];
-	sprintf(who_request, "%d blabla", WHO);
-	size_t who_request_length = strlen(who_request);
-
-	//printf("REQUEST SENT: %s (%lu)\n", who_request, who_request_length);
-
-	//Send the request.
-	if (comm_send(probe_socket, who_request, who_request_length, 0) != who_request_length)
-	{
-		fprintf(stderr, "ERRIMSS_GETDEPLOYED_REQ\n");
-		return NULL;
-	}
-
-	char * deployed_uri = (char *) malloc(URI_ * sizeof(char));
-	if (comm_recv(probe_socket, deployed_uri, URI_, 0) == -1)
-	{
-	if (errno != EAGAIN)
-	    fprintf(stderr, "ERRIMSS_GETDEPLOYED_RESP\n");
-
-		return NULL;
-	}
-
-	comm_close(probe_socket);
-	comm_ctx_destroy(probe_ctx);
-
-	return deployed_uri;
+char * get_deployed(char * endpoint) {
+	return endpoint;
 }
 
 
@@ -1144,10 +1037,10 @@ get_deployed(char * endpoint)
 //Method creating a dataset and the environment enabling READ or WRITE operations over it.
 int32_t
 create_dataset(char *  dataset_uri,
-	       char *  policy,
-	       int32_t num_data_elem,
-	       int32_t data_elem_size,
-	       int32_t repl_factor)
+		char *  policy,
+		int32_t num_data_elem,
+		int32_t data_elem_size,
+		int32_t repl_factor)
 {	
 
 	curr_imss = g_array_index(imssd, imss, curr_dataset.imss_d);
@@ -1162,7 +1055,7 @@ create_dataset(char *  dataset_uri,
 		fprintf(stderr, "ERRIMSS_CRTDATASET_BADREPLFACTOR\n");
 		return -EINVAL;
 	}
-	
+
 	int32_t associated_imss_indx;
 	//Check if the IMSS storing the dataset exists within the clients session.
 	if ((associated_imss_indx = imss_check(dataset_uri)) == -1)
@@ -1176,13 +1069,10 @@ create_dataset(char *  dataset_uri,
 
 	dataset_info new_dataset;
 
-
-
-
 	//Dataset metadata request.
 	if (stat_dataset(dataset_uri, &new_dataset))
 	{
-		fprintf(stderr, "ERRIMSS_CREATEDATASET_ALREADYEXISTS\n");
+		//fprintf(stderr, "ERRIMSS_CREATEDATASET_ALREADYEXISTS\n");
 		return -EEXIST;
 	}
 
@@ -1195,9 +1085,9 @@ create_dataset(char *  dataset_uri,
 	new_dataset.local_conn 		= associated_imss.conns.matching_server;
 	new_dataset.repl_factor		= repl_factor;
 	new_dataset.size 			= 0;
-	
+
 	new_dataset.n_servers		= curr_imss.info.num_storages;
-	
+
 	//*****NEXT LINE NEED FOR DIFERENT POLICIES TO WORK IN DISTRIBUTED*****//
 	strcpy(new_dataset.original_name, dataset_uri);
 	//*****BEFORE LINE NEED FOR DIFERENT POLICIES TO WORK IN DISTRIBUTED*****//
@@ -1211,7 +1101,7 @@ create_dataset(char *  dataset_uri,
 		uint32_t info_size = new_dataset.num_data_elem * sizeof(uint16_t);
 
 		/*new_dataset.data_locations = (uint16_t *) malloc(info_size);
-		memset(new_dataset.data_locations, 0, info_size);*/
+		  memset(new_dataset.data_locations, 0, info_size);*/
 		new_dataset.data_locations = (uint16_t *) calloc(info_size,sizeof(uint16_t));
 
 		//Specify that the created dataset is a LOCAL one.
@@ -1223,21 +1113,33 @@ create_dataset(char *  dataset_uri,
 	else
 		new_dataset.type = 'D';
 
-    //Discover the metadata server that handle the new dataset.
-    uint32_t m_srv = discover_stat_srv(new_dataset.uri_);
+	//Discover the metadata server that handle the new dataset.
+	uint32_t m_srv = discover_stat_srv(new_dataset.uri_);
 
-	char formated_uri[REQ_MSG]={0};
+	if (send_stream(ucp_worker_client, stat_client[m_srv], (char *) &stat_ids[m_srv], sizeof(uint32_t)) < 0)
+	{
+		perror("ERRIMSS_STAT_HELLO");
+		return -1;
+	}
+
+	char mode[] = "SET";
+	if (send_stream(ucp_worker_client, stat_client[m_srv], mode, MODE_SIZE) < 0)
+	{
+		perror("ERRIMSS_STAT_HELLO");
+		return -1;
+	}
+
+	char formated_uri[REQUEST_SIZE];
 	sprintf(formated_uri, "%lu %s", msg_size, new_dataset.uri_);
 	//Send the dataset URI associated to the dataset metadata structure to be sent.
-	if (comm_send(stat_client[m_srv], formated_uri, REQ_MSG, ZMQ_SNDMORE) < 0)
+	if (send_stream(ucp_worker_client, stat_client[m_srv], formated_uri, REQUEST_SIZE) < 0) // SNDMORE
 	{
 		perror("ERRIMSS_DATASET_SNDURI");
 		return -1;
 	}
 
 	//Send the new dataset metadata structure to the metadata server entity.
-	if (send_dynamic_struct(stat_client[m_srv], (void *) &new_dataset, DATASET_INFO) == -1)
-
+	if (send_dynamic_stream(ucp_worker_client, stat_client[m_srv], (void *) &new_dataset, DATASET_INFO) < 0)
 		return -1;
 
 	//Initialize dataset fields monitoring the dataset itself if it is a LOCAL one.
@@ -1249,17 +1151,17 @@ create_dataset(char *  dataset_uri,
 		//Specific blocks written by the client.
 
 		/*new_dataset.blocks_written = (uint32_t *) malloc(new_dataset.num_data_elem*sizeof(uint32_t));
-		memset(new_dataset.blocks_written, 0, new_dataset.num_data_elem*sizeof(uint32_t));*/
+		  memset(new_dataset.blocks_written, 0, new_dataset.num_data_elem*sizeof(uint32_t));*/
 
 		new_dataset.blocks_written = (uint32_t *) calloc(new_dataset.num_data_elem, sizeof(uint32_t));
 	}
 
-//	//Set the specified policy.
-//	if (set_policy(&new_dataset) == -1)
-//	{
-//		perror("ERRIMSS_DATASET_SETPLCY");
-//		return -1;
-//	}
+	//	//Set the specified policy.
+	//	if (set_policy(&new_dataset) == -1)
+	//	{
+	//		perror("ERRIMSS_DATASET_SETPLCY");
+	//		return -1;
+	//	}
 
 	//Add the created struture into the underlying IMSSs.
 	return (GInsert (&datasetd_pos, &datasetd_max_size, (char *) &new_dataset, datasetd, free_datasetd));
@@ -1290,26 +1192,26 @@ open_dataset(char * dataset_uri)
 	switch (stat_dataset_res)
 	{
 		case 0:
-		{
-			fprintf(stderr, "ERRIMSS_OPENDATASET_NOTEXISTS\n");
-			return -1;
-		}
-		case 2:
-		{
-			if (new_dataset.local_conn != -2)
 			{
-				fprintf(stderr, "ERRIMSS_OPENDATASET_ALREADYSTORED\n");
+				fprintf(stderr, "ERRIMSS_OPENDATASET_NOTEXISTS\n");
 				return -1;
 			}
+		case 2:
+			{
+				if (new_dataset.local_conn != -2)
+				{
+					fprintf(stderr, "ERRIMSS_OPENDATASET_ALREADYSTORED\n");
+					return -1;
+				}
 
-			not_initialized = 1;
+				not_initialized = 1;
 
-			break;
-		}
+				break;
+			}
 		case -1:
-		{
-			return -1;
-		}
+			{
+				return -1;
+			}
 	}
 
 	//Assign the associated IMSS descriptor to the new dataset structure.
@@ -1324,17 +1226,17 @@ open_dataset(char * dataset_uri)
 		*(new_dataset.num_blocks_written) = 0;
 		//Specific blocks written by the client.
 		/*new_dataset.blocks_written = (uint32_t *) malloc(new_dataset.num_data_elem*sizeof(uint32_t));
-		memset(new_dataset.blocks_written, '\0', new_dataset.num_data_elem*sizeof(uint32_t));*/
+		  memset(new_dataset.blocks_written, '\0', new_dataset.num_data_elem*sizeof(uint32_t));*/
 
 		new_dataset.blocks_written = (uint32_t *) calloc(new_dataset.num_data_elem, sizeof(uint32_t));
 	}
 
-//	//Set the specified policy.
-//	if (set_policy(&new_dataset) == -1)
-//	{
-//		perror("ERRIMSS_DATASET_SETPLCY");
-//		return -1;
-//	}
+	//	//Set the specified policy.
+	//	if (set_policy(&new_dataset) == -1)
+	//	{
+	//		perror("ERRIMSS_DATASET_SETPLCY");
+	//		return -1;
+	//	}
 
 	//If the struct was found within the vector but uninitialized, once updated, store it in the same position.
 	if (not_initialized)
@@ -1359,21 +1261,34 @@ release_dataset(int32_t dataset_id)
 		fprintf(stderr, "ERRIMSS_RELDATASET_BADDESCRIPTOR\n");
 		return -1;
 	}
-	
+
 	//Dataset to be released.
 	dataset_info release_dataset = g_array_index(datasetd, dataset_info, dataset_id);
 
 	//If the dataset is a LOCAL one, the position of the data elements must be updated.
 	if (!strcmp(release_dataset.policy, "LOCAL"))
 	{
-        //Discover the metadata server that handles the dataset.
-        uint32_t m_srv = discover_stat_srv(release_dataset.uri_);
-        
+		//Discover the metadata server that handles the dataset.
+		uint32_t m_srv = discover_stat_srv(release_dataset.uri_);
+
+		if (send_stream(ucp_worker_client, stat_client[m_srv], (char *) &stat_ids[m_srv], sizeof(uint32_t)) < 0)
+		{
+			perror("ERRIMSS_STAT_HELLO");
+			return -1;
+		}
+
+		char mode[] = "SET";
+		if (send_stream(ucp_worker_client, stat_client[m_srv], mode, MODE_SIZE) < 0)
+		{
+			perror("ERRIMSS_STAT_HELLO");
+			return -1;
+		}
+
 		//Formated dataset uri to be sent to the metadata server.
-		char formated_uri[REQ_MSG];
+		char formated_uri[REQUEST_SIZE];
 		sprintf(formated_uri, "0 %s", release_dataset.uri_);
 		//Send the LOCAL dataset positions update.
-		if (comm_send(stat_client[m_srv], formated_uri, REQ_MSG, ZMQ_SNDMORE) < 0)
+		if (send_stream(ucp_worker_client, stat_client[m_srv], formated_uri, REQUEST_SIZE) < 0) // SNDMORE
 		{
 			perror("ERRIMSS_RELDATASET_SENDURI");
 			return -1;
@@ -1385,7 +1300,7 @@ release_dataset(int32_t dataset_id)
 		uint64_t update_msg_size = 8 + blocks_written_size;
 
 		/*char update_msg[update_msg_size];
-		memset(update_msg, '\0', update_msg_size);*/
+		  memset(update_msg, '\0', update_msg_size);*/
 		char * update_msg = (char *) calloc(update_msg_size,sizeof(char));
 
 		uint16_t update_value = (release_dataset.local_conn + 1);
@@ -1393,45 +1308,41 @@ release_dataset(int32_t dataset_id)
 		memcpy((update_msg+blocks_written_size), &update_value, sizeof(uint16_t));
 
 		//Send the list of servers storing the data elements.
-		if (comm_send(stat_client[m_srv], update_msg, update_msg_size, 0) < 0)
+		char mode2[] = "SET";
+		if (send_stream(ucp_worker_client, stat_client[m_srv], mode2, MODE_SIZE) < 0)
+		{
+			perror("ERRIMSS_STAT_HELLO");
+			return -1;
+		}
+
+		if (send_stream(ucp_worker_client, stat_client[m_srv], update_msg, REQUEST_SIZE) < 0)
 		{
 			perror("ERRIMSS_RELDATASET_SENDPOSITIONS");
 			return -1;
 		}
 
-		zmq_msg_t update_result;
+		char update_result[RESPONSE_SIZE];
 
-		if (zmq_msg_init(&update_result) != 0)
-		{
-			perror("ERRIMSS_RELDATASET_INITUPDATERES");
-			return -1;
-		}
-
-		if (comm_msg_recv(&update_result, stat_client[m_srv], 0) == -1)
+		if (recv_stream(ucp_worker_client, stat_client[m_srv], update_result, RESPONSE_SIZE) < 0)
 		{
 			perror("ERRIMSS_RELDATASET_RECVUPDATERES");
 			return -1;
 		}
 
-		if (strcmp((char *) comm_msg_data(&update_result), "UPDATED!"))
+		if (strcmp(update_result, "UPDATED!"))
 		{
 			perror("ERRIMSS_RELDATASET_UPDATE");
 			return -1;
 		}
 
-		comm_msg_close(&update_result);
-
 		//Free the data locations vector.
 		free(release_dataset.data_locations);
 		//Freem the monitoring vector.
 		free(release_dataset.blocks_written);
-
 		free(release_dataset.num_blocks_written);
-
 		free(update_msg);
-
 	}
-    
+
 	g_array_remove_index(datasetd, dataset_id);
 	g_array_insert_val(datasetd, dataset_id, empty_dataset);
 	//Add the index to the set of free positions within the dataset vector.
@@ -1444,43 +1355,41 @@ release_dataset(int32_t dataset_id)
 int32_t
 delete_dataset(const char * 	    dataset_uri)
 {
-	
 	//Formated dataset uri to be sent to the metadata server.
-	char formated_uri[REQ_MSG];
+	char formated_uri[REQUEST_SIZE];
 	sprintf(formated_uri, "4 %s", dataset_uri); // delete
 
 	//Discover the metadata server that handles the dataset.
 	uint32_t m_srv = discover_stat_srv((char *) dataset_uri);
 
+	if (send_stream(ucp_worker_client, stat_client[m_srv], (char *) &stat_ids[m_srv], sizeof(uint32_t)) < 0)
+	{
+		perror("ERRIMSS_STAT_HELLO");
+		return -1;
+	}
+
+	char mode[] = "GET";
+	if (send_stream(ucp_worker_client, stat_client[m_srv], mode, MODE_SIZE) < 0)
+	{
+		perror("ERRIMSS_STAT_HELLO");
+		return -1;
+	}
+
 	//Send the request.
-	if (comm_send(stat_client[m_srv], formated_uri, REQ_MSG, 0) < 0)
+	if (send_stream(ucp_worker_client, stat_client[m_srv], formated_uri, REQUEST_SIZE) < 0)
 	{
 		perror("ERRIMSS_DATASET_REQ");
 		return -1;
 	}
 
 
-	zmq_msg_t msg_struct;
-
-	if (zmq_msg_init(&msg_struct) != 0)
-	{
-		perror("ERRIMSS_RECVDYNAMSTRUCT_INIT");
-		return -1;
-	}
-
-	if (comm_msg_recv(&msg_struct, stat_client[m_srv], 0) == -1)
+	char result[RESPONSE_SIZE];
+	if (recv_stream(ucp_worker_client, stat_client[m_srv], result, RESPONSE_SIZE) < 0)
 	{
 		perror("ERRIMSS_RECVDYNAMSTRUCT_RECV");
 		return -1;
 	}
-	
 
-	//Actual message content plus message size.
-
-	unsigned char * msg_data = (unsigned char *) comm_msg_data(&msg_struct);
-
-	comm_msg_close(&msg_struct);
-	
 	return 1;
 }
 
@@ -1493,10 +1402,10 @@ rename_dataset_metadata_dir_dir(char * old_dir, char * rdir_dest){
 	for (int32_t i = 0; i < datasetd->len; i++)
 	{
 		dataset_info_ = g_array_index(datasetd, dataset_info, i);
-		
+
 		if(strstr(dataset_info_.uri_, old_dir) != NULL) {
 			char * path = dataset_info_.uri_;
-			
+
 			size_t len = strlen(old_dir);
 			if (len > 0) {
 				char *p = path;
@@ -1509,51 +1418,48 @@ rename_dataset_metadata_dir_dir(char * old_dir, char * rdir_dest){
 			strcpy(new_path, rdir_dest);
 			strcat(new_path,"/");
 			strcat(new_path,path);
-			
+
 			strcpy(dataset_info_.uri_,new_path);
 			g_array_remove_index(datasetd,i);
 			g_array_insert_val(datasetd,i,dataset_info_);
 		}
-		
+
 	}
 
 	/*********RENAME METADATA*******/
 	//Formated dataset uri to be sent to the metadata server.
-	char formated_uri[REQ_MSG];
+	char formated_uri[REQUEST_SIZE];
 	sprintf(formated_uri, "6 %s %s", old_dir,rdir_dest);
 
 	//Discover the metadata server that handles the dataset.
 	uint32_t m_srv = discover_stat_srv((char *) old_dir);
 
+	if (send_stream(ucp_worker_client, stat_client[m_srv], (char *) &stat_ids[m_srv], sizeof(uint32_t)) < 0)
+	{
+		perror("ERRIMSS_STAT_HELLO");
+		return -1;
+	}
+
+	char mode[] = "GET";
+	if (send_stream(ucp_worker_client, stat_client[m_srv], mode, MODE_SIZE) < 0)
+	{
+		perror("ERRIMSS_STAT_HELLO");
+		return -1;
+	}
+
 	//Send the request.
-	if (comm_send(stat_client[m_srv], formated_uri, REQ_MSG, 0) < 0)
+	if (send_stream(ucp_worker_client, stat_client[m_srv], formated_uri, REQUEST_SIZE) < 0)
 	{
 		perror("ERRIMSS_DATASET_REQ");
 		return -1;
 	}
 
-
-	zmq_msg_t msg_struct;
-
-	if (zmq_msg_init(&msg_struct) != 0)
-	{
-		perror("ERRIMSS_RECVDYNAMSTRUCT_INIT");
-		return -1;
-	}
-
-	if (comm_msg_recv(&msg_struct, stat_client[m_srv], 0) == -1)
+	char result[RESPONSE_SIZE];
+	if (recv_stream(ucp_worker_client, stat_client[m_srv], result, RESPONSE_SIZE) < 0)
 	{
 		perror("ERRIMSS_RECVDYNAMSTRUCT_RECV");
 		return -1;
 	}
-	
-
-	//Actual message content plus message size.
-
-	unsigned char * msg_data = (unsigned char *) comm_msg_data(&msg_struct);
-
-	comm_msg_close(&msg_struct);
-
 
 	return 0;
 }
@@ -1572,47 +1478,42 @@ rename_dataset_metadata(char * old_dataset_uri, char * new_dataset_uri){
 			g_array_remove_index(datasetd,i);
 			g_array_insert_val(datasetd,i,dataset_info_);
 		}
-		
 	}
 
 	/*********RENAME METADATA*******/
 	//Formated dataset uri to be sent to the metadata server.
-	char formated_uri[REQ_MSG];
+	char formated_uri[REQUEST_SIZE];
 	sprintf(formated_uri, "5 %s %s", old_dataset_uri,new_dataset_uri);
 
 	//Discover the metadata server that handles the dataset.
 	uint32_t m_srv = discover_stat_srv((char *) old_dataset_uri);
 
+	if (send_stream(ucp_worker_client, stat_client[m_srv], (char *) &stat_ids[m_srv], sizeof(uint32_t)) < 0)
+	{
+		perror("ERRIMSS_STAT_HELLO");
+		return -1;
+	}
+
+	char mode[] = "GET";
+	if (send_stream(ucp_worker_client, stat_client[m_srv], mode, MODE_SIZE) < 0)
+	{
+		perror("ERRIMSS_STAT_HELLO");
+		return -1;
+	}
+
 	//Send the request.
-	if (comm_send(stat_client[m_srv], formated_uri, REQ_MSG, 0) < 0)
+	if (send_stream(ucp_worker_client, stat_client[m_srv], formated_uri, REQUEST_SIZE) < 0)
 	{
 		perror("ERRIMSS_DATASET_REQ");
 		return -1;
 	}
 
-
-	zmq_msg_t msg_struct;
-
-	if (zmq_msg_init(&msg_struct) != 0)
-	{
-		perror("ERRIMSS_RECVDYNAMSTRUCT_INIT");
-		return -1;
-	}
-
-	if (comm_msg_recv(&msg_struct, stat_client[m_srv], 0) == -1)
+	char result[RESPONSE_SIZE];
+	if (recv_stream(ucp_worker_client, stat_client[m_srv], result, RESPONSE_SIZE) < 0)
 	{
 		perror("ERRIMSS_RECVDYNAMSTRUCT_RECV");
 		return -1;
 	}
-	
-
-	//Actual message content plus message size.
-
-	unsigned char * msg_data = (unsigned char *) comm_msg_data(&msg_struct);
-
-	comm_msg_close(&msg_struct);
-
-
 
 	return 0;
 }
@@ -1620,33 +1521,49 @@ rename_dataset_metadata(char * old_dataset_uri, char * new_dataset_uri){
 //Method retrieving information related to a certain dataset.
 int32_t
 stat_dataset(const char * 	    dataset_uri,
-	     dataset_info * dataset_info_)
+		dataset_info * dataset_info_)
 {
+	int ret = 0;
 	//Search for the requested dataset in the local vector.
 	for (int32_t i = 0; i < datasetd->len; i++)
 	{
 		*dataset_info_ = g_array_index(datasetd, dataset_info, i);
 		if (!strcmp(dataset_uri, dataset_info_->uri_))
-		
 			return 2;
 	}
 
 	//Formated dataset uri to be sent to the metadata server.
-	char formated_uri[REQ_MSG];
+	char formated_uri[REQUEST_SIZE];
 	sprintf(formated_uri, "0 %s", dataset_uri);
 
 	//Discover the metadata server that handles the dataset.
 	uint32_t m_srv = discover_stat_srv((char *) dataset_uri);
 
+	if (send_stream(ucp_worker_client, stat_client[m_srv], (char *) &stat_ids[m_srv], sizeof(uint32_t)) < 0)
+	{
+		perror("ERRIMSS_STAT_HELLO");
+		return -1;
+	}
+
+	char mode[] = "GET";
+	if (send_stream(ucp_worker_client, stat_client[m_srv], mode, MODE_SIZE) < 0)
+	{
+		perror("ERRIMSS_STAT_HELLO");
+		return -1;
+	}
+
 	//Send the request.
-	if (comm_send(stat_client[m_srv], formated_uri, REQ_MSG, 0) < 0)
+	if (send_stream(ucp_worker_client, stat_client[m_srv], formated_uri, REQUEST_SIZE) < 0)
 	{
 		perror("ERRIMSS_DATASET_REQ");
 		return -1;
 	}
 
 	//Receive the associated structure.
-	return recv_dynamic_struct(stat_client[m_srv], dataset_info_, DATASET_INFO);
+	ret = recv_dynamic_stream(ucp_worker_client, stat_client[m_srv], dataset_info_, DATASET_INFO);
+	if (ret < sizeof(dataset_info))
+		return 0;
+	return 1;
 }
 
 /*
@@ -1657,7 +1574,7 @@ unsigned char * get_dataset(char * dataset_uri, uint64_t * buff_length);
 //Method storing a whole dataset parallelizing the procedure.
 int32_t set_dataset(char * dataset_uri, unsigned char * buffer, uint64_t offset)
 {}
-*/
+ */
 
 
 
@@ -1669,8 +1586,8 @@ int32_t set_dataset(char * dataset_uri, unsigned char * buffer, uint64_t offset)
 //Method retrieving the location of a specific data object.
 int32_t
 get_data_location(int32_t dataset_id,
-		  int32_t data_id,
-		  int32_t op_type)
+		int32_t data_id,
+		int32_t op_type)
 {
 	//If the current dataset policy was not established yet.
 
@@ -1682,7 +1599,6 @@ get_data_location(int32_t dataset_id,
 		curr_imss = g_array_index(imssd, imss, curr_dataset.imss_d);
 
 		//Set the corresponding.
-
 		if (set_policy(&curr_dataset) == -1)
 		{
 			return -1;
@@ -1705,7 +1621,7 @@ get_data_location(int32_t dataset_id,
 //Method renaming a dir_dir
 int32_t
 rename_dataset_srv_worker_dir_dir(char * old_dir, char * rdir_dest,
-int32_t 	 dataset_id,	 int32_t 	 data_id)
+		int32_t 	 dataset_id,	 int32_t 	 data_id)
 {
 	int32_t n_server;
 	//Server containing the corresponding data to be retrieved.
@@ -1729,21 +1645,18 @@ int32_t 	 dataset_id,	 int32_t 	 data_id)
 		if (repl_servers[i] == curr_dataset.local_conn)
 		{
 			//Move the local connection to the first one to be requested.
-
 			int32_t aux_conn = repl_servers[0];
-
 			repl_servers[0] = repl_servers[i];
-
 			repl_servers[i] = aux_conn;
 		}
 	}
 
-	char key_[KEY];
+	char key_[REQUEST_SIZE];
 	//Key related to the requested data element.
 	sprintf(key_, "6 %s %s",  old_dir, rdir_dest);
 
 	int key_length = strlen(key_)+1;
-	char key[key_length];
+	char key[REQUEST_SIZE];
 	memcpy((void *) key, (void *) key_, key_length);
 	key[key_length-1] = '\0';
 
@@ -1751,53 +1664,52 @@ int32_t 	 dataset_id,	 int32_t 	 data_id)
 	//for (int32_t i = 0; i < curr_dataset.repl_factor; i++)
 	for (int32_t i = 0; i < curr_imss.info.num_storages; i++)
 	{
+		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[i], (char *) &curr_imss.conns.id[i], sizeof(uint32_t)) < 0)
+		{
+			perror("ERRIMSS_STAT_HELLO");
+			return -1;
+		}
+
 		//Send read request message specifying the block URI.
-		
-		//if (comm_send(curr_imss.conns.sockets_[repl_servers[i]], key, key_length, 0) != key_length)
-		if (comm_send(curr_imss.conns.sockets_[i], key, key_length, 0) != key_length)
+		char mode[] = "GET";
+		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[i], mode, MODE_SIZE) < 0)
+		{
+			perror("ERRIMSS_STAT_HELLO");
+			return -1;
+		}
+
+		//if (comm_send(curr_imss.conns.eps_[repl_servers[i]], key, key_length, 0) != key_length)
+		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[i], key, REQUEST_SIZE) < 0)
 		{
 			perror("ERRIMSS_GETDATA_REQ");
 			return -1;
 		}	
-		zmq_msg_t msg_struct;
 
-		if (zmq_msg_init(&msg_struct) != 0)
-		{
-			perror("ERRIMSS_RECVDYNAMSTRUCT_INIT");
-			return -1;
-		}
-		if (comm_msg_recv(&msg_struct, curr_imss.conns.sockets_[i], 0) == -1)
+		char result[RESPONSE_SIZE];
+		if (recv_stream(ucp_worker_client, curr_imss.conns.eps_[i], result, RESPONSE_SIZE) < 0)
 		{
 			perror("ERRIMSS_RECVDYNAMSTRUCT_RECV");
 			return -1;
 		}
 		//Important to update
 		//strcpy(curr_dataset.uri_,new_dataset_uri);
+	}
 
-		//Actual message content plus message size.
-
-		unsigned char * msg_data = (unsigned char *) comm_msg_data(&msg_struct);
-
-		comm_msg_close(&msg_struct);		
-		}
-
-	return -1;
+	return 0;
 }
 
 //Method renaming a dataset.
 int32_t
 rename_dataset_srv_worker(char * old_dataset_uri, char * new_dataset_uri,
-int32_t 	 dataset_id,	 int32_t 	 data_id)
+		int32_t 	 dataset_id,	 int32_t 	 data_id)
 {
 	int32_t n_server;
 	//Server containing the corresponding data to be retrieved.
 	if ((n_server = get_data_location(dataset_id, data_id, GET)) == -1)
-
 		return -1;
 
 	//Servers that the data block is going to be requested to.
 	int32_t repl_servers[curr_dataset.repl_factor];
-
 	int32_t curr_imss_storages = curr_imss.info.num_storages;
 
 	//Retrieve the corresponding connections to the previous servers.
@@ -1805,28 +1717,24 @@ int32_t 	 dataset_id,	 int32_t 	 data_id)
 	{
 		//Server storing the current data block.
 		uint32_t n_server_ = (n_server + i*(curr_imss_storages/curr_dataset.repl_factor)) % curr_imss_storages;
-
 		repl_servers[i] = n_server_;
 
 		//Check if the current connection is the local one (if there is).
 		if (repl_servers[i] == curr_dataset.local_conn)
 		{
 			//Move the local connection to the first one to be requested.
-
 			int32_t aux_conn = repl_servers[0];
-
 			repl_servers[0] = repl_servers[i];
-
 			repl_servers[i] = aux_conn;
 		}
 	}
 
-	char key_[KEY];
+	char key_[REQUEST_SIZE];
 	//Key related to the requested data element.
 	sprintf(key_, "5 %s %s",  old_dataset_uri, new_dataset_uri);
 
 	int key_length = strlen(key_)+1;
-	char key[key_length];
+	char key[REQUEST_SIZE];
 	memcpy((void *) key, (void *) key_, key_length);
 	key[key_length-1] = '\0';
 
@@ -1836,58 +1744,59 @@ int32_t 	 dataset_id,	 int32_t 	 data_id)
 		//printf("BLOCK %d ASKED TO %d SERVER with key: %s (%d)\n", data_id, repl_servers[i], key, key_length);
 
 		//Send read request message specifying the block URI.
-		//if (comm_send(curr_imss.conns.sockets_[repl_servers[i]], key, KEY, 0) < 0)
-		if (comm_send(curr_imss.conns.sockets_[repl_servers[i]], key, key_length, 0) != key_length)
+		//if (comm_send(curr_imss.conns.eps_[repl_servers[i]], key, KEY, 0) < 0)
+		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[repl_servers[i]], (char *) &curr_imss.conns.id[i], sizeof(uint32_t)) < 0)
+		{
+			perror("ERRIMSS_STAT_HELLO");
+			return -1;
+		}
+
+		char mode[] = "GET";
+		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[repl_servers[i]], mode, MODE_SIZE) < 0)
+		{
+			perror("ERRIMSS_STAT_HELLO");
+			return -1;
+		}
+
+		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[repl_servers[i]], key, REQUEST_SIZE) < 0)
 		{
 			perror("ERRIMSS_GETDATA_REQ");
 			return -1;
 		}	
-		zmq_msg_t msg_struct;
 
-		if (zmq_msg_init(&msg_struct) != 0)
-		{
-			perror("ERRIMSS_RECVDYNAMSTRUCT_INIT");
-			return -1;
-		}
-
-		if (comm_msg_recv(&msg_struct, curr_imss.conns.sockets_[repl_servers[i]], 0) == -1)
+		char result[RESPONSE_SIZE];
+		if (recv_stream(ucp_worker_client, curr_imss.conns.eps_[repl_servers[i]], result, RESPONSE_SIZE) < 0)
 		{
 			perror("ERRIMSS_RECVDYNAMSTRUCT_RECV");
 			return -1;
 		}
 		//Important to update
 		strcpy(curr_dataset.uri_,new_dataset_uri);
+	}
 
-		//Actual message content plus message size.
-
-		unsigned char * msg_data = (unsigned char *) comm_msg_data(&msg_struct);
-
-		comm_msg_close(&msg_struct);		
-		}
-
-	return -1;
+	return 0;
 }
 
 //Method storing a specific data element.
 int32_t
 writev_multiple(const char * buf, int32_t dataset_id,int64_t data_id,
- int64_t end_blk, int64_t start_offset, int64_t end_offset, int64_t IMSS_DATA_BSIZE, int64_t size)
+		int64_t end_blk, int64_t start_offset, int64_t end_offset, int64_t IMSS_DATA_BSIZE, int64_t size)
 {
-	
+
 	int32_t n_server;
 	//Server containing the corresponding data to be written.
 	if ((n_server = get_data_location(dataset_id, data_id, SET)) == -1) {
-        perror("ERRIMSS_GET_DATA_LOCATION");
+		perror("ERRIMSS_GET_DATA_LOCATION");
 		return -1;
 	}
 
-	char key_[KEY];
+	char key_[REQUEST_SIZE];
 	//Key related to the requested data element.
 	sprintf(key_, "%d %s$%ld %ld %ld %ld %ld %ld %ld", curr_dataset.data_entity_size, curr_dataset.uri_, data_id,
-	data_id, end_blk, start_offset, end_offset, IMSS_DATA_BSIZE, size);
+			data_id, end_blk, start_offset, end_offset, IMSS_DATA_BSIZE, size);
 
 	int key_length = strlen(key_)+1;
-	char key[key_length];
+	char key[REQUEST_SIZE];
 	memcpy((void *) key, (void *) key_, key_length);
 	key[key_length-1] = '\0';
 
@@ -1900,17 +1809,27 @@ writev_multiple(const char * buf, int32_t dataset_id,int64_t data_id,
 		uint32_t n_server_ = (n_server + i*(curr_imss_storages/curr_dataset.repl_factor)) % curr_imss_storages;
 
 		//printf("BLOCK %ld SENT TO %d SERVER with key: %s (%d)\n", data_id, n_server_, key, key_length);
+		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[n_server_], (char *) &curr_imss.conns.id[n_server_], sizeof(uint32_t)) < 0)
+		{
+			perror("ERRIMSS_STAT_HELLO");
+			return -1;
+		}
 
-
-		//if (comm_send(curr_imss.conns.sockets_[n_server_], key, KEY, ZMQ_SNDMORE) < 0)
-		if (comm_send(curr_imss.conns.sockets_[n_server_], key, key_length, ZMQ_SNDMORE) != key_length)
+		char mode[] = "SET";
+		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[n_server_], mode, MODE_SIZE) < 0)
+		{
+			perror("ERRIMSS_STAT_HELLO");
+			return -1;
+		}
+		//if (comm_send(curr_imss.conns.eps_[n_server_], key, KEY, ZMQ_SNDMORE) < 0)
+		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[n_server_], key, REQUEST_SIZE) < 0) //SNDMORE
 		{
 			perror("ERRIMSS_SETDATA_REQ");
 			return -1;
 		}
 
 
-		if (comm_send (curr_imss.conns.sockets_[n_server_], (const void *) buf, size, 0) != size)
+		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[n_server_], buf, size) < 0)
 		{
 			perror("ERRIMSS_SETDATA_SEND");
 			return -1;
@@ -1923,12 +1842,12 @@ writev_multiple(const char * buf, int32_t dataset_id,int64_t data_id,
 //Method retrieving multiple data
 int32_t
 readv_multiple(int32_t 	 dataset_id,
-	int32_t 	 curr_block,
-	 int32_t 	 end_block,
-	 unsigned char * buffer,
-	 uint64_t 	 BLOCKSIZE,
-	 int64_t    start_offset,
-	 int64_t	size)
+		int32_t 	 curr_block,
+		int32_t 	 end_block,
+		char * buffer,
+		uint64_t 	 BLOCKSIZE,
+		int64_t    start_offset,
+		int64_t	size)
 {
 	//printf("readv size=%d\n",size);
 	int32_t n_server;
@@ -1936,10 +1855,9 @@ readv_multiple(int32_t 	 dataset_id,
 	if ((n_server = get_data_location(dataset_id, curr_block, GET)) == -1)
 
 		return -1;
-	
+
 	//Servers that the data block is going to be requested to.
 	int32_t repl_servers[curr_dataset.repl_factor];
-
 	int32_t curr_imss_storages = curr_imss.info.num_storages;
 
 	//Retrieve the corresponding connections to the previous servers.
@@ -1947,47 +1865,55 @@ readv_multiple(int32_t 	 dataset_id,
 	{
 		//Server storing the current data block.
 		uint32_t n_server_ = (n_server + i*(curr_imss_storages/curr_dataset.repl_factor)) % curr_imss_storages;
-
 		repl_servers[i] = n_server_;
 
 		//Check if the current connection is the local one (if there is).
 		if (repl_servers[i] == curr_dataset.local_conn)
 		{
 			//Move the local connection to the first one to be requested.
-
 			int32_t aux_conn = repl_servers[0];
-
 			repl_servers[0] = repl_servers[i];
-
 			repl_servers[i] = aux_conn;
 		}
 	}
 
-	char key_[KEY];
+	char key_[REQUEST_SIZE];
 	//Key related to the requested data element.
-	
+
 	sprintf(key_, "8 %s$%d %d %ld %ld %ld",  curr_dataset.uri_, curr_block, end_block, BLOCKSIZE, start_offset, size);
 
 	int key_length = strlen(key_)+1;
-	char key[key_length];
+	char key[REQUEST_SIZE];
 	memcpy((void *) key, (void *) key_, key_length);
 	key[key_length-1] = '\0';
-	
+
 	//Request the concerned block to the involved servers.
 	for (int32_t i = 0; i < curr_dataset.repl_factor; i++)
 	{
 		//printf("BLOCK %d ASKED TO %d SERVER with key: %s (%d)\n", curr_block, repl_servers[i], key, key_length);
 
 		//Send read request message specifying the block URI.
-		//if (comm_send(curr_imss.conns.sockets_[repl_servers[i]], key, KEY, 0) < 0)
-		
-		if (comm_send(curr_imss.conns.sockets_[repl_servers[i]], key, key_length, 0) != key_length)
+		//if (comm_send(curr_imss.conns.eps_[repl_servers[i]], key, KEY, 0) < 0)
+		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[repl_servers[i]], (char *) &curr_imss.conns.id[repl_servers[i]], sizeof(uint32_t)) < 0)
+		{
+			perror("ERRIMSS_STAT_HELLO");
+			return -1;
+		}
+
+		char mode[] = "GET";
+		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[repl_servers[i]], mode, MODE_SIZE) < 0)
+		{
+			perror("ERRIMSS_STAT_HELLO");
+			return -1;
+		}
+
+		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[repl_servers[i]], key, REQUEST_SIZE) < 0)
 		{
 			perror("ERRIMSS_GETDATA_REQ");
 			return -1;
 		}
 		//Receive data related to the previous read request directly into the buffer.
-		if (comm_recv(curr_imss.conns.sockets_[repl_servers[i]], buffer, size, 0) == -1)
+		if (recv_stream(ucp_worker_client, curr_imss.conns.eps_[repl_servers[i]], buffer, size) < 0)
 		{
 			if (errno != EAGAIN)
 			{
@@ -2001,7 +1927,6 @@ readv_multiple(int32_t 	 dataset_id,
 		if (strncmp((const char *) buffer, "$ERRIMSS_NO_KEY_AVAIL$", 22)){
 			return 0;
 		}
-			
 	}
 
 	//fprintf(stderr, "ERRIMSS_GETDATA_UNAVAIL\n");
@@ -2013,15 +1938,15 @@ split_writev(void * th_argv)
 {
 	//Cast from generic pointer type to p_argv struct type pointer.
 	thread_argv * arguments = (thread_argv *) th_argv;
-	
+
 	int32_t n_server;
 
 
 	char key_[arguments->lenght_key + KEY];
 	//Key related to the requested data element.
 	sprintf(key_, "%d [OP]=2 %s %ld %ld %d %s", curr_dataset.data_entity_size, 
-	arguments->path, arguments->BLKSIZE, arguments->start_offset, 
-	arguments->stats_size, arguments->msg);
+			arguments->path, arguments->BLKSIZE, arguments->start_offset, 
+			arguments->stats_size, arguments->msg);
 
 	int key_length = strlen(key_)+1;
 	char key[key_length];
@@ -2037,16 +1962,25 @@ split_writev(void * th_argv)
 		uint32_t n_server_ = (arguments->n_server + i*(curr_imss_storages/curr_dataset.repl_factor)) % curr_imss_storages;
 
 		//printf("BLOCK %ld SENT TO %d SERVER with key: %s (%d)\n", data_id, n_server_, key, key_length);
+		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[n_server_], (char *) &curr_imss.conns.id[n_server_], sizeof(uint32_t)) < 0)
+		{
+			perror("ERRIMSS_STAT_HELLO");
+		}
 
+		char mode[] = "SET";
+		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[n_server_], mode, MODE_SIZE) < 0)
+		{
+			perror("ERRIMSS_STAT_HELLO");
+		}
 
-		//if (comm_send(curr_imss.conns.sockets_[n_server_], key, KEY, ZMQ_SNDMORE) < 0)
-		if (comm_send(curr_imss.conns.sockets_[n_server_], key, key_length, ZMQ_SNDMORE) != key_length)
+		//if (comm_send(curr_imss.conns.eps_[n_server_], key, KEY, ZMQ_SNDMORE) < 0)
+		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[n_server_], key, REQUEST_SIZE) < 0 ) //SNDMORE
 		{
 			perror("ERRIMSS_SETDATA_REQ");
 		}
 
 
-		if (comm_send (curr_imss.conns.sockets_[n_server_], arguments->buffer, arguments->size*arguments->BLKSIZE*KB, 0) != arguments->size*arguments->BLKSIZE*KB)
+		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[n_server_], arguments->buffer, arguments->size*arguments->BLKSIZE*KB) < 0)
 		{
 			perror("ERRIMSS_SETDATA_SEND");
 
@@ -2061,7 +1995,7 @@ split_readv(void * th_argv)
 {
 	//Cast from generic pointer type to p_argv struct type pointer.
 	thread_argv * arguments = (thread_argv *) th_argv;
-	
+
 	//Servers that the data block is going to be requested to.
 	int32_t repl_servers[curr_dataset.repl_factor];
 
@@ -2079,42 +2013,49 @@ split_readv(void * th_argv)
 		if (repl_servers[i] == curr_dataset.local_conn)
 		{
 			//Move the local connection to the first one to be requested.
-
 			int32_t aux_conn = repl_servers[0];
-
 			repl_servers[0] = repl_servers[i];
-
 			repl_servers[i] = aux_conn;
 		}
 	}
-//	printf("[CLIENT] [Split_readv]\n");
-	char key_[arguments->lenght_key + KEY];
+	//	printf("[CLIENT] [Split_readv]\n");
+	char key_[REQUEST_SIZE];
 	//Key related to the requested data element.
 	sprintf(key_, "9 %s %ld %ld %d %s",
-	arguments->path, arguments->BLKSIZE, arguments->start_offset, 
-	arguments->stats_size, arguments->msg);
+			arguments->path, arguments->BLKSIZE, arguments->start_offset, 
+			arguments->stats_size, arguments->msg);
 	int key_length = strlen(key_)+1;
-	char key[key_length];
+	char key[REQUEST_SIZE];
 	memcpy((void *) key, (void *) key_, key_length);
 	key[key_length-1] = '\0';
-	
+
 	//Request the concerned block to the involved servers.
 	for (int32_t i = 0; i < curr_dataset.repl_factor; i++)
 	{
 		//printf("BLOCK %d ASKED TO %d SERVER with key: %s (%d)\n", curr_block, repl_servers[i], key, key_length);
 
 		//Send read request message specifying the block URI.
-		//if (comm_send(curr_imss.conns.sockets_[repl_servers[i]], key, KEY, 0) < 0)
-		
-		if (comm_send(curr_imss.conns.sockets_[repl_servers[i]], key, key_length, 0) != key_length)
+		//if (comm_send(curr_imss.conns.eps_[repl_servers[i]], key, KEY, 0) < 0)
+		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[repl_servers[i]], (char *) &curr_imss.conns.id[repl_servers[i]], sizeof(uint32_t)) < 0)
+		{
+			perror("ERRIMSS_STAT_HELLO");
+		}
+
+		char mode[] = "GET";
+		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[repl_servers[i]], mode, MODE_SIZE) < 0)
+		{
+			perror("ERRIMSS_STAT_HELLO");
+		}
+
+		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[repl_servers[i]], key, REQUEST_SIZE) < 0)
 		{
 			perror("ERRIMSS_GETDATA_REQ");
 		}
 		struct timeval start, end;
 		/*long delta_us;
-		gettimeofday(&start, NULL);*/
+		  gettimeofday(&start, NULL);*/
 		//Receive data related to the previous read request directly into the buffer.
-		if (comm_recv(curr_imss.conns.sockets_[repl_servers[i]], arguments->buffer, arguments->size*arguments->BLKSIZE*KB, 0) == -1)
+		if (recv_stream(ucp_worker_client, curr_imss.conns.eps_[repl_servers[i]], arguments->buffer, arguments->size*arguments->BLKSIZE*KB) < 0)
 		{
 			if (errno != EAGAIN)
 			{
@@ -2125,102 +2066,102 @@ split_readv(void * th_argv)
 		}
 		gettimeofday(&end, NULL);
 		/*delta_us = (long) (end.tv_usec - start.tv_usec);
-		printf("\n[CLIENT] [S_SPLIT_READ] recv data delta_us=%6.3f\n",(delta_us/1000.0F));*/
+		  printf("\n[CLIENT] [S_SPLIT_READ] recv data delta_us=%6.3f\n",(delta_us/1000.0F));*/
 		//Check if the requested key was correctly retrieved.
 		if (strncmp((const char *) arguments->buffer, "$ERRIMSS_NO_KEY_AVAIL$", 22)){
 		}
-			
+
 	}
 	pthread_exit(NULL);
 }
 //Method retrieving multiple data from a specific server
 /*int32_t
-split_readv(int32_t n_server,
-			char * path, 
-			char * msg, 
-			unsigned char * buffer, 
-			int32_t size, 
-			uint64_t BLKSIZE,
-			int64_t    start_offset,
-			int    stats_size)
+  split_readv(int32_t n_server,
+  char * path, 
+  char * msg, 
+  unsigned char * buffer, 
+  int32_t size, 
+  uint64_t BLKSIZE,
+  int64_t    start_offset,
+  int    stats_size)
+  {
+  printf("n_server=%d msg=%s size=%d\n", n_server, msg, size);
+
+//Servers that the data block is going to be requested to.
+int32_t repl_servers[curr_dataset.repl_factor];
+
+int32_t curr_imss_storages = curr_imss.info.num_storages;
+
+//Retrieve the corresponding connections to the previous servers.
+for (int32_t i = 0; i < curr_dataset.repl_factor; i++)
 {
-	printf("n_server=%d msg=%s size=%d\n", n_server, msg, size);
-	
-	//Servers that the data block is going to be requested to.
-	int32_t repl_servers[curr_dataset.repl_factor];
+//Server storing the current data block.
+uint32_t n_server_ = (n_server + i*(curr_imss_storages/curr_dataset.repl_factor)) % curr_imss_storages;
 
-	int32_t curr_imss_storages = curr_imss.info.num_storages;
+repl_servers[i] = n_server_;
 
-	//Retrieve the corresponding connections to the previous servers.
-	for (int32_t i = 0; i < curr_dataset.repl_factor; i++)
-	{
-		//Server storing the current data block.
-		uint32_t n_server_ = (n_server + i*(curr_imss_storages/curr_dataset.repl_factor)) % curr_imss_storages;
+//Check if the current connection is the local one (if there is).
+if (repl_servers[i] == curr_dataset.local_conn)
+{
+//Move the local connection to the first one to be requested.
 
-		repl_servers[i] = n_server_;
+int32_t aux_conn = repl_servers[0];
 
-		//Check if the current connection is the local one (if there is).
-		if (repl_servers[i] == curr_dataset.local_conn)
-		{
-			//Move the local connection to the first one to be requested.
+repl_servers[0] = repl_servers[i];
 
-			int32_t aux_conn = repl_servers[0];
+repl_servers[i] = aux_conn;
+}
+}
 
-			repl_servers[0] = repl_servers[i];
+char key_[KEY];
+//Key related to the requested data element.
+sprintf(key_, "9 %s %ld %ld %d %s",path, BLKSIZE, start_offset, stats_size, msg);
+int key_length = strlen(key_)+1;
+char key[key_length];
+memcpy((void *) key, (void *) key_, key_length);
+key[key_length-1] = '\0';
 
-			repl_servers[i] = aux_conn;
-		}
-	}
+//Request the concerned block to the involved servers.
+for (int32_t i = 0; i < curr_dataset.repl_factor; i++)
+{
+//printf("BLOCK %d ASKED TO %d SERVER with key: %s (%d)\n", curr_block, repl_servers[i], key, key_length);
 
-	char key_[KEY];
-	//Key related to the requested data element.
-	sprintf(key_, "9 %s %ld %ld %d %s",path, BLKSIZE, start_offset, stats_size, msg);
-	int key_length = strlen(key_)+1;
-	char key[key_length];
-	memcpy((void *) key, (void *) key_, key_length);
-	key[key_length-1] = '\0';
-	
-	//Request the concerned block to the involved servers.
-	for (int32_t i = 0; i < curr_dataset.repl_factor; i++)
-	{
-		//printf("BLOCK %d ASKED TO %d SERVER with key: %s (%d)\n", curr_block, repl_servers[i], key, key_length);
+//Send read request message specifying the block URI.
+//if (comm_send(curr_imss.conns.eps_[repl_servers[i]], key, KEY, 0) < 0)
 
-		//Send read request message specifying the block URI.
-		//if (comm_send(curr_imss.conns.sockets_[repl_servers[i]], key, KEY, 0) < 0)
-		
-		if (comm_send(curr_imss.conns.sockets_[repl_servers[i]], key, key_length, 0) != key_length)
-		{
-			perror("ERRIMSS_GETDATA_REQ");
-			return -1;
-		}
-		//Receive data related to the previous read request directly into the buffer.
-		if (comm_recv(curr_imss.conns.sockets_[repl_servers[i]], buffer, size*BLKSIZE*KB, 0) == -1)
-		{
-			if (errno != EAGAIN)
-			{
-				perror("ERRIMSS_GETDATA_RECV");
-				return -1;
-			}
-			else
-				break;
-		}
-		//Check if the requested key was correctly retrieved.
-		if (strncmp((const char *) buffer, "$ERRIMSS_NO_KEY_AVAIL$", 22)){
-			return 0;
-		}
-			
-	}
+if (comm_send(curr_imss.conns.eps_[repl_servers[i]], key, key_length, 0) != key_length)
+{
+perror("ERRIMSS_GETDATA_REQ");
+return -1;
+}
+//Receive data related to the previous read request directly into the buffer.
+if (comm_recv(curr_imss.conns.eps_[repl_servers[i]], buffer, size*BLKSIZE*KB, 0) == -1)
+{
+if (errno != EAGAIN)
+{
+perror("ERRIMSS_GETDATA_RECV");
+return -1;
+}
+else
+break;
+}
+//Check if the requested key was correctly retrieved.
+if (strncmp((const char *) buffer, "$ERRIMSS_NO_KEY_AVAIL$", 22)){
+	return 0;
+}
 
-	//fprintf(stderr, "ERRIMSS_GETDATA_UNAVAIL\n");
-	return -1;
+}
+
+//fprintf(stderr, "ERRIMSS_GETDATA_UNAVAIL\n");
+return -1;
 }
 */
 
 //Method retrieving a data element associated to a certain dataset.
 int32_t
 get_data(int32_t 	 dataset_id,
-	 int32_t 	 data_id,
-	 unsigned char * buffer)
+		int32_t 	 data_id,
+		char * buffer)
 {
 	int32_t n_server;
 
@@ -2229,12 +2170,9 @@ get_data(int32_t 	 dataset_id,
 	if ((n_server = get_data_location(dataset_id, data_id, GET)) == -1){
 		return -1;
 	}
-	
-		
 
 	//Servers that the data block is going to be requested to.
 	int32_t repl_servers[curr_dataset.repl_factor];
-
 	int32_t curr_imss_storages = curr_imss.info.num_storages;
 
 	//Retrieve the corresponding connections to the previous servers.
@@ -2249,25 +2187,20 @@ get_data(int32_t 	 dataset_id,
 		if (repl_servers[i] == curr_dataset.local_conn)
 		{
 			//Move the local connection to the first one to be requested.
-
 			int32_t aux_conn = repl_servers[0];
-
 			repl_servers[0] = repl_servers[i];
-
 			repl_servers[i] = aux_conn;
 		}
 	}
 
-	char key_[KEY];
+	char key_[REQUEST_SIZE];
 	//Key related to the requested data element.
 	sprintf(key_, "0 %s$%d",  curr_dataset.uri_, data_id);
 
 	int key_length = strlen(key_)+1;
-	char key[key_length];
+	char key[REQUEST_SIZE];
 	memcpy((void *) key, (void *) key_, key_length);
 	key[key_length-1] = '\0';
-
-	
 
 	//Request the concerned block to the involved servers.
 	for (int32_t i = 0; i < curr_dataset.repl_factor; i++)
@@ -2275,28 +2208,37 @@ get_data(int32_t 	 dataset_id,
 		//printf("CLIENT GET_DATA BLOCK %d ASKED TO %d SERVER with key: %s (%d)\n", data_id, repl_servers[i], key, key_length);
 
 		//Send read request message specifying the block URI.
-		
-	/*	struct timeval start, end;
-		long delta_us;
-		gettimeofday(&start, NULL);*/
+		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[repl_servers[i]], (char *) &curr_imss.conns.id[repl_servers[i]], sizeof(uint32_t)) < 0)
+		{
+			perror("ERRIMSS_STAT_HELLO");
+			return -1;
+		}
 
-		//if (comm_send(curr_imss.conns.sockets_[repl_servers[i]], key, KEY, 0) < 0)
-		if (comm_send(curr_imss.conns.sockets_[repl_servers[i]], key, key_length, 0) != key_length)
+		char mode[] = "GET";
+		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[repl_servers[i]], mode, MODE_SIZE) < 0)
+		{
+			perror("ERRIMSS_STAT_HELLO");
+			return -1;
+		}
+
+		//if (comm_send(curr_imss.conns.eps_[repl_servers[i]], key, KEY, 0) < 0)
+		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[repl_servers[i]], key, REQUEST_SIZE) < 0)
 		{
 			perror("ERRIMSS_GETDATA_REQ");
 			return -1;
 		}
 
-	/*	gettimeofday(&end, NULL);
-		delta_us = (long) (end.tv_usec - start.tv_usec);
-		printf("\n[CLIENT] [GET DATA] send petition delta_us=%6.3f\n",(delta_us/1000.0F));*/
+		/*	gettimeofday(&end, NULL);
+			delta_us = (long) (end.tv_usec - start.tv_usec);
+			printf("\n[CLIENT] [GET DATA] send petition delta_us=%6.3f\n",(delta_us/1000.0F));*/
 
+		clock_t t;
+		t = clock();
 
-	//	gettimeofday(&start, NULL);
+		//	gettimeofday(&start, NULL);
 		//printf("GET_DATA after send petition to read\n");
 		//Receive data related to the previous read request directly into the buffer.
-	//	printf("GET_DATA comm_recv size=%d\n",curr_dataset.data_entity_size);
-		if (comm_recv(curr_imss.conns.sockets_[repl_servers[i]], buffer, curr_dataset.data_entity_size, 0) == -1)
+		if (recv_stream(ucp_worker_client, curr_imss.conns.eps_[repl_servers[i]], buffer, curr_dataset.data_entity_size) < 0)
 		{
 			if (errno != EAGAIN)
 			{
@@ -2306,15 +2248,16 @@ get_data(int32_t 	 dataset_id,
 			else
 				break;
 		}
-	/*	gettimeofday(&end, NULL);
-		delta_us = (long) (end.tv_usec - start.tv_usec);
-		printf("[CLIENT] [GET DATA] recv data delta_us=%6.3f\n",(delta_us/1000.0F));*/
+		t = clock() - t;
+		double time_taken = ((double)t)/CLOCKS_PER_SEC; // in seconds
+
+		//printf("[CLIENT] [GET DATA] recv data %f s\n",time_taken);
 
 		//Check if the requested key was correctly retrieved.
 		if (strncmp((const char *) buffer, "$ERRIMSS_NO_KEY_AVAIL$", 22)){
 			return 0;
 		}
-			
+
 	}
 	return 1;
 }
@@ -2323,9 +2266,9 @@ get_data(int32_t 	 dataset_id,
 //Method retrieving a data element associated to a certain dataset.
 int32_t
 get_ndata(int32_t 	 dataset_id,
-	 int32_t 	 data_id,
-	 unsigned char * buffer,
-	 int64_t  * len)
+		int32_t 	 data_id,
+		char * buffer,
+		int64_t  * len)
 {
 	int32_t n_server;
 
@@ -2337,7 +2280,6 @@ get_ndata(int32_t 	 dataset_id,
 
 	//Servers that the data block is going to be requested to.
 	int32_t repl_servers[curr_dataset.repl_factor];
-
 	int32_t curr_imss_storages = curr_imss.info.num_storages;
 
 	//Retrieve the corresponding connections to the previous servers.
@@ -2352,21 +2294,18 @@ get_ndata(int32_t 	 dataset_id,
 		if (repl_servers[i] == curr_dataset.local_conn)
 		{
 			//Move the local connection to the first one to be requested.
-
 			int32_t aux_conn = repl_servers[0];
-
 			repl_servers[0] = repl_servers[i];
-
 			repl_servers[i] = aux_conn;
 		}
 	}
 
-	char key_[KEY];
+	char key_[REQUEST_SIZE];
 	//Key related to the requested data element.
 	sprintf(key_, "0 %s$%d",  curr_dataset.uri_, data_id);
 
 	int key_length = strlen(key_)+1;
-	char key[key_length];
+	char key[REQUEST_SIZE];
 	memcpy((void *) key, (void *) key_, key_length);
 	key[key_length-1] = '\0';
 
@@ -2374,16 +2313,27 @@ get_ndata(int32_t 	 dataset_id,
 	for (int32_t i = 0; i < curr_dataset.repl_factor; i++)
 	{
 		//printf("BLOCK %d ASKED TO %d SERVER with key: %s (%d)\n", data_id, repl_servers[i], key, key_length);
+		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[repl_servers[i]], (char *) &curr_imss.conns.id[repl_servers[i]], sizeof(uint32_t)) < 0)
+		{
+			perror("ERRIMSS_STAT_HELLO");
+			return -1;
+		}
+		char mode[] = "GET";
+		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[repl_servers[i]], mode, MODE_SIZE) < 0)
+		{
+			perror("ERRIMSS_STAT_HELLO");
+			return -1;
+		}
 
 		//Send read request message specifying the block URI.
-		//if (comm_send(curr_imss.conns.sockets_[repl_servers[i]], key, KEY, 0) < 0)
-		if (comm_send(curr_imss.conns.sockets_[repl_servers[i]], key, key_length, 0) != key_length)
+		//if (comm_send(curr_imss.conns.eps_[repl_servers[i]], key, KEY, 0) < 0)
+		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[repl_servers[i]], key, REQUEST_SIZE) < 0)
 		{
 			perror("ERRIMSS_GETDATA_REQ");
 			return -1;
 		}
 		//Receive data related to the previous read request directly into the buffer.
-		if (comm_recv(curr_imss.conns.sockets_[repl_servers[i]], buffer, curr_dataset.data_entity_size, 0) == -1)
+		if (recv_stream(ucp_worker_client, curr_imss.conns.eps_[repl_servers[i]], buffer, curr_dataset.data_entity_size) < 0)
 		{
 			if (errno != EAGAIN)
 			{
@@ -2398,9 +2348,9 @@ get_ndata(int32_t 	 dataset_id,
 		if (!strncmp((const char *) buffer, "$ERRIMSS_NO_KEY_AVAIL$", 22))
 			continue;
 
-	    *len = curr_dataset.data_entity_size;
+		*len = curr_dataset.data_entity_size;
 
-	    return 0;
+		return 0;
 	}
 
 	fprintf(stderr, "ERRIMSS_GETDATA_UNAVAIL\n");
@@ -2411,32 +2361,32 @@ get_ndata(int32_t 	 dataset_id,
 //Method storing a specific data element.
 int32_t
 set_data(int32_t 	 dataset_id,
-	 int32_t 	 data_id,
-	 unsigned char * buffer)
+		int32_t 	 data_id,
+		char * buffer)
 {
 	int32_t n_server;
-	
-/*	struct timeval start, end;
-	long delta_us;
-	gettimeofday(&start, NULL);*/
+
+	/*	struct timeval start, end;
+		long delta_us;
+		gettimeofday(&start, NULL);*/
 
 	//Server containing the corresponding data to be written.
 	if ((n_server = get_data_location(dataset_id, data_id, SET)) == -1) {
-        perror("ERRIMSS_GET_DATA_LOCATION");
+		perror("ERRIMSS_GET_DATA_LOCATION");
 		return -1;
 	}
 
-/*	gettimeofday(&end, NULL);
-	delta_us = (long) (end.tv_usec - start.tv_usec);
-	printf("[CLIENT] [SWRITE GET_DATA_LOCATION] delta_us=%6.3f\n",(delta_us/1000.0F));*/
-		
+	/*	gettimeofday(&end, NULL);
+		delta_us = (long) (end.tv_usec - start.tv_usec);
+		printf("[CLIENT] [SWRITE GET_DATA_LOCATION] delta_us=%6.3f\n",(delta_us/1000.0F));*/
 
-	char key_[KEY];
+
+	char key_[REQUEST_SIZE];
 	//Key related to the requested data element.
 	sprintf(key_, "%d %s$%d", curr_dataset.data_entity_size, curr_dataset.uri_, data_id);
 
 	int key_length = strlen(key_)+1;
-	char key[key_length];
+	char key[REQUEST_SIZE];
 	memcpy((void *) key, (void *) key_, key_length);
 	key[key_length-1] = '\0';
 
@@ -2449,42 +2399,59 @@ set_data(int32_t 	 dataset_id,
 		uint32_t n_server_ = (n_server + i*(curr_imss_storages/curr_dataset.repl_factor)) % curr_imss_storages;
 
 		//printf("BLOCK %d SENT TO %d SERVER with key: %s (%d)\n", data_id, n_server_, key, key_length);
+		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[n_server_], (char *) &curr_imss.conns.id[n_server_], sizeof(uint32_t)) < 0)
+		{
+			perror("ERRIMSS_STAT_HELLO");
+			return -1;
+		}
 
+		char mode[] = "SET";
+		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[n_server_], mode, MODE_SIZE) < 0)
+		{
+			perror("ERRIMSS_STAT_HELLO");
+			return -1;
+		}
 
-	//	gettimeofday(&start, NULL);
+		//	gettimeofday(&start, NULL);
 		//Send read request message specifying the block URI.
-		//if (comm_send(curr_imss.conns.sockets_[n_server_], key, KEY, ZMQ_SNDMORE) < 0)
-		if (comm_send(curr_imss.conns.sockets_[n_server_], key, key_length, ZMQ_SNDMORE) != key_length)
+		//if (comm_send(curr_imss.conns.eps_[n_server_], key, KEY, ZMQ_SNDMORE) < 0)
+		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[n_server_], key, REQUEST_SIZE) < 0) // SNDMORE
 		{
 			perror("ERRIMSS_SETDATA_REQ");
 			return -1;
 		}
-	/*	gettimeofday(&end, NULL);
-		delta_us = (long) (end.tv_usec - start.tv_usec);
-		printf("[CLIENT] [SWRITE SEND_OP] delta_us=%6.3f\n",(delta_us/1000.0F));*/
-		
+		/*	gettimeofday(&end, NULL);
+			delta_us = (long) (end.tv_usec - start.tv_usec);
+			printf("[CLIENT] [SWRITE SEND_OP] delta_us=%6.3f\n",(delta_us/1000.0F));*/
 
-	//	gettimeofday(&start, NULL);
+		clock_t t;
+		t = clock();
+
+		//	gettimeofday(&start, NULL);
 		//Send read request message specifying the block data.
-		if (comm_send (curr_imss.conns.sockets_[n_server_], buffer, curr_dataset.data_entity_size, 0) != curr_dataset.data_entity_size)
+		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[n_server_], buffer, curr_dataset.data_entity_size) < 0)
 		{
 			perror("ERRIMSS_SETDATA_SEND");
 			return -1;
 		}
-	/*	gettimeofday(&end, NULL);
-		delta_us = (long) (end.tv_usec - start.tv_usec);
-		printf("[CLIENT] [SWRITE SEND_DATA] delta_us=%6.3f\n",(delta_us/1000.0F));*/
-	}
+		/*	gettimeofday(&end, NULL);
+			delta_us = (long) (end.tv_usec - start.tv_usec);
+			printf("[CLIENT] [SWRITE SEND_DATA] delta_us=%6.3f\n",(delta_us/1000.0F));*/
 
+		t = clock() - t;
+		double time_taken = ((double)t)/CLOCKS_PER_SEC; // in seconds
+
+		//printf("[CLIENT] [SET DATA] sent data %f s\n",time_taken);
+	}
 	return 0;
 }
 
 //Method storing a specific data element.
 int32_t
 set_ndata(int32_t 	 dataset_id,
-	 int32_t 	 data_id,
-	 unsigned char * buffer,
-	 uint32_t size)
+		int32_t 	 data_id,
+		const char * buffer,
+		uint32_t size)
 {
 	int32_t n_server;
 	//Server containing the corresponding data to be written.
@@ -2492,12 +2459,12 @@ set_ndata(int32_t 	 dataset_id,
 
 		return -1;
 
-	char key_[KEY];
+	char key_[REQUEST_SIZE];
 	//Key related to the requested data element.
 	sprintf(key_, "%d %s$%d", size, curr_dataset.uri_, data_id);
 
 	int key_length = strlen(key_)+1;
-	char key[key_length];
+	char key[REQUEST_SIZE];
 	memcpy((void *) key, (void *) key_, key_length);
 	key[key_length-1] = '\0';
 
@@ -2510,17 +2477,28 @@ set_ndata(int32_t 	 dataset_id,
 		uint32_t n_server_ = (n_server + i*(curr_imss_storages/curr_dataset.repl_factor)) % curr_imss_storages;
 
 		//printf("BLOCK %d SENT TO %d SERVER with key: %s (%d)\n", data_id, n_server_, key, key_length);
+		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[n_server_], (char *) &curr_imss.conns.id[n_server_], sizeof(uint32_t)) < 0)
+		{
+			perror("ERRIMSS_STAT_HELLO");
+			return -1;
+		}
+		char mode[] = "SET";
+		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[n_server_], mode, MODE_SIZE) < 0)
+		{
+			perror("ERRIMSS_STAT_HELLO");
+			return -1;
+		}
 
 		//Send read request message specifying the block URI.
-		//if (comm_send(curr_imss.conns.sockets_[n_server_], key, KEY, ZMQ_SNDMORE) < 0)
-		if (comm_send(curr_imss.conns.sockets_[n_server_], key, key_length, ZMQ_SNDMORE) != key_length)
+		//if (comm_send(curr_imss.conns.eps_[n_server_], key, KEY, ZMQ_SNDMORE) < 0)
+		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[n_server_], key, REQUEST_SIZE) < 0) //SNDMORE
 		{
 			perror("ERRIMSS_SETDATA_REQ");
 			return -1;
 		}
 
 		//Send read request message specifying the block data.
-		if (comm_send (curr_imss.conns.sockets_[n_server_], buffer, size, 0) != size)
+		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[n_server_], buffer, size) < 0)
 		{
 			perror("ERRIMSS_SETDATA_SEND");
 			return -1;
@@ -2535,8 +2513,8 @@ set_ndata(int32_t 	 dataset_id,
 //Method retrieving the location of a specific data object.
 char **
 get_dataloc(const char *    dataset,
-	    int32_t   data_id,
-	    int32_t * num_storages)
+		int32_t   data_id,
+		int32_t * num_storages)
 {
 	//Dataset structure of the one requested.
 	dataset_info where_dataset;
@@ -2546,24 +2524,23 @@ get_dataloc(const char *    dataset,
 	{
 		//No dataset was found with the requested name.
 		case 0:
-		{
-			fprintf(stderr, "ERRIMSS_GETDATALOC_DATASETNOTEXISTS\n");
-			return NULL;
-		}
-		//The dataset was retrieved from the metadata server.
-		case 1:
-		{
-			//The dataset structure will not be stored if it is a LOCAL one as those are dynamically updated.
-			if (strcmp(where_dataset.policy, "LOCAL"))
 			{
-				//Hint specifying that the dataset was retrieved but not initialized.
-				where_dataset.local_conn = -2;
-
-				GInsert (&datasetd_pos, &datasetd_max_size, (char *) &where_dataset, datasetd, free_datasetd);
+				fprintf(stderr, "ERRIMSS_GETDATALOC_DATASETNOTEXISTS\n");
+				return NULL;
 			}
+			//The dataset was retrieved from the metadata server.
+		case 1:
+			{
+				//The dataset structure will not be stored if it is a LOCAL one as those are dynamically updated.
+				if (strcmp(where_dataset.policy, "LOCAL"))
+				{
+					//Hint specifying that the dataset was retrieved but not initialized.
+					where_dataset.local_conn = -2;
+					GInsert (&datasetd_pos, &datasetd_max_size, (char *) &where_dataset, datasetd, free_datasetd);
+				}
 
-			break;
-		}
+				break;
+			}
 	}
 
 	int32_t dataset_name_length = strlen(dataset);
@@ -2591,33 +2568,22 @@ get_dataloc(const char *    dataset,
 	int32_t found_imss_in = stat_imss(imss_name, &where_imss.info);
 
 	//Check which resource was used to retrieve the concerned IMSS structure.
-	switch (found_imss_in)
-	{
-		//No IMSS was found with the requested name.
-		case 0:
-		{
-			fprintf(stderr, "ERRIMSS_GETDATALOC_IMSSNOTEXISTS\n");
-			return NULL;
-		}
-		//The IMSS was retrieved from the metadata server.
-		case 1:
-		{
-			//Hint specifying that the IMSS structure was retrieved but not initialized.
-			where_imss.conns.matching_server = -2;
-
-			GInsert (&imssd_pos, &imssd_max_size, (char *) &where_imss, imssd, free_imssd);
-
-			break;
-		}
+	if (found_imss_in) {
+		//Hint specifying that the IMSS structure was retrieved but not initialized.
+		where_imss.conns.matching_server = -2;
+		GInsert (&imssd_pos, &imssd_max_size, (char *) &where_imss, imssd, free_imssd);
+	} else {
+		fprintf(stderr, "ERRIMSS_GETDATALOC_IMSSNOTEXISTS\n");
+		return NULL;
 	}
 
 	//Set the policy corresponding to the retrieved dataset.
 	/* if (set_policy(&where_dataset) == -1)
-	{
-		fprintf(stderr, "ERRIMSS_GETDATALOC_SETPOLICY\n");
-		return NULL;
-	}
-	*/
+	   {
+	   fprintf(stderr, "ERRIMSS_GETDATALOC_SETPOLICY\n");
+	   return NULL;
+	   }
+	 */
 
 	current_dataset = -1;
 
@@ -2637,22 +2603,16 @@ get_dataloc(const char *    dataset,
 	{
 		//Server storing the current data block.
 		uint32_t n_server_ = (server + i*(where_imss.info.num_storages/where_dataset.repl_factor)) % where_imss.info.num_storages;
-
 		machines[i] = (char *) malloc(strlen(where_imss.info.ips[n_server_])*sizeof(char));
-
 		strcpy(machines[i], where_imss.info.ips[n_server_]);
-
 		if (found_imss_in == 2)
-
 			free(where_imss.info.ips[i]);
 	}
 
 	if (found_imss_in == 2)
-
 		free(where_imss.info.ips);
 
 	if (!strcmp(where_dataset.policy, "LOCAL"))
-
 		free(where_dataset.data_locations);
 
 	return machines;
@@ -2663,45 +2623,50 @@ int32_t
 get_type(char * uri)
 {
 	//Formated uri to be sent to the metadata server.
-	char formated_uri[256];
+	char formated_uri[REQUEST_SIZE];
 	sprintf(formated_uri, "0 %s", uri);
-	size_t formated_uri_length = strlen(formated_uri);
 
 	//Discover the metadata server that handles the entity.
 	uint32_t m_srv = discover_stat_srv(uri);
 	//printf("get_type=%s\n",uri);
 	//Send the request.
-	if (comm_send(stat_client[m_srv], formated_uri, formated_uri_length, 0) != formated_uri_length)
+	if (send_stream(ucp_worker_client, stat_client[m_srv], (char *) &stat_ids[m_srv], sizeof(uint32_t)) < 0)
+	{
+		perror("ERRIMSS_STAT_HELLO");
+		return -1;
+	}
+
+	char mode[] = "GET";
+	if (send_stream(ucp_worker_client, stat_client[m_srv], mode, MODE_SIZE) < 0)
+	{
+		perror("ERRIMSS_STAT_HELLO");
+		return -1;
+	}
+
+	if (send_stream(ucp_worker_client, stat_client[m_srv], formated_uri, REQUEST_SIZE) < 0)
 	{
 		fprintf(stderr, "ERRIMSS_GETTYPE_REQ\n");
 		return -1;
 	}
 
-	zmq_msg_t entity_info;
-	zmq_msg_init (&entity_info);
+	imss_info * data;
+
 	//Receive the answer.
-	if (comm_msg_recv(&entity_info, stat_client[m_srv], 0) == -1)
+	char result[RESPONSE_SIZE];
+
+	if (recv_dynamic_stream(ucp_worker_client, stat_client[m_srv], result, BUFFER) < 0)
 	{
 		fprintf(stderr, "ERRIMSS_GETTYPE_REQ\n");
 		return -1;
 	}
 
-	//Access the information received.
-	imss_info * data = (imss_info *) comm_msg_data(&entity_info);
-
-	//printf("get_type path =%s, type =%c \n",uri,data->type);
+	data = (imss_info *)result;
 
 	//Determine what was retrieved from the metadata server.
 	if (data->type == 'I')
-
 		return 1;
-
 	else if (data->type == 'D' || data->type == 'L')
-
 		return 2;
-
-	comm_msg_close(&entity_info);
-
 	return 0;
 }
 
@@ -2711,10 +2676,10 @@ split_location_servers(int** list_servers,int32_t dataset_id,  int32_t curr_blk,
 {
 	int size = end_blk - curr_blk + 1;
 	//printf("size=%d\n",size);
-		
+
 	for(int i = 0; i < size; i++){
 		int32_t n_server;
-		
+
 		//Server containing the corresponding data to be retrieved.
 		if ((n_server = get_data_location(dataset_id, curr_blk, GET)) == -1){
 			return -1;
@@ -2736,7 +2701,6 @@ int32_t
 free_imss(imss_info * imss_info_)
 {
 	for (int32_t i = 0; i < imss_info_->num_storages; i++)
-
 		free(imss_info_->ips[i]);
 
 	free(imss_info_->ips);
@@ -2751,15 +2715,12 @@ free_dataset(dataset_info * dataset_info_)
 	if (!strcmp(dataset_info_->policy, "LOCAL"))
 	{
 		if (dataset_info_->data_locations)				
-
 			free(dataset_info_->data_locations);
 
 		if (dataset_info_->num_blocks_written)				
-
 			free(dataset_info_->num_blocks_written);
 
 		if (dataset_info_->blocks_written)				
-
 			free(dataset_info_->blocks_written);
 	}
 

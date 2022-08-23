@@ -56,7 +56,7 @@ extern uint16_t BEST_PERFORMANCE_READ;
 extern uint16_t MULTIPLE_READ;
 extern uint16_t MULTIPLE_WRITE;
 
-extern unsigned char * BUFFERPREFETCH;
+extern char * BUFFERPREFETCH;
 extern char prefetch_path  [256];
 extern int32_t prefetch_first_block; 
 extern int32_t prefetch_last_block;
@@ -74,8 +74,10 @@ extern pthread_mutex_t     mutex_prefetch;
 
 #define MAX_PATH 256
 extern pthread_mutex_t lock;
-pthread_mutex_t lock_fileopen = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t lock_file = PTHREAD_MUTEX_INITIALIZER;
 
+
+extern int32_t IMSS_DEBUG;
 
 /*
    (*) Mapping for REPL_FACTOR values:
@@ -92,12 +94,12 @@ pthread_mutex_t lock_fileopen = PTHREAD_MUTEX_INITIALIZER;
 
 
 void fd_lookup(const char * path, int *fd, struct stat * s, char ** aux) {
-	pthread_mutex_lock(&lock_fileopen);
+	pthread_mutex_lock(&lock_file);
 	*fd = -1;
 	int found = map_search(map, path, fd , s, aux);
 	if (!found)
 		*fd = -1;
-	pthread_mutex_unlock(&lock_fileopen);
+	pthread_mutex_unlock(&lock_file);
 }
 
 void get_iuri(const char * path, /*output*/ char * uri){
@@ -193,14 +195,14 @@ int imss_getattr(const char *path, struct stat *stbuf)
 				ds = open_dataset(imss_path);
 				if (ds >=0) {
                     aux = (char *) malloc(IMSS_DATA_BSIZE);
-	                get_data(ds, 0, (unsigned char*)aux);
+	                get_data(ds, 0, (char*)aux);
 	    			memcpy(&stats, aux, sizeof(struct stat));
-					pthread_mutex_lock(&lock_fileopen);
+					pthread_mutex_lock(&lock_file);
 					map_put(map, imss_path, ds, stats, aux);
-					pthread_mutex_unlock(&lock_fileopen);
+					pthread_mutex_unlock(&lock_file);
 					//free(aux);
 				} else{
-					fprintf(stderr, "[IMSS-FUSE]	Cannot get dataset metadata.");
+					if (IMSS_DEBUG) fprintf(stderr, "[IMSS-FUSE]	Cannot get dataset metadata.");
 					return -ENOENT;
 				}
 					
@@ -208,7 +210,7 @@ int imss_getattr(const char *path, struct stat *stbuf)
 			if (stats.st_nlink != 0) {
 				memcpy(stbuf, &stats, sizeof(struct stat));
 			} else {
-				fprintf(stderr, "[IMSS-FUSE]	Cannot get dataset metadata.");
+				if (IMSS_DEBUG) fprintf(stderr, "[IMSS-FUSE]	Cannot get dataset metadata.");
 				return -ENOENT;
 			}
 			return 0;
@@ -319,16 +321,16 @@ int imss_open(const char *path, uint64_t *fh)
 		
 		file_desc = open_dataset(imss_path);
 		aux = (char *) malloc(IMSS_DATA_BSIZE);
-	    get_data(file_desc, 0, (unsigned char*)aux);
+	    get_data(file_desc, 0, (char*)aux);
 	    memcpy(&stats, aux, sizeof(struct stat));
-		pthread_mutex_lock(&lock_fileopen);
+		pthread_mutex_lock(&lock_file);
 		map_put(map, imss_path, file_desc, stats, aux);
 		if (PREFETCH != 0) {
             char * buff = (char *) malloc(PREFETCH * IMSS_DATA_BSIZE);
 			map_init_prefetch(map_prefetch, imss_path, buff);
 	    }
 		
-		pthread_mutex_unlock(&lock_fileopen);
+		pthread_mutex_unlock(&lock_file);
 
 		//free(aux);
 	}
@@ -388,7 +390,6 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 	else if (fd == -2)
 		return -ENOENT;
 	
-
 //	gettimeofday(&start, NULL);
 	memset(buf, 0, size);
 	
@@ -399,17 +400,13 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 
 	while(curr_blk <= end_blk){
 		pthread_mutex_lock(&lock);
-
 		
-		//int err = get_data(ds, curr_blk, (unsigned char*)aux);
-		
-
-		
+		//int err = get_data(ds, curr_blk, (char*)aux);
 		pthread_mutex_unlock(&lock);
 		//if( err != -1){
 			//First block case
 			if (first == 0) {
-				get_data(ds, curr_blk, (unsigned char*)aux);
+				get_data(ds, curr_blk, (char*)aux);
 				if(size < (stats.st_size - start_offset) && size < IMSS_DATA_BSIZE){
 				    to_read = size;
 					//to_read = IMSS_DATA_BSIZE - start_offset;
@@ -423,13 +420,12 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 						to_read = IMSS_DATA_BSIZE - start_offset;
 					}																			    
 				}
-				//Check if offset is bigger than filled, return 0 because is EOF case
-				if(start_offset > stats.st_size) 
-					return 0; 
-
 				memcpy(buf, aux + start_offset, to_read);
 				byte_count += to_read;
 				++first;
+				//Check if offset is bigger than filled, return 0 because is EOF case
+                if(start_offset + to_read >= stats.st_size)
+                    return 0;
 				//Middle block case
 			} else if (curr_blk != end_blk) {
 				get_data(ds, curr_blk, buf + byte_count);
@@ -437,7 +433,7 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 				byte_count += IMSS_DATA_BSIZE;
 				//End block case
 			}  else {
-				get_data(ds, curr_blk, (unsigned char*)aux);
+				get_data(ds, curr_blk, (char*)aux);
 				//Read the minimum between end_offset and filled (read_ = min(end_offset, filled))
 				int64_t pending = size - byte_count;
 				/*struct timeval start, end;
@@ -947,8 +943,10 @@ int imss_vread_2x(const char *path, char *buf, size_t size, off_t offset)
 
 int imss_read(const char *path, char *buf, size_t size, off_t offset) {
    int ret;
+   ret = imss_sread(path, buf, size, offset);
+/*
 
-   	if(BEST_PERFORMANCE_READ == 0){
+   	if (BEST_PERFORMANCE_READ == 0){
 
 		if (MULTIPLE_READ==1){
 			ret = imss_vread_prefetch(path, buf, size, offset);
@@ -962,16 +960,17 @@ int imss_read(const char *path, char *buf, size_t size, off_t offset) {
 			ret = imss_sread(path, buf, size, offset);
 		}
 
-	}else if(BEST_PERFORMANCE_READ == 1){
-		if(N_SERVERS < threshold_read_servers){
+	} else if (BEST_PERFORMANCE_READ == 1){
+		if (N_SERVERS < threshold_read_servers){
 			//printf("[BEST_PERFORMANCE_READ] SREAD\n");
 			ret = imss_sread(path, buf, size, offset);
 		
-		}else{
+		} else {
 			//printf("[BEST_PERFORMANCE_READ] SPLIT_READV\n");
 			ret = imss_split_readv(path, buf, size, offset);
 		}
 	}
+	*/
    return ret;
 }
 
@@ -1046,7 +1045,7 @@ int imss_write(const char *path, const char *buf, size_t size, off_t off)
 		if (first==0 && start_offset && stats.st_size != 0) {
 			//Get previous block
 			pthread_mutex_lock(&lock);
-			if(get_data(ds, curr_blk, (unsigned char *)aux) < 0){
+			if(get_data(ds, curr_blk, (char *)aux) < 0){
 				fprintf(stderr, "[IMSS-FUSE]	Error reading from imss.\n");
 				error_print=-ENOENT;
 				pthread_mutex_unlock(&lock);
@@ -1074,7 +1073,7 @@ int imss_write(const char *path, const char *buf, size_t size, off_t off)
 			//Only if last block has contents
 			if(curr_blk <= stats.st_blocks && start_offset){
 				pthread_mutex_lock(&lock);
-				if(get_data(ds, curr_blk, (unsigned char *)aux) < 0){
+				if(get_data(ds, curr_blk, (char *)aux) < 0){
 					fprintf(stderr, "[IMSS-FUSE]	Error reading from imss.\n");
 					error_print=-ENOENT;
 					pthread_mutex_unlock(&lock);
@@ -1111,7 +1110,7 @@ int imss_write(const char *path, const char *buf, size_t size, off_t off)
 
 		//Write and update variables
 		//pthread_mutex_lock(&lock);
-		//if(set_data(ds, curr_blk, (unsigned char *)aux) < 0){
+		//if(set_data(ds, curr_blk, (char *)aux) < 0){
 		if(set_data(ds, curr_blk, aux_block) < 0){
 			fprintf(stderr, "[IMSS-FUSE]	Error writing to imss.\n");
 			error_print=-ENOENT;
@@ -1601,7 +1600,7 @@ int imss_create(const char * path, mode_t mode, uint64_t * fh)
 	int res = 0;
 	res = create_dataset((char*)rpath, POLICY,  N_BLKS, IMSS_BLKSIZE, REPL_FACTOR);
 	if(res < 0) {
-		fprintf(stderr, "[IMSS-FUSE]	Cannot create new dataset.\n");
+		if (IMSS_DEBUG) fprintf(stderr, "[IMSS-FUSE]	Cannot create new dataset.\n");
 		free(rpath);
 		return res;
 	} else{
@@ -1630,18 +1629,18 @@ int imss_create(const char * path, mode_t mode, uint64_t * fh)
 	char *buff = (char *) malloc(IMSS_DATA_BSIZE);//[IMSS_DATA_BSIZE];
 	memcpy(buff, &ds_stat, sizeof(struct stat));
 	pthread_mutex_lock(&lock);
-	set_data(*fh, 0, (unsigned char *)buff);
+	set_data(*fh, 0, (char *)buff);
 	pthread_mutex_unlock(&lock);
 
 
-	pthread_mutex_lock(&lock_fileopen);
+	pthread_mutex_lock(&lock_file);
 	map_put(map, rpath, *fh, ds_stat, buff);
 
 	if (PREFETCH !=0) {
         char * buff = (char *) malloc(PREFETCH *IMSS_BLKSIZE * KB);
 	    map_init_prefetch(map_prefetch, rpath, buff);
 	}
-	pthread_mutex_unlock(&lock_fileopen);
+	pthread_mutex_unlock(&lock_file);
 	free(rpath);
 	return 0; 
 
@@ -1715,12 +1714,12 @@ int imss_unlink(const char * path){
 	//Write initial block
 	memcpy(buff, &header, sizeof(struct stat));
 	pthread_mutex_lock(&lock);
-	set_data(ds, 0, (unsigned char *)buff);
+	set_data(ds, 0, (char *)buff);
 	pthread_mutex_unlock(&lock);
 
-	pthread_mutex_lock(&lock_fileopen);
+	pthread_mutex_lock(&lock_file);
 	map_erase(map, imss_path);
-	pthread_mutex_unlock(&lock_fileopen);		
+	pthread_mutex_unlock(&lock_file);		
 	
 
 	map_release_prefetch(map_prefetch, path); 
@@ -1754,13 +1753,13 @@ int imss_utimens(const char * path, const struct timespec tv[2]) {
 	else 
 		file_desc = open_dataset(rpath);
 	if(file_desc < 0) {
-		fprintf(stderr, "[IMSS-FUSE]    Cannot open dataset.\n");
+		if (IMSS_DEBUG) fprintf(stderr, "[IMSS-FUSE]    Cannot open dataset.\n");
 	}
 
 
 	//char *buff = malloc(IMSS_DATA_BSIZE);
 	pthread_mutex_lock(&lock);
-	get_data(file_desc, 0, (unsigned char *)buff);
+	get_data(file_desc, 0, (char *)buff);
 	pthread_mutex_unlock(&lock);
 
 	memcpy(&ds_stat, buff, sizeof(struct stat));
@@ -1771,7 +1770,7 @@ int imss_utimens(const char * path, const struct timespec tv[2]) {
 	memcpy(buff, &ds_stat, sizeof(struct stat));
 
 	pthread_mutex_lock(&lock);
-	set_data(file_desc, 0, (unsigned char *)buff);
+	set_data(file_desc, 0, (char *)buff);
 	pthread_mutex_unlock(&lock);
 
 
@@ -1824,7 +1823,7 @@ int imss_flush(const char * path){
 	else 
 		file_desc = open_dataset(rpath);
 	if(file_desc < 0) {
-		fprintf(stderr, "[IMSS-FUSE]    Cannot open dataset.\n");
+		if (IMSS_DEBUG)fprintf(stderr, "[IMSS-FUSE]    Cannot open dataset.\n");
 		return -EACCES;
 	}
 
@@ -1837,8 +1836,8 @@ int imss_flush(const char * path){
 	memcpy(buff, &stats, sizeof(struct stat));
 
 	pthread_mutex_lock(&lock);
-	if(set_data(file_desc, 0, (unsigned char *)buff) < 0){
-		fprintf(stderr, "[IMSS-FUSE]	Error writing to imss.\n");
+	if(set_data(file_desc, 0, (char *)buff) < 0){
+		if (IMSS_DEBUG) fprintf(stderr, "[IMSS-FUSE]	Error writing to imss.\n");
 		error_print=-ENOENT;
 		pthread_mutex_unlock(&lock);
 		return -ENOENT;
@@ -1875,11 +1874,11 @@ int imss_chmod(const char *path, mode_t mode){
 	else 
 		file_desc = open_dataset(rpath);
 	if(file_desc < 0) {
-		fprintf(stderr, "[IMSS-FUSE]    Cannot open dataset.\n");
+		if (IMSS_DEBUG) fprintf(stderr, "[IMSS-FUSE]    Cannot open dataset.\n");
 	}
 
 	pthread_mutex_lock(&lock);
-	get_data(file_desc, 0, (unsigned char *)buff);
+	get_data(file_desc, 0, (char *)buff);
 	pthread_mutex_unlock(&lock);
 
 	memcpy(&ds_stat, buff, sizeof(struct stat));
@@ -1890,7 +1889,7 @@ int imss_chmod(const char *path, mode_t mode){
 	memcpy(buff, &ds_stat, sizeof(struct stat));
 
 	pthread_mutex_lock(&lock);
-	set_data(file_desc, 0, (unsigned char *)buff);
+	set_data(file_desc, 0, (char *)buff);
 	pthread_mutex_unlock(&lock);
 
 	free(rpath);
@@ -1916,11 +1915,11 @@ int imss_chown(const char *path, uid_t uid, gid_t gid) {
 	else 
 		file_desc = open_dataset(rpath);
 	if(file_desc < 0) {
-		fprintf(stderr, "[IMSS-FUSE]    Cannot open dataset.\n");
+		if (IMSS_DEBUG) fprintf(stderr, "[IMSS-FUSE]    Cannot open dataset.\n");
 	}
 
 	pthread_mutex_lock(&lock);
-	get_data(file_desc, 0, (unsigned char *)buff);
+	get_data(file_desc, 0, (char *)buff);
 	pthread_mutex_unlock(&lock);
 
 	memcpy(&ds_stat, buff, sizeof(struct stat));
@@ -1936,7 +1935,7 @@ int imss_chown(const char *path, uid_t uid, gid_t gid) {
 	memcpy(buff, &ds_stat, sizeof(struct stat));
 
 	pthread_mutex_lock(&lock);
-	set_data(file_desc, 0, (unsigned char *)buff);
+	set_data(file_desc, 0, (char *)buff);
 	pthread_mutex_unlock(&lock);
 	free(rpath);
 	return 0;
@@ -1974,7 +1973,7 @@ int imss_rename(const char *old_path, const char *new_path){
 				file_desc_o = open_dataset(old_rpath);
 
 			if(file_desc_o < 0) {
-				fprintf(stderr, "[IMSS-FUSE]    Cannot open dataset.\n");
+				if (IMSS_DEBUG) fprintf(stderr, "[IMSS-FUSE]    Cannot open dataset.\n");
 				free(new_rpath);
 				return -ENOENT;
 			}
@@ -2034,7 +2033,7 @@ int imss_rename(const char *old_path, const char *new_path){
 		file_desc_o = open_dataset(old_rpath);
 
 	if(file_desc_o < 0) {
-		fprintf(stderr, "[IMSS-FUSE]    Cannot open dataset.\n");
+		if (IMSS_DEBUG) fprintf(stderr, "[IMSS-FUSE]    Cannot open dataset.\n");
 		free(old_rpath);
 		free(new_rpath);
 		return -ENOENT;

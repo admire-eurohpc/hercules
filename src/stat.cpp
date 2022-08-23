@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
+#include <string>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include "stat.h"
@@ -9,10 +10,10 @@
 
 
 //Method retrieving the set of dataset metadata structures stored in a metadata file.
-unsigned char *
+char *
 metadata_read(char * 		metadata_file,
 	      map_records * 	map,
-	      unsigned char * 	buffer,
+	      char * 	buffer,
 	      uint64_t * 	bytes_written)
 {
 	//FILE entity managing the metadata file.
@@ -127,7 +128,7 @@ metadata_read(char * 		metadata_file,
 //Method storing the set of dataset metadata structures into a file.
 int32_t
 metadata_write(char * 		metadata_file,
-	       unsigned char * 	buffer,
+	       char * 	buffer,
 	       map_records * 	map,
 	       p_argv *		regions,
 	       int64_t 		segment_size,
@@ -173,7 +174,7 @@ metadata_write(char * 		metadata_file,
 		else
 		{
 			//Number of bytes to be written.
-			uint32_t bytes_to_write = regions[i].pt - buffer;
+			uint32_t bytes_to_write = (char*)regions[i].pt - buffer;
 
 			//If no metadata information was written by the previous thread, continue.
 			if (!bytes_to_write)

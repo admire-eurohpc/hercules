@@ -1,5 +1,4 @@
-find_package(FUSE REQUIRED)
-
+find_package(FUSE)
 
 add_library(imss_posix_api STATIC imss_posix_api.c map.cpp mapprefetch.cpp)
 
@@ -11,14 +10,12 @@ add_executable(imssfs
     mapprefetch.cpp
     )
 
+target_compile_features(imssfs PRIVATE cxx_std_17)
 
-set(CMAKE_C_FLAGS "-D_FILE_OFFSET_BITS=64 -lulockmgr -DFUSE")
-#set(CMAKE_C_LDFLAGS "-L/opt/anaconda3/lib")
-
-
+target_link_directories(imssfs PUBLIC /opt/anaconda3/lib ${UCX_LIBRARIES})
+set(CMAKE_C_FLAGS " -fPIC -D_FILE_OFFSET_BITS=64 -lulockmgr -DFUSE")
 
 target_include_directories(imssfs PRIVATE ${FUSE_INCLUDE_DIR})
-target_link_libraries(imssfs  ${CMAKE_THREAD_LIBS_INIT} zmq  ${FUSE_LIBRARIES}  imss_static)
-#target_link_libraries(imssfs  ${CMAKE_THREAD_LIBS_INIT} zmq  ${FUSE_LIBRARIES}  imss_static  tcmalloc)
+target_link_libraries(imssfs  ${CMAKE_THREAD_LIBS_INIT} ${FUSE_LIBRARIES}  imss_static )
+#target_link_libraries(imssfs  ${CMAKE_THREAD_LIBS_INIT} ${FUSE_LIBRARIES}  imss_static  tcmalloc)
 
-target_compile_features(imssfs PRIVATE cxx_std_17)

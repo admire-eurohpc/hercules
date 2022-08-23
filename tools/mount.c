@@ -287,7 +287,7 @@ int parse_args(int argc, char ** argv){
 static int skeleton_daemon(int argc, char ** argv)
 {
     pid_t pid;
-
+    int ret; 
     /* Fork off the parent process */
     pid = fork();
 
@@ -361,14 +361,14 @@ static int skeleton_daemon(int argc, char ** argv)
 
     mode_t mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH ;
     //int run = creat("/var/run/imss.pid", mode);
-    int run = open ("/home/hcristobal/imss/build/imss.pid", O_CREAT | O_RDWR);
+    int run = open ("/home/hcristobal/imss/build/imss.pid", O_CREAT | O_RDWR,  0777);
 
 	char buff[16];
 
 	pid_t pid_daemon = getpid();
     printf("pid_deamons=%d\n",pid_daemon);
 	sprintf(buff,"%u\n",pid_daemon);
-    write (run, buff, strlen(buff));
+    ret = write (run, buff, strlen(buff));
     close(run);
 
     syslog (LOG_NOTICE, "IMSS daemon started.");
