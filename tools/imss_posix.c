@@ -34,7 +34,7 @@
 #define GB 1073741824
 uint32_t deployment = 2;//Default 1=ATACHED, 0=DETACHED ONLY METADATA SERVER 2=DETACHED METADATA AND DATA SERVERS
 //char * POLICY = "RR"; //Default RR
-char * POLICY = "RR";
+char * POLICY = "HASH";
 uint16_t IMSS_SRV_PORT = 1; //Not default, 1 will fail
 uint16_t METADATA_PORT = 1; //Not default, 1 will fail
 int32_t  N_SERVERS = 1; //Default

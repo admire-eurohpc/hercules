@@ -117,7 +117,6 @@ void * srv_worker_slave (void * th_argv)
 	//Code to be sent if the requested to-be-read key does not exist.
 	char err_code[] = "$ERRIMSS_NO_KEY_AVAIL$";
 
-
 	for (;;)
 	{  
 		uint32_t client_id = 0;
@@ -835,7 +834,6 @@ void * srv_worker_slave (void * th_argv)
 		ucp_listener_destroy(context.listener);
 	}
 
-
 	//Thread method attending client read-write metadata requests.
 	void * stat_worker_slave (void * th_argv)
 	{   
@@ -1048,7 +1046,6 @@ void * srv_worker_slave (void * th_argv)
 										GTree_rename((char *)old_key.c_str(),(char *)new_key.c_str());
 									}
 
-
 									char release_msg[] = "RENAME\0";
 
 									if (send_stream(ucp_data_worker, arguments->server_ep, release_msg, RESPONSE_SIZE) < 0)
@@ -1233,7 +1230,6 @@ void * srv_worker_slave (void * th_argv)
 			ucp_ep_h         server_ep;
 			ucs_status_t     status;
 			int              ret;
-
 
 			//Variable specifying the ID that will be granted to the next client.
 			uint32_t client_id_ = 0;
