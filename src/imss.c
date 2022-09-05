@@ -332,8 +332,6 @@ stat_init(char *   stat_hostfile,
 
 		char request[REQUEST_SIZE] = "HELLO!\0";
 		//Send the metadata server connection request.
-<<<<<<< HEAD
-        
         if (send_stream(ucp_worker_client, client_ep, (char*) &rank, sizeof(uint32_t)) < 0)
         {
 			perror("ERRIMSS_STAT_HELLO");
@@ -348,17 +346,6 @@ stat_init(char *   stat_hostfile,
         }
 
 		if (send_stream(ucp_worker_client, client_ep, request, REQUEST_SIZE) < 0)
-=======
-		if (comm_send(stat_client[i], request, 7, 0)  != 7)
-		{
-		    perror("ERRIMSS_STAT_HELLO");
-		    return -1;
-		}
-		//ZMQ message retrieving the connection information.
-		zmq_msg_t connection_info;
-		comm_msg_init (&connection_info);
-		if (comm_msg_recv(&connection_info, stat_client[i], 0) == -1)
->>>>>>> e4405ebddea6859f67f59880993adedf5c78d6e2
 		{
 			perror("ERRIMSS_STAT_HELLO");
 			return -1;
@@ -512,11 +499,7 @@ get_dir(char * 	 requested_uri,
 		fprintf(stderr, "ERRIMSS_GETDIR_NODIR\n");
 		return -1;
 	}
-<<<<<<< HEAD
 	uint32_t elements_size = ret; 
-=======
-	uint32_t elements_size = comm_msg_size(&uri_elements);
->>>>>>> e4405ebddea6859f67f59880993adedf5c78d6e2
 
 	//*buffer = (char *) malloc(sizeof(char)*elements_size);
 	//memcpy(*buffer, elements, elements_size);
@@ -708,14 +691,8 @@ init_imss(char *   imss_uri,
 			return -1;
 		}
 		//ZMQ message retrieving the connection information.
-<<<<<<< HEAD
 		char connection_info[RESPONSE_SIZE];
 		if (recv_stream(ucp_worker_client, new_imss.conns.eps_[i], connection_info, RESPONSE_SIZE) < 0)
-=======
-		zmq_msg_t connection_info;
-		comm_msg_init (&connection_info);
-		if (comm_msg_recv(&connection_info, new_imss.conns.sockets_[i], 0) == -1)
->>>>>>> e4405ebddea6859f67f59880993adedf5c78d6e2
 		{
 			perror("ERRIMSS_INITIMSS_CONNINFOINIT");
 			return -1;
@@ -860,14 +837,8 @@ open_imss(char * imss_uri)
 		}
 
 		//ZMQ message retrieving the connection information.
-<<<<<<< HEAD
 		char connection_info[RESPONSE_SIZE];
 		if (recv_stream(ucp_worker_client, new_imss.conns.eps_[i], connection_info, RESPONSE_SIZE) < 0)
-=======
-		zmq_msg_t connection_info;
-		comm_msg_init (&connection_info);
-		if (comm_msg_recv(&connection_info, new_imss.conns.sockets_[i], 0) == -1)
->>>>>>> e4405ebddea6859f67f59880993adedf5c78d6e2
 		{
 			perror("ERRIMSS_OPENIMSS_CONNINFOOPEN");
 			return -1;
@@ -1343,13 +1314,7 @@ release_dataset(int32_t dataset_id)
 			return -1;
 		}
 
-<<<<<<< HEAD
 		if (send_stream(ucp_worker_client, stat_client[m_srv], update_msg, REQUEST_SIZE) < 0)
-=======
-		zmq_msg_t update_result;
-
-		if (comm_msg_init(&update_result) != 0)
->>>>>>> e4405ebddea6859f67f59880993adedf5c78d6e2
 		{
 			perror("ERRIMSS_RELDATASET_SENDPOSITIONS");
 			return -1;
@@ -1402,15 +1367,8 @@ delete_dataset(const char * 	    dataset_uri)
 		return -1;
 	}
 
-<<<<<<< HEAD
 	char mode[] = "GET";
 	if (send_stream(ucp_worker_client, stat_client[m_srv], mode, MODE_SIZE) < 0)
-=======
-
-	zmq_msg_t msg_struct;
-
-	if (comm_msg_init(&msg_struct) != 0)
->>>>>>> e4405ebddea6859f67f59880993adedf5c78d6e2
 	{
 		perror("ERRIMSS_STAT_HELLO");
 		return -1;
@@ -1488,14 +1446,8 @@ rename_dataset_metadata_dir_dir(char * old_dir, char * rdir_dest){
 		return -1;
 	}
 
-<<<<<<< HEAD
 	//Send the request.
 	if (send_stream(ucp_worker_client, stat_client[m_srv], formated_uri, REQUEST_SIZE) < 0)
-=======
-	zmq_msg_t msg_struct;
-
-	if (comm_msg_init(&msg_struct) != 0)
->>>>>>> e4405ebddea6859f67f59880993adedf5c78d6e2
 	{
 		perror("ERRIMSS_DATASET_REQ");
 		return -1;
@@ -1548,14 +1500,8 @@ rename_dataset_metadata(char * old_dataset_uri, char * new_dataset_uri){
 		return -1;
 	}
 
-<<<<<<< HEAD
 	//Send the request.
 	if (send_stream(ucp_worker_client, stat_client[m_srv], formated_uri, REQUEST_SIZE) < 0)
-=======
-	zmq_msg_t msg_struct;
-
-	if (comm_msg_init(&msg_struct) != 0)
->>>>>>> e4405ebddea6859f67f59880993adedf5c78d6e2
 	{
 		perror("ERRIMSS_DATASET_REQ");
 		return -1;
@@ -1738,17 +1684,8 @@ rename_dataset_srv_worker_dir_dir(char * old_dir, char * rdir_dest,
 			return -1;
 		}	
 
-<<<<<<< HEAD
 		char result[RESPONSE_SIZE];
 		if (recv_stream(ucp_worker_client, curr_imss.conns.eps_[i], result, RESPONSE_SIZE) < 0)
-=======
-		if (comm_msg_init(&msg_struct) != 0)
-		{
-			perror("ERRIMSS_RECVDYNAMSTRUCT_INIT");
-			return -1;
-		}
-		if (comm_msg_recv(&msg_struct, curr_imss.conns.sockets_[i], 0) == -1)
->>>>>>> e4405ebddea6859f67f59880993adedf5c78d6e2
 		{
 			perror("ERRIMSS_RECVDYNAMSTRUCT_RECV");
 			return -1;
@@ -1813,12 +1750,8 @@ rename_dataset_srv_worker(char * old_dataset_uri, char * new_dataset_uri,
 			return -1;
 		}
 
-<<<<<<< HEAD
 		char mode[] = "GET";
 		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[repl_servers[i]], mode, MODE_SIZE) < 0)
-=======
-		if (comm_msg_init(&msg_struct) != 0)
->>>>>>> e4405ebddea6859f67f59880993adedf5c78d6e2
 		{
 			perror("ERRIMSS_STAT_HELLO");
 			return -1;
@@ -2715,13 +2648,8 @@ get_type(char * uri)
 		return -1;
 	}
 
-<<<<<<< HEAD
 	imss_info * data;
 
-=======
-	zmq_msg_t entity_info;
-	comm_msg_init (&entity_info);
->>>>>>> e4405ebddea6859f67f59880993adedf5c78d6e2
 	//Receive the answer.
 	char result[RESPONSE_SIZE];
 
