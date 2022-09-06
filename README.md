@@ -90,7 +90,7 @@ The mount call requires the following parameters:
 - *-r*: determines the default dataset root for the deployed file system.
 - *-a*: requires a file containing the hostnames of all metadata servers involved.
 - *-s*: the maximum capacity in bytes of the storage system.
-- *-d*: determines the deployment mode. 0 indicates an attached deployment strategy (metadata and data services are instantiated as a FUSE process) and 1 indicates a completely detached deployment, is such a way, both data and metadata servers have to be executed as independent processes.
+- *-d*: determines the deployment mode. 0 indicates an attached deployment strategy (metadata and data services are instantiated as a FUSE process) and 2 indicates a completely detached deployment, is such a way, both data and metadata servers have to be executed as independent processes.
 - *-l*: indicates the mount point path.
 
 
