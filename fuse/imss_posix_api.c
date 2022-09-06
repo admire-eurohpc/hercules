@@ -992,7 +992,7 @@ int imss_write(const char *path, const char *buf, size_t size, off_t off)
 
 	char *aux_block;
 
-	//printf("IMSS_WRITE size=%ld path=%s off=%ld IMSS_DATA_BLOCKSIZE=%ld\n",size, path, off, IMSS_DATA_BSIZE); 
+	printf("IMSS_WRITE size=%ld path=%s off=%ld IMSS_DATA_BLOCKSIZE=%ld\n",size, path, off, IMSS_DATA_BSIZE); 
 	//Compute offsets to write
 	int64_t curr_blk, end_blk, start_offset, end_offset;
 	int64_t start_blk = off / IMSS_DATA_BSIZE + 1; //Add one to skip block 0

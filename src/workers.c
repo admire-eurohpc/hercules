@@ -49,7 +49,6 @@ void * srv_worker (void * th_argv)
 
 	context.conn_request = (ucp_conn_request_h *) malloc (100 * sizeof(ucp_conn_request_h));
 	context.num_conn = 0;
-    context.conn_request[context.num_conn] = NULL;
     status = start_server(arguments->ucp_worker, &context, &context.listener, NULL, arguments->port);
 
     if (status != UCS_OK) {
@@ -69,7 +68,6 @@ void * srv_worker (void * th_argv)
 			while (context.conn_request[current_req] == NULL) {
 				ucp_worker_progress(arguments->ucp_worker);
 			}
-
             memcpy(slave_args, th_argv, sizeof(p_argv));
             ret = init_worker(arguments->ucp_context, &(slave_args->ucp_data_worker));
             if (ret != 0) {
@@ -800,12 +798,10 @@ void * srv_worker_slave (void * th_argv)
 			pthread_t thread;
 			pthread_attr_t attr;
 
-            printf ("-------- Conn (1)  %d\n",context.num_conn);
 			while (context.conn_request[current_req] == NULL) {
 				ucp_worker_progress(arguments->ucp_worker);
 			}
 
-            printf ("-------- Conn (2)  %d\n",context.num_conn);
 			memcpy(slave_args, th_argv, sizeof(p_argv));
 			ret = init_worker(arguments->ucp_context, &(slave_args->ucp_data_worker));
 			if (ret != 0) {
@@ -819,7 +815,6 @@ void * srv_worker_slave (void * th_argv)
 				pthread_exit(NULL);
 			}
 
-            printf ("-------- Conn (3)  %d\n",context.num_conn);
 			pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
 			if (pthread_create(&thread, &attr, stat_worker_slave, (void *) slave_args) == -1)
 			{
@@ -1195,8 +1190,7 @@ void * srv_worker_slave (void * th_argv)
 										//Clear the corresponding memory region.
 										memset(address_, '\0', block_size_rtvd);
 										//Receive the block into the buffer.
-										recv_stream(ucp_data_worker, arguments->server_ep, (char *) address_, block_size_rtvd);
-
+							            recv_dynamic_stream(ucp_data_worker, arguments->server_ep, address_, BUFFER);
 										break;
 									}
 							}
@@ -1361,7 +1355,7 @@ void * srv_worker_slave (void * th_argv)
 			/* Initialize the server's context. */
 			context.conn_request = (ucp_conn_request_h *) malloc (100 * sizeof(ucp_conn_request_h));
 			context.num_conn = 0;
-			context.conn_request[context.num_conn] = NULL;
+		
 
 			status = start_server(arguments->ucp_worker, &context, &context.listener, NULL, arguments->port);
 			if (status != UCS_OK) {
@@ -1405,7 +1399,9 @@ void * srv_worker_slave (void * th_argv)
 					//Port that the new client will be forwarded to.
 					int32_t port_ = arguments->port + 1 + (client_id_ % THREAD_POOL);
 					//Wrap the previous info into the ZMQ message.
+					
 					sprintf(response_, "%d%c%d", port_, '-', client_id_++);
+
 
 					//Send communication specifications.
 					if (send_stream(ucp_data_worker, server_ep, response_, RESPONSE_SIZE) < 0)

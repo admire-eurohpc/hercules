@@ -144,7 +144,7 @@ size_t send_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, const char * msg, size_
     request       = (test_req_t*) ucp_stream_send_nbx(ep, msg, msg_length, &param);
 
     size_t length = 0;
-    request_finalize(ucp_worker, (test_req_t *)request, &ctx);
+    request_finalize(ucp_worker, (test_req_t *)request, &ctx); 
 	//ucp_stream_recv_request_test(request, &length);
 
     return msg_length;
@@ -369,7 +369,6 @@ void server_conn_handle_cb(ucp_conn_request_h conn_request, void *arg)
                 ucs_status_string(status));
     }
 
-    printf("------CB Conn (1) %d\n ", context->num_conn);
     if (context->conn_request[context->num_conn] == NULL) {
 		context->conn_request[context->num_conn++] = conn_request;
     } else {
@@ -383,7 +382,6 @@ void server_conn_handle_cb(ucp_conn_request_h conn_request, void *arg)
                     ucs_status_string(status));
         }
     }
-    printf("------CB Conn (2) %d\n ", context->num_conn);
 }
 
 char* sockaddr_get_ip_str(const struct sockaddr_storage *sock_addr,

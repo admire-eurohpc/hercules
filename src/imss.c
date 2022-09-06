@@ -157,7 +157,6 @@ int32_t
 imss_check(char * dataset_uri)
 {
 	imss imss_;
-
 	//Traverse the whole set of IMSS structures in order to find the one.
 	for (int32_t i = 0; i < imssd->len; i++)
 	{
@@ -1041,7 +1040,6 @@ create_dataset(char *  dataset_uri,
 		int32_t data_elem_size,
 		int32_t repl_factor)
 {	
-
 	curr_imss = g_array_index(imssd, imss, curr_dataset.imss_d);
 
 	if ((dataset_uri == NULL) || (policy == NULL) || !num_data_elem || !data_elem_size)
@@ -1059,6 +1057,7 @@ create_dataset(char *  dataset_uri,
 	//Check if the IMSS storing the dataset exists within the clients session.
 	if ((associated_imss_indx = imss_check(dataset_uri)) == -1)
 	{
+		printf("1\n");
 		fprintf(stderr, "ERRIMSS_OPENDATA_IMSSNOTFOUND\n");
 		return -ENOENT;
 	}
@@ -1171,7 +1170,7 @@ int32_t
 open_dataset(char * dataset_uri)
 {
 	int32_t associated_imss_indx;
-	//printf("OPEN DATASET INSIDE dataset_uri=%s\n",dataset_uri);
+	printf("OPEN DATASET INSIDE dataset_uri=%s\n",dataset_uri);
 	//Check if the IMSS storing the dataset exists within the clients session.
 	if ((associated_imss_indx = imss_check(dataset_uri)) == -1)
 	{

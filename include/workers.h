@@ -19,7 +19,7 @@
 
 #define GETDIR			1
 
-#define THREAD_POOL		3
+#define THREAD_POOL		1
 
 #define GET_OP 0
 #define SET_OP 1
