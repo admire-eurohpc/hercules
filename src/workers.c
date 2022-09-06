@@ -47,8 +47,7 @@ void * srv_worker (void * th_argv)
 
 	p_argv * arguments = (p_argv *) th_argv;
 
-	context.conn_request = (ucp_conn_request_h *) malloc (100 * sizeof(ucp_conn_request_h));
-	context.num_conn = 0;
+    context.conn_request =  StsQueue.create();
     status = start_server(arguments->ucp_worker, &context, &context.listener, NULL, arguments->port);
 
     if (status != UCS_OK) {
@@ -56,18 +55,18 @@ void * srv_worker (void * th_argv)
         pthread_exit(NULL);
     }
 
-    int current_req = 0;
-
-	for (int i = 0; i < 100; ++i) context.conn_request[i] = NULL;
-
 	for (;;) {
 		    p_argv * slave_args = (p_argv *) malloc(sizeof(p_argv));
 			pthread_t thread;
             pthread_attr_t attr;
+			ucp_conn_request_h req;
 
-			while (context.conn_request[current_req] == NULL) {
+			while (StsQueue.size(context.conn_request) == 0) {
 				ucp_worker_progress(arguments->ucp_worker);
 			}
+
+            req = (ucp_conn_request_h)StsQueue.pop(context.conn_request);
+
             memcpy(slave_args, th_argv, sizeof(p_argv));
             ret = init_worker(arguments->ucp_context, &(slave_args->ucp_data_worker));
             if (ret != 0) {
@@ -75,7 +74,7 @@ void * srv_worker (void * th_argv)
                 pthread_exit(NULL);
             }
 
-			status = server_create_ep(slave_args->ucp_data_worker, context.conn_request[current_req], &(slave_args->server_ep));
+			status = server_create_ep(slave_args->ucp_data_worker, req, &(slave_args->server_ep));
 			if (status != UCS_OK) {
 				perror("ERRIMSS_SERVER_CREATE_EP");
 				pthread_exit(NULL);
@@ -88,9 +87,8 @@ void * srv_worker (void * th_argv)
                     perror("ERRIMSS_SRVWORKER_DEPLOY");
 					pthread_exit(NULL);
             }
-
-			current_req++;
     } 
+	StsQueue.destroy(context.conn_request);
 	ucp_listener_destroy(context.listener);
 }
 
@@ -779,28 +777,25 @@ void * srv_worker_slave (void * th_argv)
 
 		p_argv * arguments = (p_argv *) th_argv;
 
-        context.conn_request = (ucp_conn_request_h *) malloc (100 * sizeof(ucp_conn_request_h));  
-		context.num_conn = 0;
-		context.conn_request[context.num_conn] = NULL;
-  
+        context.conn_request =  StsQueue.create(); 
 		status = start_server(arguments->ucp_worker, &context, &context.listener, NULL, arguments->port);
 		if (status != UCS_OK) {
 			perror("ERRIMSS_STAR_SERVER");
 			pthread_exit(NULL);
 		}
 
-        int current_req = 0;
-
-        for (int i = 0; i < 100; ++i) context.conn_request[i] = NULL;
-
 		for (;;) {
 			p_argv * slave_args = (p_argv *) malloc(sizeof(p_argv));
 			pthread_t thread;
 			pthread_attr_t attr;
+			ucp_conn_request_h req;
 
-			while (context.conn_request[current_req] == NULL) {
-				ucp_worker_progress(arguments->ucp_worker);
-			}
+            while (StsQueue.size(context.conn_request) == 0) {
+                ucp_worker_progress(arguments->ucp_worker);
+            }
+
+            req = (ucp_conn_request_h)StsQueue.pop(context.conn_request);
+
 
 			memcpy(slave_args, th_argv, sizeof(p_argv));
 			ret = init_worker(arguments->ucp_context, &(slave_args->ucp_data_worker));
@@ -809,7 +804,7 @@ void * srv_worker_slave (void * th_argv)
 				pthread_exit(NULL);
 			}
 
-			status = server_create_ep(slave_args->ucp_data_worker, context.conn_request[current_req], &(slave_args->server_ep));
+			status = server_create_ep(slave_args->ucp_data_worker, req, &(slave_args->server_ep));
 			if (status != UCS_OK) {
 				perror("ERRIMSS_SERVER_CREATE_EP");
 				pthread_exit(NULL);
@@ -822,10 +817,8 @@ void * srv_worker_slave (void * th_argv)
 				perror("ERRIMSS_SRVWORKER_DEPLOY");
 				pthread_exit(NULL);
 			}
-			
-			current_req++;
 		}
-
+		StsQueue.destroy(context.conn_request);
 		ucp_listener_destroy(context.listener);
 	}
 
@@ -1236,26 +1229,25 @@ void * srv_worker_slave (void * th_argv)
 			}
 
 			/* Initialize the server's context. */
-			context.conn_request = (ucp_conn_request_h *) malloc (100 * sizeof(ucp_conn_request_h));
-			context.num_conn = 0;
-            context.conn_request[context.num_conn] = NULL;
+			context.conn_request =  StsQueue.create();
 			status = start_server(arguments->ucp_worker, &context, &context.listener, NULL, arguments->port);
 			if (status != UCS_OK) {
 				perror("ERRIMSS_STAR_SERVER");
 				pthread_exit(NULL);
 			}
 
-            int current_req = 0;
 
-            for (int i = 0; i < 100; ++i) context.conn_request[i] = NULL;
- 
 			for (;;)
 			{
-				while (context.conn_request[current_req] == NULL) {
-					ucp_worker_progress(arguments->ucp_worker);
-				}
+				ucp_conn_request_h conn_req;
 
-				status = server_create_ep(ucp_data_worker, context.conn_request[current_req], &server_ep);
+                while (StsQueue.size(context.conn_request) == 0) {
+                  ucp_worker_progress(arguments->ucp_worker);
+                }
+
+                conn_req = (ucp_conn_request_h)StsQueue.pop(context.conn_request);
+
+				status = server_create_ep(ucp_data_worker, conn_req, &server_ep);
 				if (status != UCS_OK) {
 					perror("ERRIMSS_SERVER_CREATE_EP");
 					ep_close(ucp_data_worker, server_ep, UCP_EP_CLOSE_MODE_FLUSH);
@@ -1324,7 +1316,6 @@ void * srv_worker_slave (void * th_argv)
 					}
 				}
 				//context.conn_request = NULL;
-				current_req++;
 				ep_close(ucp_data_worker, server_ep, UCP_EP_CLOSE_MODE_FLUSH);
 			}
 			pthread_exit(NULL);
@@ -1353,8 +1344,7 @@ void * srv_worker_slave (void * th_argv)
 			}
 
 			/* Initialize the server's context. */
-			context.conn_request = (ucp_conn_request_h *) malloc (100 * sizeof(ucp_conn_request_h));
-			context.num_conn = 0;
+			context.conn_request =  StsQueue.create();
 		
 
 			status = start_server(arguments->ucp_worker, &context, &context.listener, NULL, arguments->port);
@@ -1363,19 +1353,18 @@ void * srv_worker_slave (void * th_argv)
 				pthread_exit(NULL);
 			}
 
-            int current_req = 0;
-
-            for (int i = 0; i < 100; ++i) context.conn_request[i] = NULL;
-     
 			for (;;)
 			{
 				ucp_ep_h server_ep;
+				ucp_conn_request_h conn_req;
 
-				while (context.conn_request[current_req] == NULL) {
-					ucp_worker_progress(arguments->ucp_worker);
-				}
+                while (StsQueue.size(context.conn_request) == 0) {
+                  ucp_worker_progress(arguments->ucp_worker);
+                }
 
-				status = server_create_ep(ucp_data_worker, context.conn_request[current_req], &server_ep);
+                conn_req = (ucp_conn_request_h)StsQueue.pop(context.conn_request);
+
+				status = server_create_ep(ucp_data_worker, conn_req, &server_ep);
 				if (status != UCS_OK) {
 					perror("ERRIMSS_SERVER_CREATE_EP");
 					pthread_exit(NULL);
@@ -1422,7 +1411,6 @@ void * srv_worker_slave (void * th_argv)
 				}
 
 				/* Reinitialize the server's context to be used for the next client */
-				current_req++;
 				ep_close(ucp_data_worker, server_ep, UCP_EP_CLOSE_MODE_FLUSH);
 			}
 

@@ -11,6 +11,7 @@ ADD_EXECUTABLE( server
 				./server.c
 				../src/stat.cpp
 				../src/comms.c
+				../src/queue.c
 				../src/workers.c
 				../src/memalloc.c
 				../src/memalloc.c
@@ -29,6 +30,7 @@ ADD_LIBRARY( imss_static STATIC
 				../src/imss.c
 				../src/comms.c
 				../src/workers.c
+				../src/queue.c
 				../src/hercules.c
 				../src/policies.c
 				../src/directory.c
@@ -40,6 +42,7 @@ ADD_LIBRARY( imss_shared SHARED
                 ../src/stat.cpp
                 ../src/imss.c
                 ../src/comms.c
+				../src/queue.c
                 ../src/workers.c
                 ../src/hercules.c
                 ../src/policies.c
