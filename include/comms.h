@@ -16,6 +16,7 @@
 
 
 #include "ucp_util.h"
+#include "queue.h"
 #include <arpa/inet.h> /* inet_addr */
 
 #include <ucp/api/ucp.h>
@@ -38,7 +39,7 @@ typedef enum {
  */
 typedef struct ucx_server_ctx {
 	int num_conn;
-    volatile ucp_conn_request_h *conn_request;
+	StsHeader *conn_request;
     ucp_listener_h              listener;
 
 } ucx_server_ctx_t;

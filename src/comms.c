@@ -1,6 +1,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include "imss.h"
+#include "queue.h"
 #include "comms.h"
 #include <errno.h>
 #include <netdb.h>
@@ -371,19 +372,7 @@ void server_conn_handle_cb(ucp_conn_request_h conn_request, void *arg)
                 ucs_status_string(status));
     }
 
-    if (context->conn_request[context->num_conn] == NULL) {
-		context->conn_request[context->num_conn++] = conn_request;
-    } else {
-        /* The server is already handling a connection request from a client,
-         * reject this new one */
-        printf("Rejecting a connection request. "
-               "Only one client at a time is supported.\n");
-        status = ucp_listener_reject(context->listener, conn_request);
-        if (status != UCS_OK) {
-            fprintf(stderr, "server failed to reject a connection request: (%s)\n",
-                    ucs_status_string(status));
-        }
-    }
+	StsQueue.push(context->conn_request, conn_request);
 }
 
 char* sockaddr_get_ip_str(const struct sockaddr_storage *sock_addr,

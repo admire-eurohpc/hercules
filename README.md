@@ -4,7 +4,7 @@ The architectural design of IMSS follows a client-server design model where the 
 
 The development of the present work was strictly conditioned by a set of well-defined objectives. Firstly, IMSS should provide flexibility in terms of deployment. To achieve this, the IMSS API provides a set of deployment methods where the number of servers conforming the instance, as well as their locations, buffer sizes, and their coupled or decoupled nature, can be specified. Second, parallelism should be maximised. To achieve this, IMSS follows a multi-threaded design architecture. Each server conforming an instance counts with a dispatcher thread and a pool of worker threads. The dispatcher thread distributes the incoming workload between the worker threads with the aim of balancing the workload in a multi-threaded scenario. Main entities conforming the architectural design are IMSS clients (front-end), IMSS server (back-end), and IMSS metadata server. Addressing the interaction between these components, the IMSS client will exclusively communicate with the IMSS metadata server whenever a metadata-related operation is performed, such as: *create_dataset* and *open_imss*. Data-related operations (*get_data* & *set_data*) will be handled directly by the corresponding storage server. Finally, IMSS offers to the application a set of distribution policies at dataset level increasing the application's awareness about the location of the data. As a result, the storage system will increase awareness in terms of data distribution at the client side, providing benefits such as data locality exploitation and load balancing.
 
-Two of the most suitable network interfaces are sockets and Remote Procedure Calls (RPCs). To choose the best one, we made a comparison between several communication mechanisms sockets, gRPC, and we chose ZeroMQ  in order to handle communications between the different entities conforming an IMSS instance. ZeroMQ has been qualified as one of the most efficient libraries for creating distributed applications. ZeroMQ provides multiple communication patterns across various transport layers, such as inter-threaded, inter-process, TCP, UDP, and multicast. ZeroMQ provides a performance-friendly API with an asynchronous I/O model that promotes scalability. In addition, ZeroMQ library offers zero-copy messages, avoiding further overheads due to data displacements. 
+IMSS takes advantage of UCX in order to handle communications between the different entities conforming an IMSS instance. UCX has been qualified as one of the most efficient libraries for creating distributed applications. UCX provides multiple communication patterns across various transport layers, such as inter-threaded, inter-process, TCP, UDP, and multicast. 
 
 Furthermore, to deal with the IMSS dynamic nature, a distributed metadata server, resembling CEPH model, was included in the design step. The metadata server is in charge of storing the structures representing each IMSS and dataset instances. Consequently, clients are able to join an already created IMSS as well as accessing an existing dataset among other operations. 
 
@@ -90,7 +90,7 @@ The mount call requires the following parameters:
 - *-r*: determines the default dataset root for the deployed file system.
 - *-a*: requires a file containing the hostnames of all metadata servers involved.
 - *-s*: the maximum capacity in bytes of the storage system.
-- *-d*: determines the deployment mode. 0 indicates an attached deployment strategy (metadata and data services are instantiated as a FUSE process) and 1 indicates a completely detached deployment, is such a way, both data and metadata servers have to be executed as independent processes.
+- *-d*: determines the deployment mode. 0 indicates an attached deployment strategy (metadata and data services are instantiated as a FUSE process) and 2 indicates a completely detached deployment, is such a way, both data and metadata servers have to be executed as independent processes.
 - *-l*: indicates the mount point path.
 
 
@@ -113,7 +113,7 @@ Initially, it is necesary to set up the configuration environment variables:
 > export IMSS_METADATA_FILE=./metadata   
 > export IMSS_DEPLOYMENT=2  
  
-
+In this case, IMSS will employ 3 data servers and one metadata server. The file _hostfile_ containts the hostnames of the data servers. File _stat_hostfile_ contains the hostname of the dedicated metadata hosts. Finally, file _metadata_ stores the current information of the employed metadata servers for future usage.
 
 Once, the application can be executed using the aforementioned deployment modes:
 
@@ -121,35 +121,86 @@ Once, the application can be executed using the aforementioned deployment modes:
 LD_PRELOAD=libimss_posix.so ls -l /mnt/imss/
 `
 
+# Example deployment setup
+
+Using this example deployement setup:
+
+- node1: initial metadata node.
+- node2: metadata node.
+- node3: initial data node.
+- node4: data node.
+- client1
+- client2
+
+# Running without MPI
+
+
+<details><summary>Click to expand</summary>
+## Configuration Files
+
+_hostfile_
+> node3  
+> node4  
+
+_stat_hostfile_
+> node1  
+> node2  
+
+## Metadata servers 
+
+On each metadata node (node1, node2):
+
+> ./server ./metadata 5569 0 
+
+
+## Data servers
+
+On each data node (node, node4):
+
+> ./server imss:// 5555 0 node1 5569 4 ./hostfile 1
+       
+
+## Clients
+
+> LD_PRELOAD=/home/imss/build/tools/libimss_posix.so /home/benchs/ior/bin/ior -k  -w -o /mnt/testimss/data.ot 10m -b 100m -s 5
+
+</details>
+
 # Running with MPI
+
+
+<details><summary>Click to expand</summary>
 
 ## Metadata servers
 
 
-mpirun.mpich -np 1 -f ./stat_hostfile ./server ./metadata 5569 0 
-
-or
-
-mpiexec -np 1 --hostfile ./stat_hostfile ./server ./metadata 5569 0 
+> mpirun.mpich -np 1 -f ./stat_hostfile ./server ./metadata 5569 0 
+> 
+> or
+> 
+> mpiexec -np 1 --hostfile ./stat_hostfile ./server ./metadata 5569 0 
 
 
 ## Data servers
 
 
-mpirun.mpich -np 4 -f ./hostfile ./server imss:// 5555 0 compute-6-2 5569 4 ./hostfile 1
+> mpirun.mpich -np 4 -f ./hostfile ./server imss:// 5555 0 node1 5569 4 ./hostfile 1
+> 
+> or
+> 
+> mpirun -np 4 --pernode --hostfile ./hostfile ./server imss:// 5555 0 node1 5569 4 ./hostfile 1
 
-or
-
-mpirun -np 4 --pernode --hostfile ./hostfile ./server imss:// 5555 0 tcnode07 5569 4 ./hostfile 1
            
 
 ## Clients
 
 
-mpirun.mpich -np 1 -f ./clientfile -genv LD_PRELOAD /home/imss/build/tools/libimss_posix.so ./test_simple /mnt/testimss/data.out
+> mpirun.mpich -np 1 -f ./clientfile -genv LD_PRELOAD /home/imss/build/tools/libimss_posix.so ./test_simple /mnt/testimss/data.out
+> 
+> or
+> 
+> mpirun -np 2 --pernode --hostfile ./clientfile -x LD_PRELOAD=/home/imss/build/tools/libimss_posix.so /home/benchs/ior/bin/ior -k  -w -o /mnt/testimss/data.ot 10m -b 100m -s 5
 
-or
-
-mpirun -np 2 --pernode --hostfile ./clientfile -x LD_PRELOAD=/home/imss/build/tools/libimss_posix.so /home/benchs/ior/bin/ior -k  -w -o /mnt/testimss/data.ot 10m -b 100m -s 5
+</details>
 
 

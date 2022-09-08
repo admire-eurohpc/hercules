@@ -27,7 +27,7 @@ set(WITH_JEMALLOC_DEFAULT   ${JEMALLOC_FOUND})
 
 find_package(
             MPI
-            COMPONENTS C
+            COMPONENTS C CXX
             OPTIONAL_COMPONENTS
             )
 

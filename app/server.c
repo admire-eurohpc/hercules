@@ -1,5 +1,4 @@
 #include <mpi.h>
-#include <zmq.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
