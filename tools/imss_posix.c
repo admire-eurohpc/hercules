@@ -175,7 +175,7 @@ __attribute__((constructor))
 void
 imss_posix_init(void)
 {
-	if (IMSS_DEBUG) fprintf(stderr,"IMSS client starting\n");
+	if (IMSS_DEBUG) fprintf(stderr,"IMSS2 client starting\n");
 	map_fd = map_fd_create();
 	if (getenv("IMSS_MOUNT_POINT") != NULL) {
 		MOUNT_POINT = getenv("IMSS_MOUNT_POINT");
@@ -231,6 +231,7 @@ imss_posix_init(void)
 	if (getenv("IMSS_DEPLOYMENT") != NULL) {
 		deployment = atoi(getenv("IMSS_DEPLOYMENT"));
 	}
+
     if (IMSS_DEBUG) {
 		fprintf(stderr," -- IMSS_MOUNT_POINT: %s\n", MOUNT_POINT);
 		fprintf(stderr," -- IMSS_HOSTFILE: %s\n", IMSS_HOSTFILE);
@@ -245,6 +246,7 @@ imss_posix_init(void)
 		fprintf(stderr," -- IMSS_METADATA_FILE: %s\n",  METADATA_FILE);
 		fprintf(stderr," -- IMSS_DEPLOYMENT: %d\n",  deployment);
     }
+
 	IMSS_DATA_BSIZE = IMSS_BLKSIZE*KB;
 	//Hercules init -- Attached deploy
 	if(deployment==1){
@@ -618,7 +620,7 @@ ssize_t write(int fd, const void *buf, size_t size){
 		struct stat ds_stat_n;
 		imss_getattr(path, &ds_stat_n);
 		map_fd_search(map_fd, path, &fd, &p);
-		printf("CUSTOM write worked! path=%s fd=%d, size=%ld offset=%ld\n", path, fd, size, p); 
+		//printf("CUSTOM write worked! path=%s fd=%d, size=%ld offset=%ld, buffer=%s\n", path, fd, size, p, buf); 
 		ret=imss_write(path,buf,size,p);
 		imss_release(path);
 	}else{
@@ -646,7 +648,7 @@ ssize_t read(int fd, void *buf, size_t size){
 		//printf("CUSTOM read worked! path=%s fd=%d, size=%ld\n",path, fd, size);
 		map_fd_search(map_fd, path, &fd, &p);
 		ret = imss_read(path,buf,size,p);
-		//printf("END LD_PRELOAD IMSS_READ ret=%ld, size=%ld\n\n",ret, size);
+	
 	}else{
 		ret = real_read(fd, buf, size);
 	}

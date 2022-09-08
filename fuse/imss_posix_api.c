@@ -301,7 +301,7 @@ int imss_readdir(const char *path, void *buf, posix_fill_dir_t filler, off_t off
 
 int imss_open(const char *path, uint64_t *fh)
 {
-	//printf("imss_open=%s\n",path);
+	printf("imss_open=%s\n",path);
 	//TODO -> Access control
 	//DEBUG
 	char * imss_path = (char *) calloc(MAX_PATH, sizeof(char));
@@ -424,8 +424,10 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 				byte_count += to_read;
 				++first;
 				//Check if offset is bigger than filled, return 0 because is EOF case
-                if(start_offset + to_read >= stats.st_size)
+				//printf("start_offset=%ld, to_read=%ld, stats.st_size=%ld\n",start_offset,to_read,stats.st_size);
+                if(start_offset + to_read > stats.st_size){
                     return 0;
+				}
 				//Middle block case
 			} else if (curr_blk != end_blk) {
 				get_data(ds, curr_blk, buf + byte_count);
@@ -455,6 +457,7 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 	delta_us1 = (long) (end1.tv_usec - start1.tv_usec);
 	printf("[CLIENT] [SREAD_END] delta_us=%6.3f\n",(delta_us1/1000.0F));*/
 	free(rpath);
+	//printf("IMSS SREAD RETURN byte_count=%ld\n",byte_count);
 	return byte_count;
 }
 
@@ -992,7 +995,6 @@ int imss_write(const char *path, const char *buf, size_t size, off_t off)
 
 	char *aux_block;
 
-	printf("IMSS_WRITE size=%ld path=%s off=%ld IMSS_DATA_BLOCKSIZE=%ld\n",size, path, off, IMSS_DATA_BSIZE); 
 	//Compute offsets to write
 	int64_t curr_blk, end_blk, start_offset, end_offset;
 	int64_t start_blk = off / IMSS_DATA_BSIZE + 1; //Add one to skip block 0
@@ -1056,11 +1058,8 @@ int imss_write(const char *path, const char *buf, size_t size, off_t off)
 			//Bytes to write are the minimum between the size parameter and the remaining space in the block (BLOCKSIZE-start_offset)
 			to_copy = (size < IMSS_DATA_BSIZE-start_offset) ? size : IMSS_DATA_BSIZE-start_offset;
 
-			//memcpy(aux + start_offset, buf + byte_count, to_copy);
-			aux_block = (char *)buf + byte_count;
+			memcpy(aux + start_offset, buf + byte_count, to_copy);
 
-		
-			
 		}
 		//Last Block
 		else if(curr_blk == end_blk){
@@ -1090,36 +1089,25 @@ int imss_write(const char *path, const char *buf, size_t size, off_t off)
 			if(byte_count == size){
 				to_copy=0;
 			}		
-			//memcpy(aux , buf + byte_count, to_copy);
-			aux_block = (char *)buf + byte_count;
+			memcpy(aux , buf + byte_count, to_copy);
 		}
 		//middle block
 		else{
 			to_copy = IMSS_DATA_BSIZE;
 			
 			int64_t pending = size - byte_count;
-			/*struct timeval start, end;
-			long delta_us;
-			gettimeofday(&start, NULL);*/
-			//memcpy(aux, buf + byte_count, to_copy);
-			aux_block = (char *)buf + byte_count;
-			/*gettimeofday(&end, NULL);
-			delta_us = (long) (end.tv_usec - start.tv_usec);
-			printf("[CLIENT] [SWRITE MEMCPY 1 BLOCK] delta_us=%6.3f\n",(delta_us/1000.0F));*/
+			memcpy(aux, buf + byte_count, to_copy);
+
 		}
 
 		//Write and update variables
-		//pthread_mutex_lock(&lock);
-		//if(set_data(ds, curr_blk, (char *)aux) < 0){
-		if(set_data(ds, curr_blk, aux_block) < 0){
+		if(set_data(ds, curr_blk, aux) < 0){
 			fprintf(stderr, "[IMSS-FUSE]	Error writing to imss.\n");
 			error_print=-ENOENT;
-			//pthread_mutex_unlock(&lock);
-			//free(aux);
+
 			return -ENOENT;
 		}
-		//pthread_mutex_unlock(&lock);
-		//printf("currblock=%ld, byte_count=%ld\n",curr_blk, byte_count);
+
 		byte_count += to_copy;
 		++curr_blk;
 		++first;

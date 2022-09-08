@@ -1170,7 +1170,7 @@ int32_t
 open_dataset(char * dataset_uri)
 {
 	int32_t associated_imss_indx;
-	printf("OPEN DATASET INSIDE dataset_uri=%s\n",dataset_uri);
+	//printf("OPEN DATASET INSIDE dataset_uri=%s\n",dataset_uri);
 	//Check if the IMSS storing the dataset exists within the clients session.
 	if ((associated_imss_indx = imss_check(dataset_uri)) == -1)
 	{
@@ -2382,7 +2382,6 @@ set_data(int32_t 	 dataset_id,
 	char key_[REQUEST_SIZE];
 	//Key related to the requested data element.
 	sprintf(key_, "%d %s$%d", curr_dataset.data_entity_size, curr_dataset.uri_, data_id);
-
 	int key_length = strlen(key_)+1;
 	char key[REQUEST_SIZE];
 	memcpy((void *) key, (void *) key_, key_length);
@@ -2397,6 +2396,8 @@ set_data(int32_t 	 dataset_id,
 		uint32_t n_server_ = (n_server + i*(curr_imss_storages/curr_dataset.repl_factor)) % curr_imss_storages;
 
 		//printf("BLOCK %d SENT TO %d SERVER with key: %s (%d)\n", data_id, n_server_, key, key_length);
+
+		
 		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[n_server_], (char *) &curr_imss.conns.id[n_server_], sizeof(uint32_t)) < 0)
 		{
 			perror("ERRIMSS_STAT_HELLO");
@@ -2427,6 +2428,7 @@ set_data(int32_t 	 dataset_id,
 
 		//	gettimeofday(&start, NULL);
 		//Send read request message specifying the block data.
+		//printf("[SET DATA] msg=%s, size=%d\n",buffer,curr_dataset.data_entity_size);
 		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[n_server_], buffer, curr_dataset.data_entity_size) < 0)
 		{
 			perror("ERRIMSS_SETDATA_SEND");

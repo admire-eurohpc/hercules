@@ -697,7 +697,6 @@ void * srv_worker_slave (void * th_argv)
 						//unsigned char * buffer = (unsigned char *) malloc(block_size_recv);
 						char * buffer = (char *)aligned_alloc(1024, block_size_recv);
 						//Receive the block into the buffer.
-
 						recv_stream(ucp_data_worker, arguments->server_ep, buffer, block_size_recv);
 						struct stat * stats = (struct stat *) buffer;
 						int32_t insert_successful;
