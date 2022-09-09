@@ -1,22 +1,27 @@
+set_source_files_properties(./mount.c ../src/hercules.c PROPERTIES LANGUAGE CXX)
+
 add_executable(mount.imss
     mount.c
+    ../src/hercules.c
     )
 
 add_executable(umount.imss
     umount.c
     )
 
-set(CMAKE_C_FLAGS "-fPIC -lulockmgr -DFUSE")
-set(CMAKE_CXX_FLAGS "-fPIC -lulockmgr -DFUSE")
+set(CMAKE_C_FLAGS "-fPIC")
+set(CMAKE_CXX_FLAGS "-fPIC")
+
+add_library(imss_posix_api STATIC ../fuse/imss_posix_api.c ../fuse/map.cpp ../fuse/mapprefetch.cpp)
 
 add_library (imss_posix SHARED imss_posix.c mapfd.cpp ../fuse/map.cpp) 
 
 target_include_directories(imss_posix PRIVATE ../fuse  .)
 
-target_link_directories(imss_posix PUBLIC /opt/anaconda3/lib ${UCX_LIBRARIES})
-target_link_directories(mount.imss PUBLIC /opt/anaconda3/lib ${UCX_LIBRARIES})
-target_link_directories(umount.imss PUBLIC /opt/anaconda3/lib ${UCX_LIBRARIES})
+target_link_directories(imss_posix PUBLIC ${UCX_LIBRARIES})
+target_link_directories(mount.imss PUBLIC ${UCX_LIBRARIES})
+target_link_directories(umount.imss PUBLIC ${UCX_LIBRARIES})
 
-target_link_libraries(mount.imss  ${CMAKE_THREAD_LIBS_INIT} ${GLIB_LIBRARIES} ${FUSE_LIBRARIES} imss_static)
-target_link_libraries(umount.imss ${CMAKE_THREAD_LIBS_INIT} ${GLIB_LIBRARIES} ${FUSE_LIBRARIES} imss_static)
-target_link_libraries(imss_posix  ${CMAKE_THREAD_LIBS_INIT} ${GLIB_LIBRARIES} ${FUSE_LIBRARIES} imss_posix_api imss_shared dl)
+target_link_libraries(mount.imss  ${CMAKE_THREAD_LIBS_INIT} ${GLIB_LIBRARIES} imss_static)
+target_link_libraries(umount.imss ${CMAKE_THREAD_LIBS_INIT} ${GLIB_LIBRARIES} imss_static)
+target_link_libraries(imss_posix  ${CMAKE_THREAD_LIBS_INIT} ${GLIB_LIBRARIES} imss_posix_api imss_shared dl)

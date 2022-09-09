@@ -127,9 +127,10 @@ typedef struct {
 			int    lenght_key;
 } thread_argv;
 
-#ifndef FUSE
+#ifdef __cplusplus
 extern "C" {
 #endif
+
 /****************************************************************************************************************************/
 /****************************************** METADATA SERVICE MANAGEMENT FUNCTIONS  ******************************************/
 
@@ -487,7 +488,8 @@ int32_t free_imss(imss_info * imss_info_);
 */
 int32_t free_dataset(dataset_info * dataset_info_);
 
-#ifndef FUSE
+
+#ifdef __cplusplus
 }
 #endif
 

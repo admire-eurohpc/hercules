@@ -29,13 +29,11 @@ find_package(
             MPI
             COMPONENTS C CXX
             OPTIONAL_COMPONENTS
+			REQUIRED
             )
-
 
 if (MPI_FOUND)
     include_directories(SYSTEM ${MPI_INCLUDE_PATH})
-else (MPI_FOUND)
-    message(SEND_ERROR "This application cannot compile without MPI")
 endif (MPI_FOUND)
 
 FIND_PACKAGE(Threads REQUIRED)
@@ -55,6 +53,12 @@ SET(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}")
 SET(CMAKE_CXX_FLAGS  " ${CMAKE_C_FLAGS} ${CMAKE_C_FLAGS_RELEASE}")
 SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS}")
 
+find_package(FUSE)
+
 ADD_SUBDIRECTORY(app)
-ADD_SUBDIRECTORY(fuse)
+
+if(FUSE_FOUND)
+   ADD_SUBDIRECTORY(fuse)
+endif(FUSE_FOUND)
+
 ADD_SUBDIRECTORY(tools)
