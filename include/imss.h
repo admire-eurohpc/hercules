@@ -127,9 +127,6 @@ typedef struct {
 			int    lenght_key;
 } thread_argv;
 
-#ifndef FUSE
-extern "C" {
-#endif
 /****************************************************************************************************************************/
 /****************************************** METADATA SERVICE MANAGEMENT FUNCTIONS  ******************************************/
 
@@ -486,9 +483,5 @@ int32_t free_imss(imss_info * imss_info_);
 	RETURNS:	0 - Resources were released successfully.
 */
 int32_t free_dataset(dataset_info * dataset_info_);
-
-#ifndef FUSE
-}
-#endif
 
 #endif
