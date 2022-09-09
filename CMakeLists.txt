@@ -29,13 +29,11 @@ find_package(
             MPI
             COMPONENTS C CXX
             OPTIONAL_COMPONENTS
+			REQUIRED
             )
-
 
 if (MPI_FOUND)
     include_directories(SYSTEM ${MPI_INCLUDE_PATH})
-else (MPI_FOUND)
-    message(SEND_ERROR "This application cannot compile without MPI")
 endif (MPI_FOUND)
 
 FIND_PACKAGE(Threads REQUIRED)
@@ -59,8 +57,8 @@ find_package(FUSE)
 
 ADD_SUBDIRECTORY(app)
 
-if(DEFINED ${FUSE_LIBRARIES})
+if(FUSE_FOUND)
    ADD_SUBDIRECTORY(fuse)
-endif(DEFINED ${FUSE_LIBRARIES})
+endif(FUSE_FOUND)
 
 ADD_SUBDIRECTORY(tools)

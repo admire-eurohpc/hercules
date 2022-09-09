@@ -6,6 +6,11 @@
 
 #include "imss.h"
 
+#ifdef __cplusplus
+extern "C"{
+#endif
+
+
 /* Method initializing an instance of the HERCULES in-memory storage system.
 
 	RECEIVES:	rank 		       - Integer identifying the current application process among the application itself. 
@@ -28,5 +33,10 @@ int32_t hercules_init(uint32_t rank, uint64_t backend_strg_size, uint16_t server
                 -1 - In case of error.
 */
 int32_t hercules_release();
+
+#ifdef __cplusplus
+}
+#endif
+
 
 #endif
