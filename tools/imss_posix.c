@@ -46,7 +46,7 @@ char     IMSS_ROOT[32];
 char     META_HOSTFILE[512];
 uint64_t STORAGE_SIZE = 16; //In GB
 uint64_t META_BUFFSIZE = 16; //In GB
-uint64_t IMSS_BLKSIZE = 1024;//In KB 
+uint64_t IMSS_BLKSIZE = 8;//In KB 
 uint64_t IMSS_BUFFSIZE = 2; //In GB
 int32_t REPL_FACTOR = 1; //Default none
 int32_t  IMSS_DEBUG = 0;
@@ -54,10 +54,10 @@ int32_t  IMSS_DEBUG = 0;
 uint16_t PREFETCH = 6;
 
 uint16_t threshold_read_servers = 4;
-uint16_t BEST_PERFORMANCE_READ = 1;//if 1    then n_servers < threshold => SREAD, else if n_servers > threshold => SPLIT_READV 
+uint16_t BEST_PERFORMANCE_READ = 0;//if 1    then n_servers < threshold => SREAD, else if n_servers > threshold => SPLIT_READV 
 //if 0 only one method of read applied specified in MULTIPLE_READ
 
-uint16_t MULTIPLE_READ = 0;//1=vread with prefetch, 2=vread without prefetch, 
+uint16_t MULTIPLE_READ = 4;//1=vread with prefetch, 2=vread without prefetch, 
 //3=vread_2x 4=imss_split_readv(distributed) else sread
 uint16_t MULTIPLE_WRITE = 0;//1=writev(only 1 server), 2=imss_split_writev(distributed) else swrite
 char prefetch_path[256];

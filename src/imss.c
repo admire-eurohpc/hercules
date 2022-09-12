@@ -2017,38 +2017,52 @@ split_readv(void * th_argv)
 		}
 	}
 	//	printf("[CLIENT] [Split_readv]\n");
+	
 	char key_[REQUEST_SIZE];
 	//Key related to the requested data element.
-	sprintf(key_, "9 %s %ld %ld %d %s",
+	int msg_lenght = strlen(arguments->msg)+1; 
+	sprintf(key_, "9 %s %ld %ld %d %d",
 			arguments->path, arguments->BLKSIZE, arguments->start_offset, 
-			arguments->stats_size, arguments->msg);
+			arguments->stats_size, msg_lenght);
+
+
 	int key_length = strlen(key_)+1;
 	char key[REQUEST_SIZE];
 	memcpy((void *) key, (void *) key_, key_length);
 	key[key_length-1] = '\0';
 
+	//printf("key=%s\n",key);
 	//Request the concerned block to the involved servers.
 	for (int32_t i = 0; i < curr_dataset.repl_factor; i++)
 	{
-		//printf("BLOCK %d ASKED TO %d SERVER with key: %s (%d)\n", curr_block, repl_servers[i], key, key_length);
 
 		//Send read request message specifying the block URI.
 		//if (comm_send(curr_imss.conns.eps_[repl_servers[i]], key, KEY, 0) < 0)
+		//printf("[SPLIT READV] 1-Send_stream\n");
 		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[repl_servers[i]], (char *) &curr_imss.conns.id[repl_servers[i]], sizeof(uint32_t)) < 0)
 		{
 			perror("ERRIMSS_STAT_HELLO");
 		}
 
 		char mode[] = "GET";
+		//printf("[SPLIT READV] 2-Send_stream\n");
 		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[repl_servers[i]], mode, MODE_SIZE) < 0)
 		{
 			perror("ERRIMSS_STAT_HELLO");
 		}
 
+		//printf("[SPLIT READV] 3-Send_stream\n");
 		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[repl_servers[i]], key, REQUEST_SIZE) < 0)
 		{
 			perror("ERRIMSS_GETDATA_REQ");
 		}
+
+		//printf("[SPLIT READV] 4-Send_msg\n");
+		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[repl_servers[i]], arguments->msg, msg_lenght) < 0)
+		{
+			perror("ERRIMSS_GETDATA_REQ");
+		}
+
 		struct timeval start, end;
 		/*long delta_us;
 		  gettimeofday(&start, NULL);*/

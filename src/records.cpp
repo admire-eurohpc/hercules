@@ -48,7 +48,7 @@ int32_t map_records::put(std::string key, char * address, uint64_t length)
 
 	struct utsname detect;
 	uname(&detect);
-	printf("Nodename    - %s add in map=%s\n", detect.nodename, key.c_str());
+	//printf("Nodename    - %s add in map=%s\n", detect.nodename, key.c_str());
 	//printf("quantity=%ld total size=%ld\n",quantity_occupied, total_size);
 	quantity_occupied = quantity_occupied + length;
 	buffer.insert({key, value});

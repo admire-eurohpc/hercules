@@ -301,7 +301,7 @@ int imss_readdir(const char *path, void *buf, posix_fill_dir_t filler, off_t off
 
 int imss_open(const char *path, uint64_t *fh)
 {
-	printf("imss_open=%s\n",path);
+	//printf("imss_open=%s\n",path);
 	//TODO -> Access control
 	//DEBUG
 	char * imss_path = (char *) calloc(MAX_PATH, sizeof(char));
@@ -946,11 +946,10 @@ int imss_vread_2x(const char *path, char *buf, size_t size, off_t offset)
 
 int imss_read(const char *path, char *buf, size_t size, off_t offset) {
    int ret;
-   ret = imss_sread(path, buf, size, offset);
-/*
+  // ret = imss_sread(path, buf, size, offset);
+
 
    	if (BEST_PERFORMANCE_READ == 0){
-
 		if (MULTIPLE_READ==1){
 			ret = imss_vread_prefetch(path, buf, size, offset);
 		}else if(MULTIPLE_READ==2){
@@ -958,6 +957,7 @@ int imss_read(const char *path, char *buf, size_t size, off_t offset) {
 		}else if(MULTIPLE_READ==3){
 			ret = imss_vread_2x(path, buf, size, offset);
 		}else if(MULTIPLE_READ==4){
+			//printf("ENTER IMSS_SPLIT_READV\n");
 			ret = imss_split_readv(path, buf, size, offset);
 		}else{
 			ret = imss_sread(path, buf, size, offset);
@@ -973,7 +973,7 @@ int imss_read(const char *path, char *buf, size_t size, off_t offset) {
 			ret = imss_split_readv(path, buf, size, offset);
 		}
 	}
-	*/
+	
    return ret;
 }
 
@@ -1363,7 +1363,7 @@ int imss_split_readv(const char *path, char *buf, size_t size, off_t offset)
 		count=0;
 		for (int i=0; i<total; i++){
 			if(list_servers[server][i]>0){
-			//	printf("**list_servers[%d][%d]=%d\n", server,i,list_servers[server][i]);
+				//printf("**list_servers[%d][%d]=%d\n", server,i,list_servers[server][i]);
 				sprintf(block,"$%d",list_servers[server][i]);
 			//	printf("block=%s\n",block);
 			//	printf("all_block=%s length=%ld\n",all_blocks, strlen(all_blocks));
@@ -1384,13 +1384,11 @@ int imss_split_readv(const char *path, char *buf, size_t size, off_t offset)
 	free(number);
 	free(all_blocks);
 	
-
 	char **buffer_servers;//save block read for each server
 	buffer_servers = calloc(N_SERVERS, sizeof(char*)); 
 	for(int z = 0; z < N_SERVERS; z++) { 
 		buffer_servers[z] = calloc(amount[z]*IMSS_DATA_BSIZE, sizeof(char));
 	}
-
 	//*********************Lineal*******************************
 	/*for(int server = 0; server < N_SERVERS; server++){
 		printf("server=%d, N_SERVER=%d\n",server, N_SERVERS);
@@ -1416,7 +1414,7 @@ int imss_split_readv(const char *path, char *buf, size_t size, off_t offset)
 		arguments[server].stats_size		=	stats.st_size;
 		arguments[server].lenght_key		=	lenght_message;
 		
-	/*	printf("\nCustom   ->buffer %p\n", buffer_servers[server]);
+		/*printf("\nCustom   ->buffer %p\n", buffer_servers[server]);
 		printf("arguments->buffer %p\n", arguments[server].buffer);
 		printf("arguments.n_server=%d\n",arguments[server].n_server);
 		printf("arguments.path=%s\n",arguments[server].path);
@@ -1424,8 +1422,8 @@ int imss_split_readv(const char *path, char *buf, size_t size, off_t offset)
 		printf("arguments.size=%d\n",arguments[server].size);
 		printf("arguments.BLKSIZE=%ld\n",arguments[server].BLKSIZE);
 		printf("arguments.start_offset=%ld\n",arguments[server].start_offset);
-		printf("arguments.stats-size=%d\n",arguments[server].stats_size);
-	*/	
+		printf("arguments.stats-size=%d\n",arguments[server].stats_size);*/
+		
 		if(arguments[server].size > 0){
 			if (pthread_create(&threads[server], NULL, split_readv, (void *) &arguments[server]) == -1)
 			{
@@ -1435,6 +1433,7 @@ int imss_split_readv(const char *path, char *buf, size_t size, off_t offset)
 		}
 		
 	}
+
 	//Wait for the threads to conclude.
 	for (int32_t server = 0; server < (N_SERVERS); server++)
 	{
@@ -1461,7 +1460,7 @@ int imss_split_readv(const char *path, char *buf, size_t size, off_t offset)
 		for(int server = 0; server < N_SERVERS; server++){
 			
 			if(list_servers[server][i] == curr_blk){
-			//	printf("block find list_servers[%d][%d]=%d=%ld\n",server,i,list_servers[server][i],curr_blk);
+				//printf("block find list_servers[%d][%d]=%d=%ld\n",server,i,list_servers[server][i],curr_blk);
 			
 				//First block case
 				if (first == 0) {

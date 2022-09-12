@@ -258,7 +258,7 @@ void * srv_worker_slave (void * th_argv)
 						}
 						break;
 					}
-					case READV:
+					case READV://Only 1 server work
 					{
 						//printf("READV CASE\n");
 						std::size_t found = key.find('$');
@@ -388,19 +388,26 @@ void * srv_worker_slave (void * th_argv)
 							found = key.find(' ');
 							int stats_size = stoi(key.substr(0,found));
 							key.erase(0,found+1);
+							
+							int msg_size = stoi(key.substr(0,found));
+					
+							char * msg = (char *) calloc(msg_size,sizeof(char));
+							recv_stream(ucp_data_worker, arguments->server_ep,  msg, msg_size);
 
-
+							key = msg;
 							found = key.find('$');
 							int amount = stoi(key.substr(0,found));
 							int size = amount * blocksize;
 							key.erase(0,found+1);
 
-							/*printf("amount=%d\n",amount);
-							  printf("path=%s\n",path.c_str());
-							  printf("blocksize=%d\n",blocksize);
-							  printf("start_offset=%d\n",start_offset);
-							  printf("size=%d\n",size);
-							  printf("rest=%s\n",key.c_str());*/
+							/*printf("msg=%s\n",key.c_str());
+							printf("msg_size=%d\n",msg_size);
+							printf("*path=%s\n",path.c_str());
+							printf("*blocksize=%d\n",blocksize);
+							printf("*start_offset=%d\n",start_offset);
+							printf("*size=%d\n",size);
+							printf("*amount=%d\n",amount);*/
+
 
 							char * buf = (char *)malloc(size);
 
