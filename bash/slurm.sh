@@ -19,9 +19,6 @@ IOR_PATH=/home/software/io500/bin
 PWD=`pwd`
 mpiexec hostname > hostfile
 
-# Just in case there are servers running
-mpiexec killall -9  $IMSS_PATH/server &> /dev/null
-
 echo "# IMMS: Running metadata servers"
 rm metadata &> /dev/null
 touch metadata
@@ -56,7 +53,4 @@ mpirun -np $NUM_CLIENT --pernode --hostfile ./client_hostfile \
 			 -x IMSS_METADATA_FILE=$PWD/metadata \
 			 -x IMSS_DEPLOYMENT=2 \
 			 $IOR_PATH/ior -o /mnt/imss/data.out -t 10m -b 100m -s 5
-
-echo "# IMMS: Killing servers"
-mpiexec killall -9 $IMMS_PATH/server &> /dev/null
 
