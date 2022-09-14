@@ -10,6 +10,8 @@ NUM_METADATA=$1
 NUM_DATA=$2
 NUM_CLIENT=$3
 BLOCK_SIZE=$4
+META_PORT=5569
+DATA_PORT=5555
 
 IMSS_PATH=$HOME/imss/build
 IOR_PATH=/home/software/io500/bin
@@ -24,7 +26,7 @@ rm metadata &> /dev/null
 touch metadata
 head -n $NUM_METADATA hostfile > meta_hostfile
 cat meta_hostfile
-mpiexec -np $NUM_METADATA --pernode --hostfile ./meta_hostfile $IMSS_PATH/server ./metadata 5569 0 &
+mpiexec -np $NUM_METADATA --pernode --hostfile ./meta_hostfile $IMSS_PATH/server ./metadata $META_PORT 0 &
 
 sleep 1
 
@@ -32,7 +34,7 @@ echo "# IMMS: Running data servers"
 tail -n +$((NUM_METADATA+1)) hostfile | head -n $NUM_DATA > data_hostfile
 META_NODE=$(head -n 1 meta_hostfile)
 cat data_hostfile
-mpirun -np $NUM_DATA --pernode --hostfile ./data_hostfile $IMSS_PATH/server imss:// 5555 0 $META_NODE 5569 $NUM_DATA ./data_hostfile 1 &
+mpirun -np $NUM_DATA --pernode --hostfile ./data_hostfile $IMSS_PATH/server imss:// $DATA_PORT 0 $META_NODE $META_PORT $NUM_DATA ./data_hostfile 1 &
 
 sleep 1
 
@@ -43,11 +45,11 @@ mpirun -np $NUM_CLIENT --pernode --hostfile ./client_hostfile \
              -x IMSS_MOUNT_POINT=/mnt/imss \
 			 -x IMSS_HOSTFILE=$PWD/data_hostfile \
 			 -x IMSS_N_SERVERS=$NUM_DATA \
-			 -x IMSS_SRV_PORT=5555 \
+			 -x IMSS_SRV_PORT=$DATA_PORT \
 			 -x IMSS_BUFFSIZE=2000 \
 			 -x IMSS_BLKSIZE=$BLOCK_SIZE \
              -x IMSS_META_HOSTFILE=$PWD/meta_hostfile \
-			 -x IMSS_META_PORT=5569 \
+			 -x IMSS_META_PORT=$META_PORT \
 			 -x IMSS_META_SERVERS=$NUM_METADATA \
 			 -x IMSS_STORAGE_SIZE=1000 \
 			 -x IMSS_METADATA_FILE=$PWD/metadata \
