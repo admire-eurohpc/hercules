@@ -1,16 +1,15 @@
 #!/bin/bash
 #SBATCH --job-name=imss    # Job name
-#SBATCH --nodes=4                    # Run all processes on a single node
 #SBATCH --ntasks-per-node=1             # How many tasks on each node
 #SBATCH --time=00:05:00               # Time limit hrs:min:sec
 #SBATCH --output=imss_%j.log   # Standard output and error log
 
 #SETUP
 
-NUM_METADATA=1
-NUM_DATA=2
-NUM_CLIENT=1
-BLOCK_SIZE=1024
+NUM_METADATA=$1
+NUM_DATA=$2
+NUM_CLIENT=$3
+BLOCK_SIZE=$4
 
 IMSS_PATH=$HOME/imss/build
 IOR_PATH=/home/software/io500/bin
@@ -21,7 +20,7 @@ PWD=`pwd`
 mpiexec hostname > hostfile
 
 # Just in case there are servers running
-mpiexec killall $IMSS_PATH/server &> /dev/null
+mpiexec killall -9  $IMSS_PATH/server &> /dev/null
 
 echo "# IMMS: Running metadata servers"
 rm metadata &> /dev/null
@@ -59,5 +58,5 @@ mpirun -np $NUM_CLIENT --pernode --hostfile ./client_hostfile \
 			 $IOR_PATH/ior -o /mnt/imss/data.out -t 10m -b 100m -s 5
 
 echo "# IMMS: Killing servers"
-mpiexec killall $IMMS_PATH/server &> /dev/null
+mpiexec killall -9 $IMMS_PATH/server &> /dev/null
 
