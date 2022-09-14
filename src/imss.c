@@ -455,6 +455,7 @@ get_dir(char * 	 requested_uri,
 		char **  buffer,
 		char *** items)
 {
+
 	int ret = 0;
 	//Discover the metadata server that shall deal with the former URI.
 	uint32_t m_srv = discover_stat_srv(requested_uri);
@@ -462,7 +463,6 @@ get_dir(char * 	 requested_uri,
 	//GETDIR request.
 	char getdir_req[REQUEST_SIZE];
 	sprintf(getdir_req, "%d %s%c", GETDIR, requested_uri, '\0');
-
 	if (send_stream(ucp_worker_client, stat_client[m_srv], (char *) &stat_ids[m_srv], sizeof(uint32_t)) < 0)
 	{
 		perror("ERRIMSS_STAT_HELLO");
@@ -483,8 +483,16 @@ get_dir(char * 	 requested_uri,
 		return -1;
 	}
 
-	char elements[RESPONSE_SIZE];
+	size_t uris_size = 0;
+	char msg[REQUEST_SIZE];
+	if (recv_stream(ucp_worker_client, stat_client[m_srv], msg, REQUEST_SIZE) < 0)
+	{
+		perror("ERRIMSS_GETDIR_RECV");
+		return -1;
+	}
 
+	uris_size = atoi(msg);
+	char elements[uris_size];
 	//Retrieve the set of elements within the requested uri.
 	ret = recv_dynamic_stream(ucp_worker_client, stat_client[m_srv], elements, BUFFER);
 	if (ret < 0)
@@ -492,12 +500,14 @@ get_dir(char * 	 requested_uri,
 		perror("ERRIMSS_GETDIR_RECV");
 		return -1;
 	}
+	
 
 	if (!strncmp("$ERRIMSS_NO_KEY_AVAIL$", elements, 22))
 	{
 		fprintf(stderr, "ERRIMSS_GETDIR_NODIR\n");
 		return -1;
 	}
+
 	uint32_t elements_size = ret; 
 
 	//*buffer = (char *) malloc(sizeof(char)*elements_size);
@@ -517,7 +527,6 @@ get_dir(char * 	 requested_uri,
 
 		curr += URI_;
 	}
-
 	return num_elements;
 }
 

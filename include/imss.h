@@ -6,7 +6,7 @@
 
 
 //Maximum number of bytes assigned to a dataset or IMSS URI.
-#define URI_		128
+#define URI_		256
 
 //Maximum number of bytes retrieved from the imss deployment file per line.
 #define LINE_LENGTH	512

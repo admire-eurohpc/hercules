@@ -128,7 +128,6 @@ int imss_access(const char *path, int permission)
 
 int imss_getattr(const char *path, struct stat *stbuf)
 {
-	//printf("imss_getattr=%s\n",path);
 	//Needed variables for the call
 	char * buffer;
 	char ** refs;
@@ -172,11 +171,12 @@ int imss_getattr(const char *path, struct stat *stbuf)
 				//Free resources
 				//free(buffer);
 				free(refs);
-
 				return 0;
 			} 
-			else return -ENOENT;
-
+			else{
+			//fprintf(stderr,"imss_getattr get_dir ERROR\n");
+			return -ENOENT;
+			}
 		case 2: //Case file
 			
 			/*if(stat_dataset(imss_path, &metadata) == -1){
@@ -235,7 +235,7 @@ int imss_getattr(const char *path, struct stat *stbuf)
 
 int imss_readdir(const char *path, void *buf, posix_fill_dir_t filler, off_t offset)
 {
-	//printf("imss_readdir=%s\n",path);
+	//fprintf(stderr,"imss_readdir=%s\n",path);
 	//Needed variables for the call
 	char * buffer;
 	char ** refs;
@@ -246,6 +246,7 @@ int imss_readdir(const char *path, void *buf, posix_fill_dir_t filler, off_t off
 	//Call IMSS to get metadata
 	if((n_ent = get_dir((char*)imss_path, &buffer, &refs)) < 0){
 		strcat(imss_path,"/");
+		//fprintf(stderr,"try again imss_path=%s\n",imss_path);
 		if((n_ent = get_dir((char*)imss_path, &buffer, &refs)) < 0){	
 			fprintf(stderr, "[IMSS-FUSE]	Error retrieving directories for URI=%s", path);
 			return -ENOENT;
@@ -1930,6 +1931,7 @@ int imss_chown(const char *path, uid_t uid, gid_t gid) {
 }
 
 int imss_rename(const char *old_path, const char *new_path){
+	//printf("Imss rename\n");
 	struct stat ds_stat_n;
 	int file_desc_o, file_desc_n;
 	int fd=0;

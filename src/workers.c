@@ -913,7 +913,7 @@ void * srv_worker_slave (void * th_argv)
 						{
 							case GETDIR:
 								{
-									//printf("stat_server GETDIR key=%s\n",key.c_str());
+									//fprintf(stderr,"stat_server GETDIR key=%s\n",key.c_str());
 									char * buffer;
 									int32_t numelems_indir;
 									//Retrieve all elements inside the requested directory.
@@ -939,7 +939,12 @@ void * srv_worker_slave (void * th_argv)
 									msg_t m;
 									m.size = numelems_indir*URI_;
 									m.data = buffer;
-
+									char msg [REQUEST_SIZE];
+									sprintf(msg,"%ld",m.size);
+									if (send_stream(ucp_data_worker, arguments->server_ep, msg, REQUEST_SIZE) < 0)
+									{
+										perror("ERRIMSS_GETDATA_REQ");
+									}
 									if (send_dynamic_stream(ucp_data_worker, arguments->server_ep, (char*)&m, MSG) < 0)
 									{
 										perror("ERRIMSS_WORKER_SENDBLOCK");

@@ -7,7 +7,7 @@
 #define BUFFER       4
 #define MSG          5
 
-#define REQUEST_SIZE    256
+#define REQUEST_SIZE    1024
 #define RESPONSE_SIZE   1024
 #define MODE_SIZE        4
 #define BUFFER_SIZE     4*1024*1024

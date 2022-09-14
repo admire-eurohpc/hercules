@@ -46,7 +46,7 @@ char     IMSS_ROOT[32];
 char     META_HOSTFILE[512];
 uint64_t STORAGE_SIZE = 16; //In GB
 uint64_t META_BUFFSIZE = 16; //In GB
-uint64_t IMSS_BLKSIZE = 8;//In KB 
+uint64_t IMSS_BLKSIZE = 1024;//In KB 
 uint64_t IMSS_BUFFSIZE = 2; //In GB
 int32_t REPL_FACTOR = 1; //Default none
 int32_t  IMSS_DEBUG = 0;
@@ -774,7 +774,7 @@ int unlinkat (int fd, const char *name, int flag){//rm & rm -r
 }
 
 int rename (const char *old, const char *new){
-
+	
 	real_rename = dlsym(RTLD_NEXT,"rename");
 	int ret;
 	char * workdir = getenv("PWD");
@@ -889,7 +889,6 @@ int myfiller(void *buf, const char *name, const struct stat *stbuf, off_t off) {
 
 struct dirent *readdir(DIR *dirp)
 {
-	//printf("readdir\n");
 	real_readdir = dlsym(RTLD_NEXT, "readdir");
 	size_t ret;
 
@@ -903,6 +902,7 @@ struct dirent *readdir(DIR *dirp)
 	if(map_fd_search_by_val(map_fd, path, dirfd(dirp)) == 1) {
 		char buf[KB*KB]={0};
 		char *token;
+		//fprintf(stderr,"CUSTOM IMSS_READDIR\n");
 		imss_readdir(path, buf, myfiller, 0);
 		unsigned long pos = telldir(dirp);
 
