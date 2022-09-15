@@ -455,6 +455,7 @@ get_dir(char * 	 requested_uri,
 		char **  buffer,
 		char *** items)
 {
+
 	int ret = 0;
 	//Discover the metadata server that shall deal with the former URI.
 	uint32_t m_srv = discover_stat_srv(requested_uri);
@@ -462,7 +463,6 @@ get_dir(char * 	 requested_uri,
 	//GETDIR request.
 	char getdir_req[REQUEST_SIZE];
 	sprintf(getdir_req, "%d %s%c", GETDIR, requested_uri, '\0');
-
 	if (send_stream(ucp_worker_client, stat_client[m_srv], (char *) &stat_ids[m_srv], sizeof(uint32_t)) < 0)
 	{
 		perror("ERRIMSS_STAT_HELLO");
@@ -483,8 +483,16 @@ get_dir(char * 	 requested_uri,
 		return -1;
 	}
 
-	char elements[RESPONSE_SIZE];
+	size_t uris_size = 0;
+	char msg[REQUEST_SIZE];
+	if (recv_stream(ucp_worker_client, stat_client[m_srv], msg, REQUEST_SIZE) < 0)
+	{
+		perror("ERRIMSS_GETDIR_RECV");
+		return -1;
+	}
 
+	uris_size = atoi(msg);
+	char elements[uris_size];
 	//Retrieve the set of elements within the requested uri.
 	ret = recv_dynamic_stream(ucp_worker_client, stat_client[m_srv], elements, BUFFER);
 	if (ret < 0)
@@ -492,12 +500,14 @@ get_dir(char * 	 requested_uri,
 		perror("ERRIMSS_GETDIR_RECV");
 		return -1;
 	}
+	
 
 	if (!strncmp("$ERRIMSS_NO_KEY_AVAIL$", elements, 22))
 	{
 		fprintf(stderr, "ERRIMSS_GETDIR_NODIR\n");
 		return -1;
 	}
+
 	uint32_t elements_size = ret; 
 
 	//*buffer = (char *) malloc(sizeof(char)*elements_size);
@@ -517,7 +527,6 @@ get_dir(char * 	 requested_uri,
 
 		curr += URI_;
 	}
-
 	return num_elements;
 }
 
@@ -1170,7 +1179,7 @@ int32_t
 open_dataset(char * dataset_uri)
 {
 	int32_t associated_imss_indx;
-	printf("OPEN DATASET INSIDE dataset_uri=%s\n",dataset_uri);
+	//printf("OPEN DATASET INSIDE dataset_uri=%s\n",dataset_uri);
 	//Check if the IMSS storing the dataset exists within the clients session.
 	if ((associated_imss_indx = imss_check(dataset_uri)) == -1)
 	{
@@ -2017,38 +2026,52 @@ split_readv(void * th_argv)
 		}
 	}
 	//	printf("[CLIENT] [Split_readv]\n");
+	
 	char key_[REQUEST_SIZE];
 	//Key related to the requested data element.
-	sprintf(key_, "9 %s %ld %ld %d %s",
+	int msg_lenght = strlen(arguments->msg)+1; 
+	sprintf(key_, "9 %s %ld %ld %d %d",
 			arguments->path, arguments->BLKSIZE, arguments->start_offset, 
-			arguments->stats_size, arguments->msg);
+			arguments->stats_size, msg_lenght);
+
+
 	int key_length = strlen(key_)+1;
 	char key[REQUEST_SIZE];
 	memcpy((void *) key, (void *) key_, key_length);
 	key[key_length-1] = '\0';
 
+	//printf("key=%s\n",key);
 	//Request the concerned block to the involved servers.
 	for (int32_t i = 0; i < curr_dataset.repl_factor; i++)
 	{
-		//printf("BLOCK %d ASKED TO %d SERVER with key: %s (%d)\n", curr_block, repl_servers[i], key, key_length);
 
 		//Send read request message specifying the block URI.
 		//if (comm_send(curr_imss.conns.eps_[repl_servers[i]], key, KEY, 0) < 0)
+		//printf("[SPLIT READV] 1-Send_stream\n");
 		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[repl_servers[i]], (char *) &curr_imss.conns.id[repl_servers[i]], sizeof(uint32_t)) < 0)
 		{
 			perror("ERRIMSS_STAT_HELLO");
 		}
 
 		char mode[] = "GET";
+		//printf("[SPLIT READV] 2-Send_stream\n");
 		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[repl_servers[i]], mode, MODE_SIZE) < 0)
 		{
 			perror("ERRIMSS_STAT_HELLO");
 		}
 
+		//printf("[SPLIT READV] 3-Send_stream\n");
 		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[repl_servers[i]], key, REQUEST_SIZE) < 0)
 		{
 			perror("ERRIMSS_GETDATA_REQ");
 		}
+
+		//printf("[SPLIT READV] 4-Send_msg\n");
+		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[repl_servers[i]], arguments->msg, msg_lenght) < 0)
+		{
+			perror("ERRIMSS_GETDATA_REQ");
+		}
+
 		struct timeval start, end;
 		/*long delta_us;
 		  gettimeofday(&start, NULL);*/
@@ -2382,7 +2405,6 @@ set_data(int32_t 	 dataset_id,
 	char key_[REQUEST_SIZE];
 	//Key related to the requested data element.
 	sprintf(key_, "%d %s$%d", curr_dataset.data_entity_size, curr_dataset.uri_, data_id);
-
 	int key_length = strlen(key_)+1;
 	char key[REQUEST_SIZE];
 	memcpy((void *) key, (void *) key_, key_length);
@@ -2397,6 +2419,8 @@ set_data(int32_t 	 dataset_id,
 		uint32_t n_server_ = (n_server + i*(curr_imss_storages/curr_dataset.repl_factor)) % curr_imss_storages;
 
 		//printf("BLOCK %d SENT TO %d SERVER with key: %s (%d)\n", data_id, n_server_, key, key_length);
+
+		
 		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[n_server_], (char *) &curr_imss.conns.id[n_server_], sizeof(uint32_t)) < 0)
 		{
 			perror("ERRIMSS_STAT_HELLO");
@@ -2427,6 +2451,7 @@ set_data(int32_t 	 dataset_id,
 
 		//	gettimeofday(&start, NULL);
 		//Send read request message specifying the block data.
+		//printf("[SET DATA] msg=%s, size=%d\n",buffer,curr_dataset.data_entity_size);
 		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[n_server_], buffer, curr_dataset.data_entity_size) < 0)
 		{
 			perror("ERRIMSS_SETDATA_SEND");

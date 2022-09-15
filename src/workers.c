@@ -258,7 +258,7 @@ void * srv_worker_slave (void * th_argv)
 						}
 						break;
 					}
-					case READV:
+					case READV://Only 1 server work
 					{
 						//printf("READV CASE\n");
 						std::size_t found = key.find('$');
@@ -388,19 +388,26 @@ void * srv_worker_slave (void * th_argv)
 							found = key.find(' ');
 							int stats_size = stoi(key.substr(0,found));
 							key.erase(0,found+1);
+							
+							int msg_size = stoi(key.substr(0,found));
+					
+							char * msg = (char *) calloc(msg_size,sizeof(char));
+							recv_stream(ucp_data_worker, arguments->server_ep,  msg, msg_size);
 
-
+							key = msg;
 							found = key.find('$');
 							int amount = stoi(key.substr(0,found));
 							int size = amount * blocksize;
 							key.erase(0,found+1);
 
-							/*printf("amount=%d\n",amount);
-							  printf("path=%s\n",path.c_str());
-							  printf("blocksize=%d\n",blocksize);
-							  printf("start_offset=%d\n",start_offset);
-							  printf("size=%d\n",size);
-							  printf("rest=%s\n",key.c_str());*/
+							/*printf("msg=%s\n",key.c_str());
+							printf("msg_size=%d\n",msg_size);
+							printf("*path=%s\n",path.c_str());
+							printf("*blocksize=%d\n",blocksize);
+							printf("*start_offset=%d\n",start_offset);
+							printf("*size=%d\n",size);
+							printf("*amount=%d\n",amount);*/
+
 
 							char * buf = (char *)malloc(size);
 
@@ -695,7 +702,6 @@ void * srv_worker_slave (void * th_argv)
 						//unsigned char * buffer = (unsigned char *) malloc(block_size_recv);
 						char * buffer = (char *)aligned_alloc(1024, block_size_recv);
 						//Receive the block into the buffer.
-
 						recv_stream(ucp_data_worker, arguments->server_ep, buffer, block_size_recv);
 						struct stat * stats = (struct stat *) buffer;
 						int32_t insert_successful;
@@ -907,7 +913,7 @@ void * srv_worker_slave (void * th_argv)
 						{
 							case GETDIR:
 								{
-									//printf("stat_server GETDIR key=%s\n",key.c_str());
+									//fprintf(stderr,"stat_server GETDIR key=%s\n",key.c_str());
 									char * buffer;
 									int32_t numelems_indir;
 									//Retrieve all elements inside the requested directory.
@@ -933,7 +939,12 @@ void * srv_worker_slave (void * th_argv)
 									msg_t m;
 									m.size = numelems_indir*URI_;
 									m.data = buffer;
-
+									char msg [REQUEST_SIZE];
+									sprintf(msg,"%ld",m.size);
+									if (send_stream(ucp_data_worker, arguments->server_ep, msg, REQUEST_SIZE) < 0)
+									{
+										perror("ERRIMSS_GETDATA_REQ");
+									}
 									if (send_dynamic_stream(ucp_data_worker, arguments->server_ep, (char*)&m, MSG) < 0)
 									{
 										perror("ERRIMSS_WORKER_SENDBLOCK");

@@ -129,6 +129,7 @@ ucs_status_t start_client(ucp_worker_h ucp_worker, const char *address_str, int 
 
 size_t send_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, const char * msg, size_t msg_length)
 {
+    //printf("[SEND_STREAM] msg=%s, size=%ld\n",msg,msg_length);
     ucp_request_param_t param;
     test_req_t * request;
     test_req_t ctx;
@@ -154,6 +155,7 @@ size_t send_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, const char * msg, size_
 
 size_t recv_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, char * msg, size_t msg_length)
 {
+    
     ucp_request_param_t param;
     test_req_t * request;
     test_req_t ctx;
@@ -171,7 +173,7 @@ size_t recv_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, char * msg, size_t msg_
     request              = (test_req_t*) ucp_stream_recv_nbx(ep, msg, msg_length, &msg_length, &param);
 
     request_finalize(ucp_worker, request, &ctx);
-
+    //printf("[RECV_STREAM] msg=%s, size=%ld\n",msg,msg_length);
     size_t length = 0;
 	//ucp_stream_recv_request_test(&request, &length);
 	return msg_length;
@@ -362,9 +364,9 @@ void server_conn_handle_cb(ucp_conn_request_h conn_request, void *arg)
     attr.field_mask = UCP_CONN_REQUEST_ATTR_FIELD_CLIENT_ADDR;
     status = ucp_conn_request_query(conn_request, &attr);
     if (status == UCS_OK) {
-        printf("Server received a connection request from client at address %s:%s\n",
+        /*printf("Server received a connection request from client at address %s:%s\n",
                sockaddr_get_ip_str(&attr.client_address, ip_str, sizeof(ip_str)),
-               sockaddr_get_port_str(&attr.client_address, port_str, sizeof(port_str)));
+               sockaddr_get_port_str(&attr.client_address, port_str, sizeof(port_str)));*/
     } else if (status != UCS_ERR_UNSUPPORTED) {
         fprintf(stderr, "failed to query the connection request (%s)\n",
                 ucs_status_string(status));

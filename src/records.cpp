@@ -65,8 +65,8 @@ int32_t map_records::get(std::string key, char ** add_, uint64_t * size_)
 	//Block the access to the map structure.
 	std::unique_lock<std::mutex> lock(*mut);
 
-	//struct utsname detect;
-	//uname(&detect);
+	struct utsname detect;
+	uname(&detect);
 
 	if (buffer.empty())
 		return 0;
