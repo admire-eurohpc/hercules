@@ -34,13 +34,13 @@ echo "# IMMS: Running data servers"
 tail -n +$((NUM_METADATA+1)) hostfile | head -n $NUM_DATA > data_hostfile
 META_NODE=$(head -n 1 meta_hostfile)
 cat data_hostfile
-mpirun -np $NUM_DATA --pernode --hostfile ./data_hostfile $IMSS_PATH/server imss:// $DATA_PORT 0 $META_NODE $META_PORT $NUM_DATA ./data_hostfile 1 &
+mpiexec -np $NUM_DATA --pernode --hostfile ./data_hostfile $IMSS_PATH/server imss:// $DATA_PORT 0 $META_NODE $META_PORT $NUM_DATA ./data_hostfile 1 &
 
 sleep 1
 
 echo "# IMMS: Running IOR"
 tail -n +$((NUM_METADATA+NUM_DATA+1)) hostfile | head -n $NUM_CLIENT > client_hostfile
-mpirun -np $NUM_CLIENT --pernode --hostfile ./client_hostfile \
+mpiexec -np $NUM_CLIENT --pernode --hostfile ./client_hostfile \
              -x LD_PRELOAD=$IMSS_PATH/tools/libimss_posix.so \
              -x IMSS_MOUNT_POINT=/mnt/imss \
 			 -x IMSS_HOSTFILE=$PWD/data_hostfile \
@@ -56,3 +56,5 @@ mpirun -np $NUM_CLIENT --pernode --hostfile ./client_hostfile \
 			 -x IMSS_DEPLOYMENT=2 \
 			 $IOR_PATH/ior -o /mnt/imss/data.out -t 10m -b 100m -s 5
 
+mpiexec --hostfile ./data_hostfile killall -9 server
+mpiexec --hostfile ./meta_hostfile killall -9 server
