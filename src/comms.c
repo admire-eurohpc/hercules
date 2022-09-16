@@ -111,7 +111,7 @@ ucs_status_t start_client(ucp_worker_h ucp_worker, const char *address_str, int 
                                  UCP_EP_PARAM_FIELD_ERR_HANDLER |
                                  UCP_EP_PARAM_FIELD_ERR_HANDLING_MODE;
     ep_params.err_mode         = UCP_ERR_HANDLING_MODE_PEER;
-    ep_params.err_handler.cb   = err_cb;
+    ep_params.err_handler.cb   = err_cb_client;
     ep_params.err_handler.arg  = NULL;
     ep_params.flags            = UCP_EP_PARAMS_FLAGS_CLIENT_SERVER;
     ep_params.sockaddr.addr    = (struct sockaddr*)&connect_addr;
@@ -126,6 +126,27 @@ ucs_status_t start_client(ucp_worker_h ucp_worker, const char *address_str, int 
     return status;
 }
 
+ucs_status_t flush_ep(ucp_worker_h worker, ucp_ep_h ep)
+{
+    ucp_request_param_t param;
+    void *request;
+
+    param.op_attr_mask = 0;
+    request            = ucp_ep_flush_nbx(ep, &param);
+    if (request == NULL) {
+        return UCS_OK;
+    } else if (UCS_PTR_IS_ERR(request)) {
+        return UCS_PTR_STATUS(request);
+    } else {
+        ucs_status_t status;
+        do {
+            ucp_worker_progress(worker);
+            status = ucp_request_check_status(request);
+        } while (status == UCS_INPROGRESS);
+        ucp_request_free(request);
+        return status;
+    }
+}
 
 size_t send_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, const char * msg, size_t msg_length)
 {
@@ -200,7 +221,7 @@ void set_sock_addr(const char *address_str, struct sockaddr_storage *saddr, int 
             ip = inet_ntoa(*((struct in_addr*) host_entry->h_addr_list[0])); 
             int err = inet_pton(AF_INET, ip, &sa_in->sin_addr);
         } else {
-            sa_in->sin_addr.s_addr = INADDR_ANY;
+        request_finalize    sa_in->sin_addr.s_addr = INADDR_ANY;
         }
         sa_in->sin_family = AF_INET;
         sa_in->sin_port   = htons(server_port);
@@ -276,10 +297,16 @@ void send_cb(void *request, ucs_status_t status, void *user_data)
 /**
  * Error handling callback.
  */
-void err_cb(void *arg, ucp_ep_h ep, ucs_status_t status)
+void err_cb_client(void *arg, ucp_ep_h ep, ucs_status_t status)
 {
-    printf("error handling callback was invoked with status %d (%s)\n",
-           status, ucs_status_string(status));
+	if (status != UCS_ERR_CONNECTION_RESET && status != UCS_ERR_ENDPOINT_TIMEOUT)
+    printf("client error handling callback was invoked with status %d (%s)\n", status, ucs_status_string(status));
+}
+
+void err_cb_server(void *arg, ucp_ep_h ep, ucs_status_t status)
+{
+	if (status != UCS_ERR_CONNECTION_RESET && status != UCS_ERR_ENDPOINT_TIMEOUT)
+    printf("server error handling callback was invoked with status %d (%s)\n",  status, ucs_status_string(status));
 }
 
 void common_cb(void *user_data, const char *type_str)
@@ -430,7 +457,8 @@ ucs_status_t server_create_ep(ucp_worker_h data_worker,
     ep_params.field_mask      = UCP_EP_PARAM_FIELD_ERR_HANDLER |
                                 UCP_EP_PARAM_FIELD_CONN_REQUEST;
     ep_params.conn_request    = conn_request;
-    ep_params.err_handler.cb  = err_cb;
+    ep_params.err_handler.cb  = err_cb_server;
+	ep_params.err_mode = UCP_ERR_HANDLING_MODE_PEER;
     ep_params.err_handler.arg = NULL;
 
     status = ucp_ep_create(data_worker, &ep_params, server_ep);

@@ -24,7 +24,6 @@ static void ep_close(ucp_worker_h ucp_worker, ucp_ep_h ep, uint64_t flags)
     ucp_request_param_t param;
     ucs_status_t status;
     void *close_req;
-
     param.op_attr_mask = UCP_OP_ATTR_FIELD_FLAGS;
     param.flags        = flags;
     close_req          = ucp_ep_close_nbx(ep, &param);

@@ -495,7 +495,6 @@ int open64(const char *pathname, int flags, ...)
 			}
 		}
 	} else {
-		fprintf(stderr, "REAL OPEN worked!\n"); 
 		ret = real_open64(pathname, flags);
 	}
 	return ret;  

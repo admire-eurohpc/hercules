@@ -58,11 +58,11 @@ int32_t main(int32_t argc, char **argv)
 	/***************************************************************/
 	/******************** PARSE INPUT ARGUMENTS ********************/
 	/***************************************************************/
-	for(int i=0;i<argc;i++){
+	/*for(int i=0;i<argc;i++){
 		printf("argv[%d]=%s\n",i,argv[i]);
 	}
 	printf("argc=%d\n",argc);
-	
+	*/
 	//ARGV[2] = bind port number.
 	bind_port	= (uint16_t) atoi(argv[2]);
 	aux_bind_port	= bind_port;

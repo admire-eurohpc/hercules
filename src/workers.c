@@ -208,6 +208,7 @@ void * srv_worker_slave (void * th_argv)
 
 					case RELEASE:
 					{
+						flush_ep(ucp_data_worker, arguments->server_ep);
 						ep_close(ucp_data_worker, arguments->server_ep, UCP_EP_CLOSE_MODE_FLUSH);
 						ucp_worker_destroy(ucp_data_worker);
 						pthread_exit(NULL);
@@ -745,6 +746,7 @@ void * srv_worker_slave (void * th_argv)
 			break;
 			}
 			if (client_id == CLOSE_EP) {
+				flush_ep(ucp_data_worker, arguments->server_ep);
 				ep_close(ucp_data_worker, arguments->server_ep, UCP_EP_CLOSE_MODE_FLUSH);
 				ucp_worker_destroy(ucp_data_worker);
 				pthread_exit(NULL);
@@ -752,6 +754,7 @@ void * srv_worker_slave (void * th_argv)
 		}   
 
 		printf("Terminated stat thread\n");
+		flush_ep(ucp_data_worker, arguments->server_ep);
 		ep_close(ucp_data_worker, arguments->server_ep, UCP_EP_CLOSE_MODE_FLUSH);
 		ucp_worker_destroy(ucp_data_worker);
 		pthread_exit(NULL);
@@ -926,6 +929,7 @@ void * srv_worker_slave (void * th_argv)
 										{
 											perror("ERRIMSS_STATWORKER_NODIR");
 											if (client_id == CLOSE_EP) {
+												flush_ep(ucp_data_worker, arguments->server_ep);
 												ep_close(ucp_data_worker, arguments->server_ep, UCP_EP_CLOSE_MODE_FLUSH);
 												ucp_worker_destroy(ucp_data_worker);
 											}
@@ -949,6 +953,7 @@ void * srv_worker_slave (void * th_argv)
 									{
 										perror("ERRIMSS_WORKER_SENDBLOCK");
 										if (client_id == CLOSE_EP) {
+											flush_ep(ucp_data_worker, arguments->server_ep);
 											ep_close(ucp_data_worker, arguments->server_ep, UCP_EP_CLOSE_MODE_FLUSH);
 											ucp_worker_destroy(ucp_data_worker);
 										}
@@ -970,6 +975,7 @@ void * srv_worker_slave (void * th_argv)
 										{
 											perror("ERRIMSS_WORKER_SENDERR");
 											if (client_id == CLOSE_EP) {
+												flush_ep(ucp_data_worker, arguments->server_ep);
 												ep_close(ucp_data_worker, arguments->server_ep, UCP_EP_CLOSE_MODE_FLUSH);
 												ucp_worker_destroy(ucp_data_worker);
 											}
@@ -990,6 +996,7 @@ void * srv_worker_slave (void * th_argv)
 										if(err < 0){
 											perror("ERRIMSS_WORKER_SENDBLOCK");
 											if (client_id == CLOSE_EP) {
+												flush_ep(ucp_data_worker, arguments->server_ep);
 												ep_close(ucp_data_worker, arguments->server_ep, UCP_EP_CLOSE_MODE_FLUSH);
 												ucp_worker_destroy(ucp_data_worker);
 											}
@@ -1002,6 +1009,7 @@ void * srv_worker_slave (void * th_argv)
 
 							case RELEASE:
 								{
+									flush_ep(ucp_data_worker, arguments->server_ep);
 									ep_close(ucp_data_worker, arguments->server_ep, UCP_EP_CLOSE_MODE_FLUSH);
 									ucp_worker_destroy(ucp_data_worker);
 									pthread_exit(NULL);
@@ -1018,6 +1026,7 @@ void * srv_worker_slave (void * th_argv)
 									{
 										perror("ERRIMSS_PUBLISH_DELETEMSG");
 										if (client_id == CLOSE_EP) {
+											flush_ep(ucp_data_worker, arguments->server_ep);
 											ep_close(ucp_data_worker, arguments->server_ep, UCP_EP_CLOSE_MODE_FLUSH);
 											ucp_worker_destroy(ucp_data_worker);
 										}
@@ -1051,6 +1060,7 @@ void * srv_worker_slave (void * th_argv)
 									{
 										perror("ERRIMSS_PUBLISH_RENAMEMSG");
 										if (client_id == CLOSE_EP) {
+											flush_ep(ucp_data_worker, arguments->server_ep);
 											ep_close(ucp_data_worker, arguments->server_ep, UCP_EP_CLOSE_MODE_FLUSH);
 											ucp_worker_destroy(ucp_data_worker);
 										}
@@ -1078,6 +1088,7 @@ void * srv_worker_slave (void * th_argv)
 									{
 										perror("ERRIMSS_PUBLISH_RENAMEMSG");
 										if (client_id == CLOSE_EP) {
+											flush_ep(ucp_data_worker, arguments->server_ep);
 											ep_close(ucp_data_worker, arguments->server_ep, UCP_EP_CLOSE_MODE_FLUSH);
 											ucp_worker_destroy(ucp_data_worker);
 										}
@@ -1125,6 +1136,7 @@ void * srv_worker_slave (void * th_argv)
 							{
 								perror("ERRIMSS_STATWORKER_GTREEINSERT");
 								if (client_id == CLOSE_EP) {
+									flush_ep(ucp_data_worker, arguments->server_ep);
 									ep_close(ucp_data_worker, arguments->server_ep, UCP_EP_CLOSE_MODE_FLUSH);
 									ucp_worker_destroy(ucp_data_worker);
 								}
@@ -1150,6 +1162,7 @@ void * srv_worker_slave (void * th_argv)
 										{
 											perror("ERRIMSS_WORKER_DATALOCATRECV");
 											if (client_id == CLOSE_EP) {
+												flush_ep(ucp_data_worker, arguments->server_ep);
 												ep_close(ucp_data_worker, arguments->server_ep, UCP_EP_CLOSE_MODE_FLUSH);
 												ucp_worker_destroy(ucp_data_worker);
 											}
@@ -1180,6 +1193,7 @@ void * srv_worker_slave (void * th_argv)
 										{
 											perror("ERRIMSS_WORKER_DATALOCATANSWER2");
 											if (client_id == CLOSE_EP) {
+												flush_ep(ucp_data_worker, arguments->server_ep);
 												ep_close(ucp_data_worker, arguments->server_ep, UCP_EP_CLOSE_MODE_FLUSH);
 												ucp_worker_destroy(ucp_data_worker);
 											}
@@ -1205,11 +1219,13 @@ void * srv_worker_slave (void * th_argv)
 					break;
 			}
 			if (client_id == CLOSE_EP) {
+				flush_ep(ucp_data_worker, arguments->server_ep);
 				ep_close(ucp_data_worker, arguments->server_ep, UCP_EP_CLOSE_MODE_FLUSH);
 				ucp_worker_destroy(ucp_data_worker);
 				pthread_exit(NULL);
 			} 
 		}   
+		flush_ep(ucp_data_worker, arguments->server_ep);
 		ep_close(ucp_data_worker, arguments->server_ep, UCP_EP_CLOSE_MODE_FLUSH);
 		ucp_worker_destroy(ucp_data_worker);
 		pthread_exit(NULL);
@@ -1261,6 +1277,7 @@ void * srv_worker_slave (void * th_argv)
 				status = server_create_ep(ucp_data_worker, conn_req, &server_ep);
 				if (status != UCS_OK) {
 					perror("ERRIMSS_SERVER_CREATE_EP");
+					flush_ep(ucp_data_worker, server_ep);
 					ep_close(ucp_data_worker, server_ep, UCP_EP_CLOSE_MODE_FLUSH);
 					pthread_exit(NULL);
 				}
@@ -1271,6 +1288,7 @@ void * srv_worker_slave (void * th_argv)
 				if (recv_stream(ucp_data_worker, server_ep, mode, MODE_SIZE) < 0)
 				{
 					perror("ERRIMSS_WORKER_SENDCLIENTID");
+					flush_ep(ucp_data_worker, server_ep);
 					ep_close(ucp_data_worker, server_ep, UCP_EP_CLOSE_MODE_FLUSH);
 					pthread_exit(NULL);
 				}
@@ -1309,6 +1327,7 @@ void * srv_worker_slave (void * th_argv)
 					if (send_stream(ucp_data_worker, server_ep, response_, RESPONSE_SIZE) < 0)
 					{
 						perror("ERRIMSS_SRVDISP_SENDBLOCK");
+						flush_ep(ucp_data_worker, server_ep);
 						ep_close(ucp_data_worker, server_ep, UCP_EP_CLOSE_MODE_FLUSH);
 						pthread_exit(NULL);
 					}
@@ -1322,11 +1341,13 @@ void * srv_worker_slave (void * th_argv)
 					if (send_stream(ucp_data_worker, server_ep, arguments->my_uri, RESPONSE_SIZE) < 0) // MIRAR
 					{
 						perror("ERRIMSS_WHOREQUEST");
+						flush_ep(ucp_data_worker, server_ep);
 						ep_close(ucp_data_worker, server_ep, UCP_EP_CLOSE_MODE_FLUSH);
 						pthread_exit(NULL);
 					}
 				}
 				//context.conn_request = NULL;
+				flush_ep(ucp_data_worker, server_ep);
 				ep_close(ucp_data_worker, server_ep, UCP_EP_CLOSE_MODE_FLUSH);
 			}
 			pthread_exit(NULL);
@@ -1422,6 +1443,7 @@ void * srv_worker_slave (void * th_argv)
 				}
 
 				/* Reinitialize the server's context to be used for the next client */
+				flush_ep(ucp_data_worker, server_ep);
 				ep_close(ucp_data_worker, server_ep, UCP_EP_CLOSE_MODE_FLUSH);
 			}
 

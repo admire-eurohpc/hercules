@@ -81,13 +81,15 @@ ucs_status_t request_wait(ucp_worker_h ucp_worker, void *request, test_req_t *ct
 void stream_recv_cb(void *request, ucs_status_t status, size_t length, void *user_data);
 void am_recv_cb(void *request, ucs_status_t status, size_t length, void *user_data);
 void send_cb(void *request, ucs_status_t status, void *user_data);
-void err_cb(void *arg, ucp_ep_h ep, ucs_status_t status);
+void err_cb_client(void *arg, ucp_ep_h ep, ucs_status_t status);
+void err_cb_server(void *arg, ucp_ep_h ep, ucs_status_t status);
 void common_cb(void *user_data, const char *type_str);
 void server_conn_handle_cb(ucp_conn_request_h conn_request, void *arg);
 char* sockaddr_get_ip_str(const struct sockaddr_storage *sock_addr, char *ip_str, size_t max_size);
 char* sockaddr_get_port_str(const struct sockaddr_storage *sock_addr,char *port_str, size_t max_size);
 ucs_status_t start_server(ucp_worker_h ucp_worker, ucx_server_ctx_t *context, ucp_listener_h *listener_p, const char *address_str, int port);
 ucs_status_t server_create_ep(ucp_worker_h data_worker, ucp_conn_request_h conn_request, ucp_ep_h *server_ep);
+ucs_status_t flush_ep(ucp_worker_h worker, ucp_ep_h ep);
 
 //Method sending a data structure with dynamic memory allocation fields.
 int32_t send_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, void * data_struct, int32_t data_type);
