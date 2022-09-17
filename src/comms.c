@@ -221,7 +221,7 @@ void set_sock_addr(const char *address_str, struct sockaddr_storage *saddr, int 
             ip = inet_ntoa(*((struct in_addr*) host_entry->h_addr_list[0])); 
             int err = inet_pton(AF_INET, ip, &sa_in->sin_addr);
         } else {
-        request_finalize    sa_in->sin_addr.s_addr = INADDR_ANY;
+            sa_in->sin_addr.s_addr = INADDR_ANY;
         }
         sa_in->sin_family = AF_INET;
         sa_in->sin_port   = htons(server_port);
