@@ -12,6 +12,7 @@ ADD_EXECUTABLE( server
 		../src/memalloc.c
 		../src/directory.c
 		../src/records.cpp
+		../src/arg_parser.c
 )
 
 #ADD_EXECUTABLE( release_imss 
@@ -33,15 +34,15 @@ ADD_LIBRARY( imss_static STATIC
 )
 
 ADD_LIBRARY( imss_shared SHARED
-                ../src/crc.c
-                ../src/stat.cpp
-                ../src/imss.c
-                ../src/comms.c
+		../src/crc.c
+		../src/stat.cpp
+		../src/imss.c
+		../src/comms.c
 		../src/queue.c
-                ../src/workers.c
-                ../src/hercules.c
-                ../src/policies.c
-                ../src/directory.c
+		../src/workers.c
+		../src/hercules.c
+		../src/policies.c
+		../src/directory.c
 		../src/records.cpp
 )
 

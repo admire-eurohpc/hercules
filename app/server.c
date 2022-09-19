@@ -12,6 +12,7 @@
 #include "memalloc.h"
 #include "directory.h"
 #include "records.hpp"
+#include "arg_parser.h"
 
 
 //Pointer to the tree's root node.
@@ -58,20 +59,27 @@ int32_t main(int32_t argc, char **argv)
 	/***************************************************************/
 	/******************** PARSE INPUT ARGUMENTS ********************/
 	/***************************************************************/
+	struct arguments args;
+    parse_args(argc, argv, &args);
+
+	bind_port = args.port;
+	aux_bind_port	= bind_port;
+	buffer_size = args.bufsize;
+	imss_uri 	= (char *) calloc(32, sizeof(char));
 	/*for(int i=0;i<argc;i++){
 		printf("argv[%d]=%s\n",i,argv[i]);
 	}
 	printf("argc=%d\n",argc);
 	*/
 	//ARGV[2] = bind port number.
-	bind_port	= (uint16_t) atoi(argv[2]);
-	aux_bind_port	= bind_port;
+	//bind_port	= (uint16_t) atoi(argv[2]);
+	//aux_bind_port	= bind_port;
 	//ARGV[3] = buffer size provided.
-	buffer_size	= atoi(argv[3]);
+	//buffer_size	= atoi(argv[3]);
 
     // Default setup for imss uri
-	imss_uri 	= (char *) calloc(32, sizeof(char));	
-    strcpy(imss_uri, "imss://");
+	//imss_uri 	= (char *) calloc(32, sizeof(char));	
+    //strcpy(imss_uri, "imss://");
 
      /* Initialize the UCX required objects */
     ret = init_context(&ucp_context, &ucp_worker, CLIENT_SERVER_SEND_RECV_STREAM);
@@ -85,19 +93,18 @@ int32_t main(int32_t argc, char **argv)
 	In relation to the number of arguments provided, an IMSS or a metadata server will be deployed. */
 
 	//IMSS server.
-	if (argc == 9)
+	if (args.type == TYPE_DATA_SERVER)
 	{
-
 		//ARGV[1] = IMSS name.
-		imss_uri	= argv[1];
+		imss_uri	= args.imss_uri;
 		//ARGV[6] = machine name where the metadata server is being executed.
-		stat_add	= argv[4];
+		stat_add	= args.stat_host;
 		//ARGV[7] = port that the metadata server is listening to.
-		stat_port 	= atoi(argv[5]);
+		stat_port 	= args.stat_port;
 		//ARGV[8] = number of servers conforming the IMSS deployment.
-		num_servers	= atoi(argv[6]);
+		num_servers	= args.num_servers;
 		//ARGV[9] = IMSS' MPI deployment file.
-		deployfile	= argv[7];
+		deployfile	= args.deploy_hostfile;
 
 		int32_t imss_exists = 0;
 
@@ -169,7 +176,7 @@ int32_t main(int32_t argc, char **argv)
 	else
 	{
 		//ARGV[1] = metadata file.
-		metadata_file	= argv[1];
+		metadata_file	= args.stat_logfile;
 
 		//Create the tree_root node.
 		char * root_data = (char *) calloc(8, sizeof(char));
