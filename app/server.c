@@ -62,6 +62,15 @@ int32_t main(int32_t argc, char **argv)
 	struct arguments args;
     parse_args(argc, argv, &args);
 
+	printf("type = %c\nport = %u\nbufsize = %u\n", args.type, args.port, args.bufsize);
+    if (args.type == TYPE_DATA_SERVER) {
+        printf("imss_uri = %s\nstat-host = %s\nstat-port = %u\nnum-servers = %u\ndeploy-hostfile = %s\n",
+        args.imss_uri, args.stat_host, args.stat_port, args.num_servers, args.deploy_hostfile);
+    } else {
+        printf("stat-logfile = %s\n", args.stat_logfile);
+    }
+
+
 	bind_port = args.port;
 	aux_bind_port	= bind_port;
 	buffer_size = args.bufsize;
@@ -241,7 +250,7 @@ int32_t main(int32_t argc, char **argv)
 	//Metadata bytes written into the buffer.
 	uint64_t bytes_written = 0;
 
-	if (argc == 4)
+	if (args.type == TYPE_METADATA_SERVER)
 	{
 		if ((buffer_address = metadata_read(metadata_file, map.get(), buffer, &bytes_written)) == NULL)
 			return -1;
@@ -258,7 +267,7 @@ int32_t main(int32_t argc, char **argv)
 	//Thread arguments.
 	p_argv arguments[(THREAD_POOL+1)];
 
-	if (argc == 9)
+	if (args.type == TYPE_DATA_SERVER)
 		region_locks = (pthread_mutex_t *) calloc(THREAD_POOL, sizeof(pthread_mutex_t));
 	
 	//Execute all threads.
@@ -292,7 +301,7 @@ int32_t main(int32_t argc, char **argv)
             arguments[i].ucp_worker = ucp_worker;
 
 			//IMSS server.
-			if (argc == 9)
+			if (args.type == TYPE_DATA_SERVER)
 			{	
 				if (pthread_create(&threads[i], NULL, srv_worker, (void *) &arguments[i]) == -1)
 				{
@@ -315,7 +324,7 @@ int32_t main(int32_t argc, char **argv)
 	}
 
 	//Notify to the metadata server the deployment of a new IMSS.
-	if ((argc == 9) && !rank && stat_port)
+	if ((args.type == TYPE_DATA_SERVER) && !rank && stat_port)
 	{
 		//Metadata structure containing the novel IMSS info.
 		imss_info my_imss;
@@ -403,7 +412,7 @@ int32_t main(int32_t argc, char **argv)
 	}
 
 	//Write the metadata structures retrieved by the metadata server threads.
-	if (argc == 4)
+	if (args.type == TYPE_METADATA_SERVER)
 	{
 		if (metadata_write(metadata_file, buffer, map.get(), arguments, buffer_segment, bytes_written) == -1)
 

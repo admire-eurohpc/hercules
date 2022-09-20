@@ -23,7 +23,7 @@ static struct argp_option options[] = {
     {0,                     0,                  0,              0,  "Arguments:" },
     {0,                     0,                  0,              0,  "<types>:" },
     {0,                     0,                  0,              0,  "d : data server" },
-    {0,                     0,                  0,              0,  "m : metadata server:" },
+    {0,                     0,                  0,              0,  "m : metadata server" },
 
     {0,                     0,                  0,              0,  "\nOptions:\n" },
     {0,                     0,                  0,              0,  "Common options:" },
@@ -139,7 +139,7 @@ int parse_args (int argc, char ** argv, struct arguments * args)
     /* Parse arguments; every option seen by parse_opt will be
         reflected in arguments */
     argp_parse (&argp, argc, argv, 0, 0, args);
-
+/*
     printf("type = %c\nport = %u\nbufsize = %u\n", args->type, args->port, args->bufsize);
     if (args->type == TYPE_DATA_SERVER) {
         printf("imss_uri = %s\nstat-host = %s\nstat-port = %u\nnum-servers = %u\ndeploy-hostfile = %s\n",
@@ -147,6 +147,6 @@ int parse_args (int argc, char ** argv, struct arguments * args)
     } else {
         printf("stat-logfile = %s\n", args->stat_logfile);
     }
-
+*/
     return 0;
 }
