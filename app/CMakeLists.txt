@@ -1,5 +1,5 @@
 set_source_files_properties(../src/comms.c ../src/crc.c ../src/directory.c ../src/hercules.c ../src/imss.c PROPERTIES LANGUAGE CXX )
-set_source_files_properties(../src/memalloc.c ../src/policies.c ../src/stat.c ../src/workers.c PROPERTIES LANGUAGE CXX )
+set_source_files_properties(../src/memalloc.c ../src/policies.c ../src/stat.c ../src/workers.c ../src/arg_parser.c PROPERTIES LANGUAGE CXX )
 set_source_files_properties(./server.c ./release_imss.c PROPERTIES LANGUAGE CXX )
 
 ADD_EXECUTABLE( server 
