@@ -62,35 +62,25 @@ int32_t main(int32_t argc, char **argv)
 	struct arguments args;
     parse_args(argc, argv, &args);
 
-	printf("type = %c\nport = %u\nbufsize = %u\n", args.type, args.port, args.bufsize);
+	/*
+	printf("type = %c\nport = %u\nbufsize = %ld\n", args.type, args.port, args.bufsize);
     if (args.type == TYPE_DATA_SERVER) {
-        printf("imss_uri = %s\nstat-host = %s\nstat-port = %u\nnum-servers = %u\ndeploy-hostfile = %s\n",
+        printf("imss_uri = %s\nstat-host = %s\nstat-port = %ld\nnum-servers = %ld\ndeploy-hostfile = %s\n",
         args.imss_uri, args.stat_host, args.stat_port, args.num_servers, args.deploy_hostfile);
     } else {
         printf("stat-logfile = %s\n", args.stat_logfile);
     }
+	*/
 
-
+	//bind port number.
 	bind_port = args.port;
 	aux_bind_port	= bind_port;
+	//buffer size provided
 	buffer_size = args.bufsize;
+	//set up imss uri (default value is already set up in args)
 	imss_uri 	= (char *) calloc(32, sizeof(char));
-	/*for(int i=0;i<argc;i++){
-		printf("argv[%d]=%s\n",i,argv[i]);
-	}
-	printf("argc=%d\n",argc);
-	*/
-	//ARGV[2] = bind port number.
-	//bind_port	= (uint16_t) atoi(argv[2]);
-	//aux_bind_port	= bind_port;
-	//ARGV[3] = buffer size provided.
-	//buffer_size	= atoi(argv[3]);
 
-    // Default setup for imss uri
-	//imss_uri 	= (char *) calloc(32, sizeof(char));	
-    //strcpy(imss_uri, "imss://");
-
-     /* Initialize the UCX required objects */
+    /* Initialize the UCX required objects */
     ret = init_context(&ucp_context, &ucp_worker, CLIENT_SERVER_SEND_RECV_STREAM);
     if (ret != 0) {
         perror("ERRIMSS_INIT_CONTEXT");
@@ -99,20 +89,20 @@ int32_t main(int32_t argc, char **argv)
 
 	/* CHECK THIS OUT!
 	***************************************************
-	In relation to the number of arguments provided, an IMSS or a metadata server will be deployed. */
+	In relation to the type argument provided, an IMSS or a metadata server will be deployed. */
 
 	//IMSS server.
 	if (args.type == TYPE_DATA_SERVER)
 	{
-		//ARGV[1] = IMSS name.
-		imss_uri	= args.imss_uri;
-		//ARGV[6] = machine name where the metadata server is being executed.
+		//IMSS name.
+		strcpy(imss_uri, args.imss_uri);
+		//machine name where the metadata server is being executed.
 		stat_add	= args.stat_host;
-		//ARGV[7] = port that the metadata server is listening to.
+		//port that the metadata server is listening to.
 		stat_port 	= args.stat_port;
-		//ARGV[8] = number of servers conforming the IMSS deployment.
+		//number of servers conforming the IMSS deployment.
 		num_servers	= args.num_servers;
-		//ARGV[9] = IMSS' MPI deployment file.
+		//IMSS' MPI deployment file.
 		deployfile	= args.deploy_hostfile;
 
 		int32_t imss_exists = 0;
@@ -184,7 +174,7 @@ int32_t main(int32_t argc, char **argv)
 	//Metadata server.
 	else
 	{
-		//ARGV[1] = metadata file.
+		//metadata file.
 		metadata_file	= args.stat_logfile;
 
 		//Create the tree_root node.

@@ -52,13 +52,6 @@ static error_t parse_opt (int key, char * arg, struct argp_state * state)
 
     switch (key)
         {
-        case TYPE:
-            args->type = *arg;
-            if (args->type != TYPE_DATA_SERVER && args->type != TYPE_METADATA_SERVER) {
-                argp_failure(state, 1, 0, "Invalid argument for 'type' option. \nSee --help for more detail");
-                exit (ARGP_ERR_UNKNOWN);
-            }
-            break;
         case PORT:
             args->port = (uint16_t) atoi(arg);
             break;
@@ -91,7 +84,7 @@ static error_t parse_opt (int key, char * arg, struct argp_state * state)
 
             args->type = *arg;
             if (args->type != TYPE_DATA_SERVER && args->type != TYPE_METADATA_SERVER) {
-                argp_failure(state, 1, 0, "Invalid argument for 'type' option. \nSee --help for more detail");
+                argp_failure(state, 1, 0, "Invalid argument for 'type'. \nSee --help for more detail");
             }
             break;
 
@@ -107,11 +100,11 @@ static error_t parse_opt (int key, char * arg, struct argp_state * state)
             if (args-> type == TYPE_DATA_SERVER &&
             (!args->stat_host || !args->stat_port ||
             !args->num_servers || !args->deploy_hostfile)) {
-                argp_failure(state, 1, 0, "Required options for data server type: -h, -s, -n, -d. \nSee --help for more detail");
+                argp_failure(state, 1, 0, "Required options for data server type: -H, -P, -n, -d. \nSee --help for more detail");
                 exit (ARGP_ERR_UNKNOWN);
 
             } else if (args->type == TYPE_METADATA_SERVER && !args->stat_logfile) {
-                argp_failure(state, 1, 0, "Required options for metadata server type: -m. \nSee --help for more detail");
+                argp_failure(state, 1, 0, "Required options for metadata server type: -l. \nSee --help for more detail");
                 exit (ARGP_ERR_UNKNOWN);
             }
             break;
@@ -139,14 +132,6 @@ int parse_args (int argc, char ** argv, struct arguments * args)
     /* Parse arguments; every option seen by parse_opt will be
         reflected in arguments */
     argp_parse (&argp, argc, argv, 0, 0, args);
-/*
-    printf("type = %c\nport = %u\nbufsize = %u\n", args->type, args->port, args->bufsize);
-    if (args->type == TYPE_DATA_SERVER) {
-        printf("imss_uri = %s\nstat-host = %s\nstat-port = %u\nnum-servers = %u\ndeploy-hostfile = %s\n",
-        args->imss_uri, args->stat_host, args->stat_port, args->num_servers, args->deploy_hostfile);
-    } else {
-        printf("stat-logfile = %s\n", args->stat_logfile);
-    }
-*/
+
     return 0;
 }
