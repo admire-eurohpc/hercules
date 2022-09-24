@@ -12,6 +12,7 @@
 #include "memalloc.h"
 #include "directory.h"
 #include "records.hpp"
+#include "arg_parser.h"
 
 
 //Pointer to the tree's root node.
@@ -58,22 +59,28 @@ int32_t main(int32_t argc, char **argv)
 	/***************************************************************/
 	/******************** PARSE INPUT ARGUMENTS ********************/
 	/***************************************************************/
-	/*for(int i=0;i<argc;i++){
-		printf("argv[%d]=%s\n",i,argv[i]);
-	}
-	printf("argc=%d\n",argc);
+	struct arguments args;
+    parse_args(argc, argv, &args);
+
+	/*
+	printf("type = %c\nport = %u\nbufsize = %ld\n", args.type, args.port, args.bufsize);
+    if (args.type == TYPE_DATA_SERVER) {
+        printf("imss_uri = %s\nstat-host = %s\nstat-port = %ld\nnum-servers = %ld\ndeploy-hostfile = %s\n",
+        args.imss_uri, args.stat_host, args.stat_port, args.num_servers, args.deploy_hostfile);
+    } else {
+        printf("stat-logfile = %s\n", args.stat_logfile);
+    }
 	*/
-	//ARGV[2] = bind port number.
-	bind_port	= (uint16_t) atoi(argv[2]);
+
+	//bind port number.
+	bind_port = args.port;
 	aux_bind_port	= bind_port;
-	//ARGV[3] = buffer size provided.
-	buffer_size	= atoi(argv[3]);
+	//buffer size provided
+	buffer_size = args.bufsize;
+	//set up imss uri (default value is already set up in args)
+	imss_uri 	= (char *) calloc(32, sizeof(char));
 
-    // Default setup for imss uri
-	imss_uri 	= (char *) calloc(32, sizeof(char));	
-    strcpy(imss_uri, "imss://");
-
-     /* Initialize the UCX required objects */
+    /* Initialize the UCX required objects */
     ret = init_context(&ucp_context, &ucp_worker, CLIENT_SERVER_SEND_RECV_STREAM);
     if (ret != 0) {
         perror("ERRIMSS_INIT_CONTEXT");
@@ -82,22 +89,21 @@ int32_t main(int32_t argc, char **argv)
 
 	/* CHECK THIS OUT!
 	***************************************************
-	In relation to the number of arguments provided, an IMSS or a metadata server will be deployed. */
+	In relation to the type argument provided, an IMSS or a metadata server will be deployed. */
 
 	//IMSS server.
-	if (argc == 9)
+	if (args.type == TYPE_DATA_SERVER)
 	{
-
-		//ARGV[1] = IMSS name.
-		imss_uri	= argv[1];
-		//ARGV[6] = machine name where the metadata server is being executed.
-		stat_add	= argv[4];
-		//ARGV[7] = port that the metadata server is listening to.
-		stat_port 	= atoi(argv[5]);
-		//ARGV[8] = number of servers conforming the IMSS deployment.
-		num_servers	= atoi(argv[6]);
-		//ARGV[9] = IMSS' MPI deployment file.
-		deployfile	= argv[7];
+		//IMSS name.
+		strcpy(imss_uri, args.imss_uri);
+		//machine name where the metadata server is being executed.
+		stat_add	= args.stat_host;
+		//port that the metadata server is listening to.
+		stat_port 	= args.stat_port;
+		//number of servers conforming the IMSS deployment.
+		num_servers	= args.num_servers;
+		//IMSS' MPI deployment file.
+		deployfile	= args.deploy_hostfile;
 
 		int32_t imss_exists = 0;
 
@@ -168,8 +174,8 @@ int32_t main(int32_t argc, char **argv)
 	//Metadata server.
 	else
 	{
-		//ARGV[1] = metadata file.
-		metadata_file	= argv[1];
+		//metadata file.
+		metadata_file	= args.stat_logfile;
 
 		//Create the tree_root node.
 		char * root_data = (char *) calloc(8, sizeof(char));
@@ -234,7 +240,7 @@ int32_t main(int32_t argc, char **argv)
 	//Metadata bytes written into the buffer.
 	uint64_t bytes_written = 0;
 
-	if (argc == 4)
+	if (args.type == TYPE_METADATA_SERVER)
 	{
 		if ((buffer_address = metadata_read(metadata_file, map.get(), buffer, &bytes_written)) == NULL)
 			return -1;
@@ -251,7 +257,7 @@ int32_t main(int32_t argc, char **argv)
 	//Thread arguments.
 	p_argv arguments[(THREAD_POOL+1)];
 
-	if (argc == 9)
+	if (args.type == TYPE_DATA_SERVER)
 		region_locks = (pthread_mutex_t *) calloc(THREAD_POOL, sizeof(pthread_mutex_t));
 	
 	//Execute all threads.
@@ -285,7 +291,7 @@ int32_t main(int32_t argc, char **argv)
             arguments[i].ucp_worker = ucp_worker;
 
 			//IMSS server.
-			if (argc == 9)
+			if (args.type == TYPE_DATA_SERVER)
 			{	
 				if (pthread_create(&threads[i], NULL, srv_worker, (void *) &arguments[i]) == -1)
 				{
@@ -308,7 +314,7 @@ int32_t main(int32_t argc, char **argv)
 	}
 
 	//Notify to the metadata server the deployment of a new IMSS.
-	if ((argc == 9) && !rank && stat_port)
+	if ((args.type == TYPE_DATA_SERVER) && !rank && stat_port)
 	{
 		//Metadata structure containing the novel IMSS info.
 		imss_info my_imss;
@@ -396,7 +402,7 @@ int32_t main(int32_t argc, char **argv)
 	}
 
 	//Write the metadata structures retrieved by the metadata server threads.
-	if (argc == 4)
+	if (args.type == TYPE_METADATA_SERVER)
 	{
 		if (metadata_write(metadata_file, buffer, map.get(), arguments, buffer_segment, bytes_written) == -1)
 
