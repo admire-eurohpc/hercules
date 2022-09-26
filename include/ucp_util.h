@@ -9,7 +9,7 @@
 
 #include <ucp/api/ucp.h>
 
-
+extern StsHeader *send_request;
 /**
  * Close UCP endpoint.
  *
@@ -26,7 +26,15 @@ static void ep_close(ucp_worker_h ucp_worker, ucp_ep_h ep, uint64_t flags)
     void *close_req;
     param.op_attr_mask = UCP_OP_ATTR_FIELD_FLAGS;
     param.flags        = flags;
-    close_req          = ucp_ep_close_nbx(ep, &param);
+
+    // TODO
+	while (StsHeader.size(send_request) > 0){
+       ucx_async_t async;
+	   async = send_request.pop();
+	   request_finalize(ucp_worker, async.request, async.ctx);
+    }
+
+    close_req = ucp_ep_close_nbx(ep, &param);
     if (UCS_PTR_IS_PTR(close_req)) {
         do {
             ucp_worker_progress(ucp_worker);

@@ -44,7 +44,11 @@ typedef struct ucx_server_ctx {
 
 } ucx_server_ctx_t;
 
-
+typedef struct ucx_async {
+    test_req_t * request;
+    test_req_t * ctx;
+	StsHeader  * pending;
+} ucx_async_t;
 /**
  * Stream request context. Holds a value to indicate whether or not the
  * request is completed.
