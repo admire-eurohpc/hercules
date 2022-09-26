@@ -174,6 +174,35 @@ size_t send_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, const char * msg, size_
 }
 
 
+
+size_t send_istream(ucp_worker_h ucp_worker, ucp_ep_h ep, const char * msg, size_t msg_length)
+{
+    //printf("[SEND_STREAM] msg=%s, size=%ld\n",msg,msg_length);
+    ucp_request_param_t param;
+    test_req_t * request;
+    test_req_t ctx;
+	ucx_async_t pending;
+
+    ctx.complete       = 0;
+	param.op_attr_mask = UCP_OP_ATTR_FIELD_CALLBACK |
+                          UCP_OP_ATTR_FIELD_DATATYPE |
+                          UCP_OP_ATTR_FIELD_USER_DATA;
+    param.datatype     = ucp_dt_make_contig(1);
+    param.user_data    = &ctx;
+
+    /* Client sends a message to the server using the stream API */
+    param.cb.send = send_cb;
+    request       = (test_req_t*) ucp_stream_send_nbx(ep, msg, msg_length, &param);
+
+    pending.ctx = &ctx;
+	pending.request = request;
+
+	StsQueue.push(send_request, pending);
+
+    return msg_length;
+}
+
+
 size_t recv_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, char * msg, size_t msg_length)
 {
     
