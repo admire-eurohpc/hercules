@@ -619,7 +619,7 @@ ssize_t write(int fd, const void *buf, size_t size){
 		struct stat ds_stat_n;
 		imss_getattr(path, &ds_stat_n);
 		map_fd_search(map_fd, path, &fd, &p);
-		//printf("CUSTOM write worked! path=%s fd=%d, size=%ld offset=%ld, buffer=%s\n", path, fd, size, p, buf); 
+		printf("CUSTOM write worked! path=%s fd=%d, size=%ld offset=%ld, buffer=%s\n", path, fd, size, p, buf); 
 		ret=imss_write(path,buf,size,p);
 		imss_release(path);
 	}else{
