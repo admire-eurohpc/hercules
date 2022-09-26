@@ -194,10 +194,13 @@ size_t send_istream(ucp_worker_h ucp_worker, ucp_ep_h ep, const char * msg, size
     param.cb.send = send_cb;
     request       = (test_req_t*) ucp_stream_send_nbx(ep, msg, msg_length, &param);
 
+    /* set up ucx_async_t object to push it */
     pending.ctx = &ctx;
 	pending.request = request;
 
-	StsQueue.push(send_request, pending);
+    /* find this ep's queue in the map */
+    // TODO
+	StsQueue.push(send_request, &pending);
 
     return msg_length;
 }

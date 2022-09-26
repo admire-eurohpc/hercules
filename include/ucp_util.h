@@ -10,6 +10,7 @@
 #include <ucp/api/ucp.h>
 
 extern StsHeader *send_request;
+
 /**
  * Close UCP endpoint.
  *
@@ -28,10 +29,11 @@ static void ep_close(ucp_worker_h ucp_worker, ucp_ep_h ep, uint64_t flags)
     param.flags        = flags;
 
     // TODO
-	while (StsHeader.size(send_request) > 0){
-       ucx_async_t async;
-	   async = send_request.pop();
-	   request_finalize(ucp_worker, async.request, async.ctx);
+    //look for this ep's queue in the map
+    ucx_async_t * async;
+	while (StsQueue.size(send_request) > 0){
+	   async = (ucx_async_t *) StsQueue.pop(send_request);
+	   request_finalize(ucp_worker, async->request, async->ctx);
     }
 
     close_req = ucp_ep_close_nbx(ep, &param);

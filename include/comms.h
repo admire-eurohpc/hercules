@@ -44,11 +44,15 @@ typedef struct ucx_server_ctx {
 
 } ucx_server_ctx_t;
 
+/**
+ * Used in ep_close() to finalize write requests.
+ * Structure used to store requests that need to be finalized.
+ */
 typedef struct ucx_async {
     test_req_t * request;
     test_req_t * ctx;
-	StsHeader  * pending;
 } ucx_async_t;
+
 /**
  * Stream request context. Holds a value to indicate whether or not the
  * request is completed.
