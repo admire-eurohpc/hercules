@@ -29,7 +29,7 @@ rm metadata &> /dev/null
 touch metadata
 head -n $NUM_METADATA hostfile > meta_hostfile
 cat meta_hostfile
-mpiexec -n $NUM_METADATA -ppn 1 -f ./meta_hostfile $IMSS_PATH/server ./metadata $META_PORT 0 &
+mpiexec -n $NUM_METADATA -ppn 1 -f ./meta_hostfile $IMSS_PATH/server m --stat-logfile=./metadata --port=$META_PORT --bufsize=0 &
 
 sleep 5
 
@@ -37,7 +37,7 @@ echo "# IMMS: Running data servers"
 tail -n +$((NUM_METADATA+1)) hostfile | head -n $NUM_DATA > data_hostfile
 META_NODE=$(head -n 1 meta_hostfile)
 cat data_hostfile
-mpiexec -n $NUM_DATA -ppn 1 -f ./data_hostfile $IMSS_PATH/server imss:// $DATA_PORT 0 $META_NODE $META_PORT $NUM_DATA ./data_hostfile 1 &
+mpiexec -n $NUM_DATA -ppn 1 -f ./data_hostfile $IMSS_PATH/server d --imss-uri=imss:// --port=$DATA_PORT --bufsize=0 --stat-host=$META_NODE --stat-port=$META_PORT --num-servers=$NUM_DATA --deploy-hostfile=./data_hostfile &
 
 sleep 25
 
