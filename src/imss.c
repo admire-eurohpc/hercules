@@ -157,6 +157,7 @@ int32_t
 imss_check(char * dataset_uri)
 {
 	imss imss_;
+	printf ("imss_check imssd->len %d\n",  imssd->len);
 	//Traverse the whole set of IMSS structures in order to find the one.
 	for (int32_t i = 0; i < imssd->len; i++)
 	{
@@ -1013,6 +1014,8 @@ stat_imss(char *      imss_uri,
 	//Receive the associated structure.
 	char res[RESPONSE_SIZE];
 	ret = recv_dynamic_stream(ucp_worker_client, stat_client[m_srv], (char *)imss_info_, IMSS_INFO);
+	printf ("After recv_dynamic_stream %d\n", ret);
+	printf ("Sizeof imss_info %ld\n",sizeof(imss_info));
 	if (ret < sizeof(imss_info))
 		return 0;
 	return 1;
