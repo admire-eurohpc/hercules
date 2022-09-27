@@ -174,7 +174,6 @@ size_t send_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, const char * msg, size_
 }
 
 
-
 size_t send_istream(ucp_worker_h ucp_worker, ucp_ep_h ep, const char * msg, size_t msg_length)
 {
     //printf("[SEND_STREAM] msg=%s, size=%ld\n",msg,msg_length);
@@ -182,6 +181,7 @@ size_t send_istream(ucp_worker_h ucp_worker, ucp_ep_h ep, const char * msg, size
     test_req_t * request;
     test_req_t ctx;
 	ucx_async_t pending;
+    StsHeader *req_queue;
 
     ctx.complete       = 0;
 	param.op_attr_mask = UCP_OP_ATTR_FIELD_CALLBACK |
@@ -200,8 +200,12 @@ size_t send_istream(ucp_worker_h ucp_worker, ucp_ep_h ep, const char * msg, size
 
     /* find this ep's queue in the map */
     // TODO
-	StsQueue.push(send_request, &pending);
-
+    int found = map_ep_search(map, ep, &req_queue);
+    if (found) {
+	    StsQueue.push(req_queue, &pending);
+    } else {
+        return -1;//do something else??
+    }
     return msg_length;
 }
 

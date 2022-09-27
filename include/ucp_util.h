@@ -8,8 +8,12 @@
 #define UCP_UTIL_H_
 
 #include <ucp/api/ucp.h>
+#include "map_ep.hpp"
+#include "queue.h"
 
-extern StsHeader *send_request;
+// TODO
+extern StsHeader *req_queue; //not sure if this is necessary
+void *map;//set up a map somehow
 
 /**
  * Close UCP endpoint.
@@ -25,15 +29,20 @@ static void ep_close(ucp_worker_h ucp_worker, ucp_ep_h ep, uint64_t flags)
     ucp_request_param_t param;
     ucs_status_t status;
     void *close_req;
+    StsHeader *req_queue;
+
     param.op_attr_mask = UCP_OP_ATTR_FIELD_FLAGS;
     param.flags        = flags;
 
     // TODO
     //look for this ep's queue in the map
-    ucx_async_t * async;
-	while (StsQueue.size(send_request) > 0){
-	   async = (ucx_async_t *) StsQueue.pop(send_request);
-	   request_finalize(ucp_worker, async->request, async->ctx);
+    int found = map_ep_search(map, ep, &req_queue);
+    if (found) {
+        ucx_async_t * async;
+        while (StsQueue.size(req_queue) > 0) {
+            async = (ucx_async_t *) StsQueue.pop(req_queue);
+            request_finalize(ucp_worker, async->request, async->ctx);
+        }
     }
 
     close_req = ucp_ep_close_nbx(ep, &param);
