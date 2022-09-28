@@ -15,11 +15,13 @@
 #define CLOSE_EP       9999999
 
 
-#include "ucp_util.h"
 #include "queue.h"
 #include <arpa/inet.h> /* inet_addr */
 
 #include <ucp/api/ucp.h>
+
+
+extern int32_t  IMSS_DEBUG;
 
 #define IP_STRING_LEN          50
 #define PORT_STRING_LEN        8
@@ -97,7 +99,9 @@ char* sockaddr_get_ip_str(const struct sockaddr_storage *sock_addr, char *ip_str
 char* sockaddr_get_port_str(const struct sockaddr_storage *sock_addr,char *port_str, size_t max_size);
 ucs_status_t start_server(ucp_worker_h ucp_worker, ucx_server_ctx_t *context, ucp_listener_h *listener_p, const char *address_str, int port);
 ucs_status_t server_create_ep(ucp_worker_h data_worker, ucp_conn_request_h conn_request, ucp_ep_h *server_ep);
-ucs_status_t flush_ep(ucp_worker_h worker, ucp_ep_h ep);
+void ep_close(ucp_worker_h ucp_worker, ucp_ep_h ep, uint64_t flags);
+ucs_status_t ep_flush(ucp_ep_h ep, ucp_worker_h worker);
+
 
 //Method sending a data structure with dynamic memory allocation fields.
 int32_t send_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, void * data_struct, int32_t data_type);

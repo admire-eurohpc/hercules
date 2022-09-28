@@ -5,19 +5,20 @@
 #include "records.hpp"
 #include <memory>
 
-#define READ_OP			0
-#define RELEASE			2
-#define WHO			    3
-#define WRITE_OP		1
-#define DELETE_OP		4
-#define RENAME_OP		5
+#define READ_OP			  0
+#define GETDIR			  1
+#define RELEASE			  2
+#define WHO			      3
+#define DELETE_OP		  4
+#define RENAME_OP		  5
 #define RENAME_DIR_DIR_OP 6
-#define WRITEV 			7
-#define READV 			8
-#define SPLIT_READV 	9
-#define SPLIT_WRITEV	10
 
-#define GETDIR			1
+#define WRITE_OP		  1
+#define WRITEV 			  7
+#define READV 			  8
+#define SPLIT_READV 	  9
+#define SPLIT_WRITEV	 10
+
 
 #define THREAD_POOL		1
 

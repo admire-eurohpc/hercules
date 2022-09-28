@@ -38,6 +38,10 @@
 #define DATASET		1
 
 
+extern int32_t  IMSS_DEBUG;
+
+#define DPRINT(...) if (IMSS_DEBUG) {fprintf(stderr, __VA_ARGS__);}
+
 //Structure storing all information related to a certain IMSS.
 typedef struct {
 
