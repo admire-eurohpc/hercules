@@ -39,7 +39,7 @@ META_NODE=$(head -n 1 meta_hostfile)
 cat data_hostfile
 mpiexec -n $NUM_DATA -ppn 1 -f ./data_hostfile $IMSS_PATH/server d --imss-uri=imss:// --port=$DATA_PORT --bufsize=0 --stat-host=$META_NODE --stat-port=$META_PORT --num-servers=$NUM_DATA --deploy-hostfile=./data_hostfile &
 
-sleep 25
+sleep 5
 
 echo "# IMMS: Running IOR"
 tail -n +$((NUM_METADATA+NUM_DATA+1)) hostfile | head -n $NUM_CLIENT > client_hostfile

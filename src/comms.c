@@ -299,7 +299,7 @@ void send_cb(void *request, ucs_status_t status, void *user_data)
  */
 void err_cb_client(void *arg, ucp_ep_h ep, ucs_status_t status)
 {
-	if (status != UCS_ERR_CONNECTION_RESET && status != UCS_ERR_ENDPOINT_TIMEOUT)
+//	if (status != UCS_ERR_CONNECTION_RESET && status != UCS_ERR_ENDPOINT_TIMEOUT)
     printf("client error handling callback was invoked with status %d (%s)\n", status, ucs_status_string(status));
 }
 
@@ -482,6 +482,7 @@ int32_t send_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep,
 	//Buffer size.
 	size_t msg_size;
 
+    DPRINT( "[COMM] send_dynamic_stream start \n"); 
 	//Formalize the information to be sent.
 	switch (data_type)
 	{
@@ -510,7 +511,6 @@ int32_t send_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep,
 				offset_pt += LINE_LENGTH;
 			}
 
-            printf("Send: IMSS_INFO size %ld\n", msg_size);
 			break;
 		}
 
@@ -542,14 +542,12 @@ int32_t send_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep,
 				memcpy(offset_pt, struct_->data_locations, (struct_->num_data_elem * sizeof(uint16_t)));
 			}
 
-			printf ("Send: sending DATASET_INFO %ld\n",msg_size);
 			break;
 		}
 		case STRING:
 		{
             msg_size = strlen((char*) data_struct) + 1;
             info_buffer = (char *)data_struct;
-			printf ("Send: sending STRING %ld\n", msg_size);
             break;
 		}
 		case MSG:
@@ -557,7 +555,6 @@ int32_t send_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep,
 			msg_t * msg = (msg_t *) data_struct;
 			msg_size = msg->size;
 			info_buffer = msg->data;
-			printf ("Send: sending MSG %ld\n", msg_size);
 		}
 	}
 
@@ -567,11 +564,14 @@ int32_t send_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep,
             return -1;
     }
 
+    DPRINT("[COMM] send_dynamic_stream length %ld \n", msg_size); 
     if (send_stream(ucp_worker, ep, info_buffer, msg_size) < 0) {
             perror("ERRIMSS_SENDDYNAMSTRUCT");
             return -1;
     }
     // TODO free info_buffer
+    DPRINT( "[COMM] send_dynamic_stream content %ld \n", msg_size); 
+    DPRINT( "[COMM] send_dynamic_stream end %ld \n", msg_size); 
 	return msg_size;
 }
 
@@ -583,18 +583,21 @@ int32_t recv_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep,
 	size_t length;
 	char result[BUFFER_SIZE];
 
+    DPRINT( "[COMM] recv_dynamic_stream start \n"); 
 	if (recv_stream(ucp_worker, ep, (char*)&length, sizeof(size_t)) < 0)
     {
         perror("ERRIMSS_RECVDYNAMSTRUCT_RECV");
         return -1;
     }
 
+    DPRINT( "[COMM] recv_dynamic_stream length %ld \n", length); 
 	if (recv_stream(ucp_worker, ep, result, length) < 0) 
 	{
 		perror("ERRIMSS_RECVDYNAMSTRUCT_RECV");
 		return -1;
 	}
 
+    DPRINT( "[COMM] recv_dynamic_stream content %ld \n",length); 
     char * msg_data = result;
  
 	//Formalize the received information.
@@ -603,7 +606,7 @@ int32_t recv_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep,
 		case IMSS_INFO:
 		{
 			
-			printf ("Recv: receiving IMSS_INFO %ld\n",length);
+			DPRINT( "[COMM] Recv: receiving IMSS_INFO %ld\n",length);
 			imss_info * struct_ = (imss_info *) data_struct;
 
 			//Copy the actual structure into the one provided through reference.
@@ -611,6 +614,7 @@ int32_t recv_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep,
 
 			if (!strncmp("$ERRIMSS_NO_KEY_AVAIL$", struct_->uri_, 22))
 			{
+                DPRINT("[COMM] recv_dynamic_stream end %ld\n", length); 
 				return length;
 			}
 
@@ -632,7 +636,7 @@ int32_t recv_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep,
 
 		case DATASET_INFO:
 		{
-			printf ("Recv: receiving DATASET_INFO %ld\n", length);
+			DPRINT("Recv: receiving DATASET_INFO %ld\n", length);
 			dataset_info * struct_ = (dataset_info *) data_struct;
 
 			//Copy the actual structure into the one provided through reference.
@@ -640,7 +644,8 @@ int32_t recv_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep,
 
 			if (!strncmp("$ERRIMSS_NO_KEY_AVAIL$", struct_->uri_, 22))
 			{
-				return 0;
+                DPRINT("[COMM] recv_dynamic_stream end %ld\n", length); 
+				return length;
 			}
 
 			//If the size of the message received was bigger than sizeof(dataset_info), something more came with it.
@@ -660,15 +665,66 @@ int32_t recv_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep,
 		case BUFFER:
 		{
 
-			printf ("Recv: receiving STRING or BUFFER %ld\n", length);
+			DPRINT("Recv: receiving STRING or BUFFER %ld\n", length);
 			if (!strncmp("$ERRIMSS_NO_KEY_AVAIL$", msg_data, 22))
             {
-                return 0;
+                DPRINT("[COMM] recv_dynamic_stream end %ld\n", length); 
+                return length;
             }
 			memcpy(data_struct, result, length);
 		    break;
 		}
 	}
- 
+    DPRINT("[COMM] recv_dynamic_stream end %ld\n", length); 
 	return length;
+}
+
+void ep_close(ucp_worker_h ucp_worker, ucp_ep_h ep, uint64_t flags)
+{
+    ucp_request_param_t param;
+    ucs_status_t status;
+    void *close_req;
+    param.op_attr_mask = UCP_OP_ATTR_FIELD_FLAGS;
+    param.flags        = flags;
+    close_req          = ucp_ep_close_nbx(ep, &param);
+    if (UCS_PTR_IS_PTR(close_req)) {
+        do {
+            ucp_worker_progress(ucp_worker);
+            status = ucp_request_check_status(close_req);
+        } while (status == UCS_INPROGRESS);
+        ucp_request_free(close_req);
+    } else {
+        status = UCS_PTR_STATUS(close_req);
+    }
+
+    if (status != UCS_OK) {
+        fprintf(stderr, "failed to close ep %p\n", (void*)ep);
+    }
+    DPRINT("[COMM] Closed endpoint\n");
+}
+
+void empty_function(void *request, ucs_status_t status)
+{
+    DPRINT("[COMM] Flushed endpoint\n");
+}
+
+
+ucs_status_t ep_flush(ucp_ep_h ep, ucp_worker_h worker)
+{
+    void *request;
+    DPRINT( "[COMM] Flushing endpoint\n");
+    request = ucp_ep_flush_nb(ep, 0, empty_function);
+    if (request == NULL) {
+        return UCS_OK;
+    } else if (UCS_PTR_IS_ERR(request)) {
+        return UCS_PTR_STATUS(request);
+    } else {
+        ucs_status_t status;
+        do {
+            ucp_worker_progress(worker);
+            status = ucp_request_check_status(request);
+        } while (status == UCS_INPROGRESS);
+        ucp_request_free(request);
+        return status;
+    }
 }

@@ -208,7 +208,7 @@ void * srv_worker_slave (void * th_argv)
 
 					case RELEASE:
 					{
-						flush_ep(ucp_data_worker, arguments->server_ep);
+						ep_flush(arguments->server_ep, ucp_data_worker);
 						ep_close(ucp_data_worker, arguments->server_ep, UCP_EP_CLOSE_MODE_FLUSH);
 						ucp_worker_destroy(ucp_data_worker);
 						pthread_exit(NULL);
@@ -746,7 +746,7 @@ void * srv_worker_slave (void * th_argv)
 			break;
 			}
 			if (client_id == CLOSE_EP) {
-				flush_ep(ucp_data_worker, arguments->server_ep);
+				ep_flush(arguments->server_ep, ucp_data_worker);
 				ep_close(ucp_data_worker, arguments->server_ep, UCP_EP_CLOSE_MODE_FLUSH);
 				ucp_worker_destroy(ucp_data_worker);
 				pthread_exit(NULL);
@@ -754,7 +754,7 @@ void * srv_worker_slave (void * th_argv)
 		}   
 
 		printf("Terminated stat thread\n");
-		flush_ep(ucp_data_worker, arguments->server_ep);
+		ep_flush(arguments->server_ep, ucp_data_worker);
 		ep_close(ucp_data_worker, arguments->server_ep, UCP_EP_CLOSE_MODE_FLUSH);
 		ucp_worker_destroy(ucp_data_worker);
 		pthread_exit(NULL);
@@ -786,7 +786,7 @@ void * srv_worker_slave (void * th_argv)
 
 		p_argv * arguments = (p_argv *) th_argv;
 
-        context.conn_request =  StsQueue.create(); 
+		context.conn_request =  StsQueue.create(); 
 		status = start_server(arguments->ucp_worker, &context, &context.listener, NULL, arguments->port);
 		if (status != UCS_OK) {
 			perror("ERRIMSS_STAR_SERVER");
@@ -799,11 +799,11 @@ void * srv_worker_slave (void * th_argv)
 			pthread_attr_t attr;
 			ucp_conn_request_h req;
 
-            while (StsQueue.size(context.conn_request) == 0) {
-                ucp_worker_progress(arguments->ucp_worker);
-            }
+			while (StsQueue.size(context.conn_request) == 0) {
+				ucp_worker_progress(arguments->ucp_worker);
+			}
 
-            req = (ucp_conn_request_h)StsQueue.pop(context.conn_request);
+			req = (ucp_conn_request_h)StsQueue.pop(context.conn_request);
 
 
 			memcpy(slave_args, th_argv, sizeof(p_argv));
@@ -907,6 +907,9 @@ void * srv_worker_slave (void * th_argv)
 			uint64_t block_size_rtvd;
 			//printf("stat_worker RECV more=%ld, blocksss=%ld\n",more, block_size_recv);
 			//Differentiate between READ and WRITE operations. 
+
+			DPRINT("[STAT WORKER] Received command:  %d | %s | %s \n", client_id, mode, req);
+
 			switch (more)
 			{
 				//No more messages will arrive to the socket.
@@ -929,7 +932,7 @@ void * srv_worker_slave (void * th_argv)
 										{
 											perror("ERRIMSS_STATWORKER_NODIR");
 											if (client_id == CLOSE_EP) {
-												flush_ep(ucp_data_worker, arguments->server_ep);
+												ep_flush(arguments->server_ep, ucp_data_worker);
 												ep_close(ucp_data_worker, arguments->server_ep, UCP_EP_CLOSE_MODE_FLUSH);
 												ucp_worker_destroy(ucp_data_worker);
 											}
@@ -953,7 +956,7 @@ void * srv_worker_slave (void * th_argv)
 									{
 										perror("ERRIMSS_WORKER_SENDBLOCK");
 										if (client_id == CLOSE_EP) {
-											flush_ep(ucp_data_worker, arguments->server_ep);
+											ep_flush(arguments->server_ep, ucp_data_worker);
 											ep_close(ucp_data_worker, arguments->server_ep, UCP_EP_CLOSE_MODE_FLUSH);
 											ucp_worker_destroy(ucp_data_worker);
 										}
@@ -968,6 +971,7 @@ void * srv_worker_slave (void * th_argv)
 									//printf("STAT_WORKER READ_OP\n");
 									//Check if there was an associated block to the key.
 									int err = map->get(key, &address_, &block_size_rtvd);
+									DPRINT("[STAT WORKER] map->get (key %s, block_size_rtvd %ld) err %d\n",key.c_str(),block_size_rtvd, err);
 
 									if(err == 0){
 										//Send the error code block.
@@ -975,7 +979,7 @@ void * srv_worker_slave (void * th_argv)
 										{
 											perror("ERRIMSS_WORKER_SENDERR");
 											if (client_id == CLOSE_EP) {
-												flush_ep(ucp_data_worker, arguments->server_ep);
+												ep_flush(arguments->server_ep, ucp_data_worker);
 												ep_close(ucp_data_worker, arguments->server_ep, UCP_EP_CLOSE_MODE_FLUSH);
 												ucp_worker_destroy(ucp_data_worker);
 											}
@@ -996,7 +1000,7 @@ void * srv_worker_slave (void * th_argv)
 										if(err < 0){
 											perror("ERRIMSS_WORKER_SENDBLOCK");
 											if (client_id == CLOSE_EP) {
-												flush_ep(ucp_data_worker, arguments->server_ep);
+												ep_flush(arguments->server_ep, ucp_data_worker);
 												ep_close(ucp_data_worker, arguments->server_ep, UCP_EP_CLOSE_MODE_FLUSH);
 												ucp_worker_destroy(ucp_data_worker);
 											}
@@ -1009,7 +1013,7 @@ void * srv_worker_slave (void * th_argv)
 
 							case RELEASE:
 								{
-									flush_ep(ucp_data_worker, arguments->server_ep);
+									ep_flush(arguments->server_ep, ucp_data_worker);
 									ep_close(ucp_data_worker, arguments->server_ep, UCP_EP_CLOSE_MODE_FLUSH);
 									ucp_worker_destroy(ucp_data_worker);
 									pthread_exit(NULL);
@@ -1026,7 +1030,7 @@ void * srv_worker_slave (void * th_argv)
 									{
 										perror("ERRIMSS_PUBLISH_DELETEMSG");
 										if (client_id == CLOSE_EP) {
-											flush_ep(ucp_data_worker, arguments->server_ep);
+											ep_flush(arguments->server_ep, ucp_data_worker);
 											ep_close(ucp_data_worker, arguments->server_ep, UCP_EP_CLOSE_MODE_FLUSH);
 											ucp_worker_destroy(ucp_data_worker);
 										}
@@ -1060,7 +1064,7 @@ void * srv_worker_slave (void * th_argv)
 									{
 										perror("ERRIMSS_PUBLISH_RENAMEMSG");
 										if (client_id == CLOSE_EP) {
-											flush_ep(ucp_data_worker, arguments->server_ep);
+											ep_flush(arguments->server_ep, ucp_data_worker);
 											ep_close(ucp_data_worker, arguments->server_ep, UCP_EP_CLOSE_MODE_FLUSH);
 											ucp_worker_destroy(ucp_data_worker);
 										}
@@ -1088,7 +1092,7 @@ void * srv_worker_slave (void * th_argv)
 									{
 										perror("ERRIMSS_PUBLISH_RENAMEMSG");
 										if (client_id == CLOSE_EP) {
-											flush_ep(ucp_data_worker, arguments->server_ep);
+											ep_flush(arguments->server_ep, ucp_data_worker);
 											ep_close(ucp_data_worker, arguments->server_ep, UCP_EP_CLOSE_MODE_FLUSH);
 											ucp_worker_destroy(ucp_data_worker);
 										}
@@ -1110,16 +1114,14 @@ void * srv_worker_slave (void * th_argv)
 						{
 							//Receive the block into the buffer.
 							char * buffer = (char *) malloc(block_size_recv);
+							DPRINT("[STAT WORKER] Recv dynamic buffer size %ld\n", block_size_recv);
 							recv_dynamic_stream(ucp_data_worker, arguments->server_ep, buffer, BUFFER);
+							DPRINT("[STAT WORKER] END Recv dynamic \n");
 
 							int32_t insert_successful;
-							//Include the new record in the tracking structure.
-							/*dataset_info * data = (dataset_info *) buffer;
-							  printf("WRITE_OP key=%s\n",key.c_str());
-							  printf("WRITE_OP data->type=%c\n",data->type);
-							  printf("WRITE_OP data->servers=%d\n",data->n_servers);
-							  printf("WRITE_OP original_name=%s\n",data->original_name);*/
-							insert_successful=map->put(key, buffer, block_size_recv);
+							insert_successful = map->put(key, buffer, block_size_recv);
+							DPRINT("[STAT WORKER] map->put (key %s) err %d\n",key.c_str(), insert_successful);
+							
 							if (insert_successful != 0)
 							{
 								perror("ERRIMSS_WORKER_MAPPUT");
@@ -1136,7 +1138,7 @@ void * srv_worker_slave (void * th_argv)
 							{
 								perror("ERRIMSS_STATWORKER_GTREEINSERT");
 								if (client_id == CLOSE_EP) {
-									flush_ep(ucp_data_worker, arguments->server_ep);
+									ep_flush(arguments->server_ep, ucp_data_worker);
 									ep_close(ucp_data_worker, arguments->server_ep, UCP_EP_CLOSE_MODE_FLUSH);
 									ucp_worker_destroy(ucp_data_worker);
 								}
@@ -1162,7 +1164,7 @@ void * srv_worker_slave (void * th_argv)
 										{
 											perror("ERRIMSS_WORKER_DATALOCATRECV");
 											if (client_id == CLOSE_EP) {
-												flush_ep(ucp_data_worker, arguments->server_ep);
+												ep_flush(arguments->server_ep, ucp_data_worker);
 												ep_close(ucp_data_worker, arguments->server_ep, UCP_EP_CLOSE_MODE_FLUSH);
 												ucp_worker_destroy(ucp_data_worker);
 											}
@@ -1193,7 +1195,7 @@ void * srv_worker_slave (void * th_argv)
 										{
 											perror("ERRIMSS_WORKER_DATALOCATANSWER2");
 											if (client_id == CLOSE_EP) {
-												flush_ep(ucp_data_worker, arguments->server_ep);
+												ep_flush(arguments->server_ep, ucp_data_worker);
 												ep_close(ucp_data_worker, arguments->server_ep, UCP_EP_CLOSE_MODE_FLUSH);
 												ucp_worker_destroy(ucp_data_worker);
 											}
@@ -1208,7 +1210,7 @@ void * srv_worker_slave (void * th_argv)
 										//Clear the corresponding memory region.
 										memset(address_, '\0', block_size_rtvd);
 										//Receive the block into the buffer.
-							            recv_dynamic_stream(ucp_data_worker, arguments->server_ep, address_, BUFFER);
+										recv_dynamic_stream(ucp_data_worker, arguments->server_ep, address_, BUFFER);
 										break;
 									}
 							}
@@ -1219,13 +1221,13 @@ void * srv_worker_slave (void * th_argv)
 					break;
 			}
 			if (client_id == CLOSE_EP) {
-				flush_ep(ucp_data_worker, arguments->server_ep);
+				ep_flush(arguments->server_ep, ucp_data_worker);
 				ep_close(ucp_data_worker, arguments->server_ep, UCP_EP_CLOSE_MODE_FLUSH);
 				ucp_worker_destroy(ucp_data_worker);
 				pthread_exit(NULL);
 			} 
 		}   
-		flush_ep(ucp_data_worker, arguments->server_ep);
+		ep_flush(arguments->server_ep, ucp_data_worker);
 		ep_close(ucp_data_worker, arguments->server_ep, UCP_EP_CLOSE_MODE_FLUSH);
 		ucp_worker_destroy(ucp_data_worker);
 		pthread_exit(NULL);
@@ -1268,16 +1270,16 @@ void * srv_worker_slave (void * th_argv)
 			{
 				ucp_conn_request_h conn_req;
 
-                while (StsQueue.size(context.conn_request) == 0) {
-                  ucp_worker_progress(arguments->ucp_worker);
-                }
+				while (StsQueue.size(context.conn_request) == 0) {
+					ucp_worker_progress(arguments->ucp_worker);
+				}
 
-                conn_req = (ucp_conn_request_h)StsQueue.pop(context.conn_request);
+				conn_req = (ucp_conn_request_h)StsQueue.pop(context.conn_request);
 
 				status = server_create_ep(ucp_data_worker, conn_req, &server_ep);
 				if (status != UCS_OK) {
 					perror("ERRIMSS_SERVER_CREATE_EP");
-					flush_ep(ucp_data_worker, server_ep);
+					ep_flush(server_ep, ucp_data_worker);
 					ep_close(ucp_data_worker, server_ep, UCP_EP_CLOSE_MODE_FLUSH);
 					pthread_exit(NULL);
 				}
@@ -1288,7 +1290,7 @@ void * srv_worker_slave (void * th_argv)
 				if (recv_stream(ucp_data_worker, server_ep, mode, MODE_SIZE) < 0)
 				{
 					perror("ERRIMSS_WORKER_SENDCLIENTID");
-					flush_ep(ucp_data_worker, server_ep);
+					ep_flush(server_ep, ucp_data_worker);
 					ep_close(ucp_data_worker, server_ep, UCP_EP_CLOSE_MODE_FLUSH);
 					pthread_exit(NULL);
 				}
@@ -1327,7 +1329,7 @@ void * srv_worker_slave (void * th_argv)
 					if (send_stream(ucp_data_worker, server_ep, response_, RESPONSE_SIZE) < 0)
 					{
 						perror("ERRIMSS_SRVDISP_SENDBLOCK");
-						flush_ep(ucp_data_worker, server_ep);
+						ep_flush(server_ep, ucp_data_worker);
 						ep_close(ucp_data_worker, server_ep, UCP_EP_CLOSE_MODE_FLUSH);
 						pthread_exit(NULL);
 					}
@@ -1341,13 +1343,13 @@ void * srv_worker_slave (void * th_argv)
 					if (send_stream(ucp_data_worker, server_ep, arguments->my_uri, RESPONSE_SIZE) < 0) // MIRAR
 					{
 						perror("ERRIMSS_WHOREQUEST");
-						flush_ep(ucp_data_worker, server_ep);
+						ep_flush(server_ep, ucp_data_worker);
 						ep_close(ucp_data_worker, server_ep, UCP_EP_CLOSE_MODE_FLUSH);
 						pthread_exit(NULL);
 					}
 				}
 				//context.conn_request = NULL;
-				flush_ep(ucp_data_worker, server_ep);
+				ep_flush(server_ep, ucp_data_worker);
 				ep_close(ucp_data_worker, server_ep, UCP_EP_CLOSE_MODE_FLUSH);
 			}
 			pthread_exit(NULL);
@@ -1377,7 +1379,7 @@ void * srv_worker_slave (void * th_argv)
 
 			/* Initialize the server's context. */
 			context.conn_request =  StsQueue.create();
-		
+
 
 			status = start_server(arguments->ucp_worker, &context, &context.listener, NULL, arguments->port);
 			if (status != UCS_OK) {
@@ -1390,11 +1392,11 @@ void * srv_worker_slave (void * th_argv)
 				ucp_ep_h server_ep;
 				ucp_conn_request_h conn_req;
 
-                while (StsQueue.size(context.conn_request) == 0) {
-                  ucp_worker_progress(arguments->ucp_worker);
-                }
+				while (StsQueue.size(context.conn_request) == 0) {
+					ucp_worker_progress(arguments->ucp_worker);
+				}
 
-                conn_req = (ucp_conn_request_h)StsQueue.pop(context.conn_request);
+				conn_req = (ucp_conn_request_h)StsQueue.pop(context.conn_request);
 
 				status = server_create_ep(ucp_data_worker, conn_req, &server_ep);
 				if (status != UCS_OK) {
@@ -1420,7 +1422,7 @@ void * srv_worker_slave (void * th_argv)
 					//Port that the new client will be forwarded to.
 					int32_t port_ = arguments->port + 1 + (client_id_ % THREAD_POOL);
 					//Wrap the previous info into the ZMQ message.
-					
+
 					sprintf(response_, "%d%c%d", port_, '-', client_id_++);
 
 
@@ -1443,7 +1445,7 @@ void * srv_worker_slave (void * th_argv)
 				}
 
 				/* Reinitialize the server's context to be used for the next client */
-				flush_ep(ucp_data_worker, server_ep);
+				ep_flush(server_ep, ucp_data_worker);
 				ep_close(ucp_data_worker, server_ep, UCP_EP_CLOSE_MODE_FLUSH);
 			}
 

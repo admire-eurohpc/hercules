@@ -34,6 +34,9 @@ ucp_worker_h  ucp_worker;
 
 ucp_ep_h     pub_ep;
 
+
+int32_t  IMSS_DEBUG = 0;
+
 int32_t main(int32_t argc, char **argv)
 {
 	int32_t provide, world_size, rank;
@@ -60,6 +63,13 @@ int32_t main(int32_t argc, char **argv)
 	/******************** PARSE INPUT ARGUMENTS ********************/
 	/***************************************************************/
 	struct arguments args;
+
+
+	if (getenv("IMSS_DEBUG") != NULL) {
+        IMSS_DEBUG = 1;
+    }
+
+
     parse_args(argc, argv, &args);
 
 	/*
@@ -378,11 +388,12 @@ int32_t main(int32_t argc, char **argv)
 			return -1;
 		}
 
+        DPRINT("[SERVER] Creating IMSS_INFO \n");
 		//Send the new IMSS metadata structure to the metadata server entity.
 		if (send_dynamic_stream(ucp_worker, client_ep, (char *) &my_imss, IMSS_INFO) == -1)
 			return -1;
-
-        //ep_close(ucp_worker, pub_ep, UCP_EP_CLOSE_MODE_FLUSH);
+        
+		ep_flush(client_ep, ucp_worker);
 
 		for (int32_t i = 0; i < num_servers; i++)
 			free(my_imss.ips[i]);

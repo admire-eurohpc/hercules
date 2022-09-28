@@ -157,7 +157,6 @@ int32_t
 imss_check(char * dataset_uri)
 {
 	imss imss_;
-	printf ("imss_check imssd->len %d\n",  imssd->len);
 	//Traverse the whole set of IMSS structures in order to find the one.
 	for (int32_t i = 0; i < imssd->len; i++)
 	{
@@ -628,7 +627,6 @@ init_imss(char *   imss_uri,
 	new_imss.info.type     = 'I';
 
 	if (deployment == ATTACHED)
-
 		new_imss.info.conn_port     = connection_port;
 
 	new_imss.info.ips           = (char **) malloc(n_servers * sizeof(char *));
@@ -740,7 +738,7 @@ init_imss(char *   imss_uri,
 	sprintf(key_plus_size, "%lu %s", (sizeof(imss_info)+new_imss.info.num_storages*LINE_LENGTH), new_imss.info.uri_);
 
 
-	if (send_stream(ucp_worker_client, stat_client[m_srv], (char *) &stat_ids[m_srv], MODE_SIZE) < 0) // SNDMORE
+	if (send_stream(ucp_worker_client, stat_client[m_srv], (char *) &stat_ids[m_srv], sizeof(uint32_t)) < 0) // SNDMORE
 	{
 		perror("ERRIMSS_INITIMSS_SENDKEY");
 		return -1;
@@ -760,9 +758,11 @@ init_imss(char *   imss_uri,
 	}
 
 	//Send the new IMSS metadata structure to the metadata server entity.
+	printf ("[IMSS] Command:  %d | %s | %s \n", stat_ids[m_srv], mode2, key_plus_size);
 	if (send_dynamic_stream(ucp_worker_client, stat_client[m_srv], (void *) &new_imss.info, IMSS_INFO) < 0)
 		return -1;
 
+    ep_flush(stat_client[m_srv], ucp_worker_client);
 	//Add the created struture into the underlying IMSS vector.
 	GInsert (&imssd_pos, &imssd_max_size, (char *) &new_imss, imssd, free_imssd);
 
@@ -845,6 +845,7 @@ open_imss(char * imss_uri)
 			return -1;
 		}
 
+        ep_flush(new_imss.conns.eps_[i], ucp_worker_client);
 		//ZMQ message retrieving the connection information.
 		char connection_info[RESPONSE_SIZE];
 		if (recv_stream(ucp_worker_client, new_imss.conns.eps_[i], connection_info, RESPONSE_SIZE) < 0)
@@ -1011,11 +1012,12 @@ stat_imss(char *      imss_uri,
 		return -1;
 	}
 
+    ep_flush(stat_client[m_srv], ucp_worker_client);
+
 	//Receive the associated structure.
 	char res[RESPONSE_SIZE];
+
 	ret = recv_dynamic_stream(ucp_worker_client, stat_client[m_srv], (char *)imss_info_, IMSS_INFO);
-	printf ("After recv_dynamic_stream %d\n", ret);
-	printf ("Sizeof imss_info %ld\n",sizeof(imss_info));
 	if (ret < sizeof(imss_info))
 		return 0;
 	return 1;
@@ -1152,6 +1154,7 @@ create_dataset(char *  dataset_uri,
 	if (send_dynamic_stream(ucp_worker_client, stat_client[m_srv], (void *) &new_dataset, DATASET_INFO) < 0)
 		return -1;
 
+    ep_flush(stat_client[m_srv], ucp_worker_client);
 	//Initialize dataset fields monitoring the dataset itself if it is a LOCAL one.
 	if (!strcmp(new_dataset.policy, "LOCAL"))
 	{
@@ -1304,6 +1307,7 @@ release_dataset(int32_t dataset_id)
 			return -1;
 		}
 
+        ep_flush(stat_client[m_srv], ucp_worker_client);
 		//Format update message to be sent to the metadata server.
 
 		uint64_t blocks_written_size = *(release_dataset.num_blocks_written) * sizeof(uint32_t);
@@ -1393,6 +1397,7 @@ delete_dataset(const char * 	    dataset_uri)
 	}
 
 
+    ep_flush(stat_client[m_srv], ucp_worker_client);
 	char result[RESPONSE_SIZE];
 	if (recv_stream(ucp_worker_client, stat_client[m_srv], result, RESPONSE_SIZE) < 0)
 	{
@@ -1464,6 +1469,7 @@ rename_dataset_metadata_dir_dir(char * old_dir, char * rdir_dest){
 		return -1;
 	}
 
+    ep_flush(stat_client[m_srv], ucp_worker_client);
 	char result[RESPONSE_SIZE];
 	if (recv_stream(ucp_worker_client, stat_client[m_srv], result, RESPONSE_SIZE) < 0)
 	{
@@ -1518,6 +1524,8 @@ rename_dataset_metadata(char * old_dataset_uri, char * new_dataset_uri){
 		return -1;
 	}
 
+    ep_flush(stat_client[m_srv], ucp_worker_client);
+
 	char result[RESPONSE_SIZE];
 	if (recv_stream(ucp_worker_client, stat_client[m_srv], result, RESPONSE_SIZE) < 0)
 	{
@@ -1569,6 +1577,7 @@ stat_dataset(const char * 	    dataset_uri,
 		return -1;
 	}
 
+    ep_flush(stat_client[m_srv], ucp_worker_client);
 	//Receive the associated structure.
 	ret = recv_dynamic_stream(ucp_worker_client, stat_client[m_srv], dataset_info_, DATASET_INFO);
 	if (ret < sizeof(dataset_info))
@@ -1695,6 +1704,7 @@ rename_dataset_srv_worker_dir_dir(char * old_dir, char * rdir_dest,
 			return -1;
 		}	
 
+        ep_flush(curr_imss.conns.eps_[i], ucp_worker_client);
 		char result[RESPONSE_SIZE];
 		if (recv_stream(ucp_worker_client, curr_imss.conns.eps_[i], result, RESPONSE_SIZE) < 0)
 		{
@@ -1774,6 +1784,7 @@ rename_dataset_srv_worker(char * old_dataset_uri, char * new_dataset_uri,
 			return -1;
 		}	
 
+        ep_flush(curr_imss.conns.eps_[repl_servers[i]], ucp_worker_client);
 		char result[RESPONSE_SIZE];
 		if (recv_stream(ucp_worker_client, curr_imss.conns.eps_[repl_servers[i]], result, RESPONSE_SIZE) < 0)
 		{
