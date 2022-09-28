@@ -3,10 +3,12 @@ set_source_files_properties(./mount.c ../src/hercules.c PROPERTIES LANGUAGE CXX)
 add_executable(mount.imss
     mount.c
     ../src/hercules.c
+    ../src/map_ep.cpp
     )
 
 add_executable(umount.imss
     umount.c
+    ../src/map_ep.cpp
     )
 
 set(CMAKE_C_FLAGS "-fPIC")

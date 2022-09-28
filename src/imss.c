@@ -13,6 +13,7 @@
 #include "crc.h"
 #include "imss.h"
 #include "comms.h"
+#include "map_ep.hpp"
 #include "workers.h"
 #include "policies.h"
 #include <sys/time.h>
@@ -63,10 +64,13 @@ char        att_deployment[URI_];
 
 
 int32_t  IMSS_DEBUG = 0;
+int32_t  IMSS_WRITE_ASYNC = 1;
 
 /* UCP objects */
 ucp_context_h ucp_context_client;
 ucp_worker_h  ucp_worker_client;
+
+void * map_ep; //map_ep used for async write
 
 //Method inserting an element into a certain control GArray vector.
 int32_t
@@ -234,6 +238,10 @@ stat_init(char *   stat_hostfile,
     if (getenv("IMSS_DEBUG") != NULL) {
         IMSS_DEBUG = 1;
     }
+	if (getenv("IMSS_WRITE_ASYNC") != NULL) {
+        IMSS_WRITE_ASYNC = 1;
+    }
+
     /* Initialize the UCX required objects */
     ret = init_context(&ucp_context_client, &ucp_worker_client, CLIENT_SERVER_SEND_RECV_STREAM);
     if (ret != 0) {
@@ -554,6 +562,9 @@ init_imss(char *   imss_uri,
 	if (getenv("IMSS_DEBUG") != NULL) {
 		IMSS_DEBUG = 1;
 	}
+	if (getenv("IMSS_WRITE_ASYNC") != NULL) {
+        IMSS_WRITE_ASYNC = 1;
+    }
 
 	//Check if the new IMSS uri has been already assigned.
 	int32_t existing_imss = stat_imss(imss_uri, &aux_imss);
@@ -765,6 +776,9 @@ init_imss(char *   imss_uri,
     ep_flush(stat_client[m_srv], ucp_worker_client);
 	//Add the created struture into the underlying IMSS vector.
 	GInsert (&imssd_pos, &imssd_max_size, (char *) &new_imss, imssd, free_imssd);
+
+	/* create the map to store the queues used to handle async writes */
+	map_ep = map_ep_create();
 
 	return 0;
 }
@@ -2400,6 +2414,7 @@ set_data(int32_t 	 dataset_id,
 		char * buffer)
 {
 	int32_t n_server;
+	//size_t (* const send_choose_stream)(ucp_worker_h ucp_worker, ucp_ep_h ep, const char * msg, size_t msg_length) = (IMSS_WRITE_ASYNC == 1) ? send_istream : send_stream;
 
 	/*	struct timeval start, end;
 		long delta_us;
@@ -2435,14 +2450,14 @@ set_data(int32_t 	 dataset_id,
 		//printf("BLOCK %d SENT TO %d SERVER with key: %s (%d)\n", data_id, n_server_, key, key_length);
 
 		
-		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[n_server_], (char *) &curr_imss.conns.id[n_server_], sizeof(uint32_t)) < 0)
+		if (send_istream(ucp_worker_client, curr_imss.conns.eps_[n_server_], (char *) &curr_imss.conns.id[n_server_], sizeof(uint32_t)) < 0)
 		{
 			perror("ERRIMSS_STAT_HELLO");
 			return -1;
 		}
 
 		char mode[] = "SET";
-		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[n_server_], mode, MODE_SIZE) < 0)
+		if (send_istream(ucp_worker_client, curr_imss.conns.eps_[n_server_], mode, MODE_SIZE) < 0)
 		{
 			perror("ERRIMSS_STAT_HELLO");
 			return -1;
@@ -2451,7 +2466,7 @@ set_data(int32_t 	 dataset_id,
 		//	gettimeofday(&start, NULL);
 		//Send read request message specifying the block URI.
 		//if (comm_send(curr_imss.conns.eps_[n_server_], key, KEY, ZMQ_SNDMORE) < 0)
-		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[n_server_], key, REQUEST_SIZE) < 0) // SNDMORE
+		if (send_istream(ucp_worker_client, curr_imss.conns.eps_[n_server_], key, REQUEST_SIZE) < 0) // SNDMORE
 		{
 			perror("ERRIMSS_SETDATA_REQ");
 			return -1;
@@ -2466,7 +2481,7 @@ set_data(int32_t 	 dataset_id,
 		//	gettimeofday(&start, NULL);
 		//Send read request message specifying the block data.
 		//printf("[SET DATA] msg=%s, size=%d\n",buffer,curr_dataset.data_entity_size);
-		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[n_server_], buffer, curr_dataset.data_entity_size) < 0)
+		if (send_istream(ucp_worker_client, curr_imss.conns.eps_[n_server_], buffer, curr_dataset.data_entity_size) < 0)
 		{
 			perror("ERRIMSS_SETDATA_SEND");
 			return -1;

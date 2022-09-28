@@ -47,6 +47,14 @@ typedef struct ucx_server_ctx {
 } ucx_server_ctx_t;
 
 /**
+ * Stream request context. Holds a value to indicate whether or not the
+ * request is completed.
+ */
+typedef struct test_req {
+    int complete;
+} test_req_t;
+
+/**
  * Used in ep_close() to finalize write requests.
  * Structure used to store requests that need to be finalized.
  */
@@ -54,14 +62,6 @@ typedef struct ucx_async {
     test_req_t * request;
     test_req_t * ctx;
 } ucx_async_t;
-
-/**
- * Stream request context. Holds a value to indicate whether or not the
- * request is completed.
- */
-typedef struct test_req {
-    int complete;
-} test_req_t;
 
 
 /**
@@ -86,6 +86,7 @@ ucs_status_t start_client(ucp_worker_h ucp_worker, const char *address_str, int 
 void set_sock_addr(const char *address_str, struct sockaddr_storage *saddr, int server_port);
 int request_finalize(ucp_worker_h ucp_worker, test_req_t *request, test_req_t *ctx);
 size_t send_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, const char * msg, size_t msg_length);
+size_t send_istream(ucp_worker_h ucp_worker, ucp_ep_h ep, const char * msg, size_t msg_length);
 size_t recv_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, char * msg, size_t msg_length);
 ucs_status_t request_wait(ucp_worker_h ucp_worker, void *request, test_req_t *ctx);
 void stream_recv_cb(void *request, ucs_status_t status, size_t length, void *user_data);

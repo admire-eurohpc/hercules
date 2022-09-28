@@ -7,6 +7,7 @@ add_executable(imssfs
     mapprefetch.cpp
 	../src/hercules.c
 	../src/imss.c
+    ../src/map_ep.cpp
     )
 
 

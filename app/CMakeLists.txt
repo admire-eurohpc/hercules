@@ -4,6 +4,7 @@ set_source_files_properties(./server.c ./release_imss.c PROPERTIES LANGUAGE CXX 
 
 ADD_EXECUTABLE( server 
 		./server.c
+		../src/map_ep.cpp
 		../src/stat.cpp
 		../src/comms.c
 		../src/queue.c
@@ -31,6 +32,7 @@ ADD_LIBRARY( imss_static STATIC
 		../src/policies.c
 		../src/directory.c
 		../src/records.cpp
+		../src/map_ep.cpp
 )
 
 ADD_LIBRARY( imss_shared SHARED
@@ -44,6 +46,7 @@ ADD_LIBRARY( imss_shared SHARED
 		../src/policies.c
 		../src/directory.c
 		../src/records.cpp
+		../src/map_ep.cpp
 )
 
 SET(IMSS_INC "-I${CMAKE_SOURCE_DIR}/include")

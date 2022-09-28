@@ -13,6 +13,7 @@
 #include "directory.h"
 #include "records.hpp"
 #include "arg_parser.h"
+#include "map_ep.hpp"
 
 
 //Pointer to the tree's root node.
@@ -34,6 +35,7 @@ ucp_worker_h  ucp_worker;
 
 ucp_ep_h     pub_ep;
 
+void *map_ep; //map_ep used for async write
 
 int32_t  IMSS_DEBUG = 0;
 
