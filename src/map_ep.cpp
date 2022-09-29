@@ -29,12 +29,12 @@ void map_ep_erase(void* map, ucp_ep_h ep) {
 	m->erase(ep);
 }
 
-int map_ep_search(void* map, const ucp_ep_h ep, StsHeader * req_queue) {
+int map_ep_search(void* map, const ucp_ep_h ep, StsHeader ** req_queue) {
 	map_ep_t * m = reinterpret_cast<map_ep_t*> (map);
 	auto search = m->find(ep);
 
 	if (search != m->end()) {
-		*req_queue = *(search->second);
+		*req_queue = (search->second);
 		return 1;
 	} else {
 		return -1;

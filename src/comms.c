@@ -15,7 +15,7 @@ static sa_family_t ai_family   = AF_INET;
 // TODO
 extern StsHeader *req_queue; //not sure if this is necessary
 extern void *map_ep; //map_ep used for async write
-
+extern int32_t is_client; //used to make sure the server doesn't do map_ep stuff
 
 
 /**
@@ -130,11 +130,31 @@ ucs_status_t start_client(ucp_worker_h ucp_worker, const char *address_str, int 
 				ucs_status_string(status));
 	}
 
-    /*StsHeader * queue = StsQueue.create();
-    map_ep_put(map_ep, *client_ep, queue);*/
-
 	// TODO
-	//probably add an entry to the map_ep for this ep here
+	if (is_client) {
+		//probably add an entry to the map_ep for this ep here
+		StsHeader * queue = StsQueue.create();
+		if (!map_ep) {
+			map_ep = map_ep_create();
+			fprintf(stderr, "created map_ep in comms.c\n");
+
+		}
+		//fprintf(stderr, "PUNTERO map_ep start_client %p \n", map_ep);
+		fprintf(stderr, "PUNTERO queue start_client %p \n", queue);
+		map_ep_put(map_ep, *client_ep, queue);
+
+		//see if map_ep_put works at all
+		fprintf(stderr, "PUNTERO *client_ep start_client %p \n", *client_ep);
+		StsHeader * test_queue;
+		int found = map_ep_search(map_ep, *client_ep, &test_queue);
+		if (found) {
+			fprintf(stderr, "found start_client test_queue\n");
+			fprintf(stderr, "PUNTERO test_queue start_client %p \n", test_queue);
+			if (test_queue) {
+				fprintf(stderr, "test_queue not NULL\n");
+			}
+		}
+	}
 
 	return status;
 }
@@ -213,8 +233,9 @@ size_t send_istream(ucp_worker_h ucp_worker, ucp_ep_h ep, const char * msg, size
 
 	/* find this ep's queue in the map_ep */
 	// TODO
-	int found = map_ep_search(map_ep, ep, req_queue);
+	int found = map_ep_search(map_ep, ep, &req_queue);
 	if (!found) {
+		fprintf(stderr, "found send_istream\n");
 		req_queue = StsQueue.create();
         map_ep_put(map_ep, ep, req_queue);
 	} 
@@ -741,16 +762,28 @@ void ep_close(ucp_worker_h ucp_worker, ucp_ep_h ep, uint64_t flags)
 	param.flags        = flags;
 
 	// TODO
-	//look for this ep's queue in the map
-	int found = map_ep_search(map_ep, ep, req_queue);
-	if (found) {
-		while (StsQueue.size(req_queue) > 0) {
-			async = (ucx_async_t *) StsQueue.pop(req_queue);
-			request_finalize(ucp_worker, async->request, async->ctx);
+	if (is_client) {
+		//look for this ep's queue in the map
+		//fprintf(stderr, "PUNTERO map_ep ep_close %p \n", map_ep);
+		fprintf(stderr, "PUNTERO ep start_client %p \n", ep);
+		int found = map_ep_search(map_ep, ep, &req_queue);
+		if (found) {
+			fprintf(stderr, "found ep_close\n");
+			//fprintf(stderr, "PUNTERO req_queue start_client %p \n", req_queue);
+			//if (req_queue != NULL) { //this if doesn't get run for some reason (it seems)
+				fprintf(stderr, "queue size = %d\n", StsQueue.size(req_queue));
+				while (StsQueue.size(req_queue) > 0) {
+					async = (ucx_async_t *) StsQueue.pop(req_queue);
+					request_finalize(ucp_worker, async->request, async->ctx);
+				}
+				fprintf(stderr, "done with while\n");
+				StsQueue.destroy(req_queue);
+			//} else {
+			//	fprintf(stderr, "req_queue NULL???\n");
+			//}
+			map_ep_erase(map_ep, ep);
 		}
 	}
-	StsQueue.destroy(req_queue);
-        map_ep_erase(map_ep, ep);        
 
 	close_req = ucp_ep_close_nbx(ep, &param);
 	if (UCS_PTR_IS_PTR(close_req)) {
@@ -797,13 +830,16 @@ ucs_status_t ep_flush(ucp_ep_h ep, ucp_worker_h worker)
 		return status;
 	}
 
-    int found = map_ep_search(map_ep, ep, req_queue);
-	if (found) {
-		while (StsQueue.size(req_queue) > 0) {
-			async = (ucx_async_t *) StsQueue.pop(req_queue);
-			request_finalize(worker, async->request, async->ctx);
+	/*if (is_client) {
+		fprintf(stderr, "PUNTERO map_ep ep_flush %p \n", map_ep);
+		int found = map_ep_search(map_ep, ep, &req_queue);
+		if (found) {
+			while (StsQueue.size(req_queue) > 0) {
+				async = (ucx_async_t *) StsQueue.pop(req_queue);
+				request_finalize(worker, async->request, async->ctx);
+			}
 		}
-	}
-	StsQueue.destroy(req_queue);
-    map_ep_erase(map_ep, ep); 
+		StsQueue.destroy(req_queue);
+		map_ep_erase(map_ep, ep);
+	}*/
 }

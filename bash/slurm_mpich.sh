@@ -58,4 +58,3 @@ mpiexec -n $NUM_CLIENT -ppn 1 -f ./client_hostfile \
 			 -env IMSS_METADATA_FILE $PWD/metadata \
 			 -env IMSS_DEPLOYMENT 2 \
 			 $IOR_PATH/ior -o /mnt/imss/data.out -t 100m -b 100m -s 1
-
