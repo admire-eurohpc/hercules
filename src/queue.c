@@ -1,4 +1,5 @@
 #include "queue.h"
+#include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
 
@@ -11,6 +12,7 @@ static StsHeader* create() {
 
   pthread_mutex_t *mutex = malloc(sizeof(*mutex));
   handle->mutex = mutex;
+  pthread_mutex_init(handle->mutex, NULL);
   
   handle->size = 0;
 
@@ -19,6 +21,7 @@ static StsHeader* create() {
 
 static void destroy(StsHeader *header);
 static void destroy(StsHeader *header) {
+  fprintf(stderr, "queue.destroy() called\n");
   free(header->mutex);
   free(header);
   header = NULL;
