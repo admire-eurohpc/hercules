@@ -3,6 +3,7 @@
 #SBATCH --ntasks-per-node=1             # How many tasks on each node
 #SBATCH --time=00:05:00               # Time limit hrs:min:sec
 #SBATCH --output=imss_%j.log   # Standard output and error log
+#SBATCH --exclusive
 
 #SETUP
 
@@ -58,3 +59,19 @@ mpiexec -n $NUM_CLIENT -ppn 1 -f ./client_hostfile \
 			 -env IMSS_METADATA_FILE $PWD/metadata \
 			 -env IMSS_DEPLOYMENT 2 \
 			 $IOR_PATH/ior -o /mnt/imss/data.out -t 100m -b 100m -s 1
+
+mpiexec -n $NUM_CLIENT -ppn 1 -f ./client_hostfile \
+             -env LD_PRELOAD $IMSS_PATH/tools/libimss_posix.so \
+             -env IMSS_MOUNT_POINT /mnt/imss \
+             -env IMSS_HOSTFILE $PWD/data_hostfile \
+             -env IMSS_N_SERVERS $NUM_DATA \
+             -env IMSS_SRV_PORT $DATA_PORT \
+             -env IMSS_BUFFSIZE 1 \
+             -env IMSS_BLKSIZE $BLOCK_SIZE \
+             -env IMSS_META_HOSTFILE $PWD/meta_hostfile \
+             -env IMSS_META_PORT $META_PORT \
+             -env IMSS_META_SERVERS $NUM_METADATA \
+             -env IMSS_STORAGE_SIZE 8 \
+             -env IMSS_METADATA_FILE $PWD/metadata \
+             -env IMSS_DEPLOYMENT 2 \
+             $IOR_PATH/ior -o /mnt/imss/data.out -t 100m -b 100m -s 1

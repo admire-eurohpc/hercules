@@ -11,6 +11,7 @@
 #include <sys/stat.h>
 #include <sys/utsname.h>
 #include "records.hpp"
+#include "imss.h"
 
 using std::map;
 using std::pair;
@@ -41,14 +42,14 @@ int32_t map_records::put(std::string key, char * address, uint64_t length)
 	//Add a new couple to the map.
 	//printf("total_size=%ld, quantity_occupied=%ld\n",total_size, quantity_occupied);
 	if (quantity_occupied + length > total_size && total_size>0) { //out of space
-		printf("[Map record] Out of space  %ld/%ld.\n",quantity_occupied + length, total_size);			  
+		fprintf(stderr, "[Map record] Out of space  %ld/%ld.\n",quantity_occupied + length, total_size);			  
 		return -1;
 	}
 
 
 	struct utsname detect;
 	uname(&detect);
-	printf("Nodename    - %s add in map=%s\n", detect.nodename, key.c_str());
+	DPRINT("Nodename    - %s add in map=%s\n", detect.nodename, key.c_str());
 	//printf("quantity=%ld total size=%ld\n",quantity_occupied, total_size);
 	quantity_occupied = quantity_occupied + length;
 	buffer.insert({key, value});
