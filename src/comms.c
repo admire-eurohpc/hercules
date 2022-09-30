@@ -132,28 +132,14 @@ ucs_status_t start_client(ucp_worker_h ucp_worker, const char *address_str, int 
 
 	// TODO
 	if (is_client) {
-		//probably add an entry to the map_ep for this ep here
 		StsHeader * queue = StsQueue.create();
+		/* see if the map_ep exists, otherwise create it */
 		if (!map_ep) {
 			map_ep = map_ep_create();
-			fprintf(stderr, "created map_ep in comms.c\n");
 
 		}
-		//fprintf(stderr, "PUNTERO map_ep start_client %p \n", map_ep);
-		fprintf(stderr, "PUNTERO queue start_client %p \n", queue);
+		//add an entry to the map_ep for this ep
 		map_ep_put(map_ep, *client_ep, queue);
-
-		//see if map_ep_put works at all
-		fprintf(stderr, "PUNTERO *client_ep start_client %p \n", *client_ep);
-		StsHeader * test_queue;
-		int found = map_ep_search(map_ep, *client_ep, &test_queue);
-		if (found) {
-			fprintf(stderr, "found start_client test_queue\n");
-			fprintf(stderr, "PUNTERO test_queue start_client %p \n", test_queue);
-			if (test_queue) {
-				fprintf(stderr, "test_queue not NULL\n");
-			}
-		}
 	}
 
 	return status;
@@ -211,36 +197,34 @@ size_t send_istream(ucp_worker_h ucp_worker, ucp_ep_h ep, const char * msg, size
 {
 	//printf("[SEND_STREAM] msg=%s, size=%ld\n",msg,msg_length);
 	ucp_request_param_t param;
-	test_req_t * request;
-	test_req_t ctx;
-	ucx_async_t pending;
+	ucx_async_t * pending = (ucx_async_t *) malloc(sizeof(ucx_async_t));
 	StsHeader *req_queue;
 
-	ctx.complete       = 0;
+	/* set up ucx_async_t object to push it */
+	pending->ctx.complete = 0;
+
 	param.op_attr_mask = UCP_OP_ATTR_FIELD_CALLBACK |
 		UCP_OP_ATTR_FIELD_DATATYPE |
 		UCP_OP_ATTR_FIELD_USER_DATA;
 	param.datatype     = ucp_dt_make_contig(1);
-	param.user_data    = &ctx;
+	param.user_data    = pending;
 
+	pending->tmp_msg = (char *) malloc(msg_length);
+	memcpy(pending->tmp_msg, msg, msg_length);
 	/* Client sends a message to the server using the stream API */
-	param.cb.send = send_cb;
-	request       = (test_req_t*) ucp_stream_send_nbx(ep, msg, msg_length, &param);
+	param.cb.send = isend_cb;
+	pending->request       = (test_req_t*) ucp_stream_send_nbx(ep, pending->tmp_msg, msg_length, &param);
 
-	/* set up ucx_async_t object to push it */
-	pending.ctx = &ctx;
-	pending.request = request;
 
 	/* find this ep's queue in the map_ep */
 	// TODO
 	int found = map_ep_search(map_ep, ep, &req_queue);
 	if (!found) {
-		fprintf(stderr, "found send_istream\n");
 		req_queue = StsQueue.create();
         map_ep_put(map_ep, ep, req_queue);
 	} 
 
-	StsQueue.push(req_queue, &pending);
+	StsQueue.push(req_queue, pending);
 	return msg_length;
 }
 
@@ -363,6 +347,16 @@ void am_recv_cb(void *request, ucs_status_t status, size_t length,
 void send_cb(void *request, ucs_status_t status, void *user_data)
 {
 	common_cb(user_data, "send_cb");
+}
+
+void isend_cb(void *request, ucs_status_t status, void *user_data)
+{
+	ucx_async_t * pending;
+
+	pending = (ucx_async_t *) user_data;
+
+	free(pending->tmp_msg);
+	pending->ctx.complete = 1;
 }
 
 /**
@@ -761,26 +755,15 @@ void ep_close(ucp_worker_h ucp_worker, ucp_ep_h ep, uint64_t flags)
 	param.op_attr_mask = UCP_OP_ATTR_FIELD_FLAGS;
 	param.flags        = flags;
 
-	// TODO
 	if (is_client) {
 		//look for this ep's queue in the map
-		//fprintf(stderr, "PUNTERO map_ep ep_close %p \n", map_ep);
-		fprintf(stderr, "PUNTERO ep start_client %p \n", ep);
 		int found = map_ep_search(map_ep, ep, &req_queue);
 		if (found) {
-			fprintf(stderr, "found ep_close\n");
-			//fprintf(stderr, "PUNTERO req_queue start_client %p \n", req_queue);
-			//if (req_queue != NULL) { //this if doesn't get run for some reason (it seems)
-				fprintf(stderr, "queue size = %d\n", StsQueue.size(req_queue));
 				while (StsQueue.size(req_queue) > 0) {
 					async = (ucx_async_t *) StsQueue.pop(req_queue);
-					request_finalize(ucp_worker, async->request, async->ctx);
+					request_finalize(ucp_worker, async->request, &(async->ctx));
+					free(async);
 				}
-				fprintf(stderr, "done with while\n");
-				StsQueue.destroy(req_queue);
-			//} else {
-			//	fprintf(stderr, "req_queue NULL???\n");
-			//}
 			map_ep_erase(map_ep, ep);
 		}
 	}

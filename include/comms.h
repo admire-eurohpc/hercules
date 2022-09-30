@@ -59,8 +59,9 @@ typedef struct test_req {
  * Structure used to store requests that need to be finalized.
  */
 typedef struct ucx_async {
-    test_req_t * request;
-    test_req_t * ctx;
+    test_req_t *    request;
+    test_req_t      ctx;
+    char *          tmp_msg;
 } ucx_async_t;
 
 
@@ -92,6 +93,7 @@ ucs_status_t request_wait(ucp_worker_h ucp_worker, void *request, test_req_t *ct
 void stream_recv_cb(void *request, ucs_status_t status, size_t length, void *user_data);
 void am_recv_cb(void *request, ucs_status_t status, size_t length, void *user_data);
 void send_cb(void *request, ucs_status_t status, void *user_data);
+void isend_cb(void *request, ucs_status_t status, void *user_data);
 void err_cb_client(void *arg, ucp_ep_h ep, ucs_status_t status);
 void err_cb_server(void *arg, ucp_ep_h ep, ucs_status_t status);
 void common_cb(void *user_data, const char *type_str);

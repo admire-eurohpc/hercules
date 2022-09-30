@@ -1,4 +1,5 @@
 #include "queue.h"
+#include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
 
@@ -11,6 +12,7 @@ static StsHeader* create() {
 
   pthread_mutex_t *mutex = malloc(sizeof(*mutex));
   handle->mutex = mutex;
+  pthread_mutex_init(handle->mutex, NULL);
   
   handle->size = 0;
 

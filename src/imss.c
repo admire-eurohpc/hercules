@@ -2446,14 +2446,14 @@ set_data(int32_t 	 dataset_id,
 		//printf("BLOCK %d SENT TO %d SERVER with key: %s (%d)\n", data_id, n_server_, key, key_length);
 
 		
-		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[n_server_], (char *) &curr_imss.conns.id[n_server_], sizeof(uint32_t)) < 0)
+		if (send_istream(ucp_worker_client, curr_imss.conns.eps_[n_server_], (char *) &curr_imss.conns.id[n_server_], sizeof(uint32_t)) < 0)
 		{
 			perror("ERRIMSS_STAT_HELLO");
 			return -1;
 		}
 
 		char mode[] = "SET";
-		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[n_server_], mode, MODE_SIZE) < 0)
+		if (send_istream(ucp_worker_client, curr_imss.conns.eps_[n_server_], mode, MODE_SIZE) < 0)
 		{
 			perror("ERRIMSS_STAT_HELLO");
 			return -1;
@@ -2462,7 +2462,7 @@ set_data(int32_t 	 dataset_id,
 		//	gettimeofday(&start, NULL);
 		//Send read request message specifying the block URI.
 		//if (comm_send(curr_imss.conns.eps_[n_server_], key, KEY, ZMQ_SNDMORE) < 0)
-		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[n_server_], key, REQUEST_SIZE) < 0) // SNDMORE
+		if (send_istream(ucp_worker_client, curr_imss.conns.eps_[n_server_], key, REQUEST_SIZE) < 0) // SNDMORE
 		{
 			perror("ERRIMSS_SETDATA_REQ");
 			return -1;
@@ -2477,7 +2477,7 @@ set_data(int32_t 	 dataset_id,
 		//	gettimeofday(&start, NULL);
 		//Send read request message specifying the block data.
 		//printf("[SET DATA] msg=%s, size=%d\n",buffer,curr_dataset.data_entity_size);
-		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[n_server_], buffer, curr_dataset.data_entity_size) < 0)
+		if (send_istream(ucp_worker_client, curr_imss.conns.eps_[n_server_], buffer, curr_dataset.data_entity_size) < 0)
 		{
 			perror("ERRIMSS_SETDATA_SEND");
 			return -1;
