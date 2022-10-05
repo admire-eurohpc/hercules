@@ -778,10 +778,6 @@ init_imss(char *   imss_uri,
 	//Add the created struture into the underlying IMSS vector.
 	GInsert (&imssd_pos, &imssd_max_size, (char *) &new_imss, imssd, free_imssd);
 
-	/* create the map to store the queues used to handle async writes */
-	/*map_ep = map_ep_create();
-	fprintf(stderr, "created map_ep in imss.c\n");*/
-
 	return 0;
 }
 

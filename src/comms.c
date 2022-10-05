@@ -12,10 +12,10 @@
 
 static sa_family_t ai_family   = AF_INET;
 
-// TODO
-extern StsHeader *req_queue; //not sure if this is necessary
+/* asynchronous writes stuff */
 extern void *map_ep; //map_ep used for async write
 extern int32_t is_client; //used to make sure the server doesn't do map_ep stuff
+pthread_mutex_t map_ep_mutex;
 
 
 /**
@@ -130,16 +130,19 @@ ucs_status_t start_client(ucp_worker_h ucp_worker, const char *address_str, int 
 				ucs_status_string(status));
 	}
 
-	// TODO
 	if (is_client) {
 		StsHeader * queue = StsQueue.create();
 		/* see if the map_ep exists, otherwise create it */
 		if (!map_ep) {
+			pthread_mutex_lock(&map_ep_mutex);
 			map_ep = map_ep_create();
+			pthread_mutex_unlock(&map_ep_mutex);
 
 		}
 		//add an entry to the map_ep for this ep
+		pthread_mutex_lock(&map_ep_mutex);
 		map_ep_put(map_ep, *client_ep, queue);
+		pthread_mutex_unlock(&map_ep_mutex);
 	}
 
 	return status;
@@ -217,12 +220,13 @@ size_t send_istream(ucp_worker_h ucp_worker, ucp_ep_h ep, const char * msg, size
 
 
 	/* find this ep's queue in the map_ep */
-	// TODO
+	pthread_mutex_lock(&map_ep_mutex);
 	int found = map_ep_search(map_ep, ep, &req_queue);
 	if (!found) {
 		req_queue = StsQueue.create();
         map_ep_put(map_ep, ep, req_queue);
-	} 
+	}
+	pthread_mutex_unlock(&map_ep_mutex);
 
 	StsQueue.push(req_queue, pending);
 	return msg_length;
@@ -757,6 +761,7 @@ void ep_close(ucp_worker_h ucp_worker, ucp_ep_h ep, uint64_t flags)
 
 	if (is_client) {
 		//look for this ep's queue in the map
+		pthread_mutex_lock(&map_ep_mutex);
 		int found = map_ep_search(map_ep, ep, &req_queue);
 		if (found) {
 				while (StsQueue.size(req_queue) > 0) {
@@ -766,6 +771,7 @@ void ep_close(ucp_worker_h ucp_worker, ucp_ep_h ep, uint64_t flags)
 				}
 			map_ep_erase(map_ep, ep);
 		}
+		pthread_mutex_unlock(&map_ep_mutex);
 	}
 
 	close_req = ucp_ep_close_nbx(ep, &param);
@@ -815,14 +821,15 @@ ucs_status_t ep_flush(ucp_ep_h ep, ucp_worker_h worker)
 
 	/*if (is_client) {
 		fprintf(stderr, "PUNTERO map_ep ep_flush %p \n", map_ep);
+		pthread_mutex_lock(&map_ep_mutex);
 		int found = map_ep_search(map_ep, ep, &req_queue);
 		if (found) {
 			while (StsQueue.size(req_queue) > 0) {
 				async = (ucx_async_t *) StsQueue.pop(req_queue);
 				request_finalize(worker, async->request, async->ctx);
 			}
+			map_ep_erase(map_ep, ep);
 		}
-		StsQueue.destroy(req_queue);
-		map_ep_erase(map_ep, ep);
+		pthread_mutex_unlock(&map_ep_mutex);
 	}*/
 }

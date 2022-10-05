@@ -35,7 +35,7 @@ ucp_worker_h  ucp_worker;
 
 ucp_ep_h     pub_ep;
 
-void *map_ep; //map_ep used for async write
+void *map_ep; //map_ep used for async write; server doesn't use it
 int32_t is_client = 0;
 
 int32_t  IMSS_DEBUG = 0;
