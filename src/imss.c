@@ -329,6 +329,8 @@ stat_init(char *   stat_hostfile,
 			printf("stat_client=%s\n",stat_node);
 		    printf("i=%d, stat_node=%s, port=%d, rank=%d\n",i,stat_node, port, rank);
 		}
+ 
+        DPRINT("IMSS_STAT: Contacting stat dispatcher at %s:%d\n", stat_node, port);
         status = start_client(ucp_worker_client, stat_node, port, &client_ep); // port, rank,
         if (status != UCS_OK) {
             fprintf(stderr, "failed to start client (%s)\n", ucs_status_string(status));
@@ -380,6 +382,7 @@ stat_init(char *   stat_hostfile,
             fprintf(stderr, "failed to start client (%s)\n", ucs_status_string(status));
             return -1;
         }
+        DPRINT("IMSS_STAT: Created endpoint with metadata server at %s:%d\n", stat_node, stat_port);
 	}
 	//Close the file.
 	if (fclose(stat_nodes) != 0)
@@ -675,6 +678,7 @@ init_imss(char *   imss_uri,
 			strcpy(att_deployment, imss_uri);
 		}
 		//Create the connection to the IMSS server dispatcher thread.
+		DPRINT("IMSS_INIT: Contacting dispatcher at %s:%d\n",  (new_imss.info.ips)[i], new_imss.info.conn_port);
 		status = start_client(ucp_worker_client, (new_imss.info.ips)[i], new_imss.info.conn_port, &(new_imss.conns.eps_[i])); // port, rank,
 		if (status != UCS_OK) {
 			fprintf(stderr, "failed to start client (%s)\n", ucs_status_string(status));
@@ -703,7 +707,7 @@ init_imss(char *   imss_uri,
 			perror("ERRIMSS_INITIMSS_HELLO");
 			return -1;
 		}
-		//ZMQ message retrieving the connection information.
+
 		char connection_info[RESPONSE_SIZE];
 		if (recv_stream(ucp_worker_client, new_imss.conns.eps_[i], connection_info, RESPONSE_SIZE) < 0)
 		{
@@ -728,6 +732,8 @@ init_imss(char *   imss_uri,
 			fprintf(stderr, "failed to start client (%s)\n", ucs_status_string(status));
 			return -1;
 		}
+
+		DPRINT("IMSS_INIT: Created endpoint with %s:%d\n",  (new_imss.info.ips)[i], new_imss.info.conn_port);
 	}
 	//Close the file.
 	if (fclose(svr_nodes) != 0)
@@ -788,6 +794,7 @@ open_imss(char * imss_uri)
 
 	int32_t not_initialized = 0;
 
+    DPRINT("open_imss: starting function\n");
 	//Retrieve the actual information from the metadata server.
 	int32_t imss_existance = stat_imss(imss_uri, &new_imss.info);
 	//Check if the requested IMSS did not exist or was already stored in the local vector.
@@ -827,6 +834,7 @@ open_imss(char * imss_uri)
 	for  (int32_t i = 0; i < new_imss.info.num_storages; i++)
 	{
 		ucs_status_t status;
+        DPRINT("open_imss: contacting dispatcher at %s:%d\n",(new_imss.info.ips)[i], new_imss.info.conn_port);
 		status = start_client(ucp_worker_client, (new_imss.info.ips)[i], new_imss.info.conn_port,  &(new_imss.conns.eps_[i])); // port, rank,
 		if (status != UCS_OK) {
 			fprintf(stderr, "failed to start client (%s)\n", ucs_status_string(status));
@@ -892,6 +900,7 @@ open_imss(char * imss_uri)
 			new_imss.conns.matching_server = i;
 			strcpy(att_deployment, imss_uri);
 		}
+        DPRINT("open_imss: Created endpoint with %s:%d\n",(new_imss.info.ips)[i], imss_port);
 
 	}
 

@@ -50,6 +50,13 @@ int32_t main(int32_t argc, char **argv)
     // Obtain the current number of processes in the group.
 	MPI_Comm_size(MPI_COMM_WORLD, &world_size);
 
+    char processor_name[MPI_MAX_PROCESSOR_NAME];
+    int name_len;
+    MPI_Get_processor_name(processor_name, &name_len);
+
+    // Print off a hello world message
+    printf("Running on %s, server %d of %d.\n", processor_name, rank, world_size);
+
 	uint16_t bind_port, aux_bind_port;
 	char *   stat_add;
 	char *   metadata_file;
