@@ -1,4 +1,3 @@
-#include <mpi.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -42,20 +41,7 @@ int32_t  IMSS_DEBUG = 0;
 
 int32_t main(int32_t argc, char **argv)
 {
-	int32_t provide, world_size, rank;
-	// Notify that threads will be deployed along the MPI process execution.
-	MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &provide);
-	// Obtain identifier inside the group.
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    // Obtain the current number of processes in the group.
-	MPI_Comm_size(MPI_COMM_WORLD, &world_size);
-
-    char processor_name[MPI_MAX_PROCESSOR_NAME];
-    int name_len;
-    MPI_Get_processor_name(processor_name, &name_len);
-
     // Print off a hello world message
-    printf("Running on %s, server %d of %d.\n", processor_name, rank, world_size);
 
 	uint16_t bind_port, aux_bind_port;
 	char *   stat_add;
@@ -128,11 +114,9 @@ int32_t main(int32_t argc, char **argv)
 		int32_t imss_exists = 0;
 
 		//Check if the provided URI has been already reserved by any other instance.
-		if (!rank)
+		if (!args.id)
 		{
-			printf("stat_address=%s\n",stat_add);
 			//Connect to the specified endpoint.
-
             status = start_client(ucp_worker, stat_add, stat_port + 1, &client_ep); // port, rank,
             if (status != UCS_OK) {
                 fprintf(stderr, "failed to start client (%s)\n", ucs_status_string(status));
@@ -180,14 +164,9 @@ int32_t main(int32_t argc, char **argv)
 			ep_close(ucp_worker, client_ep, UCP_EP_CLOSE_MODE_FLUSH);
 		}
 
-		MPI_Bcast(&imss_exists, 1, MPI_INT, 0, MPI_COMM_WORLD);
 		if (imss_exists)
 		{
-			if (!rank)
-				fprintf(stderr, "ERRIMSS_IMSSURITAKEN");
-
-			MPI_Barrier(MPI_COMM_WORLD);
-			MPI_Finalize();	
+			fprintf(stderr, "ERRIMSS_IMSSURITAKEN");
 			return 0;
 		}
 	}
@@ -252,7 +231,6 @@ int32_t main(int32_t argc, char **argv)
 	uint64_t size = (uint64_t) buffer_size*KB;
 	//Check if the requested data is available in the current node.
 	if ((data_reserved = memalloc(size, &buffer)) == -1)
-
 		return -1;
 
 	buffer_address = buffer;
@@ -334,7 +312,7 @@ int32_t main(int32_t argc, char **argv)
 	}
 
 	//Notify to the metadata server the deployment of a new IMSS.
-	if ((args.type == TYPE_DATA_SERVER) && !rank && stat_port)
+	if ((args.type == TYPE_DATA_SERVER) && !args.id && stat_port)
 	{
 		//Metadata structure containing the novel IMSS info.
 		imss_info my_imss;
@@ -449,8 +427,5 @@ int32_t main(int32_t argc, char **argv)
 	//Free the memory buffer.
 	free(buffer);
 	//Free the publisher release address.
-	MPI_Barrier(MPI_COMM_WORLD);
-	MPI_Finalize();
-
 	return 0;
 }

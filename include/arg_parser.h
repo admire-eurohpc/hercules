@@ -13,6 +13,7 @@
 #define NUM_SERVERS             'n'
 #define DEPLOY_HOSTFILE         'd'
 #define STAT_LOGFILE            'l'
+#define ID                      'r'
 
 /* TYPE option args */
 #define TYPE_DATA_SERVER        'd'
@@ -22,6 +23,7 @@
 struct arguments
 {
     char        type;               /* type arg */
+	int			id;                 /* server ID */
     uint16_t    port;               /* port arg to '-p' */
     int64_t     bufsize;            /* buffer size arg to '-b' */
     char        imss_uri[32];       /* IMSS URI arg to '-i' */

@@ -21,18 +21,6 @@ include_directories(${GLIB_INCLUDE_DIRS})
 find_package(Jemalloc)
 set(WITH_JEMALLOC_DEFAULT   ${JEMALLOC_FOUND})
 
-
-find_package(
-            MPI
-            COMPONENTS C CXX
-            OPTIONAL_COMPONENTS
-			REQUIRED
-            )
-
-if (MPI_FOUND)
-    include_directories(SYSTEM ${MPI_INCLUDE_PATH})
-endif (MPI_FOUND)
-
 FIND_PACKAGE(Threads REQUIRED)
 
 find_package(UCX REQUIRED COMPONENTS ucp uct ucs)

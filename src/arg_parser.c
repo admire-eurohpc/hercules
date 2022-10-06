@@ -22,23 +22,24 @@ static char args_doc[] = "<type>";
 static struct argp_option options[] = {
     {0,                     0,                  0,              0,  "Arguments:" },
     {0,                     0,                  0,              0,  "<types>:" },
-    {0,                     0,                  0,              0,  "d : data server" },
-    {0,                     0,                  0,              0,  "m : metadata server" },
+    {0,                     0,                  0,              0,  "d : Data server" },
+    {0,                     0,                  0,              0,  "m : Metadata server" },
 
     {0,                     0,                  0,              0,  "\nOptions:\n" },
     {0,                     0,                  0,              0,  "Common options:" },
-    {"port",                PORT,               "PORT",         0,  "listening port number" },
-    {"bufsize",             BUFSIZE,            "BUFFER_SIZE",  0,  "buffer size; max RAM size that can be used (defaults to 0, which means NO LIMIT)" },
+    {"port",                PORT,               "PORT",         0,  "Listening port number" },
+    {"bufsize",             BUFSIZE,            "BUFFER_SIZE",  0,  "Buffer size; max RAM size that can be used (defaults to 0, which means NO LIMIT)" },
+    {"server-id",           ID,                 "ID",     		0,  "0 if omitted" },
 
     {0,                     0,                  0,              0,  "Data server options (required only if type=d):" },
     {"imss-uri",            IMSS_URI,           "IMSS_URI",     0,  "IMSS URI (data server); defaults to 'imss://' if omitted" },
-    {"stat-host",           STAT_HOST,          "HOSTNAME",     0,  "metadata server hostname" },
-    {"stat-port",           STAT_PORT,          "PORT",         0,  "metadata server port number" },
-    {"num-servers",         NUM_SERVERS,        "NUM_SERVERS",  0,  "number of data servers for this IMSS deployment" },
+    {"stat-host",           STAT_HOST,          "HOSTNAME",     0,  "Metadata server hostname" },
+    {"stat-port",           STAT_PORT,          "PORT",         0,  "Metadata server port number" },
+    {"num-servers",         NUM_SERVERS,        "NUM_SERVERS",  0,  "Number of data servers for this IMSS deployment" },
     {"deploy-hostfile",     DEPLOY_HOSTFILE,    "FILE",         0,  "IMSS MPI deployment file; contains hostnames of data servers" },
 
     {0,                     0,                  0,              0,  "Metadata server options (required only if type=m):" },
-    {"stat-logfile",        STAT_LOGFILE,       "FILE",         0,  "metadata server logfile" },
+    {"stat-logfile",        STAT_LOGFILE,       "FILE",         0,  "Metadata server logfile" },
     { 0 }
 };
 
@@ -76,7 +77,9 @@ static error_t parse_opt (int key, char * arg, struct argp_state * state)
         case STAT_LOGFILE:
             args->stat_logfile = arg;
             break;
-
+        case ID:
+		    args->id = atoi(arg);
+			break;
         case ARGP_KEY_ARG:
             if (state->arg_num >= 1) {
                 argp_usage (state);
@@ -123,6 +126,7 @@ int parse_args (int argc, char ** argv, struct arguments * args)
 {
     /* Default values */
     args->type = 0;
+	args->id = 0;
     args->port = 0;
     args->bufsize = 0;
     strcpy(args->imss_uri, "imss://");
