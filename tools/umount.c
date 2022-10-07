@@ -20,16 +20,16 @@
 int main () {
    char buff[16];
    int pid;
+   int err;
 
    //int run = open("/var/run/imss.pid", O_RDONLY);
    int run = open ("/home/hcristobal/imss/build/imss.pid", O_RDONLY);
-   read(run, buff, 16);
+   err = read(run, buff, 16);
 
    sscanf(buff, "%u" , &pid);
 
    close(run);
-   //unlink("/var/run/imss.pid");
-   unlink("/home/hcristobal/imss/build/imss.pid");
+   unlink("/var/run/imss.pid");
    printf("KILL %d\n",pid);
    kill(pid, SIGKILL);
 

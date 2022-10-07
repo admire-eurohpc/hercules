@@ -42,7 +42,7 @@ char * METADATA_FILE = NULL; //Not default
 char * IMSS_HOSTFILE = NULL; //Not default
 char * IMSS_ROOT = NULL;//Not default
 char * META_HOSTFILE = NULL; //Not default 
-char * POLICY = "RR"; //Default RR
+const char * POLICY; 
 uint64_t STORAGE_SIZE = 1024*1024*16; //In Kb, Default 16 GB
 uint64_t META_BUFFSIZE = 1024 * 16; //In Kb, Default 16MB
 //uint64_t META_BUFFSIZE = 1024 * 1000;
@@ -51,7 +51,7 @@ uint64_t IMSS_BLKSIZE = 16;
 //uint64_t IMSS_BUFFSIZE = 1024*1024*2; //In Kb, Default 2Gb
 uint64_t IMSS_BUFFSIZE = 1024*2048; //In Kb, Default 2Gb
 int32_t REPL_FACTOR = 1; //Default none
-char * MOUNTPOINT[7] = {"imssfs", "-f" , "XXXX", "-s", NULL}; // {"f", mountpoint} Not default ({"f", NULL})
+const char * MOUNTPOINT[7] = {"imssfs", "-f" , "XXXX", "-s", NULL}; // {"f", mountpoint} Not default ({"f", NULL})
 
 
 //char fd_table[1024][MAX_PATH]; 
@@ -386,6 +386,8 @@ static int skeleton_daemon(int argc, char ** argv)
 
 int main(int argc, char ** argv)
 {
+
+	POLICY = "RR";
 	//Parse input arguments
     if(!parse_args(argc, argv)) return -1;
     skeleton_daemon(argc, argv);

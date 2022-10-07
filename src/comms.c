@@ -38,6 +38,7 @@ int init_worker(ucp_context_h ucp_context, ucp_worker_h *ucp_worker)
 		ret = -1;
 	}
 
+    DPRINT( "[COMM] Inicializated worker result:%d\n", ret); 
 	return ret;
 }
 
@@ -144,7 +145,8 @@ ucs_status_t start_client(ucp_worker_h ucp_worker, const char *address_str, int 
 		map_ep_put(map_ep, *client_ep, queue);
 		pthread_mutex_unlock(&map_ep_mutex);
 	}
-
+   
+    DPRINT( "[COMM] Started client\n");
 	return status;
 }
 
@@ -368,8 +370,9 @@ void isend_cb(void *request, ucs_status_t status, void *user_data)
  */
 void err_cb_client(void *arg, ucp_ep_h ep, ucs_status_t status)
 {
-	//	if (status != UCS_ERR_CONNECTION_RESET && status != UCS_ERR_ENDPOINT_TIMEOUT)
-	printf("client error handling callback was invoked with status %d (%s)\n", status, ucs_status_string(status));
+    if (status != UCS_ERR_CONNECTION_RESET && status != UCS_ERR_ENDPOINT_TIMEOUT)
+	    printf("client error handling callback was invoked with status %d (%s)\n", status, ucs_status_string(status));
+    DPRINT( "[COMM] Client error handling callback was invoked with status %d (%s)\n", status, ucs_status_string(status));
 }
 
 void err_cb_server(void *arg, ucp_ep_h ep, ucs_status_t status)
@@ -403,8 +406,8 @@ int request_finalize(ucp_worker_h ucp_worker, test_req_t *request, test_req_t *c
 		goto release_iov;
 	}
 
-release_iov:
-	return ret;
+    release_iov:
+	   return ret;
 }
 
 ucs_status_t start_server(ucp_worker_h ucp_worker, ucx_server_ctx_t *context, ucp_listener_h *listener_p, const char *address_str, int port)
@@ -416,8 +419,7 @@ ucs_status_t start_server(ucp_worker_h ucp_worker, ucx_server_ctx_t *context, uc
 
 	set_sock_addr(address_str, &listen_addr, port);
 
-	params.field_mask         = UCP_LISTENER_PARAM_FIELD_SOCK_ADDR |
-		UCP_LISTENER_PARAM_FIELD_CONN_HANDLER;
+	params.field_mask         = UCP_LISTENER_PARAM_FIELD_SOCK_ADDR | UCP_LISTENER_PARAM_FIELD_CONN_HANDLER;
 	params.sockaddr.addr      = (const struct sockaddr*)&listen_addr;
 	params.sockaddr.addrlen   = sizeof(listen_addr);
 	params.conn_handler.cb    = server_conn_handle_cb;
@@ -434,12 +436,12 @@ ucs_status_t start_server(ucp_worker_h ucp_worker, ucx_server_ctx_t *context, uc
 	attr.field_mask = UCP_LISTENER_ATTR_FIELD_SOCKADDR;
 	status = ucp_listener_query(*listener_p, &attr);
 	if (status != UCS_OK) {
-		fprintf(stderr, "failed to query the listener (%s)\n",
-				ucs_status_string(status));
+		fprintf(stderr, "failed to query the listener (%s)\n", ucs_status_string(status));
 		ucp_listener_destroy(*listener_p);
 		goto out;
 	}
 
+    DPRINT( "[COMM] Started server with status %d \n", status);
 out:
 	return status;
 }
@@ -523,8 +525,7 @@ ucs_status_t server_create_ep(ucp_worker_h data_worker,
 	 * This is not the worker the listener was created on.
 	 * The client side should have initiated the connection, leading
 	 * to this ep's creation */
-	ep_params.field_mask      = UCP_EP_PARAM_FIELD_ERR_HANDLER |
-		UCP_EP_PARAM_FIELD_CONN_REQUEST;
+	ep_params.field_mask      = UCP_EP_PARAM_FIELD_ERR_HANDLER | UCP_EP_PARAM_FIELD_CONN_REQUEST;
 	ep_params.conn_request    = conn_request;
 	ep_params.err_handler.cb  = err_cb_server;
 	ep_params.err_mode = UCP_ERR_HANDLING_MODE_PEER;
@@ -532,10 +533,10 @@ ucs_status_t server_create_ep(ucp_worker_h data_worker,
 
 	status = ucp_ep_create(data_worker, &ep_params, server_ep);
 	if (status != UCS_OK) {
-		fprintf(stderr, "failed to create an endpoint on the server: (%s)\n",
-				ucs_status_string(status));
+		fprintf(stderr, "failed to create an endpoint on the server: (%s)\n", ucs_status_string(status));
 	}
-
+    
+	DPRINT( "[COMM] Created server endpoint\n");
 	return status;
 }
 
@@ -617,6 +618,7 @@ int32_t send_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep,
 			{
 				msg_size = strlen((char*) data_struct) + 1;
 				info_buffer = (char *)data_struct;
+				DPRINT( "[COMM] \t\t string=%s \n",(char*) data_struct);
 				break;
 			}
 		case MSG:
@@ -624,6 +626,7 @@ int32_t send_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep,
 				msg_t * msg = (msg_t *) data_struct;
 				msg_size = msg->size;
 				info_buffer = msg->data;
+				DPRINT( "[COMM] \t\t msg size=%ld \n", msg_size = msg->size );
 			}
 	}
 
@@ -633,13 +636,11 @@ int32_t send_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep,
 		return -1;
 	}
 
-	DPRINT("[COMM] send_dynamic_stream length %ld \n", msg_size); 
 	if (send_stream(ucp_worker, ep, info_buffer, msg_size) < 0) {
 		perror("ERRIMSS_SENDDYNAMSTRUCT");
 		return -1;
 	}
 	// TODO free info_buffer
-	DPRINT( "[COMM] send_dynamic_stream content %ld \n", msg_size); 
 	DPRINT( "[COMM] send_dynamic_stream end %ld \n", msg_size); 
 	return msg_size;
 }
@@ -659,23 +660,19 @@ int32_t recv_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep,
 		return -1;
 	}
 
-	DPRINT( "[COMM] recv_dynamic_stream length %ld \n", length); 
 	if (recv_stream(ucp_worker, ep, result, length) < 0) 
 	{
 		perror("ERRIMSS_RECVDYNAMSTRUCT_RECV");
 		return -1;
 	}
 
-	DPRINT( "[COMM] recv_dynamic_stream content %ld \n",length); 
 	char * msg_data = result;
-
 	//Formalize the received information.
 	switch (data_type)
 	{
 		case IMSS_INFO:
 			{
-
-				DPRINT( "[COMM] Recv: receiving IMSS_INFO %ld\n",length);
+				DPRINT(" \t\t receiving IMSS_INFO %ld\n",length);
 				imss_info * struct_ = (imss_info *) data_struct;
 
 				//Copy the actual structure into the one provided through reference.
@@ -705,7 +702,7 @@ int32_t recv_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep,
 
 		case DATASET_INFO:
 			{
-				DPRINT("Recv: receiving DATASET_INFO %ld\n", length);
+				DPRINT(" \t\t DATASET_INFO %ld\n", length);
 				dataset_info * struct_ = (dataset_info *) data_struct;
 
 				//Copy the actual structure into the one provided through reference.
@@ -734,7 +731,7 @@ int32_t recv_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep,
 		case BUFFER:
 			{
 
-				DPRINT("Recv: receiving STRING or BUFFER %ld\n", length);
+				DPRINT(" \t\t receiving STRING or BUFFER %ld\n", length);
 				if (!strncmp("$ERRIMSS_NO_KEY_AVAIL$", msg_data, 22))
 				{
 					DPRINT("[COMM] recv_dynamic_stream end %ld\n", length); 
@@ -786,24 +783,21 @@ void ep_close(ucp_worker_h ucp_worker, ucp_ep_h ep, uint64_t flags)
 	}
 
 	if (status != UCS_OK) {
-		fprintf(stderr, "failed to close ep %p\n", (void*)ep);
+		fprintf(stderr, "Failed to close ep %p\n", (void*)ep);
+	    DPRINT( "[COMM] Failed to close ep %p\n", (void*)ep);
 	}
 	DPRINT("[COMM] Closed endpoint\n");
 }
 
 void empty_function(void *request, ucs_status_t status)
 {
-	DPRINT("[COMM] Flushed endpoint\n");
 }
-
-
 ucs_status_t ep_flush(ucp_ep_h ep, ucp_worker_h worker)
 {
 	void *request;
 	StsHeader *req_queue;
 	ucx_async_t *async;
 
-	DPRINT( "[COMM] Flushing endpoint\n");
 	request = ucp_ep_flush_nb(ep, 0, empty_function);
 	if (request == NULL) {
 		return UCS_OK;
@@ -818,18 +812,5 @@ ucs_status_t ep_flush(ucp_ep_h ep, ucp_worker_h worker)
 		ucp_request_free(request);
 		return status;
 	}
-
-	/*if (is_client) {
-		fprintf(stderr, "PUNTERO map_ep ep_flush %p \n", map_ep);
-		pthread_mutex_lock(&map_ep_mutex);
-		int found = map_ep_search(map_ep, ep, &req_queue);
-		if (found) {
-			while (StsQueue.size(req_queue) > 0) {
-				async = (ucx_async_t *) StsQueue.pop(req_queue);
-				request_finalize(worker, async->request, async->ctx);
-			}
-			map_ep_erase(map_ep, ep);
-		}
-		pthread_mutex_unlock(&map_ep_mutex);
-	}*/
+	DPRINT( "[COMM] Flushed endpoint\n");
 }
