@@ -51,14 +51,14 @@ typedef struct {
 
 //Thread method attending client data requests.
 void * srv_worker (void * th_argv);
-void * srv_worker_slave (void * th_argv);
+void * srv_worker_thread (void * th_argv);
 
 //Thread method searching and cleaning nodes with st_nlink=0
 void * garbage_collector (void * th_argv);
 
 //Thread method attending client metadata requests.
 void * stat_worker (void * th_argv);
-void * stat_worker_slave (void * th_argv);
+void * stat_worker_thread (void * th_argv);
 
 //Dispatcher thread method distributing clients among the pool server threads.
 void * srv_attached_dispatcher (void * th_argv);

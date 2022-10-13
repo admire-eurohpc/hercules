@@ -2,6 +2,7 @@
 #include "map.hpp"
 #include "mapfd.hpp"
 #include <stdio.h>
+#include <stdint.h>
 #include <dlfcn.h>
 #include <errno.h>
 #include <stdlib.h>
@@ -53,12 +54,11 @@ int32_t  IMSS_DEBUG = 0;
 
 uint16_t PREFETCH = 6;
 
-uint16_t threshold_read_servers = 4;
+uint16_t threshold_read_servers = 5;
 uint16_t BEST_PERFORMANCE_READ = 0;//if 1    then n_servers < threshold => SREAD, else if n_servers > threshold => SPLIT_READV 
 //if 0 only one method of read applied specified in MULTIPLE_READ
 
-uint16_t MULTIPLE_READ = 4;//1=vread with prefetch, 2=vread without prefetch, 
-//3=vread_2x 4=imss_split_readv(distributed) else sread
+uint16_t MULTIPLE_READ = 4;//1=vread with prefetch, 2=vread without prefetch, 3=vread_2x 4=imss_split_readv(distributed) else sread
 uint16_t MULTIPLE_WRITE = 0;//1=writev(only 1 server), 2=imss_split_writev(distributed) else swrite
 char prefetch_path[256];
 int32_t prefetch_first_block = -1; 
@@ -111,6 +111,17 @@ static struct dirent *(*real_readdir)(DIR *dirp) = NULL;
 static int (*real_closedir)(DIR *dirp) = NULL;
 static int (*real_statvfs)(const char *restrict path, struct statvfs *restrict buf) = NULL;
 
+
+uint32_t inline MurmurOAAT32 ( const char * key)
+{
+  uint32_t h= 3323198485ul;
+  for (;*key;++key) {
+    h ^= *key;
+    h *= 0x5bd1e995;
+    h ^= h >> 15;
+  }
+  return h;
+}
 
 
 void *
@@ -257,8 +268,17 @@ imss_posix_init(void)
 		}
 	}
 
+    // Getting a mostly unique id for the distributed deployment.
+    char hostname[512];
+    int ret = gethostname(&hostname[0], 512);
+    if (ret == -1) {
+        perror("gethostname");
+        exit(EXIT_FAILURE);
+    }
+	sprintf(hostname, "%s:%d", hostname, getpid());
+    
 	//Metadata server
-	if (stat_init(META_HOSTFILE, METADATA_PORT, N_META_SERVERS,1) == -1){
+	if (stat_init(META_HOSTFILE, METADATA_PORT, N_META_SERVERS,  MurmurOAAT32(hostname)  ) == -1){
 		//In case of error notify and exit
 		fprintf(stderr, "Stat init failed, cannot connect to Metadata server.\n");
 	}

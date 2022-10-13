@@ -39,6 +39,8 @@ char att_imss_uri[URI_];
 
 pthread_mutex_t tree_mut;
 
+pthread_mutex_t mp = PTHREAD_MUTEX_INITIALIZER;
+
 void * srv_worker (void * th_argv)
 {
     ucx_server_ctx_t context;
@@ -56,7 +58,7 @@ void * srv_worker (void * th_argv)
     }
 
 	for (;;) {
-		    p_argv * slave_args = (p_argv *) malloc(sizeof(p_argv));
+		    p_argv * thread_args = (p_argv *) malloc(sizeof(p_argv));
 			pthread_t thread;
             pthread_attr_t attr;
 			ucp_conn_request_h req;
@@ -67,21 +69,21 @@ void * srv_worker (void * th_argv)
 
             req = (ucp_conn_request_h)StsQueue.pop(context.conn_request);
 
-            memcpy(slave_args, th_argv, sizeof(p_argv));
-            ret = init_worker(arguments->ucp_context, &(slave_args->ucp_data_worker));
+            memcpy(thread_args, th_argv, sizeof(p_argv));
+            ret = init_worker(arguments->ucp_context, &(thread_args->ucp_data_worker));
             if (ret != 0) {
                 perror("ERRIMSS_INIT_WORKER");
                 pthread_exit(NULL);
             }
 
-			status = server_create_ep(slave_args->ucp_data_worker, req, &(slave_args->server_ep));
+			status = server_create_ep(thread_args->ucp_data_worker, req, &(thread_args->server_ep));
 			if (status != UCS_OK) {
 				perror("ERRIMSS_SERVER_CREATE_EP");
 				pthread_exit(NULL);
 			}
 
             pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);			
-			if (pthread_create(&thread, &attr, srv_worker_slave, (void *) slave_args) == -1)
+			if (pthread_create(&thread, &attr, srv_worker_thread, (void *) thread_args) == -1)
             {
                     //Notify thread error deployment.
                     perror("ERRIMSS_SRVWORKER_DEPLOY");
@@ -93,7 +95,7 @@ void * srv_worker (void * th_argv)
 }
 
 //Thread method attending client read-write data requests.
-void * srv_worker_slave (void * th_argv)
+void * srv_worker_thread (void * th_argv)
 {   
 
     ucp_worker_h     ucp_data_worker;
@@ -105,6 +107,7 @@ void * srv_worker_slave (void * th_argv)
 	//Obtain the current map class element from the set of arguments.
     std::shared_ptr<map_records>  map = arguments->map;
 	ucp_data_worker = arguments->ucp_data_worker;
+
 
 	//Resources specifying if the ZMQ_SNDMORE flag was set in the sender.
 	int64_t more;
@@ -136,6 +139,7 @@ void * srv_worker_slave (void * th_argv)
 		//Save the request to be served.
         recv_stream(ucp_data_worker, arguments->server_ep, req, REQUEST_SIZE);
 		
+		DPRINT ("[DATA WORKER] Request - client_id '%d', mode '%s', req '%s'\n",client_id, mode, req)
 		/*struct timeval start2, end2;
 		long delta_us2;
 		gettimeofday(&start2, NULL);*/
@@ -210,9 +214,7 @@ void * srv_worker_slave (void * th_argv)
 					{
 						ep_flush(arguments->server_ep, ucp_data_worker);
 						ep_close(ucp_data_worker, arguments->server_ep, UCP_EP_CLOSE_MODE_FLUSH);
-						ucp_worker_destroy(ucp_data_worker);
 						pthread_exit(NULL);
-
 						break;
 					}
 					case RENAME_OP:
@@ -748,7 +750,6 @@ void * srv_worker_slave (void * th_argv)
 			if (client_id == CLOSE_EP) {
 				ep_flush(arguments->server_ep, ucp_data_worker);
 				ep_close(ucp_data_worker, arguments->server_ep, UCP_EP_CLOSE_MODE_FLUSH);
-				ucp_worker_destroy(ucp_data_worker);
 				pthread_exit(NULL);
 			}
 		}   
@@ -756,7 +757,6 @@ void * srv_worker_slave (void * th_argv)
 		printf("Terminated stat thread\n");
 		ep_flush(arguments->server_ep, ucp_data_worker);
 		ep_close(ucp_data_worker, arguments->server_ep, UCP_EP_CLOSE_MODE_FLUSH);
-		ucp_worker_destroy(ucp_data_worker);
 		pthread_exit(NULL);
 	}
 
@@ -794,7 +794,7 @@ void * srv_worker_slave (void * th_argv)
 		}
 
 		for (;;) {
-			p_argv * slave_args = (p_argv *) malloc(sizeof(p_argv));
+			p_argv * thread_args = (p_argv *) malloc(sizeof(p_argv));
 			pthread_t thread;
 			pthread_attr_t attr;
 			ucp_conn_request_h req;
@@ -806,21 +806,21 @@ void * srv_worker_slave (void * th_argv)
 			req = (ucp_conn_request_h)StsQueue.pop(context.conn_request);
 
 
-			memcpy(slave_args, th_argv, sizeof(p_argv));
-			ret = init_worker(arguments->ucp_context, &(slave_args->ucp_data_worker));
+			memcpy(thread_args, th_argv, sizeof(p_argv));
+			ret = init_worker(arguments->ucp_context, &(thread_args->ucp_data_worker));
 			if (ret != 0) {
 				perror("ERRIMSS_INIT_WORKER");
 				pthread_exit(NULL);
 			}
 
-			status = server_create_ep(slave_args->ucp_data_worker, req, &(slave_args->server_ep));
+			status = server_create_ep(thread_args->ucp_data_worker, req, &(thread_args->server_ep));
 			if (status != UCS_OK) {
 				perror("ERRIMSS_SERVER_CREATE_EP");
 				pthread_exit(NULL);
 			}
 
 			pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
-			if (pthread_create(&thread, &attr, stat_worker_slave, (void *) slave_args) == -1)
+			if (pthread_create(&thread, &attr, stat_worker_thread, (void *) thread_args) == -1)
 			{
 				//Notify thread error deployment.
 				perror("ERRIMSS_SRVWORKER_DEPLOY");
@@ -832,7 +832,7 @@ void * srv_worker_slave (void * th_argv)
 	}
 
 	//Thread method attending client read-write metadata requests.
-	void * stat_worker_slave (void * th_argv)
+	void * stat_worker_thread (void * th_argv)
 	{   
 		ucp_worker_h     ucp_data_worker;
 		ucs_status_t     status;
@@ -881,6 +881,7 @@ void * srv_worker_slave (void * th_argv)
 			recv_stream(ucp_data_worker, arguments->server_ep, req, REQUEST_SIZE);
 
 
+		    DPRINT ("[METADATA WORKER] Request - client_id '%d', mode '%s', req '%s'\n",client_id, mode, req)
 			//Expeted incomming message format: "SIZE_IN_KB KEY"
 			int32_t req_size = strlen(req);
 
@@ -934,7 +935,6 @@ void * srv_worker_slave (void * th_argv)
 											if (client_id == CLOSE_EP) {
 												ep_flush(arguments->server_ep, ucp_data_worker);
 												ep_close(ucp_data_worker, arguments->server_ep, UCP_EP_CLOSE_MODE_FLUSH);
-												ucp_worker_destroy(ucp_data_worker);
 											}
 											pthread_exit(NULL);
 										}
@@ -958,7 +958,6 @@ void * srv_worker_slave (void * th_argv)
 										if (client_id == CLOSE_EP) {
 											ep_flush(arguments->server_ep, ucp_data_worker);
 											ep_close(ucp_data_worker, arguments->server_ep, UCP_EP_CLOSE_MODE_FLUSH);
-											ucp_worker_destroy(ucp_data_worker);
 										}
 										pthread_exit(NULL);
 									}
@@ -981,7 +980,6 @@ void * srv_worker_slave (void * th_argv)
 											if (client_id == CLOSE_EP) {
 												ep_flush(arguments->server_ep, ucp_data_worker);
 												ep_close(ucp_data_worker, arguments->server_ep, UCP_EP_CLOSE_MODE_FLUSH);
-												ucp_worker_destroy(ucp_data_worker);
 											}
 											pthread_exit(NULL);
 										}
@@ -1002,7 +1000,6 @@ void * srv_worker_slave (void * th_argv)
 											if (client_id == CLOSE_EP) {
 												ep_flush(arguments->server_ep, ucp_data_worker);
 												ep_close(ucp_data_worker, arguments->server_ep, UCP_EP_CLOSE_MODE_FLUSH);
-												ucp_worker_destroy(ucp_data_worker);
 											}
 											pthread_exit(NULL);
 										}
@@ -1015,7 +1012,6 @@ void * srv_worker_slave (void * th_argv)
 								{
 									ep_flush(arguments->server_ep, ucp_data_worker);
 									ep_close(ucp_data_worker, arguments->server_ep, UCP_EP_CLOSE_MODE_FLUSH);
-									ucp_worker_destroy(ucp_data_worker);
 									pthread_exit(NULL);
 									break;
 								}
@@ -1032,7 +1028,6 @@ void * srv_worker_slave (void * th_argv)
 										if (client_id == CLOSE_EP) {
 											ep_flush(arguments->server_ep, ucp_data_worker);
 											ep_close(ucp_data_worker, arguments->server_ep, UCP_EP_CLOSE_MODE_FLUSH);
-											ucp_worker_destroy(ucp_data_worker);
 										}
 										pthread_exit(NULL);
 									}
@@ -1066,7 +1061,6 @@ void * srv_worker_slave (void * th_argv)
 										if (client_id == CLOSE_EP) {
 											ep_flush(arguments->server_ep, ucp_data_worker);
 											ep_close(ucp_data_worker, arguments->server_ep, UCP_EP_CLOSE_MODE_FLUSH);
-											ucp_worker_destroy(ucp_data_worker);
 										}
 										pthread_exit(NULL);
 									}
@@ -1094,7 +1088,6 @@ void * srv_worker_slave (void * th_argv)
 										if (client_id == CLOSE_EP) {
 											ep_flush(arguments->server_ep, ucp_data_worker);
 											ep_close(ucp_data_worker, arguments->server_ep, UCP_EP_CLOSE_MODE_FLUSH);
-											ucp_worker_destroy(ucp_data_worker);
 										}
 										pthread_exit(NULL);
 									}
@@ -1140,7 +1133,6 @@ void * srv_worker_slave (void * th_argv)
 								if (client_id == CLOSE_EP) {
 									ep_flush(arguments->server_ep, ucp_data_worker);
 									ep_close(ucp_data_worker, arguments->server_ep, UCP_EP_CLOSE_MODE_FLUSH);
-									ucp_worker_destroy(ucp_data_worker);
 								}
 								pthread_exit(NULL);
 							}
@@ -1166,7 +1158,6 @@ void * srv_worker_slave (void * th_argv)
 											if (client_id == CLOSE_EP) {
 												ep_flush(arguments->server_ep, ucp_data_worker);
 												ep_close(ucp_data_worker, arguments->server_ep, UCP_EP_CLOSE_MODE_FLUSH);
-												ucp_worker_destroy(ucp_data_worker);
 											}
 											pthread_exit(NULL);
 										}
@@ -1197,7 +1188,6 @@ void * srv_worker_slave (void * th_argv)
 											if (client_id == CLOSE_EP) {
 												ep_flush(arguments->server_ep, ucp_data_worker);
 												ep_close(ucp_data_worker, arguments->server_ep, UCP_EP_CLOSE_MODE_FLUSH);
-												ucp_worker_destroy(ucp_data_worker);
 											}
 											pthread_exit(NULL);
 										}
@@ -1223,13 +1213,11 @@ void * srv_worker_slave (void * th_argv)
 			if (client_id == CLOSE_EP) {
 				ep_flush(arguments->server_ep, ucp_data_worker);
 				ep_close(ucp_data_worker, arguments->server_ep, UCP_EP_CLOSE_MODE_FLUSH);
-				ucp_worker_destroy(ucp_data_worker);
 				pthread_exit(NULL);
 			} 
 		}   
 		ep_flush(arguments->server_ep, ucp_data_worker);
 		ep_close(ucp_data_worker, arguments->server_ep, UCP_EP_CLOSE_MODE_FLUSH);
-		ucp_worker_destroy(ucp_data_worker);
 		pthread_exit(NULL);
 	}
 

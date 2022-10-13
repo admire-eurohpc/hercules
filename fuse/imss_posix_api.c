@@ -947,17 +947,17 @@ int imss_vread_2x(const char *path, char *buf, size_t size, off_t offset)
 
 int imss_read(const char *path, char *buf, size_t size, off_t offset) {
    int ret;
-  // ret = imss_sread(path, buf, size, offset);
+   ret = imss_sread(path, buf, size, offset);
 
-
+/*
    	if (BEST_PERFORMANCE_READ == 0){
-		if (MULTIPLE_READ==1){
+		if (MULTIPLE_READ == 1){
 			ret = imss_vread_prefetch(path, buf, size, offset);
-		}else if(MULTIPLE_READ==2){
+		}else if(MULTIPLE_READ == 2){
 			ret = imss_vread_no_prefetch(path, buf, size, offset);
-		}else if(MULTIPLE_READ==3){
+		}else if(MULTIPLE_READ == 3){
 			ret = imss_vread_2x(path, buf, size, offset);
-		}else if(MULTIPLE_READ==4){
+		}else if(MULTIPLE_READ == 4){
 			//printf("ENTER IMSS_SPLIT_READV\n");
 			ret = imss_split_readv(path, buf, size, offset);
 		}else{
@@ -974,7 +974,7 @@ int imss_read(const char *path, char *buf, size_t size, off_t offset) {
 			ret = imss_split_readv(path, buf, size, offset);
 		}
 	}
-	
+*/	
    return ret;
 }
 

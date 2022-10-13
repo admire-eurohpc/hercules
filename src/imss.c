@@ -26,7 +26,7 @@
 /******************************** GLOBAL VARIABLES ********************************/
 /**********************************************************************************/
 
-int32_t 	process_rank;		//Process identifier within the deployment.
+uint32_t 	process_rank;		//Process identifier within the deployment.
 
 uint32_t    n_stat_servers;     //Number of metadata servers available.
 ucp_ep_h * 	stat_client;		//Metadata server sockets.
@@ -216,7 +216,7 @@ int32_t
 stat_init(char *   stat_hostfile,
 		uint16_t port,
 		int32_t  num_stat_servers,
-		int32_t  rank)
+		uint32_t  rank)
 {
 	//Number of metadata servers to connect to.
 	n_stat_servers = num_stat_servers;
@@ -2058,10 +2058,10 @@ split_readv(void * th_argv)
 	
 	char key_[REQUEST_SIZE];
 	//Key related to the requested data element.
-	int msg_lenght = strlen(arguments->msg)+1; 
+	int msg_length = strlen(arguments->msg)+1; 
 	sprintf(key_, "9 %s %ld %ld %d %d",
 			arguments->path, arguments->BLKSIZE, arguments->start_offset, 
-			arguments->stats_size, msg_lenght);
+			arguments->stats_size, msg_length);
 
 
 	int key_length = strlen(key_)+1;
@@ -2096,11 +2096,13 @@ split_readv(void * th_argv)
 		}
 
 		//printf("[SPLIT READV] 4-Send_msg\n");
-		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[repl_servers[i]], arguments->msg, msg_lenght) < 0)
-		{
-			perror("ERRIMSS_GETDATA_REQ");
-		}
+//		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[repl_servers[i]], arguments->msg, msg_length) < 0)
+//		{
+//			perror("ERRIMSS_GETDATA_REQ");
+//		}
 
+        DPRINT("[IMSS] Request split_readv: client_id '%d', mode '%s', key '%s', request '%s'\n", curr_imss.conns.id[repl_servers[i]], mode, key, arguments->msg);
+	 
 		struct timeval start, end;
 		/*long delta_us;
 		  gettimeofday(&start, NULL);*/
@@ -2255,8 +2257,6 @@ get_data(int32_t 	 dataset_id,
 	//Request the concerned block to the involved servers.
 	for (int32_t i = 0; i < curr_dataset.repl_factor; i++)
 	{
-		//printf("CLIENT GET_DATA BLOCK %d ASKED TO %d SERVER with key: %s (%d)\n", data_id, repl_servers[i], key, key_length);
-
 		//Send read request message specifying the block URI.
 		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[repl_servers[i]], (char *) &curr_imss.conns.id[repl_servers[i]], sizeof(uint32_t)) < 0)
 		{
@@ -2282,6 +2282,7 @@ get_data(int32_t 	 dataset_id,
 			delta_us = (long) (end.tv_usec - start.tv_usec);
 			printf("\n[CLIENT] [GET DATA] send petition delta_us=%6.3f\n",(delta_us/1000.0F));*/
 
+        DPRINT("[IMSS] Request get_data: client_id '%d', mode '%s', key '%s'\n", curr_imss.conns.id[repl_servers[i]], mode, key);
 		clock_t t;
 		t = clock();
 
@@ -2301,7 +2302,7 @@ get_data(int32_t 	 dataset_id,
 		t = clock() - t;
 		double time_taken = ((double)t)/CLOCKS_PER_SEC; // in seconds
 
-		//printf("[CLIENT] [GET DATA] recv data %f s\n",time_taken);
+		printf("[CLIENT] [GET DATA] recv data %f s\n",time_taken);
 
 		//Check if the requested key was correctly retrieved.
 		if (strncmp((const char *) buffer, "$ERRIMSS_NO_KEY_AVAIL$", 22)){
@@ -2382,6 +2383,10 @@ get_ndata(int32_t 	 dataset_id,
 			perror("ERRIMSS_GETDATA_REQ");
 			return -1;
 		}
+
+        
+        DPRINT("[IMSS] Request get_ndata: client_id '%d', mode '%s', key '%s'\n", curr_imss.conns.id[repl_servers[i]], mode, key);
+
 		//Receive data related to the previous read request directly into the buffer.
 		if (recv_stream(ucp_worker_client, curr_imss.conns.eps_[repl_servers[i]], buffer, curr_dataset.data_entity_size) < 0)
 		{
@@ -2491,6 +2496,9 @@ set_data(int32_t 	 dataset_id,
 			delta_us = (long) (end.tv_usec - start.tv_usec);
 			printf("[CLIENT] [SWRITE SEND_DATA] delta_us=%6.3f\n",(delta_us/1000.0F));*/
 
+
+        DPRINT("[IMSS] Request set_data: client_id '%d', mode '%s', key '%s'\n", curr_imss.conns.id[n_server_], mode, key);
+
 		t = clock() - t;
 		double time_taken = ((double)t)/CLOCKS_PER_SEC; // in seconds
 
@@ -2556,6 +2564,8 @@ set_ndata(int32_t 	 dataset_id,
 			perror("ERRIMSS_SETDATA_SEND");
 			return -1;
 		}
+
+        DPRINT("[IMSS] Request set_ndata: client_id '%d', mode '%s', key '%s'\n", curr_imss.conns.id[n_server_], mode, key);
 	}
 
 	return 0;
