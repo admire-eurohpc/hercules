@@ -2302,7 +2302,7 @@ get_data(int32_t 	 dataset_id,
 		t = clock() - t;
 		double time_taken = ((double)t)/CLOCKS_PER_SEC; // in seconds
 
-		printf("[CLIENT] [GET DATA] recv data %f s\n",time_taken);
+		DPRINT("[IMSS] get_data %f s\n",time_taken);
 
 		//Check if the requested key was correctly retrieved.
 		if (strncmp((const char *) buffer, "$ERRIMSS_NO_KEY_AVAIL$", 22)){

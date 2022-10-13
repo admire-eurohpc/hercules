@@ -1,6 +1,5 @@
 #!/bin/bash
 #SBATCH --job-name=imss    # Job name
-#SBATCH --ntasks-per-node=1             # How many tasks on each node
 #SBATCH --time=00:05:00               # Time limit hrs:min:sec
 #SBATCH --output=imss_%j.log   # Standard output and error log
 #SBATCH --exclusive
@@ -56,6 +55,7 @@ sleep 2
 echo "# IMMS: Running IOR"
 tail -n +$((NUM_METADATA+NUM_DATA+1)) hostfile | head -n $NUM_CLIENT > client_hostfile
 mpiexec -n $NUM_CLIENT --ppn 1 -f ./client_hostfile \
+             -env IMMS_DEBUG true \
              -env LD_PRELOAD $IMSS_PATH/tools/libimss_posix.so \
              -env IMSS_MOUNT_POINT /mnt/imss \
 			 -env IMSS_HOSTFILE $PWD/data_hostfile \
