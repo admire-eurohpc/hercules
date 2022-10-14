@@ -38,15 +38,14 @@ int init_worker(ucp_context_h ucp_context, ucp_worker_h *ucp_worker)
 		ret = -1;
 	}
 
-    DPRINT( "[COMM] Inicializated worker result:%d\n", ret); 
+	DPRINT( "[COMM] Inicializated worker result: %d\n", ret); 
 	return ret;
 }
 
 /**
  * Initialize the UCP context and worker.
  */
-int init_context(ucp_context_h *ucp_context, ucp_worker_h *ucp_worker,
-		send_recv_type_t send_recv_type)
+int init_context(ucp_context_h *ucp_context, ucp_worker_h *ucp_worker, send_recv_type_t send_recv_type)
 {
 	/* UCP objects */
 	ucp_params_t ucp_params;
@@ -84,6 +83,7 @@ int init_context(ucp_context_h *ucp_context, ucp_worker_h *ucp_worker,
 		goto err_cleanup;
 	}
 
+	DPRINT( "[COMM] Inicializated context result: %d\n", ret); 
 	return ret;
 
 err_cleanup:
@@ -145,31 +145,9 @@ ucs_status_t start_client(ucp_worker_h ucp_worker, const char *address_str, int 
 		map_ep_put(map_ep, *client_ep, queue);
 		pthread_mutex_unlock(&map_ep_mutex);
 	}
-   
-    DPRINT( "[COMM] Started client\n");
+
+	DPRINT( "[COMM] Started client\n");
 	return status;
-}
-
-ucs_status_t flush_ep(ucp_worker_h worker, ucp_ep_h ep)
-{
-	ucp_request_param_t param;
-	void *request;
-
-	param.op_attr_mask = 0;
-	request            = ucp_ep_flush_nbx(ep, &param);
-	if (request == NULL) {
-		return UCS_OK;
-	} else if (UCS_PTR_IS_ERR(request)) {
-		return UCS_PTR_STATUS(request);
-	} else {
-		ucs_status_t status;
-		do {
-			ucp_worker_progress(worker);
-			status = ucp_request_check_status(request);
-		} while (status == UCS_INPROGRESS);
-		ucp_request_free(request);
-		return status;
-	}
 }
 
 size_t send_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, const char * msg, size_t msg_length)
@@ -226,7 +204,7 @@ size_t send_istream(ucp_worker_h ucp_worker, ucp_ep_h ep, const char * msg, size
 	int found = map_ep_search(map_ep, ep, &req_queue);
 	if (!found) {
 		req_queue = StsQueue.create();
-        map_ep_put(map_ep, ep, req_queue);
+		map_ep_put(map_ep, ep, req_queue);
 	}
 	pthread_mutex_unlock(&map_ep_mutex);
 
@@ -370,9 +348,9 @@ void isend_cb(void *request, ucs_status_t status, void *user_data)
  */
 void err_cb_client(void *arg, ucp_ep_h ep, ucs_status_t status)
 {
-    if (status != UCS_ERR_CONNECTION_RESET && status != UCS_ERR_ENDPOINT_TIMEOUT)
-	    printf("client error handling callback was invoked with status %d (%s)\n", status, ucs_status_string(status));
-    DPRINT( "[COMM] Client error handling callback was invoked with status %d (%s)\n", status, ucs_status_string(status));
+	if (status != UCS_ERR_CONNECTION_RESET && status != UCS_ERR_ENDPOINT_TIMEOUT)
+		printf("client error handling callback was invoked with status %d (%s)\n", status, ucs_status_string(status));
+	DPRINT( "[COMM] Client error handling callback was invoked with status %d (%s)\n", status, ucs_status_string(status));
 }
 
 void err_cb_server(void *arg, ucp_ep_h ep, ucs_status_t status)
@@ -406,8 +384,8 @@ int request_finalize(ucp_worker_h ucp_worker, test_req_t *request, test_req_t *c
 		goto release_iov;
 	}
 
-    release_iov:
-	   return ret;
+release_iov:
+	return ret;
 }
 
 ucs_status_t start_server(ucp_worker_h ucp_worker, ucx_server_ctx_t *context, ucp_listener_h *listener_p, const char *address_str, int port)
@@ -441,7 +419,7 @@ ucs_status_t start_server(ucp_worker_h ucp_worker, ucx_server_ctx_t *context, uc
 		goto out;
 	}
 
-    DPRINT( "[COMM] Started server with status %d \n", status);
+	DPRINT( "[COMM] Started server with status %d \n", status);
 out:
 	return status;
 }
@@ -535,7 +513,7 @@ ucs_status_t server_create_ep(ucp_worker_h data_worker,
 	if (status != UCS_OK) {
 		fprintf(stderr, "failed to create an endpoint on the server: (%s)\n", ucs_status_string(status));
 	}
-    
+
 	DPRINT( "[COMM] Created server endpoint\n");
 	return status;
 }
@@ -761,11 +739,11 @@ void ep_close(ucp_worker_h ucp_worker, ucp_ep_h ep, uint64_t flags)
 		pthread_mutex_lock(&map_ep_mutex);
 		int found = map_ep_search(map_ep, ep, &req_queue);
 		if (found) {
-				while (StsQueue.size(req_queue) > 0) {
-					async = (ucx_async_t *) StsQueue.pop(req_queue);
-					request_finalize(ucp_worker, async->request, &(async->ctx));
-					free(async);
-				}
+			while (StsQueue.size(req_queue) > 0) {
+				async = (ucx_async_t *) StsQueue.pop(req_queue);
+				request_finalize(ucp_worker, async->request, &(async->ctx));
+				free(async);
+			}
 			map_ep_erase(map_ep, ep);
 		}
 		pthread_mutex_unlock(&map_ep_mutex);
@@ -784,7 +762,7 @@ void ep_close(ucp_worker_h ucp_worker, ucp_ep_h ep, uint64_t flags)
 
 	if (status != UCS_OK) {
 		fprintf(stderr, "Failed to close ep %p\n", (void*)ep);
-	    DPRINT( "[COMM] Failed to close ep %p\n", (void*)ep);
+		DPRINT( "[COMM] Failed to close ep %p\n", (void*)ep);
 	}
 	DPRINT("[COMM] Closed endpoint\n");
 }

@@ -41,7 +41,7 @@ int32_t  IMSS_DEBUG = 0;
 
 int32_t main(int32_t argc, char **argv)
 {
-    // Print off a hello world message
+	// Print off a hello world message
 
 	uint16_t bind_port, aux_bind_port;
 	char *   stat_add;
@@ -51,10 +51,10 @@ int32_t main(int32_t argc, char **argv)
 	void * 	 socket;
 
 	ucs_status_t status;
-    ucp_ep_h     client_ep;
+	ucp_ep_h     client_ep;
 
-    ucp_am_handler_param_t param;
-    int              ret;
+	ucp_am_handler_param_t param;
+	int              ret;
 	/***************************************************************/
 	/******************** PARSE INPUT ARGUMENTS ********************/
 	/***************************************************************/
@@ -62,21 +62,23 @@ int32_t main(int32_t argc, char **argv)
 
 
 	if (getenv("IMSS_DEBUG") != NULL) {
-        IMSS_DEBUG = 1;
-    }
+		IMSS_DEBUG = 1;
+	}
 
 
-    parse_args(argc, argv, &args);
+	parse_args(argc, argv, &args);
 
 	/*
-	printf("type = %c\nport = %u\nbufsize = %ld\n", args.type, args.port, args.bufsize);
-    if (args.type == TYPE_DATA_SERVER) {
-        printf("imss_uri = %s\nstat-host = %s\nstat-port = %ld\nnum-servers = %ld\ndeploy-hostfile = %s\n",
-        args.imss_uri, args.stat_host, args.stat_port, args.num_servers, args.deploy_hostfile);
-    } else {
-        printf("stat-logfile = %s\n", args.stat_logfile);
-    }
-	*/
+	   printf("type = %c\nport = %u\nbufsize = %ld\n", args.type, args.port, args.bufsize);
+	   if (args.type == TYPE_DATA_SERVER) {
+	   printf("imss_uri = %s\nstat-host = %s\nstat-port = %ld\nnum-servers = %ld\ndeploy-hostfile = %s\n",
+	   args.imss_uri, args.stat_host, args.stat_port, args.num_servers, args.deploy_hostfile);
+	   } else {
+	   printf("stat-logfile = %s\n", args.stat_logfile);
+	   }
+	   */
+
+        DPRINT("[SERVER] Starting server.\n");
 
 	//bind port number.
 	bind_port = args.port;
@@ -86,16 +88,16 @@ int32_t main(int32_t argc, char **argv)
 	//set up imss uri (default value is already set up in args)
 	imss_uri 	= (char *) calloc(32, sizeof(char));
 
-    /* Initialize the UCX required objects */
-    ret = init_context(&ucp_context, &ucp_worker, CLIENT_SERVER_SEND_RECV_STREAM);
-    if (ret != 0) {
-        perror("ERRIMSS_INIT_CONTEXT");
-        return -1;
-    }
+	/* Initialize the UCX required objects */
+	ret = init_context(&ucp_context, &ucp_worker, CLIENT_SERVER_SEND_RECV_STREAM);
+	if (ret != 0) {
+		perror("ERRIMSS_INIT_CONTEXT");
+		return -1;
+	}
 
 	/* CHECK THIS OUT!
-	***************************************************
-	In relation to the type argument provided, an IMSS or a metadata server will be deployed. */
+	 ***************************************************
+	 In relation to the type argument provided, an IMSS or a metadata server will be deployed. */
 
 	//IMSS server.
 	if (args.type == TYPE_DATA_SERVER)
@@ -117,25 +119,25 @@ int32_t main(int32_t argc, char **argv)
 		if (!args.id)
 		{
 			//Connect to the specified endpoint.
-            status = start_client(ucp_worker, stat_add, stat_port + 1, &client_ep); // port, rank,
-            if (status != UCS_OK) {
-                fprintf(stderr, "failed to start client (%s)\n", ucs_status_string(status));
-                return -1;
-            }
+			status = start_client(ucp_worker, stat_add, stat_port + 1, &client_ep); // port, rank,
+			if (status != UCS_OK) {
+				fprintf(stderr, "failed to start client (%s)\n", ucs_status_string(status));
+				return -1;
+			}
 
-            uint32_t id = CLOSE_EP;
-            if (send_stream(ucp_worker, client_ep, (char*) &id, sizeof(uint32_t)) < 0)
-            {
-                perror("ERRIMSS_DATASET_REQ");
-                return -1;
-            }
-          
-		    char mode[] = "GET\0";
-            if (send_stream(ucp_worker, client_ep, mode, MODE_SIZE) < 0)
-            {
-                perror("ERRIMSS_DATASET_REQ");
-                return -1;
-            }
+			uint32_t id = CLOSE_EP;
+			if (send_stream(ucp_worker, client_ep, (char*) &id, sizeof(uint32_t)) < 0)
+			{
+				perror("ERRIMSS_DATASET_REQ");
+				return -1;
+			}
+
+			char mode[] = "GET\0";
+			if (send_stream(ucp_worker, client_ep, mode, MODE_SIZE) < 0)
+			{
+				perror("ERRIMSS_DATASET_REQ");
+				return -1;
+			}
 
 			//Formated imss uri to be sent to the metadata server.
 			char formated_uri[REQUEST_SIZE];
@@ -148,6 +150,7 @@ int32_t main(int32_t argc, char **argv)
 				return -1;
 			}
 
+			ep_flush(client_ep, ucp_worker);
 			imss_info imss_info_;
 
 			//Receive the associated structure.
@@ -187,41 +190,41 @@ int32_t main(int32_t argc, char **argv)
 			pthread_exit(NULL);
 		}
 	}
-   
+
 
 	/***************************************************************/
 	/******************** INPROC COMMUNICATIONS ********************/
 	/***************************************************************/
-	ucx_server_ctx_t context;
-    ucp_worker_h     ucp_data_worker;
+	//ucx_server_ctx_t context;
+	//ucp_worker_h     ucp_data_worker;
 
 
-    ret = init_worker(ucp_context, &ucp_data_worker);
-    if (ret != 0) {
-        perror("ERRIMSS_WORKER_INIT");
-        pthread_exit(NULL);
-    }
+	//ret = init_worker(ucp_context, &ucp_data_worker);
+	//if (ret != 0) {
+	//	perror("ERRIMSS_WORKER_INIT");
+	//	pthread_exit(NULL);
+	//}
 
-    /* Initialize the server's context. */
-    context.conn_request = NULL;
+	/* Initialize the server's context. */
+	//context.conn_request = NULL;
 
-    status = start_server(ucp_worker, &context, &context.listener, NULL, 0);
-    //status = start_server(ucp_worker, &context, &context.listener, NULL, bind_port + 1000);
-    if (status != UCS_OK) {
-        perror("ERRIMSS_STAR_SERVER");
-        pthread_exit(NULL);
-    } 
-/*
-    while (context.conn_request == NULL) {
-            ucp_worker_progress(ucp_worker);
-    }
-    status = server_create_ep(ucp_data_worker, context.conn_request, &pub_ep);
-    if (status != UCS_OK) {
-            perror("ERRIMSS_SERVER_CREATE_EP");
-            pthread_exit(NULL);
-    }
-*/
-    //Map tracking saved records.
+	//status = start_server(ucp_worker, &context, &context.listener, NULL, 0);
+	//status = start_server(ucp_worker, &context, &context.listener, NULL, bind_port + 1000);
+	//if (status != UCS_OK) {
+	//	perror("ERRIMSS_STAR_SERVER");
+	//	pthread_exit(NULL);
+	//} 
+	/*
+	   while (context.conn_request == NULL) {
+	   ucp_worker_progress(ucp_worker);
+	   }
+	   status = server_create_ep(ucp_data_worker, context.conn_request, &pub_ep);
+	   if (status != UCS_OK) {
+	   perror("ERRIMSS_SERVER_CREATE_EP");
+	   pthread_exit(NULL);
+	   }
+	   */
+	//Map tracking saved records.
 	std::shared_ptr<map_records> map(new map_records(buffer_size*KB));
 
 	int64_t data_reserved;
@@ -257,7 +260,7 @@ int32_t main(int32_t argc, char **argv)
 
 	if (args.type == TYPE_DATA_SERVER)
 		region_locks = (pthread_mutex_t *) calloc(THREAD_POOL, sizeof(pthread_mutex_t));
-	
+
 	//Execute all threads.
 	for (int32_t i = 0; i < (THREAD_POOL+1); i++)
 	{
@@ -265,12 +268,13 @@ int32_t main(int32_t argc, char **argv)
 		arguments[i].port = (bind_port)++;
 		arguments[i].ucp_context = ucp_context;
 		arguments[i].ucp_worker = ucp_worker;
-        //Add the instance URI to the thread arguments.
-        strcpy(arguments[i].my_uri, imss_uri);
+		//Add the instance URI to the thread arguments.
+		strcpy(arguments[i].my_uri, imss_uri);
 
 		//Deploy all dispatcher + service threads.
 		if (!i)
 		{
+			DPRINT("[SERVER Creating dispatcher thread.\n");
 			//Deploy a thread distributing incomming clients among all ports.
 			if (pthread_create(&threads[i], NULL, dispatcher, (void *) &arguments[i]) == -1)
 			{
@@ -286,11 +290,12 @@ int32_t main(int32_t argc, char **argv)
 			//Specify the address used by each thread to write inside the buffer.
 			arguments[i].pt = (char *) ((i-1)*buffer_segment + buffer_address);
 			arguments[i].ucp_context = ucp_context;
-            arguments[i].ucp_worker = ucp_worker;
+			arguments[i].ucp_worker = ucp_worker;
 
 			//IMSS server.
 			if (args.type == TYPE_DATA_SERVER)
 			{	
+				DPRINT("[SERVER Creating data thread.\n");
 				if (pthread_create(&threads[i], NULL, srv_worker, (void *) &arguments[i]) == -1)
 				{
 					//Notify thread error deployment.
@@ -301,6 +306,7 @@ int32_t main(int32_t argc, char **argv)
 			//Metadata server.
 			else
 			{
+				DPRINT("[SERVER Creating metadata thread.\n");
 				if (pthread_create(&threads[i], NULL, stat_worker, (void *) &arguments[i]) == -1)
 				{
 					//Notify thread error deployment.
@@ -353,40 +359,41 @@ int32_t main(int32_t argc, char **argv)
 			return -1;
 		}
 
-        status = start_client(ucp_worker, stat_add, stat_port + 1, &client_ep); // port, rank,
-        if (status != UCS_OK) {
-           fprintf(stderr, "failed to start client (%s)\n", ucs_status_string(status));
-           return -1;
-        }
-    
+		status = start_client(ucp_worker, stat_add, stat_port + 1, &client_ep); // port, rank,
+		if (status != UCS_OK) {
+			fprintf(stderr, "failed to start client (%s)\n", ucs_status_string(status));
+			return -1;
+		}
+
 		char key_plus_size[REQUEST_SIZE];
 		//Send the created structure to the metadata server.
 		sprintf(key_plus_size, "%lu %s", (sizeof(imss_info)+my_imss.num_storages*LINE_LENGTH), my_imss.uri_);
 
-        uint32_t id = CLOSE_EP;
-        send_stream(ucp_worker, client_ep, (char *) &id, sizeof(uint32_t));
+		uint32_t id = CLOSE_EP;
+		send_stream(ucp_worker, client_ep, (char *) &id, sizeof(uint32_t));
 
-        char mode[] = "SET\0";
-        send_stream(ucp_worker, client_ep, mode, MODE_SIZE);
+		char mode[] = "SET\0";
+		send_stream(ucp_worker, client_ep, mode, MODE_SIZE);
 
-   
+
 		if (send_stream(ucp_worker, client_ep, key_plus_size, REQUEST_SIZE) < 0) // SNDMORE
 		{
 			perror("ERRIMSS_SRV_SENDKEY");
 			return -1;
 		}
 
-        DPRINT("[SERVER] Creating IMSS_INFO \n");
+		DPRINT("[SERVER] Creating IMSS_INFO at metadata server. \n");
 		//Send the new IMSS metadata structure to the metadata server entity.
 		if (send_dynamic_stream(ucp_worker, client_ep, (char *) &my_imss, IMSS_INFO) == -1)
 			return -1;
-        
+
 		ep_flush(client_ep, ucp_worker);
 
 		for (int32_t i = 0; i < num_servers; i++)
 			free(my_imss.ips[i]);
 		free(my_imss.ips);
 
+		usleep(250);
 		ep_close(ucp_worker, client_ep, UCP_EP_CLOSE_MODE_FLUSH);
 	}
 

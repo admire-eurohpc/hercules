@@ -112,19 +112,19 @@ static int (*real_closedir)(DIR *dirp) = NULL;
 static int (*real_statvfs)(const char *restrict path, struct statvfs *restrict buf) = NULL;
 
 
-uint32_t inline MurmurOAAT32 ( const char * key)
+uint32_t MurmurOAAT32 ( const char * key)
 {
-  uint32_t h= 3323198485ul;
-  for (;*key;++key) {
-    h ^= *key;
-    h *= 0x5bd1e995;
-    h ^= h >> 15;
-  }
-  return h;
+	uint32_t h= 335ul;
+	for (;*key;++key) {
+		h ^= *key;
+		h *= 0x5bd1e995;
+		h ^= h >> 15;
+	}
+	return h;
 }
 
 
-void *
+	void *
 prefetch_function (void * th_argv)
 {
 	for (;;) {
@@ -183,7 +183,7 @@ char * convert_path(const char * name, char * replace){
 
 
 __attribute__((constructor))
-void
+	void
 imss_posix_init(void)
 {
 	if (IMSS_DEBUG) fprintf(stderr,"IMSS2 client starting\n");
@@ -243,7 +243,7 @@ imss_posix_init(void)
 		deployment = atoi(getenv("IMSS_DEPLOYMENT"));
 	}
 
-    if (IMSS_DEBUG) {
+	if (IMSS_DEBUG) {
 		fprintf(stderr," -- IMSS_MOUNT_POINT: %s\n", MOUNT_POINT);
 		fprintf(stderr," -- IMSS_HOSTFILE: %s\n", IMSS_HOSTFILE);
 		fprintf(stderr," -- IMSS_N_SERVERS: %d\n", N_SERVERS );
@@ -256,7 +256,7 @@ imss_posix_init(void)
 		fprintf(stderr," -- IMSS_STORAGE_SIZE: %ld\n",  STORAGE_SIZE);
 		fprintf(stderr," -- IMSS_METADATA_FILE: %s\n",  METADATA_FILE);
 		fprintf(stderr," -- IMSS_DEPLOYMENT: %d\n",  deployment);
-    }
+	}
 
 	IMSS_DATA_BSIZE = IMSS_BLKSIZE*KB;
 	//Hercules init -- Attached deploy
@@ -268,15 +268,15 @@ imss_posix_init(void)
 		}
 	}
 
-    // Getting a mostly unique id for the distributed deployment.
-    char hostname[512];
-    int ret = gethostname(&hostname[0], 512);
-    if (ret == -1) {
-        perror("gethostname");
-        exit(EXIT_FAILURE);
-    }
+	// Getting a mostly unique id for the distributed deployment.
+	char hostname[512];
+	int ret = gethostname(&hostname[0], 512);
+	if (ret == -1) {
+		perror("gethostname");
+		exit(EXIT_FAILURE);
+	}
 	sprintf(hostname, "%s:%d", hostname, getpid());
-    
+
 	//Metadata server
 	if (stat_init(META_HOSTFILE, METADATA_PORT, N_META_SERVERS,  MurmurOAAT32(hostname)  ) == -1){
 		//In case of error notify and exit
@@ -310,7 +310,7 @@ imss_posix_init(void)
 		}
 	}
 
-    init = 1;
+	init = 1;
 }
 
 void __attribute__((destructor)) run_me_last() {
@@ -323,20 +323,19 @@ void __attribute__((destructor)) run_me_last() {
 void check_ld_preload(void){
 
 	if(LD_PRELOAD==0){
-		printf("\nActivating... ld_preload=%d\n\n",LD_PRELOAD);
+		DPRINT("\nActivating... ld_preload=%d\n\n",LD_PRELOAD);
 		LD_PRELOAD=1;
 		imss_posix_init();
 	}
 }
 
-int
+	int
 close(int fd)
 {
 	int ret = 0;   
 	real_close = dlsym(RTLD_NEXT,"close");
 	if (!init) { 
-      if (IMSS_DEBUG)  fprintf(stderr, "WARNING: IMSS not initialized yet. Running regular 'close'.\n");
-      return real_close(fd);
+		return real_close(fd);
 	}
 	map_fd_search_by_val_close(map_fd, fd);  // MIRAR
 	ret = real_close(fd);  
@@ -353,11 +352,10 @@ int __lxstat(int fd, const char *pathname, struct stat *buf)
 	real__lxstat = dlsym(RTLD_NEXT, "__lxstat");
 
 	if (!init) {
-        if (IMSS_DEBUG)  fprintf(stderr, "WARNING: IMSS not initialized yet. Running regular '__lxstat'.\n");
 		return real__lxstat(fd,pathname, buf);
 	}
 	if(! strncmp(pathname, MOUNT_POINT, strlen(MOUNT_POINT)) || ! strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT))) {
-		//printf("__lxstat WORKED!\n");
+		if (IMSS_DEBUG)  fprintf(stderr, "[POSIX]. Calling '__lxstat'.\n");
 		char * new_path; 
 		new_path = convert_path(pathname, MOUNT_POINT);
 		//int exist = map_fd_search(map_fd, new_path, &ret, &p);
@@ -375,14 +373,13 @@ int __xstat(int fd, const char *pathname, struct stat *buf)
 	unsigned long p = 0;
 	char * workdir = getenv("PWD");
 	real_xstat = dlsym(RTLD_NEXT, "__xstat");
-	
+
 	if (!init) {
-        if (IMSS_DEBUG)  fprintf(stderr, "WARNING: IMSS not initialized yet. Running regular '__xstat'.\n");
-        return real_xstat(fd,pathname, buf);
-    }
+		return real_xstat(fd,pathname, buf);
+	}
 
 	if(! strncmp(pathname, MOUNT_POINT, strlen(MOUNT_POINT)) || ! strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT))) {
-		//printf("__xstat WORKED!\n");
+		if (IMSS_DEBUG)  fprintf(stderr, "[POSIX]. Calling '__xstat'.\n");
 		char * new_path; 
 		new_path = convert_path(pathname, MOUNT_POINT);
 		// int exist = map_fd_search(map_fd, new_path, &ret, &p);
@@ -399,13 +396,12 @@ int stat(const char *pathname, struct stat *buf){
 	char * workdir = getenv("PWD");
 	real_stat = dlsym(RTLD_NEXT, "stat");
 
-    if (!init) {
-        if (IMSS_DEBUG)  fprintf(stderr, "WARNING: IMSS not initialized yet. Running regular 'stat'.\n");
-        return real_stat(pathname, buf);
-    }
+	if (!init) {
+		return real_stat(pathname, buf);
+	}
 
 	if(! strncmp(pathname, MOUNT_POINT, strlen(MOUNT_POINT)) || ! strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT))) {
-		//printf("stat WORKED!\n");
+		if (IMSS_DEBUG)  fprintf(stderr, "[POSIX]. Calling 'stat'.\n");
 		char * new_path; 
 		new_path = convert_path(pathname, MOUNT_POINT);
 		//int exist = map_fd_search(map_fd, new_path, &ret, &p);
@@ -418,15 +414,16 @@ int stat(const char *pathname, struct stat *buf){
 }
 
 int statvfs(const char *restrict path, struct statvfs *restrict buf){
-    real_statvfs = dlsym(RTLD_NEXT,"statvfs");
-    char * workdir = getenv("PWD");
-    if(! strncmp(path, MOUNT_POINT, strlen(MOUNT_POINT)) || ! strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT))) {
-        buf->f_bsize = IMSS_BLKSIZE * KB;
-        buf->f_namemax = URI_;
+	real_statvfs = dlsym(RTLD_NEXT,"statvfs");
+	char * workdir = getenv("PWD");
+	if(! strncmp(path, MOUNT_POINT, strlen(MOUNT_POINT)) || ! strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT))) {
+		if (IMSS_DEBUG)  fprintf(stderr, "[POSIX]. Calling 'statvfs'.\n");
+		buf->f_bsize = IMSS_BLKSIZE * KB;
+		buf->f_namemax = URI_;
 		return 0;
-    }else{
-        return real_statvfs(path, buf);
-    }
+	}else{
+		return real_statvfs(path, buf);
+	}
 }
 
 int __open_2(const char *pathname, int flags, ...){
@@ -437,11 +434,10 @@ int __open_2(const char *pathname, int flags, ...){
 	va_list valist;
 	va_start(valist, flags);
 
-    if (!init) {
-        if (IMSS_DEBUG)  fprintf(stderr, "WARNING: IMSS not initialized yet. Running regular '__open_2'.\n");
-        return real__open_2(pathname, flags);
-    }
-  
+	if (!init) {
+		return real__open_2(pathname, flags);
+	}
+
 	mode_t mode;
 	for (int i = 0; i < 1; i++) {
 		mode= va_arg(valist, mode_t);
@@ -451,6 +447,7 @@ int __open_2(const char *pathname, int flags, ...){
 	char * workdir = getenv("PWD");
 
 	if(! strncmp(pathname, MOUNT_POINT, strlen(MOUNT_POINT)) || ! strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT))) {
+		if (IMSS_DEBUG)  fprintf(stderr, "[POSIX]. Calling '__open_2'.\n");
 
 		char * new_path; 
 		new_path = convert_path(pathname, MOUNT_POINT);
@@ -485,10 +482,9 @@ int open64(const char *pathname, int flags, ...)
 	va_list valist;
 	va_start(valist, flags);
 
-    if (!init) {
-        if (IMSS_DEBUG)  fprintf(stderr, "WARNING: IMSS not initialized yet. Running regular 'open64'.\n");
-        return real_open64(pathname, flags);
-    }
+	if (!init) {
+		return real_open64(pathname, flags);
+	}
 
 	mode_t mode;
 	for (int i = 0; i < 1; i++) {
@@ -499,6 +495,7 @@ int open64(const char *pathname, int flags, ...)
 	char * workdir = getenv("PWD");
 
 	if(! strncmp(pathname, MOUNT_POINT, strlen(MOUNT_POINT)) || ! strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT))) {
+		if (IMSS_DEBUG)  fprintf(stderr, "[POSIX]. Calling 'open64'.\n");
 
 		char * new_path; 
 		new_path = convert_path(pathname, MOUNT_POINT);
@@ -529,10 +526,9 @@ int open(const char *pathname, int flags, ...)
 	va_list valist;
 	va_start(valist, flags);
 
-    if (!init) {
-        if (IMSS_DEBUG)  fprintf(stderr, "WARNING: IMSS not initialized yet. Running regular 'open'.\n");
-        return real_open(pathname, flags);
-    }
+	if (!init) {
+		return real_open(pathname, flags);
+	}
 
 	mode_t mode;
 	for (int i = 0; i < 1; i++) {
@@ -543,6 +539,7 @@ int open(const char *pathname, int flags, ...)
 	char * workdir = getenv("PWD");
 
 	if(! strncmp(pathname, MOUNT_POINT, strlen(MOUNT_POINT)) || ! strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT))) {
+		if (IMSS_DEBUG)  fprintf(stderr, "[POSIX]. Calling 'open'.\n");
 		char * new_path; 
 		new_path = convert_path(pathname, MOUNT_POINT);
 
@@ -568,13 +565,13 @@ int mkdir(const char *path, mode_t mode){
 	real_mkdir = dlsym(RTLD_NEXT,"mkdir");
 	size_t ret;
 
-    if (!init) {
-        if (IMSS_DEBUG)  fprintf(stderr, "WARNING: IMSS not initialized yet. Running regular 'mkdir'.\n");
-        return real_mkdir(path, mode);
-    }
+	if (!init) {
+		return real_mkdir(path, mode);
+	}
 
 	char * workdir = getenv("PWD");
 	if(!strncmp(path, MOUNT_POINT, strlen(MOUNT_POINT)) || ! strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT))) {
+		if (IMSS_DEBUG)  fprintf(stderr, "[POSIX]. Calling 'mkdir'.\n");
 		char * new_path; 
 		new_path = convert_path(path, MOUNT_POINT);
 		ret = imss_mkdir(new_path, mode);
@@ -589,15 +586,15 @@ off_t lseek(int fd, off_t offset, int whence){
 	real_lseek = dlsym(RTLD_NEXT,"lseek");
 	long ret;
 	unsigned long p = 0;
-	
-    if (!init) {
-        if (IMSS_DEBUG) fprintf(stderr, "WARNING: IMSS not initialized yet. Running regular 'lseek'.\n");
-        return real_lseek(fd, offset, whence);
-    }
+
+	if (!init) {
+		return real_lseek(fd, offset, whence);
+	}
 
 	char * path = (char *) calloc(256, sizeof(char));
 
 	if(map_fd_search_by_val(map_fd, path, fd) == 1) {
+		if (IMSS_DEBUG)  fprintf(stderr, "[POSIX]. Calling 'lseek'.\n");
 
 		if(whence == SEEK_SET){
 			//printf("SEEK_SET=%ld\n",offset);
@@ -628,14 +625,14 @@ ssize_t write(int fd, const void *buf, size_t size){
 	size_t ret;
 	unsigned long p = 0;
 
-    if (!init) {
-        if (IMSS_DEBUG) fprintf(stderr, "WARNING: IMSS not initialized yet. Running regular 'write'.\n");
-        return real_write(fd, buf, size);
-    }
+	if (!init) {
+		return real_write(fd, buf, size);
+	}
 
 	char * path = (char *) calloc(256, sizeof(char));
 
 	if(map_fd_search_by_val(map_fd, path, fd) == 1) {
+		if (IMSS_DEBUG)  fprintf(stderr, "[POSIX]. Calling 'write'.\n");
 		struct stat ds_stat_n;
 		imss_getattr(path, &ds_stat_n);
 		map_fd_search(map_fd, path, &fd, &p);
@@ -643,7 +640,6 @@ ssize_t write(int fd, const void *buf, size_t size){
 		ret=imss_write(path,buf,size,p);
 		imss_release(path);
 	}else{
-		//printf("REAL write worked! fd=%d, size=%ld\n", fd, size); 
 		ret = real_write(fd, buf, size);
 	}
 	free(path);
@@ -656,18 +652,18 @@ ssize_t read(int fd, void *buf, size_t size){
 	size_t ret;
 	unsigned long p = 0;
 
-    if (!init) {
-        if (IMSS_DEBUG) fprintf(stderr, "WARNING: IMSS not initialized yet. Running regular 'read'.\n");
-        return real_read(fd, buf, size);
-    }
+	if (!init) {
+		return real_read(fd, buf, size);
+	}
 
 	char * path = (char *) calloc(256, sizeof(char));
 
 	if(map_fd_search_by_val(map_fd, path, fd) == 1) {
+		if (IMSS_DEBUG)  fprintf(stderr, "[POSIX]. Calling 'read'.\n");
 		//printf("CUSTOM read worked! path=%s fd=%d, size=%ld\n",path, fd, size);
 		map_fd_search(map_fd, path, &fd, &p);
 		ret = imss_read(path,buf,size,p);
-	
+
 	}else{
 		ret = real_read(fd, buf, size);
 	}
@@ -680,11 +676,11 @@ int unlink (const char *name){//unlink
 	int ret;
 	char * workdir = getenv("PWD");
 
-    if (!init) {
-        if (IMSS_DEBUG) fprintf(stderr, "WARNING: IMSS not initialized yet. Running regular 'unlink'.\n");
-        return real_unlink(name);
-    }
+	if (!init) {
+		return real_unlink(name);
+	}
 
+	if (IMSS_DEBUG)  fprintf(stderr, "[POSIX]. Calling 'unlink'.\n");
 	if(!strncmp(name, MOUNT_POINT, strlen(MOUNT_POINT)) || ! strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT))) {
 		char * new_path;
 
@@ -728,11 +724,11 @@ int rmdir (const char *path) {
 	int ret;
 	char * workdir = getenv("PWD");
 
-    if (!init) {
-        if (IMSS_DEBUG) fprintf(stderr, "WARNING: IMSS not initialized yet. Running regular 'rmdir'.\n");
-        return real_rmdir(path);
-    }
+	if (!init) {
+		return real_rmdir(path);
+	}
 
+	if (IMSS_DEBUG)  fprintf(stderr, "[POSIX]. Calling 'rmdir'.\n");
 	if(! strncmp(path, MOUNT_POINT, strlen(MOUNT_POINT)) || ! strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT))) {
 		char * new_path; 
 		new_path = convert_path(path, MOUNT_POINT);
@@ -751,16 +747,15 @@ int rmdir (const char *path) {
 }
 
 int unlinkat (int fd, const char *name, int flag){//rm & rm -r
-	//printf("unlinkat WORKED!\n");
 	real_unlinkat = dlsym(RTLD_NEXT,"unlinkat");
 	int ret = 0;
 	char * workdir = getenv("PWD");
 
-    if (!init) {
-        if (IMSS_DEBUG) fprintf(stderr, "WARNING: IMSS not initialized yet. Running regular 'unlinkat'.\n");
-        return real_unlinkat(fd,name,flag);
-    }
+	if (!init) {
+		return real_unlinkat(fd,name,flag);
+	}
 
+	if (IMSS_DEBUG)  fprintf(stderr, "[POSIX]. Calling 'unlinkat'.\n");
 	if(! strncmp(name, MOUNT_POINT, strlen(MOUNT_POINT)) || ! strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT))) {
 		char * new_path; 
 		new_path = convert_path(name, MOUNT_POINT);
@@ -793,16 +788,16 @@ int unlinkat (int fd, const char *name, int flag){//rm & rm -r
 }
 
 int rename (const char *old, const char *new){
-	
+
 	real_rename = dlsym(RTLD_NEXT,"rename");
 	int ret;
 	char * workdir = getenv("PWD");
 
-    if (!init) {
-        if (IMSS_DEBUG) fprintf(stderr, "WARNING: IMSS not initialized yet. Running regular 'rename'.\n");
-        return real_rename(old, new);
-    }
+	if (!init) {
+		return real_rename(old, new);
+	}
 
+	if (IMSS_DEBUG)  fprintf(stderr, "[POSIX]. Calling 'rename'.\n");
 	if((!strncmp(old, MOUNT_POINT, strlen(MOUNT_POINT)) && ! strncmp(new, MOUNT_POINT, strlen(MOUNT_POINT)) ) || ! strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT))) {
 		char * old_path; 
 		old_path = convert_path(old, MOUNT_POINT);
@@ -822,11 +817,11 @@ int fchmodat(int dirfd, const char *pathname, mode_t mode, int flags){
 	int ret;
 	char * workdir = getenv("PWD");
 
-    if (!init) {
-        if (IMSS_DEBUG) fprintf(stderr, "WARNING: IMSS not initialized yet. Running regular 'fchmodat'.\n");
-        return real_fchmodat(dirfd, pathname, mode, flags);
-    }
-   
+	if (!init) {
+		return real_fchmodat(dirfd, pathname, mode, flags);
+	}
+
+	if (IMSS_DEBUG)  fprintf(stderr, "[POSIX]. Calling 'fchmodat'.\n");
 	if(!strncmp(pathname, MOUNT_POINT, strlen(MOUNT_POINT)) || ! strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT))) {
 		char * new_path; 
 		new_path = convert_path(pathname, MOUNT_POINT);
@@ -844,11 +839,11 @@ int fchownat(int dirfd, const char *pathname, uid_t owner, gid_t group, int flag
 	int ret;
 	char * workdir = getenv("PWD");
 
-    if (!init) {
-        if (IMSS_DEBUG) fprintf(stderr, "WARNING: IMSS not initialized yet. Running regular 'fchownat'.\n");
-        return real_fchownat(dirfd, pathname, owner, group, flags);
-    }
+	if (!init) {
+		return real_fchownat(dirfd, pathname, owner, group, flags);
+	}
 
+	if (IMSS_DEBUG)  fprintf(stderr, "[POSIX]. Calling 'fchownat'.\n");
 	if(!strncmp(pathname, MOUNT_POINT, strlen(MOUNT_POINT)) || ! strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT))) {
 		char * new_path; 
 		new_path = convert_path(pathname, MOUNT_POINT);
@@ -871,11 +866,11 @@ DIR *opendir(const char *name)
 
 	char * workdir = getenv("PWD");
 
-    if (!init) {
-        if (IMSS_DEBUG) fprintf(stderr, "WARNING: IMSS not initialized yet. Running regular 'opendir'.\n");
-        return real_opendir(name);
-    }
+	if (!init) {
+		return real_opendir(name);
+	}
 
+	if (IMSS_DEBUG)  fprintf(stderr, "[POSIX]. Calling 'open'.\n");
 	if(! strncmp(name, MOUNT_POINT, strlen(MOUNT_POINT)) || ! strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT))) {
 		char * new_path; 
 		new_path = convert_path(name, MOUNT_POINT);
@@ -912,10 +907,10 @@ struct dirent *readdir(DIR *dirp)
 	size_t ret;
 
 	if (!init) {
-        if (IMSS_DEBUG) fprintf(stderr, "WARNING: IMSS not initialized yet. Running regular 'readdir'.\n");
-        return real_readdir(dirp);
-    }
+		return real_readdir(dirp);
+	}
 
+	if (IMSS_DEBUG)  fprintf(stderr, "[POSIX]. Calling 'readir'.\n");
 	struct dirent *entry = (struct dirent *) malloc(sizeof(struct dirent));
 	char *path = calloc(256, sizeof(char));	
 	if(map_fd_search_by_val(map_fd, path, dirfd(dirp)) == 1) {
@@ -994,11 +989,11 @@ struct dirent *readdir(DIR *dirp)
 int closedir(DIR *dirp){
 	real_closedir = dlsym(RTLD_NEXT, "closedir");
 
-    if (!init) {
-        if (IMSS_DEBUG) fprintf(stderr, "WARNING: IMSS not initialized yet. Running regular 'closedir'.\n");
-        return real_closedir(dirp);
-    }
+	if (!init) {
+		return real_closedir(dirp);
+	}
 
+	if (IMSS_DEBUG)  fprintf(stderr, "[POSIX]. Calling 'closedir'.\n");
 	map_fd_search_by_val_close(map_fd, dirfd(dirp)); 
 	//printf("closedir worked! fd=%d\n",dirfd(dirp));
 	int ret = real_closedir(dirp);
