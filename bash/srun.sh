@@ -55,7 +55,7 @@ sleep 2
 echo "# IMMS: Running IOR"
 tail -n +$((NUM_METADATA+NUM_DATA+1)) hostfile | head -n $NUM_CLIENT > client_hostfile
 mpiexec -n $NUM_CLIENT --ppn 1 -f ./client_hostfile \
-             -env IMMS_DEBUG true \
+             -env IMSS_DEBUG true \
              -env LD_PRELOAD $IMSS_PATH/tools/libimss_posix.so \
              -env IMSS_MOUNT_POINT /mnt/imss \
 			 -env IMSS_HOSTFILE $PWD/data_hostfile \

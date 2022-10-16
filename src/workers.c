@@ -10,6 +10,7 @@
 #include "directory.h"
 #include "records.hpp"
 #include <sys/time.h>
+#include <inttypes.h>
 
 #define GARBAGE_COLLECTOR_PERIOD 120
 
@@ -83,6 +84,7 @@ void * srv_worker (void * th_argv)
 		}
 
 		pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);			
+		DPRINT("[DATA WORKER] Created thread for new endpoint.\n");
 		if (pthread_create(&thread, &attr, srv_worker_thread, (void *) thread_args) == -1)
 		{
 			//Notify thread error deployment.
@@ -122,6 +124,7 @@ void * srv_worker_thread (void * th_argv)
 		char req[REQUEST_SIZE];
 		char mode[MODE_SIZE];
 
+        DPRINT ("[DATA WORKER] Waiting for new request.\n");
 		//Save the identity of the requesting client.
 		recv_stream(ucp_data_worker, arguments->server_ep, (char *) &client_id, sizeof(uint32_t ));
 
@@ -139,12 +142,12 @@ void * srv_worker_thread (void * th_argv)
 		//Save the request to be served.
 		recv_stream(ucp_data_worker, arguments->server_ep, req, REQUEST_SIZE);
 
-		DPRINT ("[DATA WORKER] Request - client_id '%lu', mode '%s', req '%s'\n",(unsigned long)client_id, mode, req)
+		DPRINT ("[DATA WORKER] Request - client_id '%" PRIu32 "', mode '%s', req '%s'\n",client_id, mode, req)
 			/*struct timeval start2, end2;
 			  long delta_us2;
 			  gettimeofday(&start2, NULL);*/
 
-			char number[16];
+	    char number[16];
 		sscanf(req, "%s", number);
 		int32_t number_length = (int32_t) strlen(number);
 
@@ -862,6 +865,7 @@ void * srv_worker_thread (void * th_argv)
 			char req[REQUEST_SIZE];
 			char mode[MODE_SIZE];
 
+            DPRINT ("[METADATA WORKER] Waiting for new request.\n");
 			//Save the identity of the requesting client.
 			recv_stream(ucp_data_worker, arguments->server_ep, (char *) &client_id, sizeof(uint32_t));
 
@@ -881,7 +885,7 @@ void * srv_worker_thread (void * th_argv)
 			recv_stream(ucp_data_worker, arguments->server_ep, req, REQUEST_SIZE);
 
 
-			DPRINT ("[METADATA WORKER] Request - client_id '%lu', mode '%s', req '%s'\n", (unsigned long)client_id, mode, req)
+			DPRINT ("[METADATA WORKER] Request - client_id '%" PRIu32 "', mode '%s', req '%s'\n", client_id, mode, req)
 				//Expeted incomming message format: "SIZE_IN_KB KEY"
 				int32_t req_size = strlen(req);
 
@@ -1220,8 +1224,7 @@ void * srv_worker_thread (void * th_argv)
 	}
 
 	//Server dispatcher thread method.
-	void *
-		srv_attached_dispatcher(void * th_argv)
+	void * srv_attached_dispatcher(void * th_argv)
 		{
 			//Cast from generic pointer type to p_argv struct type pointer.
 			p_argv * arguments = (p_argv *) th_argv;
@@ -1255,6 +1258,7 @@ void * srv_worker_thread (void * th_argv)
 			for (;;)
 			{
 				ucp_conn_request_h conn_req;
+				DPRINT("[DATA DISPATCHER] Waiting for connection requests.\n");
 
 				while (StsQueue.size(context.conn_request) == 0) {
 					ucp_worker_progress(arguments->ucp_worker);
@@ -1320,6 +1324,8 @@ void * srv_worker_thread (void * th_argv)
 						pthread_exit(NULL);
 					}
 
+
+				    DPRINT("[DATA DISPATCHER] Replied client %s.\n",response_);
 					continue;
 				}
 				//Check if someone is requesting identity resources.
@@ -1335,15 +1341,13 @@ void * srv_worker_thread (void * th_argv)
 					}
 				}
 				//context.conn_request = NULL;
-				ep_flush(server_ep, ucp_data_worker);
 				ep_close(ucp_data_worker, server_ep, UCP_EP_CLOSE_MODE_FLUSH);
 			}
 			pthread_exit(NULL);
 		}
 
 	//Metadata dispatcher thread method.
-	void *
-		dispatcher(void * th_argv)
+	void * dispatcher(void * th_argv)
 		{
 			ucx_server_ctx_t context;
 			ucp_worker_h     ucp_data_worker;
@@ -1377,6 +1381,7 @@ void * srv_worker_thread (void * th_argv)
 			{
 				ucp_ep_h server_ep;
 				ucp_conn_request_h conn_req;
+				DPRINT("[DISPATCHER] Waiting for connection requests.\n");
 
 				while (StsQueue.size(context.conn_request) == 0) {
 					ucp_worker_progress(arguments->ucp_worker);
@@ -1409,7 +1414,7 @@ void * srv_worker_thread (void * th_argv)
 					int32_t port_ = arguments->port + 1 + (client_id_ % THREAD_POOL);
 					//Wrap the previous info into the ZMQ message.
 
-					sprintf(response_, "%d%c%d", port_, '-', client_id_++);
+					sprintf(response_, "%d%c%" PRIu32 "", port_, '-', client_id_);
 
 
 					//Send communication specifications.
@@ -1418,6 +1423,7 @@ void * srv_worker_thread (void * th_argv)
 						perror("ERRIMSS_STATDISP_SENDBLOCK");
 						pthread_exit(NULL);
 					}
+				    DPRINT("[DISPATCHER] Replied client %s.\n",response_);
 				}
 				//Check if someone is requesting identity resources.
 				else if (*((int32_t *) req) == WHO)
@@ -1428,10 +1434,10 @@ void * srv_worker_thread (void * th_argv)
 						perror("ERRIMSS_WHOREQUEST");
 						pthread_exit(NULL);
 					}
+				    DPRINT("[DISPATCHER] Replied client %s.\n", arguments->my_uri);
 				}
 
 				/* Reinitialize the server's context to be used for the next client */
-				ep_flush(server_ep, ucp_data_worker);
 				ep_close(ucp_data_worker, server_ep, UCP_EP_CLOSE_MODE_FLUSH);
 			}
 

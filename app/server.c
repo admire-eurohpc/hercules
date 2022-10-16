@@ -274,7 +274,7 @@ int32_t main(int32_t argc, char **argv)
 		//Deploy all dispatcher + service threads.
 		if (!i)
 		{
-			DPRINT("[SERVER Creating dispatcher thread.\n");
+			DPRINT("[SERVER] Creating dispatcher thread.\n");
 			//Deploy a thread distributing incomming clients among all ports.
 			if (pthread_create(&threads[i], NULL, dispatcher, (void *) &arguments[i]) == -1)
 			{
@@ -295,7 +295,7 @@ int32_t main(int32_t argc, char **argv)
 			//IMSS server.
 			if (args.type == TYPE_DATA_SERVER)
 			{	
-				DPRINT("[SERVER Creating data thread.\n");
+				DPRINT("[SERVER] Creating data thread.\n");
 				if (pthread_create(&threads[i], NULL, srv_worker, (void *) &arguments[i]) == -1)
 				{
 					//Notify thread error deployment.
@@ -306,7 +306,7 @@ int32_t main(int32_t argc, char **argv)
 			//Metadata server.
 			else
 			{
-				DPRINT("[SERVER Creating metadata thread.\n");
+				DPRINT("[SERVER] Creating metadata thread.\n");
 				if (pthread_create(&threads[i], NULL, stat_worker, (void *) &arguments[i]) == -1)
 				{
 					//Notify thread error deployment.

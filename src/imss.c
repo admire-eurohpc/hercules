@@ -19,6 +19,7 @@
 #include <sys/time.h>
 #include <sys/utsname.h>
 #include <time.h>
+#include <inttypes.h>
 
 #include <ucp/api/ucp.h>
 
@@ -237,6 +238,8 @@ int32_t stat_init(char *   stat_hostfile,
 		IMSS_DEBUG = 1;
 	}
 
+    DPRINT("[IMSS] Calling stat_init.\n");
+
 	/* Initialize the UCX required objects */
 	ret = init_context(&ucp_context_client, &ucp_worker_client, CLIENT_SERVER_SEND_RECV_STREAM);
 	if (ret != 0) {
@@ -324,10 +327,10 @@ int32_t stat_init(char *   stat_hostfile,
 		stat_node[n_chars - 1] = '\0';
 		if (IMSS_DEBUG) {
 			printf("stat_client=%s\n",stat_node);
-			printf("i=%d, stat_node=%s, port=%d, rank=%d\n",i,stat_node, port, rank);
+			printf("i=%d, stat_node=%s, port=%d, rank=%" PRIu32 "\n",i,stat_node, port, rank);
 		}
 
-		DPRINT("[IMSS]: Contacting stat dispatcher at %s:%d\n", stat_node, port);
+		DPRINT("[IMSS] stat_int: Contacting stat dispatcher at %s:%d\n", stat_node, port);
 		status = start_client(ucp_worker_client, stat_node, port, &client_ep); // port, rank,
 		if (status != UCS_OK) {
 			fprintf(stderr, "failed to start client (%s)\n", ucs_status_string(status));
@@ -355,7 +358,6 @@ int32_t stat_init(char *   stat_hostfile,
 			return -1;
 		}
 
-		ep_flush(client_ep, ucp_worker_client);
 		char connection_info[RESPONSE_SIZE];
 		if (recv_stream(ucp_worker_client, client_ep, connection_info, RESPONSE_SIZE) < 0)
 		{
@@ -363,16 +365,16 @@ int32_t stat_init(char *   stat_hostfile,
 			return -1;
 		}
 
-		/* Close the endpoint to the server */
-		ep_close(ucp_worker_client, client_ep, UCP_EP_CLOSE_MODE_FLUSH);
-
 		//Port that the new client must connect to.
 		int32_t stat_port;
 		//Separator.
 		char sep_;
 
 		//Read the previous information from the message received.
-		sscanf(connection_info, "%d%c%d", &stat_port, &sep_, &stat_ids[i]);
+		sscanf(connection_info, "%d%c%" PRIu32 "", &stat_port, &sep_, &stat_ids[i]);
+
+        /* Close the endpoint to the server */
+        ep_close(ucp_worker_client, client_ep, UCP_EP_CLOSE_MODE_FLUSH);
 
 		// Create the connection to the metadata server dispatcher thread.
 		status = start_client(ucp_worker_client, stat_node, stat_port, stat_client + i);
@@ -380,7 +382,7 @@ int32_t stat_init(char *   stat_hostfile,
 			fprintf(stderr, "failed to start client (%s)\n", ucs_status_string(status));
 			return -1;
 		}
-		DPRINT("IMSS_STAT: Created endpoint with metadata server at %s:%d\n", stat_node, stat_port);
+		DPRINT("[IMSS] stat_init: Created endpoint with metadata server at %s:%d\n", stat_node, stat_port);
 	}
 	//Close the file.
 	if (fclose(stat_nodes) != 0)
@@ -489,7 +491,6 @@ uint32_t get_dir(char * 	 requested_uri,
 		return -1;
 	}
 
-	ep_flush(stat_client[m_srv], ucp_worker_client);
 	size_t uris_size = 0;
 	char msg[REQUEST_SIZE];
 	if (recv_stream(ucp_worker_client, stat_client[m_srv], msg, REQUEST_SIZE) < 0)
@@ -765,7 +766,7 @@ int32_t init_imss(char *   imss_uri,
 	}
 
 	//Send the new IMSS metadata structure to the metadata server entity.
-	printf ("[IMSS] Command:  %lu | %s | %s \n", (unsigned long)stat_ids[m_srv], mode2, key_plus_size);
+	printf ("[IMSS] Command:  %" PRIu32 " | %s | %s \n", stat_ids[m_srv], mode2, key_plus_size);
 	if (send_dynamic_stream(ucp_worker_client, stat_client[m_srv], (void *) &new_imss.info, IMSS_INFO) < 0)
 		return -1;
 
@@ -853,7 +854,6 @@ int32_t open_imss(char * imss_uri)
 			return -1;
 		}
 
-		ep_flush(new_imss.conns.eps_[i], ucp_worker_client);
 		//ZMQ message retrieving the connection information.
 		char connection_info[RESPONSE_SIZE];
 		if (recv_stream(ucp_worker_client, new_imss.conns.eps_[i], connection_info, RESPONSE_SIZE) < 0)
@@ -1016,8 +1016,6 @@ int32_t stat_imss(char *      imss_uri, imss_info * imss_info_)
 		fprintf(stderr, "ERRIMSS_IMSS_REQ\n");
 		return -1;
 	}
-
-	ep_flush(stat_client[m_srv], ucp_worker_client);
 
 	ret = recv_dynamic_stream(ucp_worker_client, stat_client[m_srv], (char *)imss_info_, IMSS_INFO);
 	if (ret < sizeof(imss_info))
@@ -1307,7 +1305,6 @@ int32_t release_dataset(int32_t dataset_id)
 			return -1;
 		}
 
-		ep_flush(stat_client[m_srv], ucp_worker_client);
 		//Format update message to be sent to the metadata server.
 
 		uint64_t blocks_written_size = *(release_dataset.num_blocks_written) * sizeof(uint32_t);
@@ -1395,8 +1392,6 @@ int32_t delete_dataset(const char * 	    dataset_uri)
 		return -1;
 	}
 
-
-	ep_flush(stat_client[m_srv], ucp_worker_client);
 	char result[RESPONSE_SIZE];
 	if (recv_stream(ucp_worker_client, stat_client[m_srv], result, RESPONSE_SIZE) < 0)
 	{
@@ -1467,7 +1462,6 @@ int32_t  rename_dataset_metadata_dir_dir(char * old_dir, char * rdir_dest){
 		return -1;
 	}
 
-	ep_flush(stat_client[m_srv], ucp_worker_client);
 	char result[RESPONSE_SIZE];
 	if (recv_stream(ucp_worker_client, stat_client[m_srv], result, RESPONSE_SIZE) < 0)
 	{
@@ -1522,8 +1516,6 @@ rename_dataset_metadata(char * old_dataset_uri, char * new_dataset_uri){
 		return -1;
 	}
 
-	ep_flush(stat_client[m_srv], ucp_worker_client);
-
 	char result[RESPONSE_SIZE];
 	if (recv_stream(ucp_worker_client, stat_client[m_srv], result, RESPONSE_SIZE) < 0)
 	{
@@ -1574,7 +1566,6 @@ int32_t stat_dataset(const char * 	    dataset_uri,
 		return -1;
 	}
 
-	ep_flush(stat_client[m_srv], ucp_worker_client);
 	//Receive the associated structure.
 	ret = recv_dynamic_stream(ucp_worker_client, stat_client[m_srv], dataset_info_, DATASET_INFO);
 	if (ret < sizeof(dataset_info))
@@ -1699,7 +1690,6 @@ int32_t rename_dataset_srv_worker_dir_dir(char * old_dir, char * rdir_dest,
 			return -1;
 		}	
 
-		ep_flush(curr_imss.conns.eps_[i], ucp_worker_client);
 		char result[RESPONSE_SIZE];
 		if (recv_stream(ucp_worker_client, curr_imss.conns.eps_[i], result, RESPONSE_SIZE) < 0)
 		{
@@ -1778,7 +1768,6 @@ int32_t rename_dataset_srv_worker(char * old_dataset_uri, char * new_dataset_uri
 			return -1;
 		}	
 
-		ep_flush(curr_imss.conns.eps_[repl_servers[i]], ucp_worker_client);
 		char result[RESPONSE_SIZE];
 		if (recv_stream(ucp_worker_client, curr_imss.conns.eps_[repl_servers[i]], result, RESPONSE_SIZE) < 0)
 		{
@@ -2077,7 +2066,7 @@ void * split_readv(void * th_argv)
 		//			perror("ERRIMSS_GETDATA_REQ");
 		//		}
 
-		DPRINT("[IMSS] Request split_readv: client_id '%lu', mode '%s', key '%s', request '%s'\n", (unsigned long)curr_imss.conns.id[repl_servers[i]], mode, key, arguments->msg);
+		DPRINT("[IMSS] Request split_readv: client_id '%" PRIu32 "', mode '%s', key '%s', request '%s'\n", curr_imss.conns.id[repl_servers[i]], mode, key, arguments->msg);
 
 		struct timeval start, end;
 		/*long delta_us;
@@ -2257,7 +2246,7 @@ int32_t get_data(int32_t 	 dataset_id,
 			delta_us = (long) (end.tv_usec - start.tv_usec);
 			printf("\n[CLIENT] [GET DATA] send petition delta_us=%6.3f\n",(delta_us/1000.0F));*/
 
-		DPRINT("[IMSS] Request get_data: client_id '%lu', mode '%s', key '%s'\n", (unsigned long)curr_imss.conns.id[repl_servers[i]], mode, key);
+		DPRINT("[IMSS] Request get_data: client_id '%" PRIu32 "', mode '%s', key '%s'\n", curr_imss.conns.id[repl_servers[i]], mode, key);
 		clock_t t;
 		t = clock();
 
@@ -2358,7 +2347,7 @@ int32_t get_ndata(int32_t 	 dataset_id,
 			return -1;
 		}
 
-		DPRINT("[IMSS] Request get_ndata: client_id '%lu', mode '%s', key '%s'\n", (unsigned long)curr_imss.conns.id[repl_servers[i]], mode, key);
+		DPRINT("[IMSS] Request get_ndata: client_id '%" PRIu32 "', mode '%s', key '%s'\n", curr_imss.conns.id[repl_servers[i]], mode, key);
 
 		//Receive data related to the previous read request directly into the buffer.
 		if (recv_stream(ucp_worker_client, curr_imss.conns.eps_[repl_servers[i]], buffer, curr_dataset.data_entity_size) < 0)
@@ -2469,7 +2458,7 @@ int32_t set_data(int32_t 	 dataset_id,
 			printf("[CLIENT] [SWRITE SEND_DATA] delta_us=%6.3f\n",(delta_us/1000.0F));*/
 
 
-		DPRINT("[IMSS] Request set_data: client_id '%lu', mode '%s', key '%s'\n", (unsigned long)curr_imss.conns.id[n_server_], mode, key);
+		DPRINT("[IMSS] Request set_data: client_id '%" PRIu32 "', mode '%s', key '%s'\n", curr_imss.conns.id[n_server_], mode, key);
 
 		t = clock() - t;
 		double time_taken = ((double)t)/CLOCKS_PER_SEC; // in seconds
@@ -2537,7 +2526,7 @@ set_ndata(int32_t 	 dataset_id,
 			return -1;
 		}
 
-		DPRINT("[IMSS] Request set_ndata: client_id '%lu', mode '%s', key '%s'\n", (unsigned long)curr_imss.conns.id[n_server_], mode, key);
+		DPRINT("[IMSS] Request set_ndata: client_id '%" PRIu32 "', mode '%s', key '%s'\n", curr_imss.conns.id[n_server_], mode, key);
 	}
 
 	return 0;

@@ -31,6 +31,7 @@ int init_worker(ucp_context_h ucp_context, ucp_worker_h *ucp_worker)
 
 	worker_params.field_mask  = UCP_WORKER_PARAM_FIELD_THREAD_MODE;
 	worker_params.thread_mode = UCS_THREAD_MODE_MULTI;
+	//worker_params.thread_mode = UCS_THREAD_MODE_SINGLE  ;
 
 	status = ucp_worker_create(ucp_context, &worker_params, ucp_worker);
 	if (status != UCS_OK) {
@@ -368,6 +369,7 @@ void common_cb(void *user_data, const char *type_str)
 		return;
 	}
 
+    DPRINT("[COMM] received data.\n");
 	ctx           = (test_req *)user_data;
 	ctx->complete = 1;
 }
@@ -440,9 +442,9 @@ void server_conn_handle_cb(ucp_conn_request_h conn_request, void *arg)
 	attr.field_mask = UCP_CONN_REQUEST_ATTR_FIELD_CLIENT_ADDR;
 	status = ucp_conn_request_query(conn_request, &attr);
 	if (status == UCS_OK) {
-		/*printf("Server received a connection request from client at address %s:%s\n",
+		DPRINT("[COMM] Server received a connection request from client at address %s:%s\n",
 		  sockaddr_get_ip_str(&attr.client_address, ip_str, sizeof(ip_str)),
-		  sockaddr_get_port_str(&attr.client_address, port_str, sizeof(port_str)));*/
+		  sockaddr_get_port_str(&attr.client_address, port_str, sizeof(port_str)));
 	} else if (status != UCS_ERR_UNSUPPORTED) {
 		fprintf(stderr, "failed to query the connection request (%s)\n",
 				ucs_status_string(status));
@@ -776,6 +778,7 @@ ucs_status_t ep_flush(ucp_ep_h ep, ucp_worker_h worker)
 	StsHeader *req_queue;
 	ucx_async_t *async;
 
+	DPRINT( "[COMM] Flushed endpoint started.\n");
 	request = ucp_ep_flush_nb(ep, 0, empty_function);
 	if (request == NULL) {
 		return UCS_OK;
@@ -783,12 +786,14 @@ ucs_status_t ep_flush(ucp_ep_h ep, ucp_worker_h worker)
 		return UCS_PTR_STATUS(request);
 	} else {
 		ucs_status_t status;
+	    DPRINT( "[COMM] Flush waiting for completion.\n");
 		do {
 			ucp_worker_progress(worker);
 			status = ucp_request_check_status(request);
 		} while (status == UCS_INPROGRESS);
 		ucp_request_free(request);
+	    DPRINT( "[COMM] Flushed endpoint.\n");
 		return status;
 	}
-	DPRINT( "[COMM] Flushed endpoint\n");
+	DPRINT( "[COMM] Flushed endpoint.\n");
 }
