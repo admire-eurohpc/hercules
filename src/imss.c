@@ -1106,11 +1106,21 @@ int32_t create_dataset(char *  dataset_uri,
 	dataset_info new_dataset;
 
 	//Dataset metadata request.
-	if (stat_dataset(dataset_uri, &new_dataset))
+	/*if (stat_dataset(dataset_uri, &new_dataset))
 	{
 		DPRINT("[IMSS] create_dataset: ERRIMSS_CREATEDATASET_ALREADYEXISTS\n");
 		return -EEXIST;
-	}
+	}*/
+
+	stat_dataset(dataset_uri, &new_dataset);
+/*
+	int fd;
+	struct stat stats;
+	char * aux;
+
+	fd_lookup(dataset_uri, &fd, &stats, &aux);
+
+	stats.st_size = 0;*/
 
 	//Save the associated metadata of the current dataset.
 	strcpy(new_dataset.uri_, 	dataset_uri);

@@ -314,6 +314,7 @@ int imss_open(const char *path, uint64_t *fh)
 	struct stat stats;
 	char * aux;
 	fd_lookup(imss_path, &fd, &stats, &aux);
+	DPRINT("imss_open=%s, stats_fd=%ld\n",imss_path, stats.st_size);
 	if (fd >= 0) {
 		file_desc = fd;
 	}else if (fd == -2)
@@ -373,15 +374,17 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 	struct stat stats;
 	char * aux;
 
-/*	struct timeval start, end;
-	long delta_us;
-	gettimeofday(&start, NULL);*/
 	fd_lookup(rpath, &fd, &stats, &aux);
-	/*gettimeofday(&end, NULL);
-	delta_us = (long) (end.tv_usec - start.tv_usec);
-	printf("[CLIENT] [SREAD LOOKUP] delta_us=%6.3f\n",(delta_us/1000.0F));*/
+
 
 	//Check if offset is bigger than filled, return 0 because is EOF case
+	printf("[imss_sread]path=%s stat.size=%ld\n",path,stats.st_size);
+	
+	/*Special case where is demand to read more that there is*/
+	if((stats.st_size - start_offset) < size){
+		end_blk = ceil((double)(stats.st_size - start_offset) / IMSS_DATA_BSIZE);
+	}
+
 	if(start_offset >= stats.st_size){ 
 		return 0; 
 	}	
@@ -400,6 +403,7 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 	gettimeofday(&start1, NULL);*/
 
 	while(curr_blk <= end_blk){
+		printf("curr_block=%ld, end_block=%ld\n",curr_blk,end_blk);
 		pthread_mutex_lock(&lock);
 		
 		//int err = get_data(ds, curr_blk, (char*)aux);
@@ -421,6 +425,7 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 						to_read = IMSS_DATA_BSIZE - start_offset;
 					}																			    
 				}
+				printf("[imss_sread] first_block to_read=%ld\n",to_read);
 				memcpy(buf, aux + start_offset, to_read);
 				byte_count += to_read;
 				++first;
@@ -461,6 +466,7 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 	//printf("IMSS SREAD RETURN byte_count=%ld\n",byte_count);
 	return byte_count;
 }
+
 
 int imss_vread_prefetch(const char *path, char *buf, size_t size, off_t offset)
 {
@@ -1020,6 +1026,7 @@ int imss_write(const char *path, const char *buf, size_t size, off_t off)
 	int fd;
 	struct stat stats;
 	fd_lookup(rpath, &fd, &stats, &aux);
+	printf("[imss_write] rpath=%s stats.st_size=%ld\n",rpath,stats.st_size);
 	if (fd >= 0) 
 		ds = fd;
 	else if (fd == -2)
@@ -1622,7 +1629,20 @@ int imss_create(const char * path, mode_t mode, uint64_t * fh)
 
 
 	pthread_mutex_lock(&lock_file);
+	
+	//Need to update if already exist
+	map_erase(map,rpath);
+	
+	printf("[imss_create] path=%s ds_stat=%ld\n",rpath,ds_stat.st_size);
 	map_put(map, rpath, *fh, ds_stat, buff);
+	/*
+	int fd;
+	struct stat stats2;
+	char * buff2;
+	int found = map_search(map, path, &fd , &stats2, &buff2);
+	printf("[imss_create] after put path=%s ds_stat=%ld\n",rpath,stats2.st_size);*/
+
+	
 
 	if (PREFETCH !=0) {
         char * buff = (char *) malloc(PREFETCH *IMSS_BLKSIZE * KB);
@@ -1630,6 +1650,7 @@ int imss_create(const char * path, mode_t mode, uint64_t * fh)
 	}
 	pthread_mutex_unlock(&lock_file);
 	free(rpath);
+	DPRINT("imss_create 44444\n");
 	return 0; 
 
 }

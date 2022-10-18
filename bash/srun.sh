@@ -3,7 +3,7 @@
 #SBATCH --time=00:05:00               # Time limit hrs:min:sec
 #SBATCH --output=imss_%j.log   # Standard output and error log
 #SBATCH --exclusive
-
+#SBATCH --exclude=compute-8-1
 #SETUP
 
 NUM_METADATA=$1
@@ -13,7 +13,7 @@ BLOCK_SIZE=$4
 META_PORT=$5
 DATA_PORT=$6
 
-IMSS_PATH=$HOME/imss/build
+IMSS_PATH=$HOME/imss_parallel/imss/build
 IOR_PATH=/home/software/io500/bin
 
 module unload mpi
@@ -71,4 +71,5 @@ mpiexec -l -n $NUM_CLIENT --ppn 1 -f ./client_hostfile \
 			 -env IMSS_STORAGE_SIZE 8 \
 			 -env IMSS_METADATA_FILE $PWD/metadata \
 			 -env IMSS_DEPLOYMENT 2 \
-			 $IOR_PATH/ior -o /mnt/imss/data.out -t 100m -b 100m -s 1
+			 /home/hcristobal/imss_parallel/imss/bash/test_simple /mnt/imss/data.out
+			 #$IOR_PATH/ior -o /mnt/imss/data.out -t 100m -b 100m -s 1
