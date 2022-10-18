@@ -159,8 +159,7 @@ Get_fd (int32_t * pos,
 }
 
 //Check the existance within the session of the IMSS that the dataset is to be created in.
-	int32_t
-imss_check(char * dataset_uri)
+int32_t imss_check(char * dataset_uri)
 {
 	imss imss_;
 	//Traverse the whole set of IMSS structures in order to find the one.
@@ -176,7 +175,7 @@ imss_check(char * dataset_uri)
 }
 
 //Method searching for a certain IMSS in the vector.
-	int32_t find_imss(char * imss_uri, imss * imss_)
+int32_t find_imss(char * imss_uri, imss * imss_)
 {
 	//Search for a certain IMSS within the vector.
 	for (int32_t i = 0; i < imssd->len; i++)
@@ -557,10 +556,19 @@ int32_t init_imss(char *   imss_uri,
 {
 	int ret = 0;
 	imss_info aux_imss;
+    ucp_config_t *config;
+	ucs_status_t status;
 
 	if (getenv("IMSS_DEBUG") != NULL) {
 		IMSS_DEBUG = 1;
 	}
+
+    if (IMSS_DEBUG) {
+        status = ucp_config_read(NULL, NULL, &config);
+		ucp_config_print(config, stderr, NULL, UCS_CONFIG_PRINT_CONFIG);
+        ucp_config_release(config);
+    }
+
 
 	//Check if the new IMSS uri has been already assigned.
 	int32_t existing_imss = stat_imss(imss_uri, &aux_imss);
@@ -782,6 +790,19 @@ int32_t open_imss(char * imss_uri)
 {
 	//New IMSS structure storing the entity to be created.
 	imss new_imss;
+
+    ucp_config_t *config;
+    ucs_status_t status;
+
+    if (getenv("IMSS_DEBUG") != NULL) {
+        IMSS_DEBUG = 1;
+    }
+
+    if (IMSS_DEBUG) {
+        status = ucp_config_read(NULL, NULL, &config);
+        ucp_config_print(config, stderr, NULL, UCS_CONFIG_PRINT_CONFIG);
+        ucp_config_release(config);
+    }
 
 	int32_t not_initialized = 0;
 
@@ -1053,6 +1074,10 @@ int32_t create_dataset(char *  dataset_uri,
 		int32_t data_elem_size,
 		int32_t repl_factor)
 {	
+	int err = 0;
+
+	DPRINT("[IMSS] dataset_create: starting.\n");
+
 	curr_imss = g_array_index(imssd, imss, curr_dataset.imss_d);
 
 	if ((dataset_uri == NULL) || (policy == NULL) || !num_data_elem || !data_elem_size)
@@ -1070,7 +1095,7 @@ int32_t create_dataset(char *  dataset_uri,
 	//Check if the IMSS storing the dataset exists within the clients session.
 	if ((associated_imss_indx = imss_check(dataset_uri)) == -1)
 	{
-		printf("1\n");
+		DPRINT("[IMSS] create_dataset: ERRIMSS_OPENDATA_IMSSNOTFOUND\n");
 		fprintf(stderr, "ERRIMSS_OPENDATA_IMSSNOTFOUND\n");
 		return -ENOENT;
 	}
@@ -1083,21 +1108,20 @@ int32_t create_dataset(char *  dataset_uri,
 	//Dataset metadata request.
 	if (stat_dataset(dataset_uri, &new_dataset))
 	{
-		//fprintf(stderr, "ERRIMSS_CREATEDATASET_ALREADYEXISTS\n");
+		DPRINT("[IMSS] create_dataset: ERRIMSS_CREATEDATASET_ALREADYEXISTS\n");
 		return -EEXIST;
 	}
 
 	//Save the associated metadata of the current dataset.
 	strcpy(new_dataset.uri_, 	dataset_uri);
 	strcpy(new_dataset.policy, 	policy);
-	new_dataset.num_data_elem 	= num_data_elem;
-	new_dataset.data_entity_size 	= data_elem_size*1024;//dataset in kilobytes
-	new_dataset.imss_d 		= associated_imss_indx;
-	new_dataset.local_conn 		= associated_imss.conns.matching_server;
-	new_dataset.repl_factor		= repl_factor;
-	new_dataset.size 			= 0;
-
-	new_dataset.n_servers		= curr_imss.info.num_storages;
+	new_dataset.num_data_elem 	 = num_data_elem;
+	new_dataset.data_entity_size = data_elem_size*1024;//dataset in kilobytes
+	new_dataset.imss_d 		     = associated_imss_indx;
+	new_dataset.local_conn 		 = associated_imss.conns.matching_server;
+	new_dataset.repl_factor		 = repl_factor;
+	new_dataset.size 			 = 0;
+	new_dataset.n_servers		 = curr_imss.info.num_storages;
 
 	//*****NEXT LINE NEED FOR DIFERENT POLICIES TO WORK IN DISTRIBUTED*****//
 	strcpy(new_dataset.original_name, dataset_uri);
@@ -1142,6 +1166,7 @@ int32_t create_dataset(char *  dataset_uri,
 
 	char formated_uri[REQUEST_SIZE];
 	sprintf(formated_uri, "%lu %s", msg_size, new_dataset.uri_);
+	DPRINT("[IMSS] dataset_create: sending request %s.\n", formated_uri );
 	//Send the dataset URI associated to the dataset metadata structure to be sent.
 	if (send_stream(ucp_worker_client, stat_client[m_srv], formated_uri, REQUEST_SIZE) < 0) // SNDMORE
 	{
@@ -1149,11 +1174,14 @@ int32_t create_dataset(char *  dataset_uri,
 		return -1;
 	}
 
+	DPRINT("[IMSS] dataset_create: sending dataset_info\n");
 	//Send the new dataset metadata structure to the metadata server entity.
 	if (send_dynamic_stream(ucp_worker_client, stat_client[m_srv], (void *) &new_dataset, DATASET_INFO) < 0)
+	{
+		perror("ERRIMSS_DATASET_SNDDS");
 		return -1;
-
-	ep_flush(stat_client[m_srv], ucp_worker_client);
+    }
+	DPRINT("[IMSS] dataset_create: sent dataset_info\n");
 	//Initialize dataset fields monitoring the dataset itself if it is a LOCAL one.
 	if (!strcmp(new_dataset.policy, "LOCAL"))
 	{
@@ -1176,7 +1204,9 @@ int32_t create_dataset(char *  dataset_uri,
 	//	}
 
 	//Add the created struture into the underlying IMSSs.
-	return (GInsert (&datasetd_pos, &datasetd_max_size, (char *) &new_dataset, datasetd, free_datasetd));
+	err = GInsert (&datasetd_pos, &datasetd_max_size, (char *) &new_dataset, datasetd, free_datasetd);
+	DPRINT("[IMSS] dataset_create: GIsinser %d\n", err);
+	return err;
 }
 
 //Method creating the required resources in order to READ and WRITE an existing dataset.
@@ -1527,8 +1557,7 @@ rename_dataset_metadata(char * old_dataset_uri, char * new_dataset_uri){
 }
 
 //Method retrieving information related to a certain dataset.
-int32_t stat_dataset(const char * 	    dataset_uri,
-		dataset_info * dataset_info_)
+int32_t stat_dataset(const char * dataset_uri, dataset_info * dataset_info_)
 {
 	int ret = 0;
 	//Search for the requested dataset in the local vector.
@@ -1568,8 +1597,10 @@ int32_t stat_dataset(const char * 	    dataset_uri,
 
 	//Receive the associated structure.
 	ret = recv_dynamic_stream(ucp_worker_client, stat_client[m_srv], dataset_info_, DATASET_INFO);
-	if (ret < sizeof(dataset_info))
+	if (ret < sizeof(dataset_info)) {
+		DPRINT("[IMSS] stat_dataset: dataset does not exist.\n");
 		return 0;
+	}
 	return 1;
 }
 

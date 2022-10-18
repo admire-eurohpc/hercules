@@ -33,9 +33,11 @@ cat meta_hostfile
 
 readarray -t hosts < meta_hostfile
 
+export IMSS_DEBUG=true
+
 for ((i=0;i<$NUM_METADATA;i++));
 do
-   srun -N 1 -w ${hosts[$i]} --exclusive $IMSS_PATH/server m --server-id=$i --stat-logfile=./metadata --port=$META_PORT --bufsize=0 &
+   srun --export=ALL -N 1 -w ${hosts[$i]} --exclusive $IMSS_PATH/server m --server-id=$i --stat-logfile=./metadata --port=$META_PORT --bufsize=0 2> meta.log &
 done
 sleep 2
 
@@ -48,13 +50,13 @@ readarray -t hosts < data_hostfile
 
 for ((i=0;i<$NUM_DATA;i++));
 do
-   srun -N 1 -w ${hosts[$i]} --exclusive $IMSS_PATH/server d --server-id=$i --imss-uri=imss:// --port=$DATA_PORT --bufsize=0 --stat-host=$META_NODE --stat-port=$META_PORT --num-servers=$NUM_DATA --deploy-hostfile=./data_hostfile &
+   srun --export=ALL -N 1 -w ${hosts[$i]} --exclusive $IMSS_PATH/server d --server-id=$i --imss-uri=imss:// --port=$DATA_PORT --bufsize=0 --stat-host=$META_NODE --stat-port=$META_PORT --num-servers=$NUM_DATA --deploy-hostfile=./data_hostfile 2> data.log &
 done
 sleep 2
 
 echo "# IMMS: Running IOR"
 tail -n +$((NUM_METADATA+NUM_DATA+1)) hostfile | head -n $NUM_CLIENT > client_hostfile
-mpiexec -n $NUM_CLIENT --ppn 1 -f ./client_hostfile \
+mpiexec -l -n $NUM_CLIENT --ppn 1 -f ./client_hostfile \
              -env IMSS_DEBUG true \
              -env LD_PRELOAD $IMSS_PATH/tools/libimss_posix.so \
              -env IMSS_MOUNT_POINT /mnt/imss \

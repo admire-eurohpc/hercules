@@ -865,7 +865,7 @@ void * srv_worker_thread (void * th_argv)
 			char req[REQUEST_SIZE];
 			char mode[MODE_SIZE];
 
-            DPRINT ("[METADATA WORKER] Waiting for new request.\n");
+            DPRINT ("[STAT WORKER] Waiting for new request.\n");
 			//Save the identity of the requesting client.
 			recv_stream(ucp_data_worker, arguments->server_ep, (char *) &client_id, sizeof(uint32_t));
 
@@ -885,7 +885,7 @@ void * srv_worker_thread (void * th_argv)
 			recv_stream(ucp_data_worker, arguments->server_ep, req, REQUEST_SIZE);
 
 
-			DPRINT ("[METADATA WORKER] Request - client_id '%" PRIu32 "', mode '%s', req '%s'\n", client_id, mode, req)
+			DPRINT ("[STAT WORKER] Request - client_id '%" PRIu32 "', mode '%s', req '%s'\n", client_id, mode, req)
 				//Expeted incomming message format: "SIZE_IN_KB KEY"
 				int32_t req_size = strlen(req);
 
@@ -969,6 +969,7 @@ void * srv_worker_thread (void * th_argv)
 								}
 							case READ_OP:
 								{
+									pthread_mutex_lock(&mp);
 									//printf("STAT_WORKER READ_OP\n");
 									//Check if there was an associated block to the key.
 									int err = map->get(key, &address_, &block_size_rtvd);
@@ -983,6 +984,7 @@ void * srv_worker_thread (void * th_argv)
 												ep_flush(arguments->server_ep, ucp_data_worker);
 												ep_close(ucp_data_worker, arguments->server_ep, UCP_EP_CLOSE_MODE_FLUSH);
 											}
+											pthread_mutex_unlock(&mp);
 											pthread_exit(NULL);
 										}
 									}
@@ -1003,10 +1005,12 @@ void * srv_worker_thread (void * th_argv)
 												ep_flush(arguments->server_ep, ucp_data_worker);
 												ep_close(ucp_data_worker, arguments->server_ep, UCP_EP_CLOSE_MODE_FLUSH);
 											}
+											pthread_mutex_unlock(&mp);
 											pthread_exit(NULL);
 										}
 									}
 
+									pthread_mutex_unlock(&mp);
 									break;
 								}
 
@@ -1104,6 +1108,8 @@ void * srv_worker_thread (void * th_argv)
 					//More messages will arrive to the socket.
 				case SET_OP:
 					{
+						DPRINT("[STAT WORKER] Creating dataset %s.\n",key.c_str());
+						pthread_mutex_lock(&mp);
 						//If the record was not already stored, add the block.
 						if (!map->get(key, &address_, &block_size_rtvd))
 						{
@@ -1140,19 +1146,19 @@ void * srv_worker_thread (void * th_argv)
 							}
 							//Update the pointer.
 							arguments->pt += block_size_recv;
+							DPRINT("[STAT WORKER] Created dataset %s.\n",key.c_str());
 
 						}
 						//If was already stored:
 						else
 						{
 							//Follow a certain behavior if the received block was already stored.
+							DPRINT("[STAT WORKER] LOCAL DATASET_UPDATE %ld\n", block_size_recv);
 							switch (block_size_recv)
 							{
 								//Update where the blocks of a LOCAL dataset have been stored.
 								case LOCAL_DATASET_UPDATE:
 									{
-										DPRINT("[STAT_WORKER] LOCAL DATASET_UPDATE\n");
-
 										char data_ref[REQUEST_SIZE];
 										if (recv_stream(ucp_data_worker, arguments->server_ep, data_ref, REQUEST_SIZE) < 0) 
 										{
@@ -1183,6 +1189,7 @@ void * srv_worker_thread (void * th_argv)
 
 
 										//Answer the client with the update.
+										DPRINT("[STAT_WORKER] Updating existing dataset %s.\n", key.c_str());
 										char answer[] = "UPDATED!\0";
 										if (send_stream(ucp_data_worker, arguments->server_ep, answer, RESPONSE_SIZE) < 0)
 										{
@@ -1199,14 +1206,17 @@ void * srv_worker_thread (void * th_argv)
 
 								default:
 									{
+										DPRINT("[STAT_WORKER] Updating existing dataset %s.\n", key.c_str());
 										//Clear the corresponding memory region.
-										memset(address_, '\0', block_size_rtvd);
+										char * buffer = (char *) malloc(block_size_recv);
 										//Receive the block into the buffer.
-										recv_dynamic_stream(ucp_data_worker, arguments->server_ep, address_, BUFFER);
+										recv_dynamic_stream(ucp_data_worker, arguments->server_ep, buffer, BUFFER);
+										free(buffer);
 										break;
 									}
 							}
 						}
+						pthread_mutex_unlock(&mp);
 						break;
 					}
 				default:

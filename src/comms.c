@@ -154,6 +154,7 @@ ucs_status_t start_client(ucp_worker_h ucp_worker, const char *address_str, int 
 size_t send_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, const char * msg, size_t msg_length)
 {
 	//printf("[SEND_STREAM] msg=%s, size=%ld\n",msg,msg_length);
+    DPRINT("[COMM] Sending stream (%ld bytes).\n", msg_length);
 	ucp_request_param_t param;
 	test_req_t * request;
 	test_req_t ctx;
@@ -180,6 +181,8 @@ size_t send_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, const char * msg, size_
 size_t send_istream(ucp_worker_h ucp_worker, ucp_ep_h ep, const char * msg, size_t msg_length)
 {
 	//printf("[SEND_STREAM] msg=%s, size=%ld\n",msg,msg_length);
+
+    DPRINT("[COMM] Sending istream (%ld bytes).\n", msg_length);
 	ucp_request_param_t param;
 	ucx_async_t * pending = (ucx_async_t *) malloc(sizeof(ucx_async_t));
 	StsHeader *req_queue;
@@ -216,6 +219,7 @@ size_t send_istream(ucp_worker_h ucp_worker, ucp_ep_h ep, const char * msg, size
 
 size_t recv_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, char * msg, size_t msg_length)
 {
+    DPRINT("[COMM] Recv stream (%ld bytes).\n", msg_length);
 
 	ucp_request_param_t param;
 	test_req_t * request;
@@ -369,7 +373,6 @@ void common_cb(void *user_data, const char *type_str)
 		return;
 	}
 
-    DPRINT("[COMM] received data.\n");
 	ctx           = (test_req *)user_data;
 	ctx->complete = 1;
 }
@@ -583,7 +586,7 @@ int32_t send_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep,
 				char * offset_pt = info_buffer;
 
 				//Copy the actual structure to the buffer.
-				memcpy(offset_pt, struct_, sizeof(dataset_info));
+				memcpy(info_buffer, struct_, msg_size);
 
 				//Copy the remaining 'data_locations' field if the dataset is a LOCAL one.
 				if (!strcmp(struct_->policy, "LOCAL"))
@@ -591,7 +594,7 @@ int32_t send_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep,
 					offset_pt += sizeof(dataset_info);
 					memcpy(offset_pt, struct_->data_locations, (struct_->num_data_elem * sizeof(uint16_t)));
 				}
-
+                DPRINT( "[COMM] Prepared DATASET_INFO for sending.\n");
 				break;
 			}
 		case STRING:
@@ -682,17 +685,17 @@ int32_t recv_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep,
 
 		case DATASET_INFO:
 			{
-				DPRINT(" \t\t DATASET_INFO %ld\n", length);
+	
+				if (!strncmp("$ERRIMSS_NO_KEY_AVAIL$", msg_data, 22))
+				{
+					DPRINT("[COMM] recv_dynamic_stream end 22\n");
+					return 22;
+				}
+     			DPRINT(" \t\t DATASET_INFO %ld\n", length);
 				dataset_info * struct_ = (dataset_info *) data_struct;
 
 				//Copy the actual structure into the one provided through reference.
 				memcpy(struct_, msg_data, sizeof(dataset_info));
-
-				if (!strncmp("$ERRIMSS_NO_KEY_AVAIL$", struct_->uri_, 22))
-				{
-					DPRINT("[COMM] recv_dynamic_stream end %ld\n", length); 
-					return length;
-				}
 
 				//If the size of the message received was bigger than sizeof(dataset_info), something more came with it.
 

@@ -458,7 +458,11 @@ int __open_2(const char *pathname, int flags, ...){
 			map_fd_put(map_fd, new_path, ret, p);
 			int create_flag = (flags & O_CREAT);
 			if (create_flag){
-				imss_create(new_path, mode, &ret_ds);
+				int err_create = imss_create(new_path, mode, &ret_ds);
+				if (err_create == -EEXIST) {
+					if (IMSS_DEBUG)  fprintf(stderr, "[POSIX]. Dataset already exists.\n");
+					imss_open(new_path, &ret_ds);
+				}
 			}else{
 				imss_open(new_path, &ret_ds);
 			}
@@ -506,7 +510,11 @@ int open64(const char *pathname, int flags, ...)
 			map_fd_put(map_fd, new_path, ret, p);
 			int create_flag = (flags & O_CREAT);
 			if (create_flag){
-				imss_create(new_path, mode, &ret_ds);
+				int err_create = imss_create(new_path, mode, &ret_ds);
+				if (err_create == -EEXIST) {
+					if (IMSS_DEBUG)  fprintf(stderr, "[POSIX]. Calling '__open_2'.\n");
+                    imss_open(new_path, &ret_ds);
+				}
 			}else{
 				imss_open(new_path, &ret_ds);
 			}
@@ -549,7 +557,11 @@ int open(const char *pathname, int flags, ...)
 			map_fd_put(map_fd, new_path, ret, p);
 			int create_flag = (flags & O_CREAT);
 			if (create_flag){
-				imss_create(new_path, mode, &ret_ds);
+				int err_create = imss_create(new_path, mode, &ret_ds);
+				if (err_create == -EEXIST) {
+					if (IMSS_DEBUG)  fprintf(stderr, "[POSIX]. Dataset already exists.\n");
+                    imss_open(new_path, &ret_ds);
+				}
 			}else{
 				imss_open(new_path, &ret_ds);
 			}
