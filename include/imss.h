@@ -40,7 +40,11 @@
 
 extern int32_t  IMSS_DEBUG;
 
-#define DPRINT(...) if (IMSS_DEBUG) {fprintf(stderr, __VA_ARGS__);}
+#ifdef DEBUG
+    #define DPRINT(...) if (IMSS_DEBUG) {fprintf(stderr, __VA_ARGS__);}
+#else
+	#define DPRINT(...)
+#endif
 
 //Structure storing all information related to a certain IMSS.
 typedef struct {

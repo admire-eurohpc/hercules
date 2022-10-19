@@ -314,6 +314,8 @@ int32_t stat_init(char *   stat_hostfile,
 
 	char * stat_node = (char *) malloc(LINE_LENGTH);
 	//Connect to all servers.
+	char request[REQUEST_SIZE];
+
 	for (int i = 0; i < n_stat_servers; i++)
 	{
 		ucs_status_t status;
@@ -336,21 +338,7 @@ int32_t stat_init(char *   stat_hostfile,
 			return -1;
 		}
 
-		char request[REQUEST_SIZE] = "HELLO!\0";
-		//Send the metadata server connection request.
-		if (send_stream(ucp_worker_client, client_ep, (char*) &rank, sizeof(uint32_t)) < 0)
-		{
-			perror("ERRIMSS_STAT_HELLO");
-			return -1;
-		}
-
-		char mode[] = "GET";
-		if (send_stream(ucp_worker_client, client_ep, mode, MODE_SIZE) < 0)
-		{
-			perror("ERRIMSS_STAT_HELLO");
-			return -1;
-		}
-
+        sprintf (request, "%" PRIu32 " GET HELLO!", rank);
 		if (send_stream(ucp_worker_client, client_ep, request, REQUEST_SIZE) < 0)
 		{
 			perror("ERRIMSS_STAT_HELLO");
@@ -418,26 +406,15 @@ int32_t stat_release()
 	//Disconnect from all metadata servers.
 	for (int i = 0; i < n_stat_servers; i++)
 	{
-		if (send_stream(ucp_worker_client, stat_client[i], (char*) &process_rank, sizeof(uint32_t)) < 0)
-		{
-			perror("ERRIMSS_STAT_HELLO");
-			return -1;
-		}
+		char release_msg[REQUEST_SIZE];
 
-		char mode[] = "GET";
-		if (send_stream(ucp_worker_client, stat_client[i], mode, MODE_SIZE) < 0)
-		{
-			perror("ERRIMSS_STAT_HELLO");
-			return -1;
-		}
-
-		char release_msg[] = "2 RELEASE\0";
-
+        sprintf (release_msg, "%" PRIu32 " GET 2 RELEASE", process_rank);
 		if (send_stream(ucp_worker_client, stat_client[i], release_msg, REQUEST_SIZE) < 0)
 		{
 			perror("ERRIMSS_RLSIMSS_SENDREQ");
 			return -1;
 		}
+
 		ep_close(ucp_worker_client, stat_client[i], UCP_EP_CLOSE_MODE_FLUSH);
 	}
 
@@ -469,19 +446,7 @@ uint32_t get_dir(char * 	 requested_uri,
 
 	//GETDIR request.
 	char getdir_req[REQUEST_SIZE];
-	sprintf(getdir_req, "%d %s%c", GETDIR, requested_uri, '\0');
-	if (send_stream(ucp_worker_client, stat_client[m_srv], (char *) &stat_ids[m_srv], sizeof(uint32_t)) < 0)
-	{
-		perror("ERRIMSS_STAT_HELLO");
-		return -1;
-	}
-
-	char mode[] = "GET";
-	if (send_stream(ucp_worker_client, stat_client[m_srv], mode, MODE_SIZE) < 0)
-	{
-		perror("ERRIMSS_STAT_HELLO");
-		return -1;
-	}
+	sprintf(getdir_req, "%" PRIu32 " GET %d %s", stat_ids[m_srv],  GETDIR, requested_uri);
 
 	//Send the request.
 	if (send_stream(ucp_worker_client, stat_client[m_srv], getdir_req, REQUEST_SIZE) < 0)
@@ -690,21 +655,9 @@ int32_t init_imss(char *   imss_uri,
 		}
 
 		process_rank = CLOSE_EP;
-		if (send_stream(ucp_worker_client, new_imss.conns.eps_[i], (char*) &process_rank, sizeof(uint32_t)) < 0)
-		{
-			perror("ERRIMSS_STAT_HELLO");
-			return -1;
-		} 
-
-		char mode[] = "GET";
-		if (send_stream(ucp_worker_client, new_imss.conns.eps_[i], mode, MODE_SIZE) < 0)
-		{
-			perror("ERRIMSS_STAT_HELLO");
-			return -1;
-		}
 
 		char request[REQUEST_SIZE];
-		sprintf(request, "%s %ld %s%c", "HELLO!", buff_size, imss_uri, '\0');
+		sprintf(request, "%" PRIu32 " GET HELLO! %ld %s", process_rank, buff_size, imss_uri);
 		//Send the IMSS server connection request.
 		if (send_stream(ucp_worker_client, new_imss.conns.eps_[i], request, REQUEST_SIZE) < 0)
 		{
@@ -751,21 +704,7 @@ int32_t init_imss(char *   imss_uri,
 
 	//Send the created structure to the metadata server.
 	char key_plus_size[REQUEST_SIZE];
-	sprintf(key_plus_size, "%lu %s", (sizeof(imss_info)+new_imss.info.num_storages*LINE_LENGTH), new_imss.info.uri_);
-
-
-	if (send_stream(ucp_worker_client, stat_client[m_srv], (char *) &stat_ids[m_srv], sizeof(uint32_t)) < 0) // SNDMORE
-	{
-		perror("ERRIMSS_INITIMSS_SENDKEY");
-		return -1;
-	}    
-
-	char mode2[] = "SET";
-	if (send_stream(ucp_worker_client, stat_client[m_srv], mode2, MODE_SIZE) < 0) // SNDMORE
-	{
-		perror("ERRIMSS_INITIMSS_SENDKEY");
-		return -1;
-	}
+	sprintf(key_plus_size, "%" PRIu32 " SET %lu %s", stat_ids[m_srv], (sizeof(imss_info)+new_imss.info.num_storages*LINE_LENGTH), new_imss.info.uri_);
 
 	if (send_stream(ucp_worker_client, stat_client[m_srv], key_plus_size, REQUEST_SIZE) < 0) // SNDMORE
 	{
@@ -774,7 +713,6 @@ int32_t init_imss(char *   imss_uri,
 	}
 
 	//Send the new IMSS metadata structure to the metadata server entity.
-	printf ("[IMSS] Command:  %" PRIu32 " | %s | %s \n", stat_ids[m_srv], mode2, key_plus_size);
 	if (send_dynamic_stream(ucp_worker_client, stat_client[m_srv], (void *) &new_imss.info, IMSS_INFO) < 0)
 		return -1;
 
@@ -853,21 +791,8 @@ int32_t open_imss(char * imss_uri)
 			return -1;
 		}
 
-		if (send_stream(ucp_worker_client, new_imss.conns.eps_[i], (char*) &process_rank, sizeof(uint32_t)) < 0)
-		{
-			perror("ERRIMSS_STAT_HELLO");
-			return -1;
-		}
-
-		char mode[] = "GET";
-		if (send_stream(ucp_worker_client, new_imss.conns.eps_[i], mode, MODE_SIZE) < 0)
-		{
-			perror("ERRIMSS_STAT_HELLO");
-			return -1;
-		}
-
 		char request[REQUEST_SIZE];
-		sprintf(request, "%s", "HELLO!JOIN");
+		sprintf(request, "%" PRIu32 " GET %s", process_rank, "HELLO!JOIN");
 		//Send the IMSS server connection request.
 		if (send_stream(ucp_worker_client, new_imss.conns.eps_[i], request, REQUEST_SIZE) < 0)
 		{
@@ -950,20 +875,8 @@ int32_t release_imss(char * imss_uri, uint32_t release_op)
 		//Request IMSS instance closure per server if the instance is a DETACHED one and the corresponding argumet was provided.
 		if (release_op == CLOSE_DETACHED)
 		{
-			if (send_stream(ucp_worker_client, imss_.conns.eps_[i], (char*) &process_rank, sizeof(uint32_t)) < 0)
-			{
-				perror("ERRIMSS_STAT_HELLO");
-				return -1;
-			}
-
-			char mode[] = "GET";
-			if (send_stream(ucp_worker_client, imss_.conns.eps_[i], mode, MODE_SIZE) < 0)
-			{
-				perror("ERRIMSS_STAT_HELLO");
-				return -1;
-			}
-
-			char release_msg[] = "2 RELEASE\0";
+			char release_msg[REQUEST_SIZE];
+            sprintf(release_msg, "%" PRIu32 " GET 2 RELEASE", process_rank);
 
 			if (send_stream(ucp_worker_client, imss_.conns.eps_[i], release_msg, REQUEST_SIZE) < 0)
 			{
@@ -1013,23 +926,10 @@ int32_t stat_imss(char *      imss_uri, imss_info * imss_info_)
 
 	//Formated imss uri to be sent to the metadata server.
 	char formated_uri[REQUEST_SIZE];
-	sprintf(formated_uri, "0 %s%c", imss_uri, '\0');
 
 	//Discover the metadata server that handles the IMSS instance.
 	uint32_t m_srv = discover_stat_srv(imss_uri);
-
-	if (send_stream(ucp_worker_client, stat_client[m_srv], (char *) &stat_ids[m_srv], sizeof(uint32_t)) < 0)
-	{
-		perror("ERRIMSS_STAT_HELLO");
-		return -1;
-	}
-
-	char mode[] = "GET";
-	if (send_stream(ucp_worker_client, stat_client[m_srv], mode, MODE_SIZE) < 0)
-	{
-		fprintf(stderr, "ERRIMSS_IMSS_REQ\n");
-		return -1;
-	}
+	sprintf(formated_uri, "%" PRIu32 " GET 0 %s", stat_ids[m_srv], imss_uri);
 
 	//Send the request.
 	if (send_stream(ucp_worker_client, stat_client[m_srv], formated_uri, REQUEST_SIZE) < 0)
@@ -1161,21 +1061,8 @@ int32_t create_dataset(char *  dataset_uri,
 	//Discover the metadata server that handle the new dataset.
 	uint32_t m_srv = discover_stat_srv(new_dataset.uri_);
 
-	if (send_stream(ucp_worker_client, stat_client[m_srv], (char *) &stat_ids[m_srv], sizeof(uint32_t)) < 0)
-	{
-		perror("ERRIMSS_STAT_HELLO");
-		return -1;
-	}
-
-	char mode[] = "SET";
-	if (send_stream(ucp_worker_client, stat_client[m_srv], mode, MODE_SIZE) < 0)
-	{
-		perror("ERRIMSS_STAT_HELLO");
-		return -1;
-	}
-
 	char formated_uri[REQUEST_SIZE];
-	sprintf(formated_uri, "%lu %s", msg_size, new_dataset.uri_);
+	sprintf(formated_uri, "%" PRIu32 " SET %lu %s", stat_ids[m_srv], msg_size, new_dataset.uri_);
 	DPRINT("[IMSS] dataset_create: sending request %s.\n", formated_uri );
 	//Send the dataset URI associated to the dataset metadata structure to be sent.
 	if (send_stream(ucp_worker_client, stat_client[m_srv], formated_uri, REQUEST_SIZE) < 0) // SNDMORE
@@ -1322,22 +1209,9 @@ int32_t release_dataset(int32_t dataset_id)
 		//Discover the metadata server that handles the dataset.
 		uint32_t m_srv = discover_stat_srv(release_dataset.uri_);
 
-		if (send_stream(ucp_worker_client, stat_client[m_srv], (char *) &stat_ids[m_srv], sizeof(uint32_t)) < 0)
-		{
-			perror("ERRIMSS_STAT_HELLO");
-			return -1;
-		}
-
-		char mode[] = "SET";
-		if (send_stream(ucp_worker_client, stat_client[m_srv], mode, MODE_SIZE) < 0)
-		{
-			perror("ERRIMSS_STAT_HELLO");
-			return -1;
-		}
-
 		//Formated dataset uri to be sent to the metadata server.
 		char formated_uri[REQUEST_SIZE];
-		sprintf(formated_uri, "0 %s", release_dataset.uri_);
+		sprintf(formated_uri, "%" PRIu32 " SET 0 %s", stat_ids[m_srv], release_dataset.uri_);
 		//Send the LOCAL dataset positions update.
 		if (send_stream(ucp_worker_client, stat_client[m_srv], formated_uri, REQUEST_SIZE) < 0) // SNDMORE
 		{
@@ -1407,24 +1281,11 @@ int32_t delete_dataset(const char * 	    dataset_uri)
 {
 	//Formated dataset uri to be sent to the metadata server.
 	char formated_uri[REQUEST_SIZE];
-	sprintf(formated_uri, "4 %s", dataset_uri); // delete
 
 	//Discover the metadata server that handles the dataset.
 	uint32_t m_srv = discover_stat_srv((char *) dataset_uri);
 
-	if (send_stream(ucp_worker_client, stat_client[m_srv], (char *) &stat_ids[m_srv], sizeof(uint32_t)) < 0)
-	{
-		perror("ERRIMSS_STAT_HELLO");
-		return -1;
-	}
-
-	char mode[] = "GET";
-	if (send_stream(ucp_worker_client, stat_client[m_srv], mode, MODE_SIZE) < 0)
-	{
-		perror("ERRIMSS_STAT_HELLO");
-		return -1;
-	}
-
+	sprintf(formated_uri, "%" PRIu32 " GET 4 %s", stat_ids[m_srv], dataset_uri); // delete
 	//Send the request.
 	if (send_stream(ucp_worker_client, stat_client[m_srv], formated_uri, REQUEST_SIZE) < 0)
 	{
@@ -1477,25 +1338,12 @@ int32_t  rename_dataset_metadata_dir_dir(char * old_dir, char * rdir_dest){
 	/*********RENAME METADATA*******/
 	//Formated dataset uri to be sent to the metadata server.
 	char formated_uri[REQUEST_SIZE];
-	sprintf(formated_uri, "6 %s %s", old_dir,rdir_dest);
 
 	//Discover the metadata server that handles the dataset.
 	uint32_t m_srv = discover_stat_srv((char *) old_dir);
 
-	if (send_stream(ucp_worker_client, stat_client[m_srv], (char *) &stat_ids[m_srv], sizeof(uint32_t)) < 0)
-	{
-		perror("ERRIMSS_STAT_HELLO");
-		return -1;
-	}
-
-	char mode[] = "GET";
-	if (send_stream(ucp_worker_client, stat_client[m_srv], mode, MODE_SIZE) < 0)
-	{
-		perror("ERRIMSS_STAT_HELLO");
-		return -1;
-	}
-
 	//Send the request.
+	sprintf(formated_uri, "%" PRIu32 " GET 6 %s %s", stat_ids[m_srv], old_dir,rdir_dest);
 	if (send_stream(ucp_worker_client, stat_client[m_srv], formated_uri, REQUEST_SIZE) < 0)
 	{
 		perror("ERRIMSS_DATASET_REQ");
@@ -1531,25 +1379,12 @@ rename_dataset_metadata(char * old_dataset_uri, char * new_dataset_uri){
 	/*********RENAME METADATA*******/
 	//Formated dataset uri to be sent to the metadata server.
 	char formated_uri[REQUEST_SIZE];
-	sprintf(formated_uri, "5 %s %s", old_dataset_uri,new_dataset_uri);
 
 	//Discover the metadata server that handles the dataset.
 	uint32_t m_srv = discover_stat_srv((char *) old_dataset_uri);
 
-	if (send_stream(ucp_worker_client, stat_client[m_srv], (char *) &stat_ids[m_srv], sizeof(uint32_t)) < 0)
-	{
-		perror("ERRIMSS_STAT_HELLO");
-		return -1;
-	}
-
-	char mode[] = "GET";
-	if (send_stream(ucp_worker_client, stat_client[m_srv], mode, MODE_SIZE) < 0)
-	{
-		perror("ERRIMSS_STAT_HELLO");
-		return -1;
-	}
-
 	//Send the request.
+	sprintf(formated_uri, "%" PRIu32 " GET 5 %s %s", stat_ids[m_srv], old_dataset_uri,new_dataset_uri);
 	if (send_stream(ucp_worker_client, stat_client[m_srv], formated_uri, REQUEST_SIZE) < 0)
 	{
 		perror("ERRIMSS_DATASET_REQ");
@@ -1580,24 +1415,11 @@ int32_t stat_dataset(const char * dataset_uri, dataset_info * dataset_info_)
 
 	//Formated dataset uri to be sent to the metadata server.
 	char formated_uri[REQUEST_SIZE];
-	sprintf(formated_uri, "0 %s", dataset_uri);
 
 	//Discover the metadata server that handles the dataset.
 	uint32_t m_srv = discover_stat_srv((char *) dataset_uri);
 
-	if (send_stream(ucp_worker_client, stat_client[m_srv], (char *) &stat_ids[m_srv], sizeof(uint32_t)) < 0)
-	{
-		perror("ERRIMSS_STAT_HELLO");
-		return -1;
-	}
-
-	char mode[] = "GET";
-	if (send_stream(ucp_worker_client, stat_client[m_srv], mode, MODE_SIZE) < 0)
-	{
-		perror("ERRIMSS_STAT_HELLO");
-		return -1;
-	}
-
+	sprintf(formated_uri, "%" PRIu32 " GET 0 %s", stat_ids[m_srv], dataset_uri);
 	//Send the request.
 	if (send_stream(ucp_worker_client, stat_client[m_srv], formated_uri, REQUEST_SIZE) < 0)
 	{
@@ -1699,33 +1521,14 @@ int32_t rename_dataset_srv_worker_dir_dir(char * old_dir, char * rdir_dest,
 
 	char key_[REQUEST_SIZE];
 	//Key related to the requested data element.
-	sprintf(key_, "6 %s %s",  old_dir, rdir_dest);
-
-	int key_length = strlen(key_)+1;
-	char key[REQUEST_SIZE];
-	memcpy((void *) key, (void *) key_, key_length);
-	key[key_length-1] = '\0';
 
 	//Request the concerned block to the involved servers.
 	//for (int32_t i = 0; i < curr_dataset.repl_factor; i++)
 	for (int32_t i = 0; i < curr_imss.info.num_storages; i++)
 	{
-		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[i], (char *) &curr_imss.conns.id[i], sizeof(uint32_t)) < 0)
-		{
-			perror("ERRIMSS_STAT_HELLO");
-			return -1;
-		}
-
-		//Send read request message specifying the block URI.
-		char mode[] = "GET";
-		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[i], mode, MODE_SIZE) < 0)
-		{
-			perror("ERRIMSS_STAT_HELLO");
-			return -1;
-		}
-
+	    sprintf(key_, "%" PRIu32 " GET 6 %s %s", curr_imss.conns.id[i], old_dir, rdir_dest);
 		//if (comm_send(curr_imss.conns.eps_[repl_servers[i]], key, key_length, 0) != key_length)
-		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[i], key, REQUEST_SIZE) < 0)
+		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[i], key_, REQUEST_SIZE) < 0)
 		{
 			perror("ERRIMSS_GETDATA_REQ");
 			return -1;
@@ -1775,35 +1578,15 @@ int32_t rename_dataset_srv_worker(char * old_dataset_uri, char * new_dataset_uri
 	}
 
 	char key_[REQUEST_SIZE];
-	//Key related to the requested data element.
-	sprintf(key_, "5 %s %s",  old_dataset_uri, new_dataset_uri);
-
-	int key_length = strlen(key_)+1;
-	char key[REQUEST_SIZE];
-	memcpy((void *) key, (void *) key_, key_length);
-	key[key_length-1] = '\0';
 
 	//Request the concerned block to the involved servers.
 	for (int32_t i = 0; i < curr_dataset.repl_factor; i++)
 	{
 		//printf("BLOCK %d ASKED TO %d SERVER with key: %s (%d)\n", data_id, repl_servers[i], key, key_length);
 
-		//Send read request message specifying the block URI.
-		//if (comm_send(curr_imss.conns.eps_[repl_servers[i]], key, KEY, 0) < 0)
-		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[repl_servers[i]], (char *) &curr_imss.conns.id[i], sizeof(uint32_t)) < 0)
-		{
-			perror("ERRIMSS_STAT_HELLO");
-			return -1;
-		}
-
-		char mode[] = "GET";
-		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[repl_servers[i]], mode, MODE_SIZE) < 0)
-		{
-			perror("ERRIMSS_STAT_HELLO");
-			return -1;
-		}
-
-		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[repl_servers[i]], key, REQUEST_SIZE) < 0)
+	    //Key related to the requested data element.
+	    sprintf(key_, "%" PRIu32 " GET 5 %s %s", curr_imss.conns.id[i], old_dataset_uri, new_dataset_uri);
+		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[repl_servers[i]], key_, REQUEST_SIZE) < 0)
 		{
 			perror("ERRIMSS_GETDATA_REQ");
 			return -1;
@@ -1836,13 +1619,6 @@ int32_t writev_multiple(const char * buf, int32_t dataset_id,int64_t data_id,
 
 	char key_[REQUEST_SIZE];
 	//Key related to the requested data element.
-	sprintf(key_, "%d %s$%ld %ld %ld %ld %ld %ld %ld", curr_dataset.data_entity_size, curr_dataset.uri_, data_id,
-			data_id, end_blk, start_offset, end_offset, IMSS_DATA_BSIZE, size);
-
-	int key_length = strlen(key_)+1;
-	char key[REQUEST_SIZE];
-	memcpy((void *) key, (void *) key_, key_length);
-	key[key_length-1] = '\0';
 
 	int32_t curr_imss_storages = curr_imss.info.num_storages;
 
@@ -1853,25 +1629,12 @@ int32_t writev_multiple(const char * buf, int32_t dataset_id,int64_t data_id,
 		uint32_t n_server_ = (n_server + i*(curr_imss_storages/curr_dataset.repl_factor)) % curr_imss_storages;
 
 		//printf("BLOCK %ld SENT TO %d SERVER with key: %s (%d)\n", data_id, n_server_, key, key_length);
-		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[n_server_], (char *) &curr_imss.conns.id[n_server_], sizeof(uint32_t)) < 0)
-		{
-			perror("ERRIMSS_STAT_HELLO");
-			return -1;
-		}
-
-		char mode[] = "SET";
-		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[n_server_], mode, MODE_SIZE) < 0)
-		{
-			perror("ERRIMSS_STAT_HELLO");
-			return -1;
-		}
-		//if (comm_send(curr_imss.conns.eps_[n_server_], key, KEY, ZMQ_SNDMORE) < 0)
-		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[n_server_], key, REQUEST_SIZE) < 0) //SNDMORE
+	    sprintf(key_, "%" PRIu32 " SET %d %s$%ld %ld %ld %ld %ld %ld %ld", curr_imss.conns.id[i], curr_dataset.data_entity_size, curr_dataset.uri_, data_id, data_id, end_blk, start_offset, end_offset, IMSS_DATA_BSIZE, size);
+		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[n_server_], key_, REQUEST_SIZE) < 0) //SNDMORE
 		{
 			perror("ERRIMSS_SETDATA_REQ");
 			return -1;
 		}
-
 
 		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[n_server_], buf, size) < 0)
 		{
@@ -1923,12 +1686,6 @@ int32_t readv_multiple(int32_t 	 dataset_id,
 	char key_[REQUEST_SIZE];
 	//Key related to the requested data element.
 
-	sprintf(key_, "8 %s$%d %d %ld %ld %ld",  curr_dataset.uri_, curr_block, end_block, BLOCKSIZE, start_offset, size);
-
-	int key_length = strlen(key_)+1;
-	char key[REQUEST_SIZE];
-	memcpy((void *) key, (void *) key_, key_length);
-	key[key_length-1] = '\0';
 
 	//Request the concerned block to the involved servers.
 	for (int32_t i = 0; i < curr_dataset.repl_factor; i++)
@@ -1936,21 +1693,8 @@ int32_t readv_multiple(int32_t 	 dataset_id,
 		//printf("BLOCK %d ASKED TO %d SERVER with key: %s (%d)\n", curr_block, repl_servers[i], key, key_length);
 
 		//Send read request message specifying the block URI.
-		//if (comm_send(curr_imss.conns.eps_[repl_servers[i]], key, KEY, 0) < 0)
-		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[repl_servers[i]], (char *) &curr_imss.conns.id[repl_servers[i]], sizeof(uint32_t)) < 0)
-		{
-			perror("ERRIMSS_STAT_HELLO");
-			return -1;
-		}
-
-		char mode[] = "GET";
-		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[repl_servers[i]], mode, MODE_SIZE) < 0)
-		{
-			perror("ERRIMSS_STAT_HELLO");
-			return -1;
-		}
-
-		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[repl_servers[i]], key, REQUEST_SIZE) < 0)
+	    sprintf(key_, "%" PRIu32 " GET 8 %s$%d %d %ld %ld %ld", curr_imss.conns.id[repl_servers[i]], curr_dataset.uri_, curr_block, end_block, BLOCKSIZE, start_offset, size);
+		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[repl_servers[i]], key_, REQUEST_SIZE) < 0)
 		{
 			perror("ERRIMSS_GETDATA_REQ");
 			return -1;
@@ -1985,18 +1729,8 @@ split_writev(void * th_argv)
 	int32_t n_server;
 
 
-	char key_[arguments->lenght_key + KEY];
-	//Key related to the requested data element.
-	sprintf(key_, "%d [OP]=2 %s %ld %ld %d %s", curr_dataset.data_entity_size, 
-			arguments->path, arguments->BLKSIZE, arguments->start_offset, 
-			arguments->stats_size, arguments->msg);
-
-	int key_length = strlen(key_)+1;
-	char key[key_length];
-	memcpy((void *) key, (void *) key_, key_length);
-	key[key_length-1] = '\0';
-
-	int32_t curr_imss_storages = curr_imss.info.num_storages;
+	char key_[REQUEST_SIZE];
+    int32_t curr_imss_storages = curr_imss.info.num_storages;
 
 	//Send the data block to every server implementing redundancy.
 	for (int32_t i = 0; i < curr_dataset.repl_factor; i++)
@@ -2004,29 +1738,21 @@ split_writev(void * th_argv)
 		//Server receiving the current data block.
 		uint32_t n_server_ = (arguments->n_server + i*(curr_imss_storages/curr_dataset.repl_factor)) % curr_imss_storages;
 
-		//printf("BLOCK %ld SENT TO %d SERVER with key: %s (%d)\n", data_id, n_server_, key, key_length);
-		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[n_server_], (char *) &curr_imss.conns.id[n_server_], sizeof(uint32_t)) < 0)
-		{
-			perror("ERRIMSS_STAT_HELLO");
-		}
+        //Key related to the requested data element.
+	    sprintf(key_, "%" PRIu32 " SET %d [OP]=2 %s %ld %ld %d %s", curr_imss.conns.id[n_server_],  curr_dataset.data_entity_size, 
+			arguments->path, arguments->BLKSIZE, arguments->start_offset, 
+			arguments->stats_size, arguments->msg);
 
-		char mode[] = "SET";
-		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[n_server_], mode, MODE_SIZE) < 0)
-		{
-			perror("ERRIMSS_STAT_HELLO");
-		}
 
 		//if (comm_send(curr_imss.conns.eps_[n_server_], key, KEY, ZMQ_SNDMORE) < 0)
-		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[n_server_], key, REQUEST_SIZE) < 0 ) //SNDMORE
+		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[n_server_], key_, REQUEST_SIZE) < 0 ) //SNDMORE
 		{
 			perror("ERRIMSS_SETDATA_REQ");
 		}
 
-
 		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[n_server_], arguments->buffer, arguments->size*arguments->BLKSIZE*KB) < 0)
 		{
 			perror("ERRIMSS_SETDATA_SEND");
-
 		}
 	}
 
@@ -2065,38 +1791,19 @@ void * split_readv(void * th_argv)
 	char key_[REQUEST_SIZE];
 	//Key related to the requested data element.
 	int msg_length = strlen(arguments->msg)+1; 
-	sprintf(key_, "9 %s %ld %ld %d %d",
-			arguments->path, arguments->BLKSIZE, arguments->start_offset, 
-			arguments->stats_size, msg_length);
-
-
-	int key_length = strlen(key_)+1;
-	char key[REQUEST_SIZE];
-	memcpy((void *) key, (void *) key_, key_length);
-	key[key_length-1] = '\0';
-
-	//printf("key=%s\n",key);
+		//printf("key=%s\n",key);
 	//Request the concerned block to the involved servers.
 	for (int32_t i = 0; i < curr_dataset.repl_factor; i++)
 	{
-
 		//Send read request message specifying the block URI.
 		//if (comm_send(curr_imss.conns.eps_[repl_servers[i]], key, KEY, 0) < 0)
 		//printf("[SPLIT READV] 1-Send_stream\n");
-		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[repl_servers[i]], (char *) &curr_imss.conns.id[repl_servers[i]], sizeof(uint32_t)) < 0)
-		{
-			perror("ERRIMSS_STAT_HELLO");
-		}
+		sprintf(key_, "%" PRIu32 " GET 9 %s %ld %ld %d %d", curr_imss.conns.id[repl_servers[i]],
+			arguments->path, arguments->BLKSIZE, arguments->start_offset, 
+			arguments->stats_size, msg_length);
 
-		char mode[] = "GET";
-		//printf("[SPLIT READV] 2-Send_stream\n");
-		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[repl_servers[i]], mode, MODE_SIZE) < 0)
-		{
-			perror("ERRIMSS_STAT_HELLO");
-		}
-
-		//printf("[SPLIT READV] 3-Send_stream\n");
-		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[repl_servers[i]], key, REQUEST_SIZE) < 0)
+//printf("[SPLIT READV] 3-Send_stream\n");
+		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[repl_servers[i]], key_, REQUEST_SIZE) < 0)
 		{
 			perror("ERRIMSS_GETDATA_REQ");
 		}
@@ -2251,33 +1958,15 @@ int32_t get_data(int32_t 	 dataset_id,
 	}
 
 	char key_[REQUEST_SIZE];
-	//Key related to the requested data element.
-	sprintf(key_, "0 %s$%d",  curr_dataset.uri_, data_id);
 
-	int key_length = strlen(key_)+1;
-	char key[REQUEST_SIZE];
-	memcpy((void *) key, (void *) key_, key_length);
-	key[key_length-1] = '\0';
-
-	//Request the concerned block to the involved servers.
+    //Request the concerned block to the involved servers.
 	for (int32_t i = 0; i < curr_dataset.repl_factor; i++)
 	{
-		//Send read request message specifying the block URI.
-		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[repl_servers[i]], (char *) &curr_imss.conns.id[repl_servers[i]], sizeof(uint32_t)) < 0)
-		{
-			perror("ERRIMSS_STAT_HELLO");
-			return -1;
-		}
-
-		char mode[] = "GET";
-		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[repl_servers[i]], mode, MODE_SIZE) < 0)
-		{
-			perror("ERRIMSS_STAT_HELLO");
-			return -1;
-		}
+	    //Key related to the requested data element.
+	    sprintf(key_, "%" PRIu32 " GET 0 %s$%d", curr_imss.conns.id[repl_servers[i]],  curr_dataset.uri_, data_id);
 
 		//if (comm_send(curr_imss.conns.eps_[repl_servers[i]], key, KEY, 0) < 0)
-		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[repl_servers[i]], key, REQUEST_SIZE) < 0)
+		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[repl_servers[i]], key_, REQUEST_SIZE) < 0)
 		{
 			perror("ERRIMSS_GETDATA_REQ");
 			return -1;
@@ -2356,33 +2045,18 @@ int32_t get_ndata(int32_t 	 dataset_id,
 	}
 
 	char key_[REQUEST_SIZE];
-	//Key related to the requested data element.
-	sprintf(key_, "0 %s$%d",  curr_dataset.uri_, data_id);
-
-	int key_length = strlen(key_)+1;
-	char key[REQUEST_SIZE];
-	memcpy((void *) key, (void *) key_, key_length);
-	key[key_length-1] = '\0';
-
+	
 	//Request the concerned block to the involved servers.
 	for (int32_t i = 0; i < curr_dataset.repl_factor; i++)
 	{
 		//printf("BLOCK %d ASKED TO %d SERVER with key: %s (%d)\n", data_id, repl_servers[i], key, key_length);
-		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[repl_servers[i]], (char *) &curr_imss.conns.id[repl_servers[i]], sizeof(uint32_t)) < 0)
-		{
-			perror("ERRIMSS_STAT_HELLO");
-			return -1;
-		}
-		char mode[] = "GET";
-		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[repl_servers[i]], mode, MODE_SIZE) < 0)
-		{
-			perror("ERRIMSS_STAT_HELLO");
-			return -1;
-		}
+        
+		//Key related to the requested data element.
+	    sprintf(key_, "%" PRIu32 " GET 0 %s$%d",curr_imss.conns.id[repl_servers[i]], curr_dataset.uri_, data_id);
 
 		//Send read request message specifying the block URI.
 		//if (comm_send(curr_imss.conns.eps_[repl_servers[i]], key, KEY, 0) < 0)
-		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[repl_servers[i]], key, REQUEST_SIZE) < 0)
+		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[repl_servers[i]], key_, REQUEST_SIZE) < 0)
 		{
 			perror("ERRIMSS_GETDATA_REQ");
 			return -1;
@@ -2440,13 +2114,6 @@ int32_t set_data(int32_t 	 dataset_id,
 
 
 	char key_[REQUEST_SIZE];
-	//Key related to the requested data element.
-	sprintf(key_, "%d %s$%d", curr_dataset.data_entity_size, curr_dataset.uri_, data_id);
-	int key_length = strlen(key_)+1;
-	char key[REQUEST_SIZE];
-	memcpy((void *) key, (void *) key_, key_length);
-	key[key_length-1] = '\0';
-
 	int32_t curr_imss_storages = curr_imss.info.num_storages;
 
 	//Send the data block to every server implementing redundancy.
@@ -2457,24 +2124,12 @@ int32_t set_data(int32_t 	 dataset_id,
 
 		//printf("BLOCK %d SENT TO %d SERVER with key: %s (%d)\n", data_id, n_server_, key, key_length);
 
-
-		if (send_istream(ucp_worker_client, curr_imss.conns.eps_[n_server_], (char *) &curr_imss.conns.id[n_server_], sizeof(uint32_t)) < 0)
-		{
-			perror("ERRIMSS_STAT_HELLO");
-			return -1;
-		}
-
-		char mode[] = "SET";
-		if (send_istream(ucp_worker_client, curr_imss.conns.eps_[n_server_], mode, MODE_SIZE) < 0)
-		{
-			perror("ERRIMSS_STAT_HELLO");
-			return -1;
-		}
-
 		//	gettimeofday(&start, NULL);
 		//Send read request message specifying the block URI.
-		//if (comm_send(curr_imss.conns.eps_[n_server_], key, KEY, ZMQ_SNDMORE) < 0)
-		if (send_istream(ucp_worker_client, curr_imss.conns.eps_[n_server_], key, REQUEST_SIZE) < 0) // SNDMORE
+	  	//Key related to the requested data element.
+	    sprintf(key_, "%" PRIu32 " SET %d %s$%d", curr_imss.conns.id[n_server_], curr_dataset.data_entity_size, curr_dataset.uri_, data_id);
+
+		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[n_server_], key_, REQUEST_SIZE) < 0) // SNDMORE
 		{
 			perror("ERRIMSS_SETDATA_REQ");
 			return -1;
@@ -2489,7 +2144,7 @@ int32_t set_data(int32_t 	 dataset_id,
 		//	gettimeofday(&start, NULL);
 		//Send read request message specifying the block data.
 		//printf("[SET DATA] msg=%s, size=%d\n",buffer,curr_dataset.data_entity_size);
-		if (send_istream(ucp_worker_client, curr_imss.conns.eps_[n_server_], buffer, curr_dataset.data_entity_size) < 0)
+		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[n_server_], buffer, curr_dataset.data_entity_size) < 0)
 		{
 			perror("ERRIMSS_SETDATA_SEND");
 			return -1;
@@ -2497,7 +2152,6 @@ int32_t set_data(int32_t 	 dataset_id,
 		/*	gettimeofday(&end, NULL);
 			delta_us = (long) (end.tv_usec - start.tv_usec);
 			printf("[CLIENT] [SWRITE SEND_DATA] delta_us=%6.3f\n",(delta_us/1000.0F));*/
-
 
 		DPRINT("[IMSS] Request set_data: client_id '%" PRIu32 "', mode '%s', key '%s'\n", curr_imss.conns.id[n_server_], mode, key);
 
@@ -2523,14 +2177,6 @@ set_ndata(int32_t 	 dataset_id,
 		return -1;
 
 	char key_[REQUEST_SIZE];
-	//Key related to the requested data element.
-	sprintf(key_, "%d %s$%d", size, curr_dataset.uri_, data_id);
-
-	int key_length = strlen(key_)+1;
-	char key[REQUEST_SIZE];
-	memcpy((void *) key, (void *) key_, key_length);
-	key[key_length-1] = '\0';
-
 	int32_t curr_imss_storages = curr_imss.info.num_storages;
 
 	//Send the data block to every server implementing redundancy.
@@ -2540,21 +2186,12 @@ set_ndata(int32_t 	 dataset_id,
 		uint32_t n_server_ = (n_server + i*(curr_imss_storages/curr_dataset.repl_factor)) % curr_imss_storages;
 
 		//printf("BLOCK %d SENT TO %d SERVER with key: %s (%d)\n", data_id, n_server_, key, key_length);
-		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[n_server_], (char *) &curr_imss.conns.id[n_server_], sizeof(uint32_t)) < 0)
-		{
-			perror("ERRIMSS_STAT_HELLO");
-			return -1;
-		}
-		char mode[] = "SET";
-		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[n_server_], mode, MODE_SIZE) < 0)
-		{
-			perror("ERRIMSS_STAT_HELLO");
-			return -1;
-		}
+        //Key related to the requested data element.
+	    sprintf(key_, "%" PRIu32 " SET %d %s$%d", curr_imss.conns.id[n_server_], size, curr_dataset.uri_, data_id);
 
 		//Send read request message specifying the block URI.
 		//if (comm_send(curr_imss.conns.eps_[n_server_], key, KEY, ZMQ_SNDMORE) < 0)
-		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[n_server_], key, REQUEST_SIZE) < 0) //SNDMORE
+		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[n_server_], key_, REQUEST_SIZE) < 0) //SNDMORE
 		{
 			perror("ERRIMSS_SETDATA_REQ");
 			return -1;
@@ -2687,25 +2324,13 @@ int32_t get_type(char * uri)
 {
 	//Formated uri to be sent to the metadata server.
 	char formated_uri[REQUEST_SIZE];
-	sprintf(formated_uri, "0 %s", uri);
 
 	//Discover the metadata server that handles the entity.
 	uint32_t m_srv = discover_stat_srv(uri);
 	//printf("get_type=%s\n",uri);
 	//Send the request.
-	if (send_stream(ucp_worker_client, stat_client[m_srv], (char *) &stat_ids[m_srv], sizeof(uint32_t)) < 0)
-	{
-		perror("ERRIMSS_STAT_HELLO");
-		return -1;
-	}
 
-	char mode[] = "GET";
-	if (send_stream(ucp_worker_client, stat_client[m_srv], mode, MODE_SIZE) < 0)
-	{
-		perror("ERRIMSS_STAT_HELLO");
-		return -1;
-	}
-
+	sprintf(formated_uri, "%" PRIu32 " GET 0 %s", stat_ids[m_srv], uri);
 	if (send_stream(ucp_worker_client, stat_client[m_srv], formated_uri, REQUEST_SIZE) < 0)
 	{
 		fprintf(stderr, "ERRIMSS_GETTYPE_REQ\n");

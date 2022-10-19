@@ -403,11 +403,11 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 	gettimeofday(&start1, NULL);*/
 
 	while(curr_blk <= end_blk){
-		printf("curr_block=%ld, end_block=%ld\n",curr_blk,end_blk);
-		pthread_mutex_lock(&lock);
+		//printf("curr_block=%ld, end_block=%ld\n",curr_blk,end_blk);
+	    //pthread_mutex_lock(&lock);
 		
 		//int err = get_data(ds, curr_blk, (char*)aux);
-		pthread_mutex_unlock(&lock);
+		//pthread_mutex_unlock(&lock);
 		//if( err != -1){
 			//First block case
 			if (first == 0) {
@@ -425,7 +425,7 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 						to_read = IMSS_DATA_BSIZE - start_offset;
 					}																			    
 				}
-				printf("[imss_sread] first_block to_read=%ld\n",to_read);
+				//printf("[imss_sread] first_block to_read=%ld\n",to_read);
 				memcpy(buf, aux + start_offset, to_read);
 				byte_count += to_read;
 				++first;
@@ -953,9 +953,9 @@ int imss_vread_2x(const char *path, char *buf, size_t size, off_t offset)
 
 int imss_read(const char *path, char *buf, size_t size, off_t offset) {
    int ret;
-   ret = imss_sread(path, buf, size, offset);
+ //  ret = imss_sread(path, buf, size, offset);
 
-/*
+
    	if (BEST_PERFORMANCE_READ == 0){
 		if (MULTIPLE_READ == 1){
 			ret = imss_vread_prefetch(path, buf, size, offset);
@@ -980,7 +980,7 @@ int imss_read(const char *path, char *buf, size_t size, off_t offset) {
 			ret = imss_split_readv(path, buf, size, offset);
 		}
 	}
-*/	
+	
    return ret;
 }
 

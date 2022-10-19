@@ -337,6 +337,7 @@ close(int fd)
 	if (!init) { 
 		return real_close(fd);
 	}
+	if (IMSS_DEBUG)  fprintf(stderr, "[POSIX]. Calling 'close'.\n");
 	map_fd_search_by_val_close(map_fd, fd);  // MIRAR
 	ret = real_close(fd);  
 	return ret;

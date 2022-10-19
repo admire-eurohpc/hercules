@@ -125,10 +125,13 @@ void * srv_worker_thread (void * th_argv)
 		char mode[MODE_SIZE];
 
         DPRINT ("[DATA WORKER] Waiting for new request.\n");
-		//Save the identity of the requesting client.
-		recv_stream(ucp_data_worker, arguments->server_ep, (char *) &client_id, sizeof(uint32_t ));
+		//Save the request to be served.
+		recv_stream(ucp_data_worker, arguments->server_ep, req, REQUEST_SIZE);
 
-		recv_stream(ucp_data_worker, arguments->server_ep, mode, MODE_SIZE);
+        sscanf(req, "%" PRIu32 " %s", &client_id, mode);
+
+        char *req_content = strstr(req, mode);
+		req_content += 4;
 
 		if (!strcmp(mode, "GET"))
 			more = GET_OP;
@@ -139,20 +142,18 @@ void * srv_worker_thread (void * th_argv)
 		  long delta_us;
 		  gettimeofday(&start, NULL);*/
 
-		//Save the request to be served.
-		recv_stream(ucp_data_worker, arguments->server_ep, req, REQUEST_SIZE);
 
-		DPRINT ("[DATA WORKER] Request - client_id '%" PRIu32 "', mode '%s', req '%s'\n",client_id, mode, req)
+		DPRINT ("[DATA WORKER] Request - client_id '%" PRIu32 "', mode '%s', req '%s'\n",client_id, mode, req_content)
 			/*struct timeval start2, end2;
 			  long delta_us2;
 			  gettimeofday(&start2, NULL);*/
 
 	    char number[16];
-		sscanf(req, "%s", number);
+		sscanf(req_content, "%s", number);
 		int32_t number_length = (int32_t) strlen(number);
 
 		//Elements conforming the request.
-		char * uri_ = req + number_length + 1;
+		char * uri_ = req_content + number_length + 1;
 		uint64_t block_size_recv = (uint64_t) atoi(number);
 
 		//Create an std::string in order to be managed by the map structure.
@@ -483,8 +484,8 @@ void * srv_worker_thread (void * th_argv)
 				{
 					//std::cout <<"WRITE_OP key:" << key << '\n';
 
-					struct utsname detect;
-					uname(&detect);
+					//struct utsname detect;
+					//uname(&detect);
 
 					int op;
 					std::size_t found = key.find(' ');
@@ -866,31 +867,25 @@ void * srv_worker_thread (void * th_argv)
 			char mode[MODE_SIZE];
 
             DPRINT ("[STAT WORKER] Waiting for new request.\n");
-			//Save the identity of the requesting client.
-			recv_stream(ucp_data_worker, arguments->server_ep, (char *) &client_id, sizeof(uint32_t));
-
-			/*struct timeval start, end;
-			  long delta_us;
-			  gettimeofday(&start, NULL);*/
-
 			//Save the request to be served.
-			recv_stream(ucp_data_worker, arguments->server_ep, mode, MODE_SIZE);
+			recv_stream(ucp_data_worker, arguments->server_ep, req, REQUEST_SIZE);
+
+            sscanf(req, "%" PRIu32 " %s", &client_id, mode);
+
+            char *req_content = strstr(req, mode);
+            req_content += 4;
 
 			if (!strcmp(mode, "GET"))
 				more = GET_OP;
 			else
 				more = SET_OP;
 
-			//Save the request to be served.
-			recv_stream(ucp_data_worker, arguments->server_ep, req, REQUEST_SIZE);
-
-
-			DPRINT ("[STAT WORKER] Request - client_id '%" PRIu32 "', mode '%s', req '%s'\n", client_id, mode, req)
+			DPRINT ("[STAT WORKER] Request - client_id '%" PRIu32 "', mode '%s', req '%s'\n", client_id, mode, req_content)
 				//Expeted incomming message format: "SIZE_IN_KB KEY"
-				int32_t req_size = strlen(req);
+			int32_t req_size = strlen(req_content);
 
 			char raw_msg[req_size+1];
-			memcpy((void*) raw_msg, req, req_size);
+			memcpy((void*) raw_msg, req_content, req_size);
 			raw_msg[req_size] = '\0';
 
 			//printf("*********worker_metadata raw_msg %s\n",raw_msg);
@@ -1285,23 +1280,19 @@ void * srv_worker_thread (void * th_argv)
 				}
 
 				//Save the identity of the requesting client.
-				recv_stream(ucp_data_worker, server_ep, (char*)&client_id_, sizeof(uint32_t));
 				char mode[MODE_SIZE];
-				if (recv_stream(ucp_data_worker, server_ep, mode, MODE_SIZE) < 0)
-				{
-					perror("ERRIMSS_WORKER_SENDCLIENTID");
-					ep_flush(server_ep, ucp_data_worker);
-					ep_close(ucp_data_worker, server_ep, UCP_EP_CLOSE_MODE_FLUSH);
-					pthread_exit(NULL);
-				}
 				recv_stream(ucp_data_worker, server_ep, req, REQUEST_SIZE);
+
+                sscanf(req, "%" PRIu32 " %s", &client_id_, mode);
+                char *req_content = strstr(req, mode);
+                req_content += 4;
 
 				uint32_t c_id = client_id_;
 
 				//Check if the client is requesting connection resources.
-				if (!strncmp(req, "HELLO!", 6))
+				if (!strncmp(req_content, "HELLO!", 6))
 				{
-					if (strncmp(req, "HELLO!JOIN", 10) != 0)
+					if (strncmp(req_content, "HELLO!JOIN", 10) != 0)
 					{
 						//Retrieve the buffer size that will be asigned to the current server process.
 						char buff[6];
@@ -1405,17 +1396,18 @@ void * srv_worker_thread (void * th_argv)
 					pthread_exit(NULL);
 				}
 
-				//Save the identity of the requesting client.
-				recv_stream(ucp_data_worker, server_ep, (char *)&client_id_, sizeof(uint32_t));
-
 				char mode[MODE_SIZE];
-				recv_stream(ucp_data_worker, server_ep, mode, MODE_SIZE);
-
 				//Save the request to be served.
+
 				recv_stream(ucp_data_worker, server_ep, req, REQUEST_SIZE);
 
+                sscanf(req, "%" PRIu32 " %s", &client_id_, mode);
+
+                char *req_content = strstr(req, mode);
+                req_content += 4;
+
 				//Check if the client is requesting connection resources.
-				if (!strncmp(req, "HELLO!", 6))
+				if (!strncmp(req_content, "HELLO!", 6))
 				{
 					//Message containing the client's communication ID plus its connection port.
 					char response_[RESPONSE_SIZE]; 
