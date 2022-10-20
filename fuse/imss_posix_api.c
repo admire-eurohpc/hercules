@@ -356,19 +356,6 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 	
 	get_iuri(path, rpath);
 
-	/*size_t read_size = 0;	
-	//Check dataset_size to calculate the maximum information to read	
-	stat_dataset(rpath, &new_dataset);
-	printf("imss_sread to read size=%ld offset=%ld\n",read_size,offset);
-	if(  (offset+read_size) > new_dataset.data_entity_size){
-		printf("1new_dataset.size=%d\n", new_dataset.data_entity_size);
-		size = (new_dataset.data_entity_size - offset);
-	}else{
-		printf("2new_dataset.size=%d\n", new_dataset.data_entity_size);
-		size = read_size;
-	}
-	
-	printf("size=%ld\n", size);*/
 
 	int64_t curr_blk, end_blk, start_offset, end_offset;
 	int64_t first = 0; 
@@ -394,26 +381,22 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 	struct stat stats;
 	char * aux;
 
-/*	struct timeval start, end;
-	long delta_us;
-	gettimeofday(&start, NULL);*/
 	fd_lookup(rpath, &fd, &stats, &aux);
-	printf("stats_size=%d\n",stats.st_size);
-	/*gettimeofday(&end, NULL);
-	delta_us = (long) (end.tv_usec - start.tv_usec);
-	printf("[CLIENT] [SREAD LOOKUP] delta_us=%6.3f\n",(delta_us/1000.0F));*/
+	//printf("stats_size=%ld\n",stats.st_size);
+	if(stats.st_size < size){
+		end_blk = ceil((double)(offset+stats.st_size) / IMSS_DATA_BSIZE);
+	}
 
 	//Check if offset is bigger than filled, return 0 because is EOF case
 	if(start_offset >= stats.st_size){ 
 		return 0; 
 	}	
-	printf("11111\n");
+
 	if (fd >= 0) 
 		ds = fd;
 	else if (fd == -2)
 		return -ENOENT;
 	
-	printf("2222\n");
 //	gettimeofday(&start, NULL);
 	memset(buf, 0, size);
 	
@@ -421,9 +404,7 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 /*	struct timeval start1, end1;
 	long delta_us1;
 	gettimeofday(&start1, NULL);*/
-	printf("Loop sread curr_block=%d end_block=%d\n",curr_blk, end_blk);
 	while(curr_blk <= end_blk){
-		printf("Loop sread curr_block=%d end_block=%d\n",curr_blk, end_blk);
 		//if( err != -1){
 			//First block case
 			if (first == 0) {
@@ -1335,7 +1316,10 @@ int imss_split_readv(const char *path, char *buf, size_t size, off_t offset)
 	char * aux;
 
 	fd_lookup(rpath, &fd, &stats, &aux);
-	
+	//printf("stats_size=%ld\n",stats.st_size);
+	if(stats.st_size < size){
+		end_blk = ceil((double)(offset+stats.st_size) / IMSS_DATA_BSIZE);
+	}
 
 	//Check if offset is bigger than filled, return 0 because is EOF case
 	if(start_offset >= stats.st_size){ 
@@ -1395,7 +1379,7 @@ int imss_split_readv(const char *path, char *buf, size_t size, off_t offset)
 		sprintf(number,"%d",count);
 		strcat(msg[server],number);
 		strcat(msg[server],all_blocks);
-	//	printf("server=%d msg_full=%s\n",server, msg[server]);
+		printf("server=%d msg_full=%s\n",server, msg[server]);
 	//	printf("amount=%d\n",amount[server]);
 	}
 
@@ -1639,7 +1623,7 @@ int imss_create(const char * path, mode_t mode, uint64_t * fh)
 	set_data(*fh, 0, (char *)buff);
 	pthread_mutex_unlock(&lock);
 
-
+	map_erase(map,rpath);
 	pthread_mutex_lock(&lock_file);
 	map_put(map, rpath, *fh, ds_stat, buff);
 

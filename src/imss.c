@@ -1801,7 +1801,7 @@ void * split_readv(void * th_argv)
 			perror("ERRIMSS_GETDATA_REQ");
 		}
 
-		printf("[SPLIT READV] 4-Send_msg\n");
+		//printf("[SPLIT READV] 4-Send_msg\n");
 				if (send_stream(ucp_worker_client, curr_imss.conns.eps_[repl_servers[i]], arguments->msg, msg_length) < 0)
 				{
 					perror("ERRIMSS_GETDATA_REQ");
