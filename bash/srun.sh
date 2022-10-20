@@ -13,7 +13,7 @@ BLOCK_SIZE=$4
 META_PORT=$5
 DATA_PORT=$6
 
-IMSS_PATH=$HOME/imss_parallel/imss/build
+IMSS_PATH=$HOME/imss/build
 IOR_PATH=/home/software/io500/bin
 
 module unload mpi

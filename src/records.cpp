@@ -12,12 +12,14 @@
 #include <sys/utsname.h>
 #include "records.hpp"
 #include "imss.h"
+#include "queue.h"
 
 using std::map;
 using std::pair;
 using std::make_pair;
 using std::string;
 
+extern StsHeader * mem_pool;
 
 map_records::map_records(const uint64_t nsize)  {
 	total_size = nsize;
@@ -298,7 +300,8 @@ int32_t map_records::cleaning()
 	for (i=vec.begin(); i<vec.end(); i++){
 		//std::cout << "Garbage Collector: Deleting " << *i << "\n";
 		auto item = buffer.find(*i);
-		free(item->second.first);
+		StsQueue.push(mem_pool, item->second.first);
+		// free(item->second.first);
 		buffer.erase (*i);
 
 	}
@@ -348,4 +351,5 @@ int32_t map_records::cleaning_specific(std::string new_key)
 	  }*/
 	return 0;
 }
+
 

@@ -46,6 +46,8 @@ typedef struct {
     ucp_worker_h  ucp_worker;
 	ucp_worker_h  ucp_data_worker;
 	ucp_ep_h      server_ep;
+	size_t		  blocksize;
+	uint64_t	  storage_size;
 } p_argv;
 
 
@@ -67,3 +69,4 @@ void * srv_attached_dispatcher (void * th_argv);
 void * dispatcher (void * th_argv);
 
 #endif
+

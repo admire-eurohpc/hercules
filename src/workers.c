@@ -35,6 +35,8 @@ pthread_mutex_t buff_size_mut;
 pthread_cond_t 	buff_size_cond;
 int32_t 	copied;
 
+StsHeader * mem_pool;
+
 //URI of the attached deployment.
 char att_imss_uri[URI_];
 
@@ -44,11 +46,27 @@ pthread_mutex_t mp = PTHREAD_MUTEX_INITIALIZER;
 
 void * srv_worker (void * th_argv)
 {
-	ucx_server_ctx_t context;
-	ucs_status_t     status;
-	int              ret;
+	ucx_server_ctx_t 	context;
+	ucs_status_t 		status;
+	int 				ret;
+	uint64_t 			max_storage_size;
+	uint32_t 			num_blocks;
 
 	p_argv * arguments = (p_argv *) th_argv;
+
+	max_storage_size = arguments->storage_size*GB;
+	if (!max_storage_size) {
+		//TODO: check max available memory
+		max_storage_size = 32*GB;
+	}
+
+	// init memory pool
+	mem_pool = StsQueue.create();
+	num_blocks = max_storage_size/arguments->blocksize*KB;
+	for (int i = 0; i < num_blocks; ++i) {
+		char *buffer = (char *) malloc(arguments->blocksize*KB);
+		StsQueue.push(mem_pool, buffer);
+	}
 
 	context.conn_request =  StsQueue.create();
 	status = start_server(arguments->ucp_worker, &context, &context.listener, NULL, arguments->port);
@@ -705,8 +723,9 @@ void * srv_worker_thread (void * th_argv)
 						//if (!map->get(key, &address_, &block_size_rtvd))
 
 						if(ret == 0){
+							char * buffer = (char *)StsQueue.pop(mem_pool);
 
-							char * buffer = (char *) malloc(block_size_recv);
+							// char * buffer = (char *) malloc(block_size_recv);
 							//char * buffer = (char *)aligned_alloc(1024, block_size_recv);
 							//Receive the block into the buffer.
 							recv_stream(ucp_data_worker, arguments->server_ep, buffer, block_size_recv);
@@ -729,7 +748,6 @@ void * srv_worker_thread (void * th_argv)
 							}
 
 							//Update the pointer.
-
 							arguments->pt += block_size_recv;
 
 						}
@@ -1445,3 +1463,4 @@ void * srv_worker_thread (void * th_argv)
 
 			pthread_exit(NULL);
 		}
+

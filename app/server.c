@@ -39,6 +39,8 @@ void *map_ep; //map_ep used for async write; server doesn't use it
 int32_t is_client = 0;
 
 int32_t  IMSS_DEBUG = 0;
+uint64_t IMSS_BLKSIZE = 1024;//In KB 
+uint64_t STORAGE_SIZE = 16; //In GB
 
 int32_t main(int32_t argc, char **argv)
 {
@@ -65,6 +67,13 @@ int32_t main(int32_t argc, char **argv)
 	if (getenv("IMSS_DEBUG") != NULL) {
 		IMSS_DEBUG = 1;
 	}
+	if (getenv("IMSS_BLKSIZE") != NULL) {
+		IMSS_BLKSIZE = atoi(getenv("IMSS_BLKSIZE"));
+	}
+	if (getenv("IMSS_STORAGE_SIZE") != NULL) {
+		STORAGE_SIZE = atol(getenv("IMSS_STORAGE_SIZE"));
+	}
+
 
 
 	parse_args(argc, argv, &args);
@@ -257,6 +266,8 @@ int32_t main(int32_t argc, char **argv)
 		arguments[i].port = (bind_port)++;
 		arguments[i].ucp_context = ucp_context;
 		arguments[i].ucp_worker = ucp_worker;
+		arguments[i].blocksize = IMSS_BLKSIZE;
+		arguments[i].storage_size = STORAGE_SIZE;
 		//Add the instance URI to the thread arguments.
 		strcpy(arguments[i].my_uri, imss_uri);
 
@@ -419,3 +430,4 @@ int32_t main(int32_t argc, char **argv)
 	//Free the publisher release address.
 	return 0;
 }
+
