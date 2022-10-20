@@ -71,8 +71,8 @@ int32_t  IMSS_DEBUG = 0;
 ucp_context_h ucp_context_client;
 ucp_worker_h  ucp_worker_client;
 
-void * map_ep; //map_ep used for async write
-int32_t is_client = 1;
+void * map_ep; // map_ep used for async write
+int32_t is_client = 1; // also used for async write
 
 //Method inserting an element into a certain control GArray vector.
 	int32_t

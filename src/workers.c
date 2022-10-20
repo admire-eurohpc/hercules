@@ -62,7 +62,7 @@ void * srv_worker (void * th_argv)
 
 	// init memory pool
 	mem_pool = StsQueue.create();
-	num_blocks = max_storage_size/arguments->blocksize*KB;
+	num_blocks = max_storage_size/(arguments->blocksize*KB);
 	for (int i = 0; i < num_blocks; ++i) {
 		char *buffer = (char *) malloc(arguments->blocksize*KB);
 		StsQueue.push(mem_pool, buffer);
@@ -724,7 +724,6 @@ void * srv_worker_thread (void * th_argv)
 
 						if(ret == 0){
 							char * buffer = (char *)StsQueue.pop(mem_pool);
-
 							// char * buffer = (char *) malloc(block_size_recv);
 							//char * buffer = (char *)aligned_alloc(1024, block_size_recv);
 							//Receive the block into the buffer.
