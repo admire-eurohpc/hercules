@@ -337,6 +337,7 @@ close(int fd)
 	if (!init) { 
 		return real_close(fd);
 	}
+	if (IMSS_DEBUG)  fprintf(stderr, "[POSIX]. Calling 'close'.\n");
 	map_fd_search_by_val_close(map_fd, fd);  // MIRAR
 	ret = real_close(fd);  
 	return ret;
@@ -557,7 +558,11 @@ int open(const char *pathname, int flags, ...)
 			map_fd_put(map_fd, new_path, ret, p);
 			int create_flag = (flags & O_CREAT);
 			if (create_flag){
+<<<<<<< HEAD
 				DPRINT("IMSS_CREATE %s\n",new_path);
+=======
+				//printf("IMSS_CREATE %s\n",new_path);
+>>>>>>> b76aa950b99ac5666acba7fb9fb3ff136e668361
 				int err_create = imss_create(new_path, mode, &ret_ds);
 				if (err_create == -EEXIST) {
 					if (IMSS_DEBUG)  fprintf(stderr, "[POSIX]. Dataset already exists.\n");

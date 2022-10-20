@@ -1,0 +1,408 @@
+[SERVER] Starting server.
+[COMM] Inicializated worker result: 0
+[COMM] Inicializated context result: 0
+[SERVER] Creating dispatcher thread.
+[SERVER] Creating data thread.
+[COMM] Started server with status 0 
+[COMM] Inicializated worker result: 0
+[COMM] Started server with status 0 
+[DISPATCHER] Waiting for connection requests.
+[COMM] Server received a connection request from client at address 10.0.40.14:51936
+[COMM] Created server endpoint
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (1024 bytes).
+[COMM] Sending stream (1024 bytes).
+[DISPATCHER] Replied client 6256-670095638.
+[COMM] Closed endpoint
+[DISPATCHER] Waiting for connection requests.
+[COMM] Server received a connection request from client at address 10.0.40.14:37820
+[COMM] Inicializated worker result: 0
+[COMM] Created server endpoint
+[DATA WORKER] Created thread for new endpoint.
+[DATA WORKER] Waiting for new request.
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (1024 bytes).
+[DATA WORKER] Request - client_id '670095638', mode 'SET', req '1048576 imss://data.out$1'
+[COMM] Recv stream (1048576 bytes).
+Nodename    - compute-3-1 add in map=imss://data.out$1
+[DATA WORKER] Waiting for new request.
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (1024 bytes).
+[DATA WORKER] Request - client_id '670095638', mode 'SET', req '1048576 imss://data.out$3'
+[COMM] Recv stream (1048576 bytes).
+Nodename    - compute-3-1 add in map=imss://data.out$3
+[DATA WORKER] Waiting for new request.
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (1024 bytes).
+[DATA WORKER] Request - client_id '670095638', mode 'SET', req '1048576 imss://data.out$5'
+[COMM] Recv stream (1048576 bytes).
+Nodename    - compute-3-1 add in map=imss://data.out$5
+[DATA WORKER] Waiting for new request.
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (1024 bytes).
+[DATA WORKER] Request - client_id '670095638', mode 'SET', req '1048576 imss://data.out$7'
+[COMM] Recv stream (1048576 bytes).
+Nodename    - compute-3-1 add in map=imss://data.out$7
+[DATA WORKER] Waiting for new request.
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (1024 bytes).
+[DATA WORKER] RequestNodename    - compute-2-4 add in map=imss://data.out$2
+[DATA WORKER] Waiting for new request.
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (1024 bytes).
+[DATA WORKER] Request - client_id '670095638', mode 'SET', req '1048576 imss://data.out$4'
+[COMM] Recv stream (1048576 bytes).
+Nodename    - compute-2-4 add in map=imss://data.out$4
+[DATA WORKER] Waiting for new request.
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (1024 bytes).
+[DATA WORKER] Request - client_id '670095638', mode 'SET', req '1048576 imss://data.out$6'
+[COMM] Recv stream (1048576 bytes).
+Nodename    - compute-2-4 add in map=imss://data.out$6
+[DATA WORKER] Waiting for new request.
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (1024 bytes).
+[DATA WORKER] Request - client_id '670095638', mode 'SET', req '1048576 imss://data.out$8'
+[COMM] Recv stream (1048576 bytes).
+Nodename    - compute-2-4 add in map=imss://data.out$8
+[DATA WORKER] Waiting for new request.
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (1024 bytes).
+[DATA WORKER] Request - client_id '670095638', mode 'SET', req '1048576 imss://data.out$11'
+[COMM] Recv stream (1048576 bytes).
+Nodename    - compute-2-4 add in map=imss://data.out$11
+[DATA WORKER] Waiting for new request.
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (1024 bytes).
+[DATA WORKER] Request - client_id '670095638', mode 'SET', req '1048576 imss://data.out$13'
+[COMM] Recv stream (1048576 bytes).
+Nodename    - compute-2-4 add in map=imss://data.out$13
+[DATA WORKER] Waiting for new request.
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (1024 bytes).
+[DATA WORKER] Request - client_id '670095638', mode 'SET', req '1048576 imss://data.out$15'
+[COMM] Recv stream (1048576 bytes).
+Nodename    - compute-2-4 add in map=imss://data.out$15
+[DATA WORKER] Waiting for new request.
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (1024 bytes).
+[DATA WORKER] Request - client_id '670095638', mode 'SET', req '1048576 imss://data.out$17'
+[COMM] Recv stream (1048576 bytes).
+Nodename    - compute-2-4 add in map=imss://data.out$17
+[DATA WORKER] Waiting for new request.
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (1024 bytes).
+[DATA WORKER] Request - client_id '670095638', mode 'SET', req '1048576 imss://data.out$19'
+[COMM] Recv stream (1048576 bytes).
+Nodename    - compute-2-4 add in map=imss://data.out$19
+[DATA WORKER] Waiting for new request.
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (1024 bytes).
+[DATA WORKER] Request - client_id '670095638', mode 'SET', req '1048576 imss://data.out$20'
+[COMM] Recv stream (1048576 bytes).
+Nodename    - compute-2-4 add in map=imss://data.out$20
+[DATA WORKER] Waiting for new request.
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (1024 bytes).
+[DATA WORKER] Request - client_id '670095638', mode 'SET', req '1048576 imss://data.out$22'
+[COMM] Recv stream (1048576 bytes).
+Nodename    - compute-2-4 add in map=imss://data.out$22
+[DATA WORKER] Waiting for new request.
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (1024 bytes).
+[DATA WORKER] Request - client_id '670095638', mode 'SET', req '1048576 imss://data.out$24'
+[COMM] Recv stream (1048576 bytes).
+Nodename    - compute-2-4 add in map=imss://data.out$24
+[DATA WORKER] Waiting for new request.
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (1024 bytes).
+[DATA WORKER] Request - client_id '670095638', mode 'SET', req '1048576 imss://data.out$26'
+[COMM] Recv stream (1048576 bytes).
+Nodename    - compute-2-4 add in map=imss://data.out$26
+[DATA WORKER] Waiting for new request.
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (1024 bytes).
+[DATA WORKER] Request - client_id '670095638', mode 'SET', req '1048576 imss://data.out$28'
+[COMM] Recv stream (1048576 bytes).
+Nodename    - compute-2-4 add in map=imss://data.out$28
+[DATA WORKER] Waiting for new request.
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (1024 bytes).
+[DATA WORKER] Request - client_id '670095638', mode 'SET', req '1048576 imss://data.out$31'
+[COMM] Recv stream (1048576 bytes).
+Nodename    - compute-2-4 add in map=imss://data.out$31
+[DATA WORKER] Waiting for new request.
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (1024 bytes).
+[DATA WORKER] Request - client_id '670095638', mode 'SET', req '1048576 imss://data.out$33'
+[COMM] Recv stream (1048576 bytes).
+Nodename    - compute-2-4 add in map=imss://data.out$33
+[DATA WORKER] Waiting for new request.
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (1024 bytes).
+[DATA WORKER] Request - client_id '670095638', mode 'SET', req '1048576 imss://data.out$35'
+[COMM] Recv stream (1048576 bytes).
+Nodename    - compute-2-4 add in map=imss://data.out$35
+[DATA WORKER] Waiting for new request.
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (1024 bytes).
+[DATA WORKER] Request - client_id '670095638', mode 'SET', req '1048576 imss://data.out$37'
+[COMM] Recv stream (1048576 bytes).
+Nodename    - compute-2-4 add in map=imss://data.out$37
+[DATA WORKER] Waiting for new request.
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (1024 bytes).
+[DATA WORKER] Request - client_id '670095638', mode 'SET', req '1048576 imss://data.out$39'
+[COMM] Recv stream (1048576 bytes).
+Nodename    - compute-2-4 add in map=imss://data.out$39
+[DATA WORKER] Waiting for new request.
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (1024 bytes).
+[DATA WORKER] Request - client_id '670095638', mode 'SET', req '1048576 imss://data.out$40'
+[COMM] Recv stream (1048576 bytes).
+Nodename    - compute-2-4 add in map=imss://data.out$40
+[DATA WORKER] Waiting for new request.
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (1024 bytes).
+[DATA WORKER] Request - client_id '670095638', mode 'SET', req '1048576 imss://data.out$42'
+[COMM] Recv stream (1048576 bytes).
+Nodename    - compute-2-4 add in map=imss://data.out$42
+[DATA WORKER] Waiting for new request.
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (1024 bytes).
+[DATA WORKER] Request - client_id '670095638', mode 'SET', req '1048576 imss://data.out$44'
+[COMM] Recv stream (1048576 bytes).
+Nodename    - compute-2-4 add in map=imss://data.out$44
+[DATA WORKER] Waiting for new request.
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (1024 bytes).
+[DATA WORKER] Request - client_id '670095638', mode 'SET', req '1048576 imss://data.out$46'
+[COMM] Recv stream (1048576 bytes).
+Nodename    - compute-2-4 add in map=imss://data.out$46
+[DATA WORKER] Waiting for new request.
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (1024 bytes).
+[DATA WORKER] Request - client_id '670095638', mode 'SET', req '1048576 imss://data.out$48'
+[COMM] Recv stream (1048576 bytes).
+Nodename    - compute-2-4 add in map=imss://data.out$48
+[DATA WORKER] Waiting for new request.
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (1024 bytes).
+[DATA WORKER] Request - client_id '670095638', mode 'SET', req '1048576 imss://data.out$51'
+[COMM] Recv stream (1048576 bytes).
+Nodename    - compute-2-4 add in map=imss://data.out$51
+[DATA WORKER] Waiting for new request.
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (1024 bytes).
+[DATA WORKER] Request - client_id '670095638', mode 'SET', req '1048576 imss://data.out$53'
+[COMM] Recv stream (1048576 bytes).
+Nodename    - compute-2-4 add in map=imss://data.out$53
+[DATA WORKER] Waiting for new request.
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (1024 bytes).
+[DATA WORKER] Request - client_id '670095638', mode 'SET', req '1048576 imss://data.out$55'
+[COMM] Recv stream (1048576 bytes).
+Nodename    - compute-2-4 add in map=imss://data.out$55
+[DATA WORKER] Waiting for new request.
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (1024 bytes).
+[DATA WORKER] Request - client_id '670095638', mode 'SET', req '1048576 imss://data.out$57'
+[COMM] Recv stream (1048576 bytes).
+Nodename    - compute-2-4 add in map=imss://data.out$57
+[DATA WORKER] Waiting for new request.
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (1024 bytes).
+[DATA WORKER] Request - client_id '670095638', mode 'SET', req '1048576 imss://data.out$59'
+[COMM] Recv stream (1048576 bytes).
+Nodename    - compute-2-4 add in map=imss://data.out$59
+[DATA WORKER] Waiting for new request.
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (1024 bytes).
+[DATA WORKER] Request - client_id '670095638', mode 'SET', req '1048576 imss://data.out$60'
+[COMM] Recv stream (1048576 bytes).
+Nodename    - compute-2-4 add in map=imss://data.out$60
+[DATA WORKER] Waiting for new request.
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (1024 bytes).
+[DATA WORKER] Request - client_id '670095638', mode 'SET', req '1048576 imss://data.out$62'
+[COMM] Recv stream (1048576 bytes).
+Nodename    - compute-2-4 add in map=imss://data.out$62
+[DATA WORKER] Waiting for new request.
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (1024 bytes).
+[DATA WORKER] Request - client_id '670095638', mode 'SET', req '1048576 imss://data.out$64'
+[COMM] Recv stream (1048576 bytes).
+Nodename    - compute-2-4 add in map=imss://data.out$64
+[DATA WORKER] Waiting for new request.
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (1024 bytes).
+[DATA WORKER] Request - client_id '670095638', mode 'SET', req '1048576 imss://data.out$66'
+[COMM] Recv stream (1048576 bytes).
+Nodename    - compute-2-4 add in map=imss://data.out$66
+[DATA WORKER] Waiting for new request.
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (1024 bytes).
+[DATA WORKER] Request - client_id '670095638', mode 'SET', req '1048576 imss://data.out$68'
+[COMM] Recv stream (1048576 bytes).
+Nodename    - compute-2-4 add in map=imss://data.out$68
+[DATA WORKER] Waiting for new request.
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (1024 bytes).
+[DATA WORKER] Request - client_id '670095638', mode 'SET', req '1048576 imss://data.out$71'
+[COMM] Recv stream (1048576 bytes).
+Nodename    - compute-2-4 add in map=imss://data.out$71
+[DATA WORKER] Waiting for new request.
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (1024 bytes).
+[DATA WORKER] Request - client_id '670095638', mode 'SET', req '1048576 imss://data.out$73'
+[COMM] Recv stream (1048576 bytes).
+Nodename    - compute-2-4 add in map=imss://data.out$73
+[DATA WORKER] Waiting for new request.
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (1024 bytes).
+[DATA WORKER] Request - client_id '670095638', mode 'SET', req '1048576 imss://data.out$75'
+[COMM] Recv stream (1048576 bytes).
+Nodename    - compute-2-4 add in map=imss://data.out$75
+[DATA WORKER] Waiting for new request.
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (1024 bytes).
+[DATA WORKER] Request - client_id '670095638', mode 'SET', req '1048576 imss://data.out$77'
+[COMM] Recv stream (1048576 bytes).
+Nodename    - compute-2-4 add in map=imss://data.out$77
+[DATA WORKER] Waiting for new request.
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (1024 bytes).
+[DATA WORKER] Request - client_id '670095638', mode 'SET', req '1048576 imss://data.out$79'
+[COMM] Recv stream (1048576 bytes).
+Nodename    - compute-2-4 add in map=imss://data.out$79
+[DATA WORKER] Waiting for new request.
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (1024 bytes).
+[DATA WORKER] Request - client_id '670095638', mode 'SET', req '1048576 imss://data.out$80'
+[COMM] Recv stream (1048576 bytes).
+Nodename    - compute-2-4 add in map=imss://data.out$80
+[DATA WORKER] Waiting for new request.
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (1024 bytes).
+[DATA WORKER] Request - client_id '670095638', mode 'SET', req '1048576 imss://data.out$82'
+[COMM] Recv stream (1048576 bytes).
+Nodename    - compute-2-4 add in map=imss://data.out$82
+[DATA WORKER] Waiting for new request.
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (1024 bytes).
+[DATA WORKER] Request - client_id '670095638', mode 'SET', req '1048576 imss://data.out$84'
+[COMM] Recv stream (1048576 bytes).
+Nodename    - compute-2-4 add in map=imss://data.out$84
+[DATA WORKER] Waiting for new request.
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (1024 bytes).
+[DATA WORKER] Request - client_id '670095638', mode 'SET', req '1048576 imss://data.out$86'
+[COMM] Recv stream (1048576 bytes).
+Nodename    - compute-2-4 add in map=imss://data.out$86
+[DATA WORKER] Waiting for new request.
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (1024 bytes).
+[DATA WORKER] Request - client_id '670095638', mode 'SET', req '1048576 imss://data.out$88'
+[COMM] Recv stream (1048576 bytes).
+Nodename    - compute-2-4 add in map=imss://data.out$88
+[DATA WORKER] Waiting for new request.
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (1024 bytes).
+[DATA WORKER] Request - client_id '670095638', mode 'SET', req '1048576 imss://data.out$91'
+[COMM] Recv stream (1048576 bytes).
+Nodename    - compute-2-4 add in map=imss://data.out$91
+[DATA WORKER] Waiting for new request.
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (1024 bytes).
+[DATA WORKER] Request - client_id '670095638', mode 'SET', req '1048576 imss://data.out$93'
+[COMM] Recv stream (1048576 bytes).
+Nodename    - compute-2-4 add in map=imss://data.out$93
+[DATA WORKER] Waiting for new request.
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (1024 bytes).
+[DATA WORKER] Request - client_id '670095638', mode 'SET', req '1048576 imss://data.out$95'
+[COMM] Recv stream (1048576 bytes).
+Nodename    - compute-2-4 add in map=imss://data.out$95
+[DATA WORKER] Waiting for new request.
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (1024 bytes).
+[DATA WORKER] Request - client_id '670095638', mode 'SET', req '1048576 imss://data.out$97'
+[COMM] Recv stream (1048576 bytes).
+Nodename    - compute-2-4 add in map=imss://data.out$97
+[DATA WORKER] Waiting for new request.
+[COMM] Recv stream (4 bytes[COMM] Sending stream (53477376 bytes).
+[DATA WORKER] Waiting for new request.
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (1024 bytes).
+[DATA WORKER] Request - client_id '670095638', mode 'GET', req '2 RELEASE'
+[COMM] Flushed endpoint started.
+[COMM] Flush waiting for completion.
+[COMM] Flushed endpoint.
+[COMM] Closed endpoint
+am (1024 bytes).
+[DATA WORKER] Request - client_id '670095638', mode 'SET', req '1048576 imss://data.out$0'
+[COMM] Recv stream (1048576 bytes).
+[DATA WORKER] Waiting for new request.
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (1024 bytes).
+[DATA WORKER] Request - client_id '670095638', mode 'GET', req '9 imss://data.out 1024 0 104857600 146'
+[COMM] Recv stream (146 bytes).
+[COMM] Sending stream (51380224 bytes).
+[DATA WORKER] Waiting for new request.
+[COMM] Recv stream (4 bytes).
+[COMM] Recv stream (4 bytes).

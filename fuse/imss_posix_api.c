@@ -404,10 +404,14 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 
 	while(curr_blk <= end_blk){
 		//printf("curr_block=%ld, end_block=%ld\n",curr_blk,end_blk);
+<<<<<<< HEAD
 		pthread_mutex_lock(&lock);
+=======
+	    //pthread_mutex_lock(&lock);
+>>>>>>> b76aa950b99ac5666acba7fb9fb3ff136e668361
 		
 		//int err = get_data(ds, curr_blk, (char*)aux);
-		pthread_mutex_unlock(&lock);
+		//pthread_mutex_unlock(&lock);
 		//if( err != -1){
 			//First block case
 			if (first == 0) {
@@ -953,7 +957,11 @@ int imss_vread_2x(const char *path, char *buf, size_t size, off_t offset)
 
 int imss_read(const char *path, char *buf, size_t size, off_t offset) {
    int ret;
+<<<<<<< HEAD
   // ret = imss_sread(path, buf, size, offset);
+=======
+ //  ret = imss_sread(path, buf, size, offset);
+>>>>>>> b76aa950b99ac5666acba7fb9fb3ff136e668361
 
 
    	if (BEST_PERFORMANCE_READ == 0){
@@ -1026,7 +1034,7 @@ int imss_write(const char *path, const char *buf, size_t size, off_t off)
 	int fd;
 	struct stat stats;
 	fd_lookup(rpath, &fd, &stats, &aux);
-	printf("[imss_write] rpath=%s stats.st_size=%ld\n",rpath,stats.st_size);
+	//printf("[imss_write] rpath=%s stats.st_size=%ld\n",rpath,stats.st_size);
 	if (fd >= 0) 
 		ds = fd;
 	else if (fd == -2)
@@ -1638,7 +1646,7 @@ int imss_create(const char * path, mode_t mode, uint64_t * fh)
 	//Need to update if already exist
 	map_erase(map,rpath);
 	
-	printf("[imss_create] path=%s ds_stat=%ld\n",rpath,ds_stat.st_size);
+	//printf("[imss_create] path=%s ds_stat=%ld\n",rpath,ds_stat.st_size);
 	map_put(map, rpath, *fh, ds_stat, buff);
 	/*
 	int fd;
@@ -1655,7 +1663,7 @@ int imss_create(const char * path, mode_t mode, uint64_t * fh)
 	}
 	pthread_mutex_unlock(&lock_file);
 	free(rpath);
-	DPRINT("imss_create 44444\n");
+	//DPRINT("imss_create 44444\n");
 	return 0; 
 
 }

@@ -13,6 +13,7 @@
 #include "records.hpp"
 #include "arg_parser.h"
 #include "map_ep.hpp"
+#include <inttypes.h>
 
 
 //Pointer to the tree's root node.
@@ -126,22 +127,10 @@ int32_t main(int32_t argc, char **argv)
 			}
 
 			uint32_t id = CLOSE_EP;
-			if (send_stream(ucp_worker, client_ep, (char*) &id, sizeof(uint32_t)) < 0)
-			{
-				perror("ERRIMSS_DATASET_REQ");
-				return -1;
-			}
-
-			char mode[] = "GET\0";
-			if (send_stream(ucp_worker, client_ep, mode, MODE_SIZE) < 0)
-			{
-				perror("ERRIMSS_DATASET_REQ");
-				return -1;
-			}
 
 			//Formated imss uri to be sent to the metadata server.
 			char formated_uri[REQUEST_SIZE];
-			sprintf(formated_uri, "0 %s%c", imss_uri, '\0');
+			sprintf(formated_uri, "%" PRIu32 " GET 0 %s", id, imss_uri);
 
 			//Send the request.
 			if (send_stream(ucp_worker, client_ep, formated_uri, REQUEST_SIZE) < 0)
@@ -366,15 +355,9 @@ int32_t main(int32_t argc, char **argv)
 		}
 
 		char key_plus_size[REQUEST_SIZE];
-		//Send the created structure to the metadata server.
-		sprintf(key_plus_size, "%lu %s", (sizeof(imss_info)+my_imss.num_storages*LINE_LENGTH), my_imss.uri_);
-
 		uint32_t id = CLOSE_EP;
-		send_stream(ucp_worker, client_ep, (char *) &id, sizeof(uint32_t));
-
-		char mode[] = "SET\0";
-		send_stream(ucp_worker, client_ep, mode, MODE_SIZE);
-
+		//Send the created structure to the metadata server.
+		sprintf(key_plus_size, "%" PRIu32 " SET %lu %s", id,  (sizeof(imss_info)+my_imss.num_storages*LINE_LENGTH), my_imss.uri_);
 
 		if (send_stream(ucp_worker, client_ep, key_plus_size, REQUEST_SIZE) < 0) // SNDMORE
 		{
