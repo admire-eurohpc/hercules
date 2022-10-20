@@ -56,7 +56,7 @@ sleep 2
 
 echo "# IMMS: Running IOR"
 tail -n +$((NUM_METADATA+NUM_DATA+1)) hostfile | head -n $NUM_CLIENT > client_hostfile
-mpiexec -l -n $NUM_CLIENT --ppn 1 -f ./client_hostfile \
+mpiexec -l -n $NUM_CLIENT --ppn 2 -f ./client_hostfile \
              -env IMSS_DEBUG true \
              -env LD_PRELOAD $IMSS_PATH/tools/libimss_posix.so \
              -env IMSS_MOUNT_POINT /mnt/imss \
@@ -71,5 +71,5 @@ mpiexec -l -n $NUM_CLIENT --ppn 1 -f ./client_hostfile \
 			 -env IMSS_STORAGE_SIZE 8 \
 			 -env IMSS_METADATA_FILE $PWD/metadata \
 			 -env IMSS_DEPLOYMENT 2 \
-			 /home/hcristobal/imss_parallel/imss/bash/test_simple /mnt/imss/data.out
-			 #$IOR_PATH/ior -o /mnt/imss/data.out -t 100m -b 100m -s 1
+			 $IOR_PATH/ior -o /mnt/imss/data.out -t 100m -b 100m -s 1
+			 #/home/hcristobal/imss_parallel/imss/bash/test_simple /mnt/imss/data.out

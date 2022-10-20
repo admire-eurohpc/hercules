@@ -378,7 +378,7 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 
 
 	//Check if offset is bigger than filled, return 0 because is EOF case
-	printf("[imss_sread]path=%s stat.size=%ld\n",path,stats.st_size);
+	//printf("[imss_sread]path=%s stat.size=%ld\n",path,stats.st_size);
 	
 	/*Special case where is demand to read more that there is*/
 	if((stats.st_size - start_offset) < size){
@@ -403,7 +403,7 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 	gettimeofday(&start1, NULL);*/
 
 	while(curr_blk <= end_blk){
-		printf("curr_block=%ld, end_block=%ld\n",curr_blk,end_blk);
+		//printf("curr_block=%ld, end_block=%ld\n",curr_blk,end_blk);
 		pthread_mutex_lock(&lock);
 		
 		//int err = get_data(ds, curr_blk, (char*)aux);
@@ -425,7 +425,7 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 						to_read = IMSS_DATA_BSIZE - start_offset;
 					}																			    
 				}
-				printf("[imss_sread] first_block to_read=%ld\n",to_read);
+				//printf("[imss_sread] first_block to_read=%ld\n",to_read);
 				memcpy(buf, aux + start_offset, to_read);
 				byte_count += to_read;
 				++first;
@@ -953,9 +953,9 @@ int imss_vread_2x(const char *path, char *buf, size_t size, off_t offset)
 
 int imss_read(const char *path, char *buf, size_t size, off_t offset) {
    int ret;
-   ret = imss_sread(path, buf, size, offset);
+  // ret = imss_sread(path, buf, size, offset);
 
-/*
+
    	if (BEST_PERFORMANCE_READ == 0){
 		if (MULTIPLE_READ == 1){
 			ret = imss_vread_prefetch(path, buf, size, offset);
@@ -964,7 +964,7 @@ int imss_read(const char *path, char *buf, size_t size, off_t offset) {
 		}else if(MULTIPLE_READ == 3){
 			ret = imss_vread_2x(path, buf, size, offset);
 		}else if(MULTIPLE_READ == 4){
-			//printf("ENTER IMSS_SPLIT_READV\n");
+			printf("ENTER IMSS_SPLIT_READV\n");
 			ret = imss_split_readv(path, buf, size, offset);
 		}else{
 			ret = imss_sread(path, buf, size, offset);
@@ -980,7 +980,7 @@ int imss_read(const char *path, char *buf, size_t size, off_t offset) {
 			ret = imss_split_readv(path, buf, size, offset);
 		}
 	}
-*/	
+	
    return ret;
 }
 
@@ -1324,6 +1324,11 @@ int imss_split_readv(const char *path, char *buf, size_t size, off_t offset)
 
 	fd_lookup(rpath, &fd, &stats, &aux);
 	
+	/*Special case where is demand to read more that there is*/
+	if((stats.st_size - start_offset) < size){
+		end_blk = ceil((double)(stats.st_size - start_offset) / IMSS_DATA_BSIZE);
+	}
+
 
 	//Check if offset is bigger than filled, return 0 because is EOF case
 	if(start_offset >= stats.st_size){ 
@@ -1383,8 +1388,8 @@ int imss_split_readv(const char *path, char *buf, size_t size, off_t offset)
 		sprintf(number,"%d",count);
 		strcat(msg[server],number);
 		strcat(msg[server],all_blocks);
-	//	printf("server=%d msg_full=%s\n",server, msg[server]);
-	//	printf("amount=%d\n",amount[server]);
+		//printf("server=%d msg_full=%s\n",server, msg[server]);
+		//printf("amount=%d\n",amount[server]);
 	}
 
 	

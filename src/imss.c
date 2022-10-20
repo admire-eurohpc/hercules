@@ -1113,14 +1113,7 @@ int32_t create_dataset(char *  dataset_uri,
 	}*/
 
 	stat_dataset(dataset_uri, &new_dataset);
-/*
-	int fd;
-	struct stat stats;
-	char * aux;
 
-	fd_lookup(dataset_uri, &fd, &stats, &aux);
-
-	stats.st_size = 0;*/
 
 	//Save the associated metadata of the current dataset.
 	strcpy(new_dataset.uri_, 	dataset_uri);
@@ -2101,11 +2094,11 @@ void * split_readv(void * th_argv)
 			perror("ERRIMSS_GETDATA_REQ");
 		}
 
-		//printf("[SPLIT READV] 4-Send_msg\n");
-		//		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[repl_servers[i]], arguments->msg, msg_length) < 0)
-		//		{
-		//			perror("ERRIMSS_GETDATA_REQ");
-		//		}
+		printf("[SPLIT READV] 4-Send_msg\n");
+				if (send_stream(ucp_worker_client, curr_imss.conns.eps_[repl_servers[i]], arguments->msg, msg_length) < 0)
+				{
+					perror("ERRIMSS_GETDATA_REQ");
+				}
 
 		DPRINT("[IMSS] Request split_readv: client_id '%" PRIu32 "', mode '%s', key '%s', request '%s'\n", curr_imss.conns.id[repl_servers[i]], mode, key, arguments->msg);
 
