@@ -47,9 +47,9 @@ int32_t map_records::put(std::string key, char * address, uint64_t length)
 	}
 
 
-	struct utsname detect;
-	uname(&detect);
-	DPRINT("Nodename    - %s add in map=%s\n", detect.nodename, key.c_str());
+	//struct utsname detect;
+	//uname(&detect);
+	//DPRINT("Nodename    - %s add in map=%s\n", detect.nodename, key.c_str());
 	//printf("quantity=%ld total size=%ld\n",quantity_occupied, total_size);
 	quantity_occupied = quantity_occupied + length;
 	buffer.insert({key, value});
@@ -66,8 +66,8 @@ int32_t map_records::get(std::string key, char ** add_, uint64_t * size_)
 	//Block the access to the map structure.
 	std::unique_lock<std::mutex> lock(*mut);
 
-	struct utsname detect;
-	uname(&detect);
+	//struct utsname detect;
+	//uname(&detect);
 
 	if (buffer.empty())
 		return 0;

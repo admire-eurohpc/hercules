@@ -558,7 +558,7 @@ int open(const char *pathname, int flags, ...)
 			map_fd_put(map_fd, new_path, ret, p);
 			int create_flag = (flags & O_CREAT);
 			if (create_flag){
-				printf("IMSS_CREATE %s\n",new_path);
+				//printf("IMSS_CREATE %s\n",new_path);
 				int err_create = imss_create(new_path, mode, &ret_ds);
 				if (err_create == -EEXIST) {
 					if (IMSS_DEBUG)  fprintf(stderr, "[POSIX]. Dataset already exists.\n");

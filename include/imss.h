@@ -40,7 +40,7 @@
 
 extern int32_t  IMSS_DEBUG;
 
-#ifdef DEBUG
+#ifdef __DEBUG__
     #define DPRINT(...) if (IMSS_DEBUG) {fprintf(stderr, __VA_ARGS__);}
 #else
 	#define DPRINT(...)

@@ -378,7 +378,7 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 
 
 	//Check if offset is bigger than filled, return 0 because is EOF case
-	printf("[imss_sread]path=%s stat.size=%ld\n",path,stats.st_size);
+	//printf("[imss_sread]path=%s stat.size=%ld\n",path,stats.st_size);
 	
 	/*Special case where is demand to read more that there is*/
 	if((stats.st_size - start_offset) < size){
@@ -1026,7 +1026,7 @@ int imss_write(const char *path, const char *buf, size_t size, off_t off)
 	int fd;
 	struct stat stats;
 	fd_lookup(rpath, &fd, &stats, &aux);
-	printf("[imss_write] rpath=%s stats.st_size=%ld\n",rpath,stats.st_size);
+	//printf("[imss_write] rpath=%s stats.st_size=%ld\n",rpath,stats.st_size);
 	if (fd >= 0) 
 		ds = fd;
 	else if (fd == -2)
@@ -1633,7 +1633,7 @@ int imss_create(const char * path, mode_t mode, uint64_t * fh)
 	//Need to update if already exist
 	map_erase(map,rpath);
 	
-	printf("[imss_create] path=%s ds_stat=%ld\n",rpath,ds_stat.st_size);
+	//printf("[imss_create] path=%s ds_stat=%ld\n",rpath,ds_stat.st_size);
 	map_put(map, rpath, *fh, ds_stat, buff);
 	/*
 	int fd;
@@ -1650,7 +1650,7 @@ int imss_create(const char * path, mode_t mode, uint64_t * fh)
 	}
 	pthread_mutex_unlock(&lock_file);
 	free(rpath);
-	DPRINT("imss_create 44444\n");
+	//DPRINT("imss_create 44444\n");
 	return 0; 
 
 }

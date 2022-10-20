@@ -692,7 +692,7 @@ void * srv_worker_thread (void * th_argv)
 						}
 					}
 					else{
-						//printf("WRITE NORMAL CASE\n");
+						//DPRINT("WRITE NORMAL CASE\n");
 
 						//gettimeofday(&start2, NULL);
 
@@ -706,8 +706,8 @@ void * srv_worker_thread (void * th_argv)
 
 						if(ret == 0){
 
-							//unsigned char * buffer = (unsigned char *) malloc(block_size_recv);
-							char * buffer = (char *)aligned_alloc(1024, block_size_recv);
+							char * buffer = (char *) malloc(block_size_recv);
+							//char * buffer = (char *)aligned_alloc(1024, block_size_recv);
 							//Receive the block into the buffer.
 							recv_stream(ucp_data_worker, arguments->server_ep, buffer, block_size_recv);
 							struct stat * stats = (struct stat *) buffer;
@@ -724,7 +724,7 @@ void * srv_worker_thread (void * th_argv)
 							if (insert_successful != 0)
 							{
 								perror("ERRIMSS_WORKER_MAPPUT");
-								//pthread_exit(NULL);
+								pthread_exit(NULL);
 								continue;
 							}
 

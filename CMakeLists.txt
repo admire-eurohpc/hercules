@@ -38,6 +38,14 @@ SET(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}")
 SET(CMAKE_CXX_FLAGS  " ${CMAKE_C_FLAGS} ${CMAKE_C_FLAGS_RELEASE}")
 SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS}")
 
+set(IS_DEBUG_BUILD CMAKE_BUILD_TYPE STREQUAL "Debug" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
+
+# Indication to the code that this is a debug build
+if (${IS_DEBUG_BUILD})
+    add_compile_definitions(__DEBUG__)
+endif ()
+
+
 find_package(FUSE)
 
 ADD_SUBDIRECTORY(app)

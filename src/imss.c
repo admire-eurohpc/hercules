@@ -1814,7 +1814,7 @@ void * split_readv(void * th_argv)
 		//			perror("ERRIMSS_GETDATA_REQ");
 		//		}
 
-		DPRINT("[IMSS] Request split_readv: client_id '%" PRIu32 "', mode '%s', key '%s', request '%s'\n", curr_imss.conns.id[repl_servers[i]], mode, key, arguments->msg);
+		DPRINT("[IMSS] Request split_readv: client_id '%" PRIu32 "', mode '%s', key '%s', request '%s'\n", curr_imss.conns.id[repl_servers[i]], "GET", key_, arguments->msg);
 
 		struct timeval start, end;
 		/*long delta_us;
@@ -1976,7 +1976,7 @@ int32_t get_data(int32_t 	 dataset_id,
 			delta_us = (long) (end.tv_usec - start.tv_usec);
 			printf("\n[CLIENT] [GET DATA] send petition delta_us=%6.3f\n",(delta_us/1000.0F));*/
 
-		DPRINT("[IMSS] Request get_data: client_id '%" PRIu32 "', mode '%s', key '%s'\n", curr_imss.conns.id[repl_servers[i]], mode, key);
+		DPRINT("[IMSS] Request get_data: client_id '%" PRIu32 "', mode 'GET', key '%s'\n", curr_imss.conns.id[repl_servers[i]], key_);
 		clock_t t;
 		t = clock();
 
@@ -2062,7 +2062,7 @@ int32_t get_ndata(int32_t 	 dataset_id,
 			return -1;
 		}
 
-		DPRINT("[IMSS] Request get_ndata: client_id '%" PRIu32 "', mode '%s', key '%s'\n", curr_imss.conns.id[repl_servers[i]], mode, key);
+		DPRINT("[IMSS] Request get_ndata: client_id '%" PRIu32 "', mode 'GET', key '%s'\n", curr_imss.conns.id[repl_servers[i]],  key_);
 
 		//Receive data related to the previous read request directly into the buffer.
 		if (recv_stream(ucp_worker_client, curr_imss.conns.eps_[repl_servers[i]], buffer, curr_dataset.data_entity_size) < 0)
@@ -2153,7 +2153,7 @@ int32_t set_data(int32_t 	 dataset_id,
 			delta_us = (long) (end.tv_usec - start.tv_usec);
 			printf("[CLIENT] [SWRITE SEND_DATA] delta_us=%6.3f\n",(delta_us/1000.0F));*/
 
-		DPRINT("[IMSS] Request set_data: client_id '%" PRIu32 "', mode '%s', key '%s'\n", curr_imss.conns.id[n_server_], mode, key);
+		DPRINT("[IMSS] Request set_data: client_id '%" PRIu32 "', mode 'SET', key '%s'\n", curr_imss.conns.id[n_server_], key_);
 
 		t = clock() - t;
 		double time_taken = ((double)t)/CLOCKS_PER_SEC; // in seconds
@@ -2204,7 +2204,7 @@ set_ndata(int32_t 	 dataset_id,
 			return -1;
 		}
 
-		DPRINT("[IMSS] Request set_ndata: client_id '%" PRIu32 "', mode '%s', key '%s'\n", curr_imss.conns.id[n_server_], mode, key);
+		DPRINT("[IMSS] Request set_ndata: client_id '%" PRIu32 "', mode 'SET', key '%s'\n", curr_imss.conns.id[n_server_], key_);
 	}
 
 	return 0;
