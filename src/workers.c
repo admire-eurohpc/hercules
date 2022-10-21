@@ -14,7 +14,7 @@
 #include <inttypes.h>
 
 #define GARBAGE_COLLECTOR_PERIOD 120
-
+#define RAM_STORAGE_USE_PCT 0.75f // percentage of free system RAM to be used for storage
 
 //Lock dealing when cleaning blocks
 pthread_mutex_t mutex_garbage;
@@ -50,20 +50,25 @@ void * srv_worker (void * th_argv)
 	ucx_server_ctx_t 	context;
 	ucs_status_t 		status;
 	int 				ret;
-	size_t 				max_storage_size;
+	uint64_t			max_system_ram_allowed;
+	uint64_t			max_storage_size; // memory pool size
 	uint32_t 			num_blocks;
 
 	p_argv * arguments = (p_argv *) th_argv;
 
-	max_storage_size = arguments->storage_size*GB;
-	if (!max_storage_size) {
-		//TODO: check max available memory
-		// sysconf(_SC_AVPHYS_PAGES) * sysconf(_SC_PAGESIZE);
-		max_storage_size = (size_t) 32*GB;
+	/* Set memory pool size */
+	max_storage_size = (uint64_t) arguments->storage_size*GB;
+	// get max RAM we could use for storage
+	max_system_ram_allowed = (uint64_t) sysconf(_SC_AVPHYS_PAGES) * sysconf(_SC_PAGESIZE) * RAM_STORAGE_USE_PCT;
+
+	// make sure we don't use more memory than available
+	if (max_storage_size >= max_system_ram_allowed) {
+		max_storage_size = max_system_ram_allowed;
 	}
 
 	// init memory pool
 	mem_pool = StsQueue.create();
+	// figure out how many blocks we need and allocate them
 	num_blocks = max_storage_size/(arguments->blocksize*KB);
 	for (int i = 0; i < num_blocks; ++i) {
 		char *buffer = (char *) malloc(arguments->blocksize*KB);

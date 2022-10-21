@@ -20,7 +20,7 @@ IOR_PATH=/home/software/io500/bin
 
 module unload mpi
 module load mpi/mpich3/3.2.1 
-set -x
+#set -x
 
 # SCRIPT
 
@@ -63,7 +63,6 @@ tail -n +$((NUM_METADATA+NUM_DATA+1)) hostfile | head -n $NUM_CLIENT > client_ho
 mpiexec -l -n $NUM_CLIENT --ppn 1 -f ./client_hostfile \
 	-env LD_PRELOAD $IMSS_PATH/tools/libimss_posix.so \
 	-env IMSS_MOUNT_POINT /mnt/imss \
-	-env IMSS_DEBUG true \
 	-env IMSS_HOSTFILE $PWD/data_hostfile \
 	-env IMSS_N_SERVERS $NUM_DATA \
 	-env IMSS_SRV_PORT $DATA_PORT \
