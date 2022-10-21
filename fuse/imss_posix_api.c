@@ -126,6 +126,36 @@ int imss_access(const char *path, int permission)
 	return 0;
 }
 
+int imss_refresh(const char *path) {
+
+    struct stat * stats;
+	struct stat  old_stats;
+    uint32_t ds;
+	int fd;
+	char * aux2;
+	char * imss_path = calloc(MAX_PATH, sizeof(char));	
+	char * aux = (char *) malloc(IMSS_DATA_BSIZE);
+
+    get_iuri(path, imss_path);
+
+    fd_lookup(imss_path, &fd, &old_stats, &aux2);
+	if (fd >= 0) 
+		ds = fd;
+	else {
+		ds = open_dataset(imss_path);
+	}
+
+	get_data(ds, 0, aux);
+	stats = (struct stat *) aux;
+	
+    map_update(map, imss_path, ds, *stats);
+
+	free(aux);
+	free(imss_path);
+	return 0;
+}
+
+
 int imss_getattr(const char *path, struct stat *stbuf)
 {
 	//Needed variables for the call
@@ -1794,9 +1824,6 @@ int imss_flush(const char * path){
 	struct timespec spec;
 	clock_gettime(CLOCK_REALTIME, &spec);
 	uint32_t file_desc;
-
-
-
 
 	char * rpath = (char *) calloc(MAX_PATH, sizeof(char));
 	get_iuri(path, rpath);

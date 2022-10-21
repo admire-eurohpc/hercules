@@ -28,15 +28,18 @@ static struct argp_option options[] = {
     {0,                     0,                  0,              0,  "\nOptions:\n" },
     {0,                     0,                  0,              0,  "Common options:" },
     {"port",                PORT,               "PORT",         0,  "Listening port number" },
-    {"bufsize",             BUFSIZE,            "BUFFER_SIZE",  0,  "Buffer size; max RAM size that can be used (defaults to 0, which means NO LIMIT)" },
+    //TODO: figure out what bufsize ACTUALLY does
+    {"bufsize",             BUFSIZE,            "BUFFER_SIZE",  0,  "Buffer size; max RAM size that can be used; 0 if omitted, which means NO LIMIT" },
     {"server-id",           ID,                 "ID",     		0,  "0 if omitted" },
 
     {0,                     0,                  0,              0,  "Data server options (required only if type=d):" },
-    {"imss-uri",            IMSS_URI,           "IMSS_URI",     0,  "IMSS URI (data server); defaults to 'imss://' if omitted" },
+    {"imss-uri",            IMSS_URI,           "IMSS_URI",     0,  "IMSS URI (data server); 'imss://' if omitted" },
     {"stat-host",           STAT_HOST,          "HOSTNAME",     0,  "Metadata server hostname" },
     {"stat-port",           STAT_PORT,          "PORT",         0,  "Metadata server port number" },
     {"num-servers",         NUM_SERVERS,        "NUM_SERVERS",  0,  "Number of data servers for this IMSS deployment" },
     {"deploy-hostfile",     DEPLOY_HOSTFILE,    "FILE",         0,  "IMSS MPI deployment file; contains hostnames of data servers" },
+    {"block-size",          BLOCK_SIZE,         "BLOCK_SIZE",   0,  "Size of each data block in KB" },
+    {"storage-size",        STORAGE_SIZE,       "STORAGE_SIZE", 0,  "Total amount of RAM in GB to be used as storage" },
 
     {0,                     0,                  0,              0,  "Metadata server options (required only if type=m):" },
     {"stat-logfile",        STAT_LOGFILE,       "FILE",         0,  "Metadata server logfile" },
@@ -59,6 +62,9 @@ static error_t parse_opt (int key, char * arg, struct argp_state * state)
         case BUFSIZE:
             args->bufsize = atoi(arg);
             break;
+        case ID:
+		    args->id = atoi(arg);
+			break;
         case IMSS_URI:
             strcpy(args->imss_uri, arg);
             break;
@@ -74,12 +80,15 @@ static error_t parse_opt (int key, char * arg, struct argp_state * state)
         case DEPLOY_HOSTFILE:
             args->deploy_hostfile = arg;
             break;
+        case BLOCK_SIZE:
+            args->block_size = atoi(arg);
+            break;
+        case STORAGE_SIZE:
+            args->storage_size = atoi(arg);
+            break;
         case STAT_LOGFILE:
             args->stat_logfile = arg;
             break;
-        case ID:
-		    args->id = atoi(arg);
-			break;
         case ARGP_KEY_ARG:
             if (state->arg_num >= 1) {
                 argp_usage (state);
@@ -101,9 +110,9 @@ static error_t parse_opt (int key, char * arg, struct argp_state * state)
                 argp_failure(state, 1, 0, "Required options: -p. \nSee --help for more detail");
             }
             if (args-> type == TYPE_DATA_SERVER &&
-            (!args->stat_host || !args->stat_port ||
-            !args->num_servers || !args->deploy_hostfile)) {
-                argp_failure(state, 1, 0, "Required options for data server type: -H, -P, -n, -d. \nSee --help for more detail");
+            (!args->stat_host || !args->stat_port || !args->num_servers ||
+            !args->deploy_hostfile || !args->block_size || !args->storage_size)) {
+                argp_failure(state, 1, 0, "Required options for data server type: -H, -P, -n, -d, -B, -s. \nSee --help for more detail");
                 exit (ARGP_ERR_UNKNOWN);
 
             } else if (args->type == TYPE_METADATA_SERVER && !args->stat_logfile) {
@@ -132,6 +141,8 @@ int parse_args (int argc, char ** argv, struct arguments * args)
     strcpy(args->imss_uri, "imss://");
     args->stat_port = 0;
     args->num_servers = 0;
+    args->block_size = 0;
+    args->storage_size = 0;
 
     /* Parse arguments; every option seen by parse_opt will be
         reflected in arguments */

@@ -35,10 +35,11 @@ ucp_worker_h  ucp_worker;
 
 ucp_ep_h     pub_ep;
 
-void *map_ep; //map_ep used for async write; server doesn't use it
-int32_t is_client = 0;
+void * map_ep; // map_ep used for async write; server doesn't use it
+int32_t is_client = 0; // also used for async write
 
 int32_t  IMSS_DEBUG = 0;
+
 
 int32_t main(int32_t argc, char **argv)
 {
@@ -51,6 +52,10 @@ int32_t main(int32_t argc, char **argv)
 	int64_t  buffer_size, stat_port, num_servers;
 	void * 	 socket;
 
+	// memory pool stuff
+	uint64_t block_size; //In KB 
+	uint64_t storage_size; //In GB
+
 	ucs_status_t status;
 	ucp_ep_h     client_ep;
 
@@ -61,25 +66,20 @@ int32_t main(int32_t argc, char **argv)
 	/***************************************************************/
 	struct arguments args;
 
-
 	if (getenv("IMSS_DEBUG") != NULL) {
 		IMSS_DEBUG = 1;
 	}
 
-
 	parse_args(argc, argv, &args);
 
-	/*
-	   printf("type = %c\nport = %u\nbufsize = %ld\n", args.type, args.port, args.bufsize);
-	   if (args.type == TYPE_DATA_SERVER) {
-	   printf("imss_uri = %s\nstat-host = %s\nstat-port = %ld\nnum-servers = %ld\ndeploy-hostfile = %s\n",
-	   args.imss_uri, args.stat_host, args.stat_port, args.num_servers, args.deploy_hostfile);
-	   } else {
-	   printf("stat-logfile = %s\n", args.stat_logfile);
-	   }
-	   */
-
-        DPRINT("[SERVER] Starting server.\n");
+	DPRINT("[SERVER] Starting server.\n");
+	DPRINT("[CLI PARAMS] type = %c port = %" PRIu16 " bufsize = %" PRId64 " ", args.type, args.port, args.bufsize);
+	if (args.type == TYPE_DATA_SERVER) {
+		DPRINT("imss_uri = %s stat-host = %s stat-port = %" PRId64 " num-servers = %" PRId64 " deploy-hostfile = %s block-size = %" PRIu64 " storage-size = %" PRIu64 "\n",
+		args.imss_uri, args.stat_host, args.stat_port, args.num_servers, args.deploy_hostfile, args.block_size, args.storage_size);
+	} else {
+		DPRINT("stat-logfile = %s\n", args.stat_logfile);
+	}
 
 	//bind port number.
 	bind_port = args.port;
@@ -107,12 +107,16 @@ int32_t main(int32_t argc, char **argv)
 		strcpy(imss_uri, args.imss_uri);
 		//machine name where the metadata server is being executed.
 		stat_add	= args.stat_host;
-		//port that the metadata server is listening to.
+		//port that the metadata server is listening on.
 		stat_port 	= args.stat_port;
 		//number of servers conforming the IMSS deployment.
 		num_servers	= args.num_servers;
 		//IMSS' MPI deployment file.
 		deployfile	= args.deploy_hostfile;
+		//data block size
+		block_size  = args.block_size;
+		//total storage size
+		storage_size = args.storage_size;
 
 		int32_t imss_exists = 0;
 
@@ -257,6 +261,8 @@ int32_t main(int32_t argc, char **argv)
 		arguments[i].port = (bind_port)++;
 		arguments[i].ucp_context = ucp_context;
 		arguments[i].ucp_worker = ucp_worker;
+		arguments[i].blocksize = block_size;
+		arguments[i].storage_size = storage_size;
 		//Add the instance URI to the thread arguments.
 		strcpy(arguments[i].my_uri, imss_uri);
 
@@ -419,3 +425,4 @@ int32_t main(int32_t argc, char **argv)
 	//Free the publisher release address.
 	return 0;
 }
+

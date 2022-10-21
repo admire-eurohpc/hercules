@@ -24,6 +24,7 @@ void fd_lookup(const char * path, int *fd, struct stat * s, char ** aux);
 void get_iuri(const char * path, /*output*/ char * uri);
 int imss_truncate(const char * path, off_t offset);
 int imss_access(const char *path, int permission);
+int imss_refresh(const char *path);
 int imss_getattr(const char *path, struct stat *stbuf);
 
 int imss_readdir(const char *path, void *buf, posix_fill_dir_t filler, off_t offset);

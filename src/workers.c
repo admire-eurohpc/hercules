@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <sys/types.h>
+#include <sys/sysinfo.h>
 #include <signal.h>
 #include "imss.h"
 #include "comms.h"
@@ -13,7 +14,7 @@
 #include <inttypes.h>
 
 #define GARBAGE_COLLECTOR_PERIOD 120
-
+#define RAM_STORAGE_USE_PCT 0.75f // percentage of free system RAM to be used for storage
 
 //Lock dealing when cleaning blocks
 pthread_mutex_t mutex_garbage;
@@ -35,6 +36,8 @@ pthread_mutex_t buff_size_mut;
 pthread_cond_t 	buff_size_cond;
 int32_t 	copied;
 
+StsHeader * mem_pool;
+
 //URI of the attached deployment.
 char att_imss_uri[URI_];
 
@@ -44,11 +47,33 @@ pthread_mutex_t mp = PTHREAD_MUTEX_INITIALIZER;
 
 void * srv_worker (void * th_argv)
 {
-	ucx_server_ctx_t context;
-	ucs_status_t     status;
-	int              ret;
+	ucx_server_ctx_t 	context;
+	ucs_status_t 		status;
+	int 				ret;
+	uint64_t			max_system_ram_allowed;
+	uint64_t			max_storage_size; // memory pool size
+	uint32_t 			num_blocks;
 
 	p_argv * arguments = (p_argv *) th_argv;
+
+	/* Set memory pool size */
+	max_storage_size = (uint64_t) arguments->storage_size*GB;
+	// get max RAM we could use for storage
+	max_system_ram_allowed = (uint64_t) sysconf(_SC_AVPHYS_PAGES) * sysconf(_SC_PAGESIZE) * RAM_STORAGE_USE_PCT;
+
+	// make sure we don't use more memory than available
+	if (max_storage_size >= max_system_ram_allowed) {
+		max_storage_size = max_system_ram_allowed;
+	}
+
+	// init memory pool
+	mem_pool = StsQueue.create();
+	// figure out how many blocks we need and allocate them
+	num_blocks = max_storage_size/(arguments->blocksize*KB);
+	for (int i = 0; i < num_blocks; ++i) {
+		char *buffer = (char *) malloc(arguments->blocksize*KB);
+		StsQueue.push(mem_pool, buffer);
+	}
 
 	context.conn_request =  StsQueue.create();
 	status = start_server(arguments->ucp_worker, &context, &context.listener, NULL, arguments->port);
@@ -705,8 +730,8 @@ void * srv_worker_thread (void * th_argv)
 						//if (!map->get(key, &address_, &block_size_rtvd))
 
 						if(ret == 0){
-
-							char * buffer = (char *) malloc(block_size_recv);
+							char * buffer = (char *)StsQueue.pop(mem_pool);
+							// char * buffer = (char *) malloc(block_size_recv);
 							//char * buffer = (char *)aligned_alloc(1024, block_size_recv);
 							//Receive the block into the buffer.
 							recv_stream(ucp_data_worker, arguments->server_ep, buffer, block_size_recv);
@@ -729,7 +754,6 @@ void * srv_worker_thread (void * th_argv)
 							}
 
 							//Update the pointer.
-
 							arguments->pt += block_size_recv;
 
 						}
@@ -738,7 +762,20 @@ void * srv_worker_thread (void * th_argv)
 						{
 							//gettimeofday(&start2, NULL);
 							//Receive the block into the buffer.
-							recv_stream(ucp_data_worker, arguments->server_ep, address_, block_size_rtvd);
+							std::size_t found = key.find("$0");
+							if(found!=std::string::npos){
+								DPRINT("[DATA WORKER]  Updating block $0\n ");
+								struct stat *old, *lastest;
+								char * buffer = (char *) malloc (block_size_rtvd);
+								recv_stream(ucp_data_worker, arguments->server_ep, buffer, block_size_rtvd);
+								old = (struct stat *) address_;
+								lastest = (struct stat *) buffer;
+								DPRINT("[DATA WORKER]  File size old %ld  new %ld \n ", lastest->st_size,old->st_size);
+								lastest->st_size = std::max(lastest->st_size,old->st_size);
+								memcpy(address_, buffer, block_size_rtvd);
+								free(buffer);
+							} else
+								recv_stream(ucp_data_worker, arguments->server_ep, address_, block_size_rtvd);
 							/*gettimeofday(&end2, NULL);
 							  delta_us2 = (long) (end2.tv_usec - start2.tv_usec);
 							  printf("\n[SRV_WORKER] [WRITE] recv delta_us=%6.3f\n",(delta_us2/1000.0F));*/
@@ -1445,3 +1482,4 @@ void * srv_worker_thread (void * th_argv)
 
 			pthread_exit(NULL);
 		}
+

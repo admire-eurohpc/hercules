@@ -10,20 +10,21 @@ NUM_METADATA=$1
 NUM_DATA=$2
 NUM_CLIENT=$3
 BLOCK_SIZE=$4
+STORAGE_SIZE=2
 META_PORT=$5
 DATA_PORT=$6
 
-IMSS_PATH=$HOME/imss_parallel/imss/build
+IMSS_PATH=$HOME/imss/build
 IOR_PATH=/home/software/io500/bin
 
 module unload mpi
 module load mpi/mpich3/3.2.1 
-set -x
+#set -x
 
 # SCRIPT
 
 PWD=`pwd`
-srun hostname |sort > hostfile
+srun hostname | sort > hostfile
 
 echo "# IMMS: Running metadata servers"
 rm metadata &> /dev/null
@@ -50,7 +51,7 @@ readarray -t hosts < data_hostfile
 
 for ((i=0;i<$NUM_DATA;i++));
 do
-   srun --export=ALL -N 1 -w ${hosts[$i]} --exclusive $IMSS_PATH/server d --server-id=$i --imss-uri=imss:// --port=$DATA_PORT --bufsize=0 --stat-host=$META_NODE --stat-port=$META_PORT --num-servers=$NUM_DATA --deploy-hostfile=./data_hostfile 2> data.log &
+   srun --export=ALL -N 1 -w ${hosts[$i]} --exclusive $IMSS_PATH/server d --server-id=$i --imss-uri=imss:// --port=$DATA_PORT --bufsize=0 --stat-host=$META_NODE --stat-port=$META_PORT --num-servers=$NUM_DATA --deploy-hostfile=./data_hostfile --block-size=$BLOCK_SIZE --storage-size=$STORAGE_SIZE 2> data.log &
 done
 sleep 2
 
@@ -68,7 +69,7 @@ mpiexec -l -n $NUM_CLIENT --ppn 2 -f ./client_hostfile \
              -env IMSS_META_HOSTFILE $PWD/meta_hostfile \
 			 -env IMSS_META_PORT $META_PORT \
 			 -env IMSS_META_SERVERS $NUM_METADATA \
-			 -env IMSS_STORAGE_SIZE 8 \
+			 -env IMSS_STORAGE_SIZE $STORAGE_SIZE \
 			 -env IMSS_METADATA_FILE $PWD/metadata \
 			 -env IMSS_DEPLOYMENT 2 \
 			 $IOR_PATH/ior -o /mnt/imss/data.out -t 100m -b 100m -s 1
