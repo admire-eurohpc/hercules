@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <sys/types.h>
+#include <sys/sysinfo.h>
 #include <signal.h>
 #include "imss.h"
 #include "comms.h"
@@ -49,7 +50,7 @@ void * srv_worker (void * th_argv)
 	ucx_server_ctx_t 	context;
 	ucs_status_t 		status;
 	int 				ret;
-	uint64_t 			max_storage_size;
+	size_t 				max_storage_size;
 	uint32_t 			num_blocks;
 
 	p_argv * arguments = (p_argv *) th_argv;
@@ -57,7 +58,8 @@ void * srv_worker (void * th_argv)
 	max_storage_size = arguments->storage_size*GB;
 	if (!max_storage_size) {
 		//TODO: check max available memory
-		max_storage_size = 32*GB;
+		// sysconf(_SC_AVPHYS_PAGES) * sysconf(_SC_PAGESIZE);
+		max_storage_size = (size_t) 32*GB;
 	}
 
 	// init memory pool
@@ -755,7 +757,20 @@ void * srv_worker_thread (void * th_argv)
 						{
 							//gettimeofday(&start2, NULL);
 							//Receive the block into the buffer.
-							recv_stream(ucp_data_worker, arguments->server_ep, address_, block_size_rtvd);
+							std::size_t found = key.find("$0");
+							if(found!=std::string::npos){
+								DPRINT("[DATA WORKER]  Updating block $0\n ");
+								struct stat *old, *lastest;
+								char * buffer = (char *) malloc (block_size_rtvd);
+								recv_stream(ucp_data_worker, arguments->server_ep, buffer, block_size_rtvd);
+								old = (struct stat *) address_;
+								lastest = (struct stat *) buffer;
+								DPRINT("[DATA WORKER]  File size old %ld  new %ld \n ", lastest->st_size,old->st_size);
+								lastest->st_size = std::max(lastest->st_size,old->st_size);
+								memcpy(address_, buffer, block_size_rtvd);
+								free(buffer);
+							} else
+								recv_stream(ucp_data_worker, arguments->server_ep, address_, block_size_rtvd);
 							/*gettimeofday(&end2, NULL);
 							  delta_us2 = (long) (end2.tv_usec - start2.tv_usec);
 							  printf("\n[SRV_WORKER] [WRITE] recv delta_us=%6.3f\n",(delta_us2/1000.0F));*/
