@@ -240,7 +240,7 @@ int32_t stat_init(char *   stat_hostfile,
     DPRINT("[IMSS] Calling stat_init.\n");
 
 	/* Initialize the UCX required objects */
-	ret = init_context(&ucp_context_client, &ucp_worker_client, CLIENT_SERVER_SEND_RECV_STREAM);
+	ret = init_context(&ucp_context_client, NULL, &ucp_worker_client, CLIENT_SERVER_SEND_RECV_STREAM);
 	if (ret != 0) {
 		perror("ERRIMSS_INIT_CONTEXT");
 		return -1;

@@ -82,7 +82,7 @@ typedef struct msg {
 
 
 int init_worker(ucp_context_h ucp_context, ucp_worker_h *ucp_worker);
-int init_context(ucp_context_h *ucp_context, ucp_worker_h *ucp_worker, send_recv_type_t send_recv_type);
+int init_context(ucp_context_h *ucp_context,  ucp_config_t *config, ucp_worker_h *ucp_worker, send_recv_type_t send_recv_type);
 ucs_status_t start_client(ucp_worker_h ucp_worker, const char *address_str, int port, ucp_ep_h *client_ep);
 void set_sock_addr(const char *address_str, struct sockaddr_storage *saddr, int server_port);
 int request_finalize(ucp_worker_h ucp_worker, test_req_t *request, test_req_t *ctx);

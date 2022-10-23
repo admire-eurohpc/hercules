@@ -46,12 +46,11 @@ int init_worker(ucp_context_h ucp_context, ucp_worker_h *ucp_worker)
 /**
  * Initialize the UCP context and worker.
  */
-int init_context(ucp_context_h *ucp_context, ucp_worker_h *ucp_worker, send_recv_type_t send_recv_type)
+int init_context(ucp_context_h *ucp_context,  ucp_config_t *config,  ucp_worker_h *ucp_worker, send_recv_type_t send_recv_type)
 {
 	/* UCP objects */
 	ucp_params_t ucp_params;
 	ucs_status_t status;
-	ucp_config_t *config;
 	int ret = 0;
 
 
@@ -72,7 +71,7 @@ int init_context(ucp_context_h *ucp_context, ucp_worker_h *ucp_worker, send_recv
 		ucp_params.features = UCP_FEATURE_AM;
 	}
 
-	status = ucp_init(&ucp_params, NULL, ucp_context);
+	status = ucp_init(&ucp_params, config, ucp_context);
 	if (status != UCS_OK) {
 		fprintf(stderr, "failed to ucp_init (%s)\n", ucs_status_string(status));
 		ret = -1;

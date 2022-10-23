@@ -61,6 +61,8 @@ int32_t main(int32_t argc, char **argv)
 
 	ucp_am_handler_param_t param;
 	int              ret;
+    ucp_config_t *config;
+
 	/***************************************************************/
 	/******************** PARSE INPUT ARGUMENTS ********************/
 	/***************************************************************/
@@ -81,6 +83,11 @@ int32_t main(int32_t argc, char **argv)
 		DPRINT("stat-logfile = %s\n", args.stat_logfile);
 	}
 
+
+
+    status = ucp_config_read(NULL, NULL, &config);
+    ucp_config_modify(config, "UCX_TCP_CM_REUSEADDR", "y");
+
 	//bind port number.
 	bind_port = args.port;
 	aux_bind_port	= bind_port;
@@ -90,7 +97,7 @@ int32_t main(int32_t argc, char **argv)
 	imss_uri 	= (char *) calloc(32, sizeof(char));
 
 	/* Initialize the UCX required objects */
-	ret = init_context(&ucp_context, &ucp_worker, CLIENT_SERVER_SEND_RECV_STREAM);
+	ret = init_context(&ucp_context, config,  &ucp_worker, CLIENT_SERVER_SEND_RECV_STREAM);
 	if (ret != 0) {
 		perror("ERRIMSS_INIT_CONTEXT");
 		return -1;
