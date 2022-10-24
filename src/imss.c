@@ -326,11 +326,8 @@ int32_t stat_init(char *   stat_hostfile,
 		n_chars = getline(&stat_node, &l_size, stat_nodes);
 		//Erase the new line character ('\n') from the string.
 		stat_node[n_chars - 1] = '\0';
-		if (IMSS_DEBUG) {
-			printf("stat_client=%s\n",stat_node);
-			printf("i=%d, stat_node=%s, port=%d, rank=%" PRIu32 "\n",i,stat_node, port, rank);
-		}
-
+		DPRINT("[IMSS] stat_client=%s\n",stat_node);
+		DPRINT("[IMSS] i=%d, stat_node=%s, port=%d, rank=%" PRIu32 "\n",i,stat_node, port, rank);
 		DPRINT("[IMSS] stat_int: Contacting stat dispatcher at %s:%d\n", stat_node, port);
 		status = start_client(ucp_worker_client, stat_node, port, &client_ep); // port, rank,
 		if (status != UCS_OK) {
@@ -355,16 +352,20 @@ int32_t stat_init(char *   stat_hostfile,
 		//Port that the new client must connect to.
 		int32_t stat_port;
 		//Separator.
-		char sep_;
+		char host[255];
 
 		//Read the previous information from the message received.
-		sscanf(connection_info, "%d%c%" PRIu32 "", &stat_port, &sep_, &stat_ids[i]);
+		sscanf(connection_info, "%[^':']:%d:%" PRIu32 "", host, &stat_port,  &stat_ids[i]);
 
         /* Close the endpoint to the server */
         ep_close(ucp_worker_client, client_ep, UCP_EP_CLOSE_MODE_FLUSH);
 
 		// Create the connection to the metadata server dispatcher thread.
-		status = start_client(ucp_worker_client, stat_node, stat_port, stat_client + i);
+		if (!strcmp(host, "none"))
+			status = start_client(ucp_worker_client, stat_node, stat_port, stat_client + i);
+		else
+			status = start_client(ucp_worker_client, host, stat_port, stat_client + i);
+
 		if (status != UCS_OK) {
 			fprintf(stderr, "failed to start client (%s)\n", ucs_status_string(status));
 			return -1;
@@ -679,12 +680,16 @@ int32_t init_imss(char *   imss_uri,
 		//ID that the new client must take.
 		int32_t imss_id;
 		//Separator.
-		char sep_;
+		char host[256];
 		//Read the previous information from the message received.
-		sscanf(connection_info, "%d%c%d", &imss_port, &sep_, &new_imss.conns.id[i]);
+		sscanf(connection_info, "%[^':']:%d:%" PRIu32 "", host, &imss_port, &new_imss.conns.id[i]);
 
 		//Create the connection to the metadata server dispatcher thread.
-		status = start_client(ucp_worker_client, (new_imss.info.ips)[i], imss_port, &(new_imss.conns.eps_[i])); // port, rank,
+		if(!strcmp(host, "none"))
+			status = start_client(ucp_worker_client, (new_imss.info.ips)[i], imss_port, &(new_imss.conns.eps_[i])); // port, rank,
+		else
+			status = start_client(ucp_worker_client, host, imss_port, &(new_imss.conns.eps_[i])); // port, rank,
+
 		if (status != UCS_OK) {
 			fprintf(stderr, "failed to start client (%s)\n", ucs_status_string(status));
 			return -1;

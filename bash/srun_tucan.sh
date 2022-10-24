@@ -20,7 +20,7 @@ IOR_PATH=/home/software/io500/bin
 
 module unload mpi
 module load mpi/mpich3/3.2.1 
-#set -x
+set -x
 
 # SCRIPT
 
@@ -67,6 +67,7 @@ mpiexec -l -n $NUM_CLIENT --ppn 1 -f ./client_hostfile \
 	-env IMSS_N_SERVERS $NUM_DATA \
 	-env IMSS_SRV_PORT $DATA_PORT \
 	-env IMSS_BUFFSIZE 1 \
+	-env IMSS_DEBUG 1 \
 	-env IMSS_BLKSIZE $BLOCK_SIZE \
 	-env IMSS_META_HOSTFILE $PWD/meta_hostfile \
 	-env IMSS_META_PORT $META_PORT \

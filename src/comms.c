@@ -98,6 +98,7 @@ ucs_status_t start_client(ucp_worker_h ucp_worker, const char *address_str, int 
 	struct sockaddr_storage connect_addr;
 	ucs_status_t status;
 
+
 	set_sock_addr(address_str, &connect_addr, port);
 
 	/*

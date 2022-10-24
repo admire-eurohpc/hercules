@@ -12,6 +12,11 @@
 #include "records.hpp"
 #include <sys/time.h>
 #include <inttypes.h>
+#include <sys/socket.h>
+#include <sys/ioctl.h>
+#include <netinet/in.h>
+#include <net/if.h>
+#include <arpa/inet.h>
 
 #define GARBAGE_COLLECTOR_PERIOD 120
 #define RAM_STORAGE_USE_PCT 0.75f // percentage of free system RAM to be used for storage
@@ -1446,6 +1451,9 @@ void * srv_worker_thread (void * th_argv)
 				//Check if the client is requesting connection resources.
 				if (!strncmp(req_content, "HELLO!", 6))
 				{
+					int n;
+					struct ifreq ifr;
+					char *ip_;
 					//Message containing the client's communication ID plus its connection port.
 					char response_[RESPONSE_SIZE]; 
 					memset(response_, '\0', RESPONSE_SIZE);
@@ -1453,7 +1461,21 @@ void * srv_worker_thread (void * th_argv)
 					int32_t port_ = arguments->port + 1 + (client_id_ % THREAD_POOL);
 					//Wrap the previous info into the ZMQ message.
 
-					sprintf(response_, "%d%c%" PRIu32 "", port_, '-', client_id_);
+					char array[] = "ib0";
+					n = socket(AF_INET, SOCK_DGRAM, 0);
+					ifr.ifr_addr.sa_family = AF_INET;
+					strncpy(ifr.ifr_name , array , IFNAMSIZ - 1);
+					int err = ioctl(n, SIOCGIFADDR, &ifr);
+
+                    if (err) {
+						sprintf(response_, "%s:%d:%" PRIu32 "", "none", port_,  client_id_);
+
+					} else {
+						ip_ = inet_ntoa(( (struct sockaddr_in *)&ifr.ifr_addr )->sin_addr); 
+						sprintf(response_, "%s:%d:%" PRIu32 "", ip_ , port_, client_id_);
+						DPRINT("[DISPATCHER]  New IP is %s\n",ip_);
+					}
+
 
 
 					//Send communication specifications.
@@ -1462,7 +1484,7 @@ void * srv_worker_thread (void * th_argv)
 						perror("ERRIMSS_STATDISP_SENDBLOCK");
 						pthread_exit(NULL);
 					}
-				    DPRINT("[DISPATCHER] Replied client %s.\n",response_);
+					DPRINT("[DISPATCHER] Replied client %s.\n",response_);
 				}
 				//Check if someone is requesting identity resources.
 				else if (*((int32_t *) req) == WHO)
@@ -1473,7 +1495,7 @@ void * srv_worker_thread (void * th_argv)
 						perror("ERRIMSS_WHOREQUEST");
 						pthread_exit(NULL);
 					}
-				    DPRINT("[DISPATCHER] Replied client %s.\n", arguments->my_uri);
+					DPRINT("[DISPATCHER] Replied client %s.\n", arguments->my_uri);
 				}
 
 				/* Reinitialize the server's context to be used for the next client */
