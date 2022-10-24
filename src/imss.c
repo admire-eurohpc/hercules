@@ -361,10 +361,10 @@ int32_t stat_init(char *   stat_hostfile,
         ep_close(ucp_worker_client, client_ep, UCP_EP_CLOSE_MODE_FLUSH);
 
 		// Create the connection to the metadata server dispatcher thread.
-		if (!strcmp(host, "none"))
-			status = start_client(ucp_worker_client, stat_node, stat_port, stat_client + i);
-		else
-			status = start_client(ucp_worker_client, host, stat_port, stat_client + i);
+		if (strcmp(host, "none"))
+	    	strcpy(stat_node, host);
+		
+		status = start_client(ucp_worker_client, stat_node, stat_port, stat_client + i);
 
 		if (status != UCS_OK) {
 			fprintf(stderr, "failed to start client (%s)\n", ucs_status_string(status));
@@ -685,10 +685,10 @@ int32_t init_imss(char *   imss_uri,
 		sscanf(connection_info, "%[^':']:%d:%" PRIu32 "", host, &imss_port, &new_imss.conns.id[i]);
 
 		//Create the connection to the metadata server dispatcher thread.
-		if(!strcmp(host, "none"))
-			status = start_client(ucp_worker_client, (new_imss.info.ips)[i], imss_port, &(new_imss.conns.eps_[i])); // port, rank,
-		else
-			status = start_client(ucp_worker_client, host, imss_port, &(new_imss.conns.eps_[i])); // port, rank,
+		if(strcmp(host, "none"))
+            strcpy((new_imss.info.ips)[i], host);
+
+		status = start_client(ucp_worker_client, (new_imss.info.ips)[i], imss_port, &(new_imss.conns.eps_[i])); // port, rank,
 
 		if (status != UCS_OK) {
 			fprintf(stderr, "failed to start client (%s)\n", ucs_status_string(status));
@@ -820,11 +820,13 @@ int32_t open_imss(char * imss_uri)
 		int32_t imss_port;
 		//ID that the new client must take.
 		int32_t imss_id;
-		//Separator.
-		char sep_;
+		char host[256];
 
 		//Read the previous information from the message received.
-		sscanf(connection_info, "%d%c%d", &imss_port, &sep_, &imss_id);
+		sscanf(connection_info, "%[^':']:%d:%" PRIu32 "", host, &imss_port, &imss_id);
+		
+		if(strcmp(host, "none"))
+			strcpy((new_imss.info.ips)[i], host);
 
 		//Create the connection to the metadata server dispatcher thread.
 		status = start_client(ucp_worker_client, (new_imss.info.ips)[i], imss_port,  &(new_imss.conns.eps_[i])); // port, rank,
