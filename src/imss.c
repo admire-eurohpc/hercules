@@ -2129,7 +2129,7 @@ int32_t set_data(int32_t 	 dataset_id,
 	  	//Key related to the requested data element.
 	    sprintf(key_, "%" PRIu32 " SET %d %s$%d", curr_imss.conns.id[n_server_], curr_dataset.data_entity_size, curr_dataset.uri_, data_id);
 
-		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[n_server_], key_, REQUEST_SIZE) < 0) // SNDMORE
+		if (send_istream(ucp_worker_client, curr_imss.conns.eps_[n_server_], key_, REQUEST_SIZE) < 0) // SNDMORE
 		{
 			perror("ERRIMSS_SETDATA_REQ");
 			return -1;
@@ -2144,7 +2144,7 @@ int32_t set_data(int32_t 	 dataset_id,
 		//	gettimeofday(&start, NULL);
 		//Send read request message specifying the block data.
 		//printf("[SET DATA] msg=%s, size=%d\n",buffer,curr_dataset.data_entity_size);
-		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[n_server_], buffer, curr_dataset.data_entity_size) < 0)
+		if (send_istream(ucp_worker_client, curr_imss.conns.eps_[n_server_], buffer, curr_dataset.data_entity_size) < 0)
 		{
 			perror("ERRIMSS_SETDATA_SEND");
 			return -1;
@@ -2158,7 +2158,7 @@ int32_t set_data(int32_t 	 dataset_id,
 		t = clock() - t;
 		double time_taken = ((double)t)/CLOCKS_PER_SEC; // in seconds
 
-		//printf("[CLIENT] [SET DATA] sent data %f s\n",time_taken);
+		DPRINT("[IMSS] [SET DATA] sent data %f s\n",time_taken);
 	}
 	return 0;
 }

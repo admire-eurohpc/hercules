@@ -22,7 +22,7 @@
 #define RAM_STORAGE_USE_PCT 0.75f // percentage of free system RAM to be used for storage
 
 //Lock dealing when cleaning blocks
-pthread_mutex_t mutex_garbage;
+pthread_mutex_t mutex_garbage = PTHREAD_MUTEX_INITIALIZER;
 
 //Initial buffer address.
 char *   buffer_address;
@@ -46,7 +46,7 @@ StsHeader * mem_pool;
 //URI of the attached deployment.
 char att_imss_uri[URI_];
 
-pthread_mutex_t tree_mut;
+pthread_mutex_t tree_mut = PTHREAD_MUTEX_INITIALIZER;
 
 pthread_mutex_t mp = PTHREAD_MUTEX_INITIALIZER;
 
@@ -1010,6 +1010,7 @@ void * srv_worker_thread (void * th_argv)
 									//printf("STAT_WORKER READ_OP\n");
 									//Check if there was an associated block to the key.
 									int err = map->get(key, &address_, &block_size_rtvd);
+									pthread_mutex_unlock(&mp);
 									DPRINT("[STAT WORKER] map->get (key %s, block_size_rtvd %ld) get res %d\n",key.c_str(),block_size_rtvd, err);
 
 									if(err == 0){
@@ -1021,7 +1022,6 @@ void * srv_worker_thread (void * th_argv)
 												ep_flush(arguments->server_ep, ucp_data_worker);
 												ep_close(ucp_data_worker, arguments->server_ep, UCP_EP_CLOSE_MODE_FLUSH);
 											}
-											pthread_mutex_unlock(&mp);
 											pthread_exit(NULL);
 										}
 									}
@@ -1042,12 +1042,10 @@ void * srv_worker_thread (void * th_argv)
 												ep_flush(arguments->server_ep, ucp_data_worker);
 												ep_close(ucp_data_worker, arguments->server_ep, UCP_EP_CLOSE_MODE_FLUSH);
 											}
-											pthread_mutex_unlock(&mp);
 											pthread_exit(NULL);
 										}
 									}
 
-									pthread_mutex_unlock(&mp);
 									break;
 								}
 
@@ -1150,6 +1148,7 @@ void * srv_worker_thread (void * th_argv)
 						//If the record was not already stored, add the block.
 						if (!map->get(key, &address_, &block_size_rtvd))
 						{
+							pthread_mutex_unlock(&mp);
 							//Receive the block into the buffer.
 							char * buffer = (char *) malloc(block_size_recv);
 							DPRINT("[STAT WORKER] Recv dynamic buffer size %ld\n", block_size_recv);
@@ -1189,6 +1188,7 @@ void * srv_worker_thread (void * th_argv)
 						//If was already stored:
 						else
 						{
+							pthread_mutex_unlock(&mp);
 							//Follow a certain behavior if the received block was already stored.
 							DPRINT("[STAT WORKER] LOCAL DATASET_UPDATE %ld\n", block_size_recv);
 							switch (block_size_recv)
@@ -1253,7 +1253,6 @@ void * srv_worker_thread (void * th_argv)
 									}
 							}
 						}
-						pthread_mutex_unlock(&mp);
 						break;
 					}
 				default:

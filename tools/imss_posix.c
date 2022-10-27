@@ -337,12 +337,12 @@ int close(int fd)
 		return real_close(fd);
 	}
 
-    char * path = (char *) calloc(256, sizeof(char));
+    	char * path = (char *) calloc(256, sizeof(char));
 
 	if(map_fd_search_by_val(map_fd, path, fd) == 1) {	
 		if (IMSS_DEBUG)  fprintf(stderr, "[POSIX]. Calling 'close'.\n");
-        imss_release(path);
-		imss_refresh(path);
+        	imss_release(path);
+		//imss_refresh(path);
 	}else{     
 		ret = real_close(fd);
 	}
@@ -393,7 +393,6 @@ int __xstat(int fd, const char *pathname, struct stat *buf)
 		new_path = convert_path(pathname, MOUNT_POINT);
 		// int exist = map_fd_search(map_fd, new_path, &ret, &p);
 		ret = imss_getattr(new_path, buf);
-		fprintf(stderr, "[POSIX] '__xstat' file size %ld  .\n", buf->st_size);
 	}else{
 		ret = real_xstat(fd,pathname, buf);
 	}
