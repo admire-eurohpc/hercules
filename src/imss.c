@@ -361,10 +361,10 @@ int32_t stat_init(char *   stat_hostfile,
         ep_close(ucp_worker_client, client_ep, UCP_EP_CLOSE_MODE_FLUSH);
 
 		// Create the connection to the metadata server dispatcher thread.
-		if (!strcmp(host, "none"))
-			status = start_client(ucp_worker_client, stat_node, stat_port, stat_client + i);
-		else
-			status = start_client(ucp_worker_client, host, stat_port, stat_client + i);
+		if (strcmp(host, "none"))
+	    	strcpy(stat_node, host);
+		
+		status = start_client(ucp_worker_client, stat_node, stat_port, stat_client + i);
 
 		if (status != UCS_OK) {
 			fprintf(stderr, "failed to start client (%s)\n", ucs_status_string(status));
@@ -685,10 +685,10 @@ int32_t init_imss(char *   imss_uri,
 		sscanf(connection_info, "%[^':']:%d:%" PRIu32 "", host, &imss_port, &new_imss.conns.id[i]);
 
 		//Create the connection to the metadata server dispatcher thread.
-		if(!strcmp(host, "none"))
-			status = start_client(ucp_worker_client, (new_imss.info.ips)[i], imss_port, &(new_imss.conns.eps_[i])); // port, rank,
-		else
-			status = start_client(ucp_worker_client, host, imss_port, &(new_imss.conns.eps_[i])); // port, rank,
+		if(strcmp(host, "none"))
+            strcpy((new_imss.info.ips)[i], host);
+
+		status = start_client(ucp_worker_client, (new_imss.info.ips)[i], imss_port, &(new_imss.conns.eps_[i])); // port, rank,
 
 		if (status != UCS_OK) {
 			fprintf(stderr, "failed to start client (%s)\n", ucs_status_string(status));
@@ -721,7 +721,6 @@ int32_t init_imss(char *   imss_uri,
 	if (send_dynamic_stream(ucp_worker_client, stat_client[m_srv], (void *) &new_imss.info, IMSS_INFO) < 0)
 		return -1;
 
-	ep_flush(stat_client[m_srv], ucp_worker_client);
 	//Add the created struture into the underlying IMSS vector.
 	GInsert (&imssd_pos, &imssd_max_size, (char *) &new_imss, imssd, free_imssd);
 
@@ -820,11 +819,13 @@ int32_t open_imss(char * imss_uri)
 		int32_t imss_port;
 		//ID that the new client must take.
 		int32_t imss_id;
-		//Separator.
-		char sep_;
+		char host[256];
 
 		//Read the previous information from the message received.
-		sscanf(connection_info, "%d%c%d", &imss_port, &sep_, &imss_id);
+		sscanf(connection_info, "%[^':']:%d:%" PRIu32 "", host, &imss_port, &imss_id);
+		
+		if(strcmp(host, "none"))
+			strcpy((new_imss.info.ips)[i], host);
 
 		//Create the connection to the metadata server dispatcher thread.
 		status = start_client(ucp_worker_client, (new_imss.info.ips)[i], imss_port,  &(new_imss.conns.eps_[i])); // port, rank,
@@ -998,13 +999,14 @@ int32_t create_dataset(char *  dataset_uri,
 
 	int32_t associated_imss_indx;
 	//Check if the IMSS storing the dataset exists within the clients session.
+	//DPRINT("[TEST] Before imss_check  %s \n", dataset_uri);
 	if ((associated_imss_indx = imss_check(dataset_uri)) == -1)
 	{
 		DPRINT("[IMSS] create_dataset: ERRIMSS_OPENDATA_IMSSNOTFOUND\n");
-		fprintf(stderr, "ERRIMSS_OPENDATA_IMSSNOTFOUND\n");
 		return -ENOENT;
 	}
 
+	//DPRINT("[TEST] After imss_check  \n");
 	imss associated_imss;
 	associated_imss = g_array_index(imssd, imss, associated_imss_indx);
 
@@ -2094,7 +2096,7 @@ int32_t set_data(int32_t 	 dataset_id,
 		char * buffer)
 {
 	int32_t n_server;
-	//size_t (* const send_choose_stream)(ucp_worker_h ucp_worker, ucp_ep_h ep, const char * msg, size_t msg_length) = (IMSS_WRITE_ASYNC == 1) ? send_istream : send_stream;
+	size_t (* const send_choose_stream)(ucp_worker_h ucp_worker, ucp_ep_h ep, const char * msg, size_t msg_length) = (IMSS_WRITE_ASYNC == 1) ? send_istream : send_stream;
 
 	/*	struct timeval start, end;
 		long delta_us;
@@ -2127,7 +2129,7 @@ int32_t set_data(int32_t 	 dataset_id,
 	  	//Key related to the requested data element.
 	    sprintf(key_, "%" PRIu32 " SET %d %s$%d", curr_imss.conns.id[n_server_], curr_dataset.data_entity_size, curr_dataset.uri_, data_id);
 
-		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[n_server_], key_, REQUEST_SIZE) < 0) // SNDMORE
+		if (send_istream(ucp_worker_client, curr_imss.conns.eps_[n_server_], key_, REQUEST_SIZE) < 0) // SNDMORE
 		{
 			perror("ERRIMSS_SETDATA_REQ");
 			return -1;
@@ -2142,7 +2144,7 @@ int32_t set_data(int32_t 	 dataset_id,
 		//	gettimeofday(&start, NULL);
 		//Send read request message specifying the block data.
 		//printf("[SET DATA] msg=%s, size=%d\n",buffer,curr_dataset.data_entity_size);
-		if (send_stream(ucp_worker_client, curr_imss.conns.eps_[n_server_], buffer, curr_dataset.data_entity_size) < 0)
+		if (send_istream(ucp_worker_client, curr_imss.conns.eps_[n_server_], buffer, curr_dataset.data_entity_size) < 0)
 		{
 			perror("ERRIMSS_SETDATA_SEND");
 			return -1;
@@ -2156,7 +2158,7 @@ int32_t set_data(int32_t 	 dataset_id,
 		t = clock() - t;
 		double time_taken = ((double)t)/CLOCKS_PER_SEC; // in seconds
 
-		//printf("[CLIENT] [SET DATA] sent data %f s\n",time_taken);
+		DPRINT("[IMSS] [SET DATA] sent data %f s\n",time_taken);
 	}
 	return 0;
 }
