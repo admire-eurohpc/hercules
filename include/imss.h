@@ -46,6 +46,12 @@ extern int32_t  IMSS_DEBUG;
 	#define DPRINT(...)
 #endif
 
+
+typedef enum {
+    CLIENT_SERVER_SEND_RECV_STREAM  = UCS_BIT(0),
+    CLIENT_SERVER_SEND_RECV_DEFAULT = CLIENT_SERVER_SEND_RECV_STREAM
+} send_type_t;
+
 //Structure storing all information related to a certain IMSS.
 typedef struct {
 

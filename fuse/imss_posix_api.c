@@ -1619,7 +1619,6 @@ int imss_write(const char *path, const char *buf, size_t size, off_t off)
 		int res = 0;
 		res = create_dataset((char*)rpath, POLICY,  N_BLKS, IMSS_BLKSIZE, REPL_FACTOR);
 		if(res < 0) {
-			if (IMSS_DEBUG) fprintf(stderr, "[IMSS-FUSE]	Cannot create new dataset.\n");
 			free(rpath);
 			return res;
 		} else{

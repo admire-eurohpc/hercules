@@ -154,13 +154,13 @@ void * srv_worker_thread (void * th_argv)
 		char req[REQUEST_SIZE];
 		char mode[MODE_SIZE];
 
-        DPRINT ("[DATA WORKER] Waiting for new request.\n");
+		DPRINT ("[DATA WORKER] Waiting for new request.\n");
 		//Save the request to be served.
 		recv_stream(ucp_data_worker, arguments->server_ep, req, REQUEST_SIZE);
 
-        sscanf(req, "%" PRIu32 " %s", &client_id, mode);
+		sscanf(req, "%" PRIu32 " %s", &client_id, mode);
 
-        char *req_content = strstr(req, mode);
+		char *req_content = strstr(req, mode);
 		req_content += 4;
 
 		if (!strcmp(mode, "GET"))
@@ -178,7 +178,7 @@ void * srv_worker_thread (void * th_argv)
 			  long delta_us2;
 			  gettimeofday(&start2, NULL);*/
 
-	    char number[16];
+			char number[16];
 		sscanf(req_content, "%s", number);
 		int32_t number_length = (int32_t) strlen(number);
 
@@ -908,14 +908,14 @@ void * srv_worker_thread (void * th_argv)
 			char req[REQUEST_SIZE];
 			char mode[MODE_SIZE];
 
-            DPRINT ("[STAT WORKER] Waiting for new request.\n");
+			DPRINT ("[STAT WORKER] Waiting for new request.\n");
 			//Save the request to be served.
 			recv_stream(ucp_data_worker, arguments->server_ep, req, REQUEST_SIZE);
 
-            sscanf(req, "%" PRIu32 " %s", &client_id, mode);
+			sscanf(req, "%" PRIu32 " %s", &client_id, mode);
 
-            char *req_content = strstr(req, mode);
-            req_content += 4;
+			char *req_content = strstr(req, mode);
+			req_content += 4;
 
 			if (!strcmp(mode, "GET"))
 				more = GET_OP;
@@ -924,7 +924,7 @@ void * srv_worker_thread (void * th_argv)
 
 			DPRINT ("[STAT WORKER] Request - client_id '%" PRIu32 "', mode '%s', req '%s'\n", client_id, mode, req_content)
 				//Expeted incomming message format: "SIZE_IN_KB KEY"
-			int32_t req_size = strlen(req_content);
+				int32_t req_size = strlen(req_content);
 
 			char raw_msg[req_size+1];
 			memcpy((void*) raw_msg, req_content, req_size);
@@ -1243,12 +1243,13 @@ void * srv_worker_thread (void * th_argv)
 
 								default:
 									{
-										DPRINT("[STAT_WORKER] Updating existing dataset %s.\n", key.c_str());
+										DPRINT("[STAT_WORKER] Updating existing dataset 2222 %s.\n", key.c_str());
 										//Clear the corresponding memory region.
 										char * buffer = (char *) malloc(block_size_recv);
 										//Receive the block into the buffer.
 										recv_dynamic_stream(ucp_data_worker, arguments->server_ep, buffer, BUFFER);
 										free(buffer);
+										DPRINT("[STAT_WORKER] End Updating existing dataset 2222 %s.\n", key.c_str());
 										break;
 									}
 							}
@@ -1271,236 +1272,236 @@ void * srv_worker_thread (void * th_argv)
 
 	//Server dispatcher thread method.
 	void * srv_attached_dispatcher(void * th_argv)
+	{
+		//Cast from generic pointer type to p_argv struct type pointer.
+		p_argv * arguments = (p_argv *) th_argv;
+
+		ucx_server_ctx_t context;
+		ucp_worker_h     ucp_data_worker;
+		ucp_am_handler_param_t param;
+		ucp_ep_h         server_ep;
+		ucs_status_t     status;
+		int              ret;
+
+		//Variable specifying the ID that will be granted to the next client.
+		uint32_t client_id_ = 0;
+		char req[256];
+
+		ret = init_worker(arguments->ucp_context, &ucp_data_worker);
+		if (ret != 0) {
+			perror("ERRIMSS_INIT_WORKER");
+			pthread_exit(NULL);
+		}
+
+		/* Initialize the server's context. */
+		context.conn_request =  StsQueue.create();
+		status = start_server(arguments->ucp_worker, &context, &context.listener, NULL, arguments->port);
+		if (status != UCS_OK) {
+			perror("ERRIMSS_STAR_SERVER");
+			pthread_exit(NULL);
+		}
+
+
+		for (;;)
 		{
-			//Cast from generic pointer type to p_argv struct type pointer.
-			p_argv * arguments = (p_argv *) th_argv;
+			ucp_conn_request_h conn_req;
+			DPRINT("[DATA DISPATCHER] Waiting for connection requests.\n");
 
-			ucx_server_ctx_t context;
-			ucp_worker_h     ucp_data_worker;
-			ucp_am_handler_param_t param;
-			ucp_ep_h         server_ep;
-			ucs_status_t     status;
-			int              ret;
-
-			//Variable specifying the ID that will be granted to the next client.
-			uint32_t client_id_ = 0;
-			char req[256];
-
-			ret = init_worker(arguments->ucp_context, &ucp_data_worker);
-			if (ret != 0) {
-				perror("ERRIMSS_INIT_WORKER");
-				pthread_exit(NULL);
+			while (StsQueue.size(context.conn_request) == 0) {
+				ucp_worker_progress(arguments->ucp_worker);
 			}
 
-			/* Initialize the server's context. */
-			context.conn_request =  StsQueue.create();
-			status = start_server(arguments->ucp_worker, &context, &context.listener, NULL, arguments->port);
+			conn_req = (ucp_conn_request_h)StsQueue.pop(context.conn_request);
+
+			status = server_create_ep(ucp_data_worker, conn_req, &server_ep);
 			if (status != UCS_OK) {
-				perror("ERRIMSS_STAR_SERVER");
+				perror("ERRIMSS_SERVER_CREATE_EP");
+				ep_flush(server_ep, ucp_data_worker);
+				ep_close(ucp_data_worker, server_ep, UCP_EP_CLOSE_MODE_FLUSH);
 				pthread_exit(NULL);
 			}
 
+			//Save the identity of the requesting client.
+			char mode[MODE_SIZE];
+			recv_stream(ucp_data_worker, server_ep, req, REQUEST_SIZE);
 
-			for (;;)
+			sscanf(req, "%" PRIu32 " %s", &client_id_, mode);
+			char *req_content = strstr(req, mode);
+			req_content += 4;
+
+			uint32_t c_id = client_id_;
+
+			//Check if the client is requesting connection resources.
+			if (!strncmp(req_content, "HELLO!", 6))
 			{
-				ucp_conn_request_h conn_req;
-				DPRINT("[DATA DISPATCHER] Waiting for connection requests.\n");
+				if (strncmp(req_content, "HELLO!JOIN", 10) != 0)
+				{
+					//Retrieve the buffer size that will be asigned to the current server process.
+					char buff[6];
+					sscanf(req, "%s %ld %s", buff, &buffer_KB, att_imss_uri);
+					strcpy(arguments->my_uri, att_imss_uri);
 
-				while (StsQueue.size(context.conn_request) == 0) {
-					ucp_worker_progress(arguments->ucp_worker);
+					//printf("MU URI: %s\n", att_imss_uri);
+
+					//Notify that the value has been received.
+					pthread_mutex_lock(&buff_size_mut);
+					copied = 1;
+					pthread_cond_signal(&buff_size_cond);
+					pthread_mutex_unlock(&buff_size_mut);
 				}
 
-				conn_req = (ucp_conn_request_h)StsQueue.pop(context.conn_request);
+				//Message containing the client's communication ID plus its connection port.
+				char response_[RESPONSE_SIZE]; 
+				memset(response_, '\0', RESPONSE_SIZE);
+				//Port that the new client will be forwarded to.
+				int32_t port_ = arguments->port + 1 + (client_id_ % THREAD_POOL);
+				//Wrap the previous info into the ZMQ message.
+				sprintf(response_, "%d%c%d", port_, '-', client_id_++);
 
-				status = server_create_ep(ucp_data_worker, conn_req, &server_ep);
-				if (status != UCS_OK) {
-					perror("ERRIMSS_SERVER_CREATE_EP");
+				//Send communication specifications.
+				if (send_stream(ucp_data_worker, server_ep, response_, RESPONSE_SIZE) < 0)
+				{
+					perror("ERRIMSS_SRVDISP_SENDBLOCK");
 					ep_flush(server_ep, ucp_data_worker);
 					ep_close(ucp_data_worker, server_ep, UCP_EP_CLOSE_MODE_FLUSH);
 					pthread_exit(NULL);
 				}
 
-				//Save the identity of the requesting client.
-				char mode[MODE_SIZE];
-				recv_stream(ucp_data_worker, server_ep, req, REQUEST_SIZE);
 
-                sscanf(req, "%" PRIu32 " %s", &client_id_, mode);
-                char *req_content = strstr(req, mode);
-                req_content += 4;
-
-				uint32_t c_id = client_id_;
-
-				//Check if the client is requesting connection resources.
-				if (!strncmp(req_content, "HELLO!", 6))
-				{
-					if (strncmp(req_content, "HELLO!JOIN", 10) != 0)
-					{
-						//Retrieve the buffer size that will be asigned to the current server process.
-						char buff[6];
-						sscanf(req, "%s %ld %s", buff, &buffer_KB, att_imss_uri);
-						strcpy(arguments->my_uri, att_imss_uri);
-
-						//printf("MU URI: %s\n", att_imss_uri);
-
-						//Notify that the value has been received.
-						pthread_mutex_lock(&buff_size_mut);
-						copied = 1;
-						pthread_cond_signal(&buff_size_cond);
-						pthread_mutex_unlock(&buff_size_mut);
-					}
-
-					//Message containing the client's communication ID plus its connection port.
-					char response_[RESPONSE_SIZE]; 
-					memset(response_, '\0', RESPONSE_SIZE);
-					//Port that the new client will be forwarded to.
-					int32_t port_ = arguments->port + 1 + (client_id_ % THREAD_POOL);
-					//Wrap the previous info into the ZMQ message.
-					sprintf(response_, "%d%c%d", port_, '-', client_id_++);
-
-					//Send communication specifications.
-					if (send_stream(ucp_data_worker, server_ep, response_, RESPONSE_SIZE) < 0)
-					{
-						perror("ERRIMSS_SRVDISP_SENDBLOCK");
-						ep_flush(server_ep, ucp_data_worker);
-						ep_close(ucp_data_worker, server_ep, UCP_EP_CLOSE_MODE_FLUSH);
-						pthread_exit(NULL);
-					}
-
-
-				    DPRINT("[DATA DISPATCHER] Replied client %s.\n",response_);
-					continue;
-				}
-				//Check if someone is requesting identity resources.
-				else if (*((int32_t *) req) == WHO) // MIRAR
-				{
-					//Provide the uri of this instance.
-					if (send_stream(ucp_data_worker, server_ep, arguments->my_uri, RESPONSE_SIZE) < 0) // MIRAR
-					{
-						perror("ERRIMSS_WHOREQUEST");
-						ep_flush(server_ep, ucp_data_worker);
-						ep_close(ucp_data_worker, server_ep, UCP_EP_CLOSE_MODE_FLUSH);
-						pthread_exit(NULL);
-					}
-				}
-				//context.conn_request = NULL;
-				ep_close(ucp_data_worker, server_ep, UCP_EP_CLOSE_MODE_FLUSH);
+				DPRINT("[DATA DISPATCHER] Replied client %s.\n",response_);
+				continue;
 			}
-			pthread_exit(NULL);
+			//Check if someone is requesting identity resources.
+			else if (*((int32_t *) req) == WHO) // MIRAR
+			{
+				//Provide the uri of this instance.
+				if (send_stream(ucp_data_worker, server_ep, arguments->my_uri, RESPONSE_SIZE) < 0) // MIRAR
+				{
+					perror("ERRIMSS_WHOREQUEST");
+					ep_flush(server_ep, ucp_data_worker);
+					ep_close(ucp_data_worker, server_ep, UCP_EP_CLOSE_MODE_FLUSH);
+					pthread_exit(NULL);
+				}
+			}
+			//context.conn_request = NULL;
+			ep_close(ucp_data_worker, server_ep, UCP_EP_CLOSE_MODE_FLUSH);
 		}
+		pthread_exit(NULL);
+	}
 
 	//Metadata dispatcher thread method.
 	void * dispatcher(void * th_argv)
-		{
-			ucx_server_ctx_t context;
-			ucp_worker_h     ucp_data_worker;
-			ucp_am_handler_param_t param;
-			ucs_status_t     status;
-			int              ret;
+	{
+		ucx_server_ctx_t context;
+		ucp_worker_h     ucp_data_worker;
+		ucp_am_handler_param_t param;
+		ucs_status_t     status;
+		int              ret;
 
-			//Cast from generic pointer type to p_argv struct type pointer.
-			p_argv * arguments = (p_argv *) th_argv;
+		//Cast from generic pointer type to p_argv struct type pointer.
+		p_argv * arguments = (p_argv *) th_argv;
 
-			uint32_t client_id_ = 0;
-			char req[REQUEST_SIZE];
+		uint32_t client_id_ = 0;
+		char req[REQUEST_SIZE];
 
-			ret = init_worker(arguments->ucp_context, &ucp_data_worker);
-			if (ret != 0) {
-				perror("ERRIMSS_INIT_WORKER");
-				pthread_exit(NULL);
-			}
-
-			/* Initialize the server's context. */
-			context.conn_request =  StsQueue.create();
-
-
-			status = start_server(arguments->ucp_worker, &context, &context.listener, NULL, arguments->port);
-			if (status != UCS_OK) {
-				perror("ERRIMSS_STAR_SERVER");
-				pthread_exit(NULL);
-			}
-
-			for (;;)
-			{
-				ucp_ep_h server_ep;
-				ucp_conn_request_h conn_req;
-				DPRINT("[DISPATCHER] Waiting for connection requests.\n");
-
-				while (StsQueue.size(context.conn_request) == 0) {
-					ucp_worker_progress(arguments->ucp_worker);
-				}
-
-				conn_req = (ucp_conn_request_h)StsQueue.pop(context.conn_request);
-
-				status = server_create_ep(ucp_data_worker, conn_req, &server_ep);
-				if (status != UCS_OK) {
-					perror("ERRIMSS_SERVER_CREATE_EP");
-					pthread_exit(NULL);
-				}
-
-				char mode[MODE_SIZE];
-				//Save the request to be served.
-
-				recv_stream(ucp_data_worker, server_ep, req, REQUEST_SIZE);
-
-                sscanf(req, "%" PRIu32 " %s", &client_id_, mode);
-
-                char *req_content = strstr(req, mode);
-                req_content += 4;
-
-				//Check if the client is requesting connection resources.
-				if (!strncmp(req_content, "HELLO!", 6))
-				{
-					int n;
-					struct ifreq ifr;
-					char *ip_;
-					//Message containing the client's communication ID plus its connection port.
-					char response_[RESPONSE_SIZE]; 
-					memset(response_, '\0', RESPONSE_SIZE);
-					//Port that the new client will be forwarded to.
-					int32_t port_ = arguments->port + 1 + (client_id_ % THREAD_POOL);
-					//Wrap the previous info into the ZMQ message.
-
-					char array[] = "ib0";
-					n = socket(AF_INET, SOCK_DGRAM, 0);
-					ifr.ifr_addr.sa_family = AF_INET;
-					strncpy(ifr.ifr_name , array , IFNAMSIZ - 1);
-					int err = ioctl(n, SIOCGIFADDR, &ifr);
-
-                    if (err) {
-						sprintf(response_, "%s:%d:%" PRIu32 "", "none", port_,  client_id_);
-
-					} else {
-						ip_ = inet_ntoa(( (struct sockaddr_in *)&ifr.ifr_addr )->sin_addr); 
-						sprintf(response_, "%s:%d:%" PRIu32 "", ip_ , port_, client_id_);
-						DPRINT("[DISPATCHER]  New IP is %s\n",ip_);
-					}
-
-
-
-					//Send communication specifications.
-					if (send_stream(ucp_data_worker, server_ep, response_, RESPONSE_SIZE) < 0)
-					{
-						perror("ERRIMSS_STATDISP_SENDBLOCK");
-						pthread_exit(NULL);
-					}
-					DPRINT("[DISPATCHER] Replied client %s.\n",response_);
-				}
-				//Check if someone is requesting identity resources.
-				else if (*((int32_t *) req) == WHO)
-				{
-					//Provide the uri of this instance.
-					if (send_stream(ucp_data_worker, server_ep, arguments->my_uri, RESPONSE_SIZE) < 0)
-					{
-						perror("ERRIMSS_WHOREQUEST");
-						pthread_exit(NULL);
-					}
-					DPRINT("[DISPATCHER] Replied client %s.\n", arguments->my_uri);
-				}
-
-				/* Reinitialize the server's context to be used for the next client */
-				ep_close(ucp_data_worker, server_ep, UCP_EP_CLOSE_MODE_FLUSH);
-			}
-
+		ret = init_worker(arguments->ucp_context, &ucp_data_worker);
+		if (ret != 0) {
+			perror("ERRIMSS_INIT_WORKER");
 			pthread_exit(NULL);
 		}
+
+		/* Initialize the server's context. */
+		context.conn_request =  StsQueue.create();
+
+
+		status = start_server(arguments->ucp_worker, &context, &context.listener, NULL, arguments->port);
+		if (status != UCS_OK) {
+			perror("ERRIMSS_STAR_SERVER");
+			pthread_exit(NULL);
+		}
+
+		for (;;)
+		{
+			ucp_ep_h server_ep;
+			ucp_conn_request_h conn_req;
+			DPRINT("[DISPATCHER] Waiting for connection requests.\n");
+
+			while (StsQueue.size(context.conn_request) == 0) {
+				ucp_worker_progress(arguments->ucp_worker);
+			}
+
+			conn_req = (ucp_conn_request_h)StsQueue.pop(context.conn_request);
+
+			status = server_create_ep(ucp_data_worker, conn_req, &server_ep);
+			if (status != UCS_OK) {
+				perror("ERRIMSS_SERVER_CREATE_EP");
+				pthread_exit(NULL);
+			}
+
+			char mode[MODE_SIZE];
+			//Save the request to be served.
+
+			recv_stream(ucp_data_worker, server_ep, req, REQUEST_SIZE);
+
+			sscanf(req, "%" PRIu32 " %s", &client_id_, mode);
+
+			char *req_content = strstr(req, mode);
+			req_content += 4;
+
+			//Check if the client is requesting connection resources.
+			if (!strncmp(req_content, "HELLO!", 6))
+			{
+				int n;
+				struct ifreq ifr;
+				char *ip_;
+				//Message containing the client's communication ID plus its connection port.
+				char response_[RESPONSE_SIZE]; 
+				memset(response_, '\0', RESPONSE_SIZE);
+				//Port that the new client will be forwarded to.
+				int32_t port_ = arguments->port + 1 + (client_id_ % THREAD_POOL);
+				//Wrap the previous info into the ZMQ message.
+
+				char array[] = "ib0";
+				n = socket(AF_INET, SOCK_DGRAM, 0);
+				ifr.ifr_addr.sa_family = AF_INET;
+				strncpy(ifr.ifr_name , array , IFNAMSIZ - 1);
+				int err = ioctl(n, SIOCGIFADDR, &ifr);
+
+				if (err) {
+					sprintf(response_, "%s:%d:%" PRIu32 "", "none", port_,  client_id_);
+
+				} else {
+					ip_ = inet_ntoa(( (struct sockaddr_in *)&ifr.ifr_addr )->sin_addr); 
+					sprintf(response_, "%s:%d:%" PRIu32 "", ip_ , port_, client_id_);
+					DPRINT("[DISPATCHER]  New IP is %s\n",ip_);
+				}
+
+
+
+				//Send communication specifications.
+				if (send_stream(ucp_data_worker, server_ep, response_, RESPONSE_SIZE) < 0)
+				{
+					perror("ERRIMSS_STATDISP_SENDBLOCK");
+					pthread_exit(NULL);
+				}
+				DPRINT("[DISPATCHER] Replied client %s.\n",response_);
+			}
+			//Check if someone is requesting identity resources.
+			else if (*((int32_t *) req) == WHO)
+			{
+				//Provide the uri of this instance.
+				if (send_stream(ucp_data_worker, server_ep, arguments->my_uri, RESPONSE_SIZE) < 0)
+				{
+					perror("ERRIMSS_WHOREQUEST");
+					pthread_exit(NULL);
+				}
+				DPRINT("[DISPATCHER] Replied client %s.\n", arguments->my_uri);
+			}
+
+			/* Reinitialize the server's context to be used for the next client */
+			ep_close(ucp_data_worker, server_ep, UCP_EP_CLOSE_MODE_FLUSH);
+		}
+
+		pthread_exit(NULL);
+	}
 

@@ -521,10 +521,10 @@ int open64(const char *pathname, int flags, ...)
 			if (create_flag){
 				int err_create = imss_create(new_path, mode, &ret_ds);
 				if (err_create == -EEXIST) {
-					if (IMSS_DEBUG)  fprintf(stderr, "[POSIX]. Calling '__open_2'.\n");
-                    imss_open(new_path, &ret_ds);
+					if (IMSS_DEBUG)  fprintf(stderr, "[POSIX]. Dataset already exists.\n");
+                    			imss_open(new_path, &ret_ds);
 				}
-			}else{
+			} else {
 				imss_open(new_path, &ret_ds);
 			}
 		}
@@ -570,7 +570,7 @@ int open(const char *pathname, int flags, ...)
 				int err_create = imss_create(new_path, mode, &ret_ds);
 				if (err_create == -EEXIST) {
 					if (IMSS_DEBUG)  fprintf(stderr, "[POSIX]. Dataset already exists.\n");
-                    imss_open(new_path, &ret_ds);
+       			                imss_open(new_path, &ret_ds);
 				}
 			}else{
 				imss_open(new_path, &ret_ds);
