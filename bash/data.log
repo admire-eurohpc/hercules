@@ -1,3 +1,0 @@
-server: Required options for data server type: -H, -P, -n, -d, -B, -s. 
-See --help for more detail
-srun: error: sd117: task 0: Exited with exit code 1

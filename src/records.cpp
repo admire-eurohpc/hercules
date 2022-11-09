@@ -340,7 +340,8 @@ int32_t map_records::cleaning_specific(std::string new_key)
 	for (i=vec.begin(); i<vec.end(); i++){
 		//std::cout << "Garbage Collector: Deleting " << *i << "\n";
 		auto item = buffer.find(*i);
-		free(item->second.first);
+		StsQueue.push(mem_pool, item->second.first);
+		// free(item->second.first);
 		buffer.erase (*i);
 
 	}
