@@ -237,11 +237,11 @@ size_t recv_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, char * msg, size_t msg_
 	param.cb.recv_stream = stream_recv_cb;
 	request              = (test_req_t*) ucp_stream_recv_nbx(ep, msg, msg_length, &msg_length, &param);
 
-	request_finalize(ucp_worker, request, &ctx);
+	return request_finalize(ucp_worker, request, &ctx);
 	//printf("[RECV_STREAM] msg=%s, size=%ld\n",msg,msg_length);
-	size_t length = 0;
+	// size_t length = 0;
 	//ucp_stream_recv_request_test(&request, &length);
-	return msg_length;
+	// return msg_length;
 }
 
 
@@ -386,10 +386,10 @@ int request_finalize(ucp_worker_h ucp_worker, test_req_t *request, test_req_t *c
 	if (status != UCS_OK) {
 		fprintf(stderr, "unable to complete UCX message (%s)\n", ucs_status_string(status));
 		ret = -1;
-		goto release_iov;
+		//goto release_iov;
 	}
 
-release_iov:
+//release_iov:
 	return ret;
 }
 
