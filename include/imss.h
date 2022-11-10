@@ -4,6 +4,8 @@
 #include <stdint.h>
 #include <ucp/api/ucp.h>
 
+// to manage logs.
+#include "slog.h"
 
 //Maximum number of bytes assigned to a dataset or IMSS URI.
 #define URI_		256
@@ -45,6 +47,22 @@ extern int32_t  IMSS_DEBUG;
 #else
 	#define DPRINT(...)
 #endif
+
+/**
+* Macro to measure the time spend by function_to_call.
+* char*::print_comment: comment to be concatenated to the elapsed time.
+*/
+#define TIMING(function_to_call, print_comment) \
+{\
+    clock_t t;\
+    double time_taken;\
+    int ret = -1;\
+    t = clock();\
+    ret = function_to_call;\
+    t = clock() - t;\
+    time_taken = ((double)t)/(CLOCKS_PER_SEC/1000);\
+    slog_info(",%f, %s, %d", time_taken, print_comment, ret);\
+}
 
 //Structure storing all information related to a certain IMSS.
 typedef struct {

@@ -42,17 +42,21 @@ extern "C" {
 	}
 
 	int map_fd_search(void* map, const char* k, int *v,  unsigned long *p) {
+		// lock this function.
 		std::unique_lock<std::mutex> lck (fdlock);
 		Map* m = reinterpret_cast<Map*> (map);
+		// looking for the value with key "k".
 		auto search = m->find(std::string(k));
-
+		// if the key exists:
 		if (search != m->end()) {
+			// get the pair values (refered as *v=first and *p=second) from the value (refered as second) of the map (refered as search).
 			*v =  search->second.first;
 			*p = search->second.second; 
 			return 1;
 		} else {
+			// nothing to do.	
 			return -1;
-		} 
+		}
 	}
 
 	int map_fd_search_by_val(void* map, char* path, int v) {

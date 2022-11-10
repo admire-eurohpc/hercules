@@ -1,22 +1,24 @@
-set_source_files_properties(./mount.c ../src/hercules.c PROPERTIES LANGUAGE CXX)
+set_source_files_properties(./mount.c ../src/hercules.c ../src/slog.c PROPERTIES LANGUAGE CXX)
 
 add_executable(mount.imss
     mount.c
     ../src/hercules.c
     ../src/map_ep.cpp
+    ../src/slog.c
     )
 
 add_executable(umount.imss
     umount.c
     ../src/map_ep.cpp
+    ../src/slog.c
     )
 
 set(CMAKE_C_FLAGS "-fPIC")
 set(CMAKE_CXX_FLAGS "-fPIC")
 
-add_library(imss_posix_api STATIC ../fuse/imss_posix_api.c ../fuse/map.cpp ../fuse/mapprefetch.cpp)
+add_library(imss_posix_api STATIC ../fuse/imss_posix_api.c ../fuse/map.cpp ../fuse/mapprefetch.cpp ../src/slog.c)
 
-add_library (imss_posix SHARED imss_posix.c mapfd.cpp ../fuse/map.cpp) 
+add_library (imss_posix SHARED imss_posix.c mapfd.cpp ../fuse/map.cpp ../src/slog.c) 
 
 target_include_directories(imss_posix PRIVATE ../fuse  .)
 
