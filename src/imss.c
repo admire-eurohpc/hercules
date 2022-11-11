@@ -64,7 +64,7 @@ extern uint16_t connection_port; // FIXME
 char att_deployment[URI_];
 
 int32_t IMSS_DEBUG = 0;
-// int32_t  IMSS_WRITE_ASYNC = 1;
+int32_t  IMSS_WRITE_ASYNC = 1;
 
 /* UCP objects */
 ucp_context_h ucp_context_client;
@@ -1990,10 +1990,16 @@ int32_t get_data(int32_t dataset_id,
 		time_taken = ((double)t) / CLOCKS_PER_SEC; // in seconds
 		DPRINT("[IMSS get_data] SEND_STREAM %f s\n", time_taken);
 		t = clock();
+
+		int size = 0;
+		if (data_id)
+		  size = curr_dataset.data_entity_size;
+		else
+		  size = sizeof(struct stat);
 		//	gettimeofday(&start, NULL);
 		// printf("GET_DATA after send petition to read\n");
 		// Receive data related to the previous read request directly into the buffer.
-		if (recv_stream(ucp_worker_client, curr_imss.conns.eps_[repl_servers[i]], buffer, curr_dataset.data_entity_size) < 0)
+		if (recv_stream(ucp_worker_client, curr_imss.conns.eps_[repl_servers[i]], buffer, size) < 0)
 		{
 			if (errno != EAGAIN)
 			{
@@ -2135,7 +2141,13 @@ int32_t set_data(int32_t dataset_id,
 		//	gettimeofday(&start, NULL);
 		// Send read request message specifying the block URI.
 		// Key related to the requested data element.
-		sprintf(key_, "%" PRIu32 " SET %d %s$%d", curr_imss.conns.id[n_server_], curr_dataset.data_entity_size, curr_dataset.uri_, data_id);
+		int size = 0;
+		if (data_id)
+		  size = curr_dataset.data_entity_size;
+		else
+		  size = sizeof(struct stat);
+
+		sprintf(key_, "%" PRIu32 " SET %d %s$%d", curr_imss.conns.id[n_server_], size, curr_dataset.uri_, data_id);
 
 		if (send_istream(ucp_worker_client, curr_imss.conns.eps_[n_server_], key_, REQUEST_SIZE) < 0) // SNDMORE
 		{
@@ -2154,7 +2166,7 @@ int32_t set_data(int32_t dataset_id,
 		//	gettimeofday(&start, NULL);
 		// Send read request message specifying the block data.
 		// printf("[SET DATA] msg=%s, size=%d\n",buffer,curr_dataset.data_entity_size);
-		if (send_istream(ucp_worker_client, curr_imss.conns.eps_[n_server_], buffer, curr_dataset.data_entity_size) < 0)
+		if (send_istream(ucp_worker_client, curr_imss.conns.eps_[n_server_], buffer, size) < 0)
 		{
 			perror("ERRIMSS_SETDATA_SEND");
 			return -1;
