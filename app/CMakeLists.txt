@@ -14,6 +14,7 @@ ADD_EXECUTABLE( server
 		../src/directory.c
 		../src/records.cpp
 		../src/arg_parser.c
+		../src/slog.c
 )
 
 #ADD_EXECUTABLE( release_imss 
@@ -33,6 +34,7 @@ ADD_LIBRARY( imss_static STATIC
 		../src/directory.c
 		../src/records.cpp
 		../src/map_ep.cpp
+		../src/slog.c
 )
 
 ADD_LIBRARY( imss_shared SHARED
@@ -47,6 +49,7 @@ ADD_LIBRARY( imss_shared SHARED
 		../src/directory.c
 		../src/records.cpp
 		../src/map_ep.cpp
+		../src/slog.c
 )
 
 SET(IMSS_INC "-I${CMAKE_SOURCE_DIR}/include")

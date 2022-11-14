@@ -114,7 +114,7 @@ void * srv_worker (void * th_argv)
 		}
 
 		pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);			
-		DPRINT("[DATA WORKER] Created thread for new endpoint.\n");
+		slog_live("[srv_worker] Created thread for new endpoint.");
 		if (pthread_create(&thread, &attr, srv_worker_thread, (void *) thread_args) == -1)
 		{
 			//Notify thread error deployment.
@@ -128,11 +128,11 @@ void * srv_worker (void * th_argv)
 
 //Thread method attending client read-write data requests.
 void * srv_worker_thread (void * th_argv)
-{   
-
+{ 
+	//slog_init("workers", SLOG_INFO, 1, 0, 1, 1, 1);
 	ucp_worker_h     ucp_data_worker;
 	ucs_status_t     status;
-	int              ret;
+	int              ret = -1;
 
 	//Cast from generic pointer type to p_argv struct type pointer.
 	p_argv * arguments = (p_argv *) th_argv;
@@ -154,9 +154,12 @@ void * srv_worker_thread (void * th_argv)
 		char req[REQUEST_SIZE];
 		char mode[MODE_SIZE];
 
-		DPRINT ("[DATA WORKER] Waiting for new request.\n");
+		slog_live("[srv_worker_thread] Waiting for new request.");
 		//Save the request to be served.
-		recv_stream(ucp_data_worker, arguments->server_ep, req, REQUEST_SIZE);
+		TIMING(ret = recv_stream(ucp_data_worker, arguments->server_ep, req, REQUEST_SIZE),"[srv_worker_thread] Save the request to be served");
+		slog_live("[srv_worker_thread] request to be served %s", req);
+
+		//slog_info("********** %d",ret);
 
 		sscanf(req, "%" PRIu32 " %s", &client_id, mode);
 
@@ -168,15 +171,7 @@ void * srv_worker_thread (void * th_argv)
 		else
 			more = SET_OP;
 
-		/*struct timeval start, end;
-		  long delta_us;
-		  gettimeofday(&start, NULL);*/
-
-
-		DPRINT ("[DATA WORKER] Request - client_id '%" PRIu32 "', mode '%s', req '%s'\n",client_id, mode, req_content)
-			/*struct timeval start2, end2;
-			  long delta_us2;
-			  gettimeofday(&start2, NULL);*/
+		slog_live("[srv_worker_thread] Request - client_id '%" PRIu32 "', mode '%s', req '%s', more %ld",client_id, mode, req_content, more);
 
 			char number[16];
 		sscanf(req_content, "%s", number);
@@ -204,48 +199,33 @@ void * srv_worker_thread (void * th_argv)
 					{
 						case READ_OP:
 							{
-								//printf("SRV_WORKER READ_OP\n");
-
 								int ret = map->get(key, &address_, &block_size_rtvd);
-
 								//Check if there was an associated block to the key.
-								//if (!(map->get(key, &address_, &block_size_rtvd)))
 								if(ret == 0)
 								{
-									//gettimeofday(&start2, NULL);
 									//Send the error code block.
-									if (send_dynamic_stream(ucp_data_worker, arguments->server_ep, err_code, STRING) < 0)
+									ret = send_dynamic_stream(ucp_data_worker, arguments->server_ep, err_code, STRING);
+									if (ret < 0)
 									{
 										perror("ERRIMSS_WORKER_SENDERR");
 										pthread_exit(NULL);
 									}
-
-									/*gettimeofday(&end2, NULL);
-									  delta_us2 = (long) (end2.tv_usec - start2.tv_usec);
-									  printf("\n[SRV_WORKER] [READ] send delta_us=%6.3f\n",(delta_us2/1000.0F));*/
 								}
 								else
 								{
-									/*double elapsedTime;
-									  gettimeofday(&start2, NULL);*/
 									//Send the requested block.
-
-									if (send_stream(ucp_data_worker, arguments->server_ep, address_, block_size_rtvd) < 0)
+									TIMING(ret = send_stream(ucp_data_worker, arguments->server_ep, address_, block_size_rtvd), "[srv_worker_thread][READ_OP][READ_OP] Send the requested block");
+									if (ret < 0)
 									{
 										perror("ERRIMSS_WORKER_SENDBLOCK");
 										pthread_exit(NULL);
 									}
-									/*gettimeofday(&end2, NULL);
-									  elapsedTime = (end2.tv_sec - start2.tv_sec) * 1000.0;      // sec to ms
-									  elapsedTime += (end2.tv_usec - start2.tv_usec) / 1000.0;   // us to ms
-									  delta_us2 = (long) (end2.tv_usec - start2.tv_usec);
-									  printf("[SRV_WORKER] [READ]  NEW send delta_us=%6.3f\n", elapsedTime  );*/
 								}
 								break;
 							}
-
 						case RELEASE:
 							{
+								slog_live("[srv_worker_thread][READ_OP][RELEASE]");
 								ep_flush(arguments->server_ep, ucp_data_worker);
 								ep_close(ucp_data_worker, arguments->server_ep, UCP_EP_CLOSE_MODE_FLUSH);
 								pthread_exit(NULL);
@@ -253,11 +233,11 @@ void * srv_worker_thread (void * th_argv)
 							}
 						case RENAME_OP:
 							{
+								slog_live("[srv_worker_thread][RENAME_OP]");
 								std::size_t found = key.find(' ');
 								if (found!=std::string::npos){
 									std::string old_key = key.substr(0,found);
 									std::string new_key = key.substr(found+1,key.length());
-
 									//RENAME MAP
 									map->cleaning_specific(new_key);
 									int32_t result = map->rename_data_srv_worker(old_key,new_key);
@@ -267,8 +247,8 @@ void * srv_worker_thread (void * th_argv)
 								}
 
 								char release_msg[] = "RENAME\0";
-
-								if (send_stream(ucp_data_worker, arguments->server_ep, release_msg, RESPONSE_SIZE) < 0)
+								TIMING(ret = send_stream(ucp_data_worker, arguments->server_ep, release_msg, RESPONSE_SIZE),"[srv_worker_thread][READ_OP][RENAME_OP] Send rename");
+								if (ret < 0)
 								{
 									perror("ERRIMSS_PUBLISH_RENAMEMSG");
 									pthread_exit(NULL);
@@ -288,7 +268,8 @@ void * srv_worker_thread (void * th_argv)
 								}
 
 								char release_msg[] = "RENAME\0";
-								if (send_stream(ucp_data_worker, arguments->server_ep, release_msg, RESPONSE_SIZE) < 0)
+								TIMING(ret = send_stream(ucp_data_worker, arguments->server_ep, release_msg, RESPONSE_SIZE),"[srv_worker_thread][READ_OP][RENAME_DIR_DIR_OP] Send rename");
+								if (ret < 0)
 								{
 									perror("ERRIMSS_PUBLISH_RENAMEMSG");
 									pthread_exit(NULL);
@@ -324,7 +305,6 @@ void * srv_worker_thread (void * th_argv)
 									int64_t size = stoi(key.substr(0,found));
 									key.erase(0,found+1);
 
-
 									//Needed variables
 									size_t byte_count = 0;
 									int first = 0;
@@ -349,7 +329,8 @@ void * srv_worker_thread (void * th_argv)
 										{//If dont exist 
 											//Send the error code block.
 											//std::cout <<"SERVER READV NO EXISTE element:" << element << '\n';
-											if (send_dynamic_stream(ucp_data_worker, arguments->server_ep, err_code, STRING) < 0)
+											TIMING(ret = send_dynamic_stream(ucp_data_worker, arguments->server_ep, err_code, STRING),"[srv_worker_thread][READ_OP][READV] send_dynamic_stream");
+											if (ret < 0)
 											{
 												perror("ERRIMSS_WORKER_SENDERR");
 												pthread_exit(NULL);
@@ -367,9 +348,8 @@ void * srv_worker_thread (void * th_argv)
 														to_read = stats->st_size - start_offset;
 													}else{
 														to_read = blocksize*KB - start_offset;
-													}																	
+													}	
 												}
-
 												//Check if offset is bigger than filled, return 0 because is EOF case
 												if(start_offset > stats->st_size) 
 													return 0; 
@@ -377,12 +357,11 @@ void * srv_worker_thread (void * th_argv)
 												byte_count += to_read;
 												++first;
 
-												//Middle block case
+											//Middle block case
 											} else if (curr_blk != end_blk) {
-												//memcpy(buf + byte_count, aux + HEADER, IMSS_DATA_BSIZE);
 												memcpy(buf + byte_count, address_, blocksize*KB);
 												byte_count += blocksize*KB;
-												//End block case
+											//End block case
 											}  else {
 
 												//Read the minimum between end_offset and filled (read_ = min(end_offset, filled))
@@ -393,21 +372,20 @@ void * srv_worker_thread (void * th_argv)
 										}								
 										++curr_blk;
 									}
+									TIMING(ret = send_stream(ucp_data_worker, arguments->server_ep, buf, size),("[srv_worker_thread][READ_OP][READV] send buf: %s", buf));
 									//Send the requested block.
-									if (send_stream(ucp_data_worker, arguments->server_ep, buf, size) < 0)
+									if (ret < 0)
 									{
 										perror("ERRIMSS_WORKER_SENDBLOCK");
 										pthread_exit(NULL);
 									}
 								}
-
-
 								break;
 							}
 						case SPLIT_READV:
 							{
 								//printf("SPLIT_READV CASE\n");
-								//printf("key=%s\n",key.c_str());
+								slog_live("key=%s\n",key.c_str());
 								std::size_t found = key.find(' ');
 								std::string path;
 								if (found!=std::string::npos){
@@ -429,7 +407,15 @@ void * srv_worker_thread (void * th_argv)
 									int msg_size = stoi(key.substr(0,found));
 
 									char * msg = (char *) calloc(msg_size,sizeof(char));
-									recv_stream(ucp_data_worker, arguments->server_ep,  msg, msg_size);
+									
+									TIMING(ret = recv_stream(ucp_data_worker, arguments->server_ep, msg, msg_size),"[srv_worker_thread][READ_OP][SPLIT_READV] recv_stream");
+										
+									//Send the requested block.
+									if (ret < 0)
+									{
+										perror("ERRIMSS_WORKER_SENDBLOCK");
+										pthread_exit(NULL);
+									}
 
 									key = msg;
 									found = key.find('$');
@@ -437,17 +423,15 @@ void * srv_worker_thread (void * th_argv)
 									int size = amount * blocksize;
 									key.erase(0,found+1);
 
-									/*printf("msg=%s\n",key.c_str());
-									  printf("msg_size=%d\n",msg_size);
-									  printf("*path=%s\n",path.c_str());
-									  printf("*blocksize=%d\n",blocksize);
-									  printf("*start_offset=%d\n",start_offset);
-									  printf("*size=%d\n",size);
-									  printf("*amount=%d\n",amount);*/
-
+									slog_live("msg=%s\n",key.c_str());
+									slog_live("msg_size=%d\n",msg_size);
+									slog_live("*path=%s\n",path.c_str());
+									slog_live("*blocksize=%d\n",blocksize);
+									slog_live("*start_offset=%d\n",start_offset);
+									slog_live("*size=%d\n",size);
+									slog_live("*amount=%d\n",amount);
 
 									char * buf = (char *)malloc(size);
-
 									//Needed variables
 									size_t byte_count = 0;
 									int first = 0;
@@ -458,7 +442,6 @@ void * srv_worker_thread (void * th_argv)
 									int curr_blk = 0;
 
 									for(int i = 0; i < amount; i++){
-
 										//substract current block
 										found = key.find('$');
 										int curr_blk = stoi(key.substr(0,found));
@@ -480,8 +463,9 @@ void * srv_worker_thread (void * th_argv)
 										byte_count += blocksize;
 
 									}
+									TIMING(ret = send_stream(ucp_data_worker, arguments->server_ep, buf, byte_count),("[srv_worker_thread][READ_OP][READV] send buf: %s", buf));
 									//Send the requested block.
-									if (send_stream(ucp_data_worker, arguments->server_ep, buf, byte_count) < 0)
+									if (ret < 0)
 									{
 										perror("ERRIMSS_WORKER_SENDBLOCK");
 										pthread_exit(NULL);
@@ -493,30 +477,23 @@ void * srv_worker_thread (void * th_argv)
 						case WHO:
 							{
 								//Provide the uri of this instance.
-								if (send_stream(ucp_data_worker, arguments->server_ep, arguments->my_uri, strlen(arguments->my_uri)) < 0)
+								TIMING(ret = send_stream(ucp_data_worker, arguments->server_ep, arguments->my_uri, strlen(arguments->my_uri)),("[srv_worker_thread][READ_OP][WHO] send uri: %s", arguments->my_uri));
+								if (ret < 0)
 								{
 									perror("ERRIMSS_WHOREQUEST");
 									pthread_exit(NULL);
 								}
-
 								break;
 							}
-
 						default:
-
 							break;
 					}
-
 					break;
 				}
 				//More messages will arrive to the socket.
 			case WRITE_OP:
 				{
 					//std::cout <<"WRITE_OP key:" << key << '\n';
-
-					//struct utsname detect;
-					//uname(&detect);
-
 					int op;
 					std::size_t found = key.find(' ');
 					std::size_t found2 = key.find("[OP]=");
@@ -644,7 +621,7 @@ void * srv_worker_thread (void * th_argv)
 						}
 
 						free(buf);
-					}else if(found!=std::string::npos && op == 2){
+					} else if(found!=std::string::npos && op == 2){
 						std::string path;
 						std::size_t found = key.find(' ');
 						//printf("Nodename	-%s SPLIT WRITEV\n",detect.nodename);
@@ -669,17 +646,24 @@ void * srv_worker_thread (void * th_argv)
 						int size = amount * blocksize;
 						key.erase(0,found+1);
 
-						/*printf("amount=%d\n",amount);
-						  printf("path=%s\n",path.c_str());
-						  printf("blocksize=%d\n",blocksize);
-						  printf("start_offset=%d\n",start_offset);
-						  printf("size=%d\n",size);
-						  printf("rest=%s\n",key.c_str());*/
+						slog_live("amount=%d",amount);
+						slog_live("path=%s",path.c_str());
+						slog_live("blocksize=%d",blocksize);
+						slog_live("start_offset=%d",start_offset);
+						slog_live("size=%d",size);
+						slog_live("rest=%s",key.c_str());
 
 						//Receive all blocks into the buffer.
 						char * buf = (char *)malloc(size);
-						int size_recv = recv_stream(ucp_data_worker, arguments->server_ep, buf, size);
-						size_recv = size; // MIRAR
+						// int size_recv = -1; 
+						TIMING(ret = recv_stream(ucp_data_worker, arguments->server_ep, buf, size),("[srv_worker_thread][WRITE_OP] buf: %s", buf));
+						if (ret < 0)
+						{
+							perror("ERRIMSS_WRITE_OP_BUF");
+							pthread_exit(NULL);
+						}
+
+						// size_recv = size; // MIRAR
 						int32_t insert_successful;
 
 						//printf("Nodename	-%s size_recv=%d\n",detect.nodename,size_recv);
@@ -697,15 +681,11 @@ void * srv_worker_thread (void * th_argv)
 							//printf("\n element=%s\n",element.c_str());
 
 							if (map->get(element, &address_, &block_size_rtvd)==0){
-
-								//If dont exist 
+								//If don't exist 
 								char * buffer = (char *)aligned_alloc(1024, blocksize);
-
 								memcpy(buffer, buf + byte_count, blocksize);
-
 								//printf("Salida buffer part=%c\n",buffer[100]);
 								insert_successful=map->put(element, buffer, block_size_recv);
-
 								if (insert_successful != 0)
 								{
 									perror("ERRIMSS_WORKER_MAPPUT");
@@ -720,35 +700,21 @@ void * srv_worker_thread (void * th_argv)
 							byte_count = byte_count + blocksize;
 							//printf("Nodename	-%s byte_count=%d\n",detect.nodename,byte_count);
 						}
-					}
-					else{
-						//DPRINT("WRITE NORMAL CASE\n");
-
-						//gettimeofday(&start2, NULL);
-
+					}else{
+						slog_live("[srv_worker_thread][WRITE_OP] WRITE NORMAL CASE");
+						// search for the block to know if it was previously stored.
 						int ret = map->get(key, &address_, &block_size_rtvd);
 
-						/*gettimeofday(&end2, NULL);
-						  delta_us2 = (long) (end2.tv_usec - start2.tv_usec);
-						  printf("\n[SRV_WORKER] [WRITE] map-get delta_us=%6.3f\n",(delta_us2/1000.0F));*/
-						//If the record was not already stored, add the block.
-						//if (!map->get(key, &address_, &block_size_rtvd))
-
+						// if the block was not already stored:
 						if(ret == 0){
-							char * buffer = (char *)StsQueue.pop(mem_pool);
-							// char * buffer = (char *) malloc(block_size_recv);
-							//char * buffer = (char *)aligned_alloc(1024, block_size_recv);
+							char *buffer = (char *)StsQueue.pop(mem_pool);
 							//Receive the block into the buffer.
-							recv_stream(ucp_data_worker, arguments->server_ep, buffer, block_size_recv);
+							TIMING(recv_stream(ucp_data_worker, arguments->server_ep, buffer, block_size_recv),"[srv_worker_thread][WRITE_OP] recv_stream: Receive the block into the buffer.");
 							struct stat * stats = (struct stat *) buffer;
 							int32_t insert_successful;
 
-							//gettimeofday(&start2, NULL);
 							//Include the new record in the tracking structure.
 							insert_successful=map->put(key, buffer, block_size_recv);
-							/*gettimeofday(&end2, NULL);
-							  delta_us2 = (long) (end2.tv_usec - start2.tv_usec);
-							  printf("\n[SRV_WORKER] [WRITE] map-put delta_us=%6.3f\n",(delta_us2/1000.0F));*/
 
 							//Include the new record in the tracking structure.
 							if (insert_successful != 0)
@@ -760,32 +726,30 @@ void * srv_worker_thread (void * th_argv)
 
 							//Update the pointer.
 							arguments->pt += block_size_recv;
-
 						}
-						//If was already stored:
+						// if the block was already stored:
 						else
 						{
-							//gettimeofday(&start2, NULL);
 							//Receive the block into the buffer.
 							std::size_t found = key.find("$0");
 							if(found!=std::string::npos){
-								DPRINT("[DATA WORKER]  Updating block $0\n ");
-								struct stat *old, *lastest;
+								slog_live("[srv_worker_thread][WRITE_OP] Updating block $0");
+								struct stat *old, *latest;
 								char * buffer = (char *) malloc (block_size_rtvd);
-								recv_stream(ucp_data_worker, arguments->server_ep, buffer, block_size_rtvd);
+								TIMING(recv_stream(ucp_data_worker, arguments->server_ep, buffer, block_size_rtvd),"[srv_worker_thread][WRITE_OP] recv_stream Updating block $0");
 								old = (struct stat *) address_;
-								lastest = (struct stat *) buffer;
-								DPRINT("[DATA WORKER]  File size old %ld  new %ld \n ", lastest->st_size,old->st_size);
-								lastest->st_size = std::max(lastest->st_size,old->st_size);
+								latest = (struct stat *) buffer;
+								slog_live("[srv_worker_thread] File size new %ld old %ld", latest->st_size,old->st_size);
+								latest->st_size = std::max(latest->st_size,old->st_size);
+								slog_live("[srv_worker_thread] buffer: %ld", latest->st_size);
 								memcpy(address_, buffer, block_size_rtvd);
+    							slog_live("address_=%x", address_);
 								free(buffer);
-							} else
-								recv_stream(ucp_data_worker, arguments->server_ep, address_, block_size_rtvd);
-							/*gettimeofday(&end2, NULL);
-							  delta_us2 = (long) (end2.tv_usec - start2.tv_usec);
-							  printf("\n[SRV_WORKER] [WRITE] recv delta_us=%6.3f\n",(delta_us2/1000.0F));*/
-
-							//pthread_mutex_unlock(&region_locks[lock]);
+							} else {
+								TIMING(recv_stream(ucp_data_worker, arguments->server_ep, address_, block_size_rtvd),("[srv_worker_thread][WRITE_OP] recv_stream Updated non 0 existing block"));
+								slog_live("[srv_worker_thread][WRITE_OP] non 0 key.c_str(): %s", key.c_str());
+    							// slog_live("address_=%x", address_);
+							}
 						}
 						break;
 					}
@@ -800,7 +764,7 @@ void * srv_worker_thread (void * th_argv)
 				}
 		}   
 
-		DPRINT("[STAT WORKER] Terminated stat thread\n");
+		slog_live("[srv_worker_thread] Terminated stat thread");
 		ep_flush(arguments->server_ep, ucp_data_worker);
 		ep_close(ucp_data_worker, arguments->server_ep, UCP_EP_CLOSE_MODE_FLUSH);
 		pthread_exit(NULL);
@@ -908,7 +872,7 @@ void * srv_worker_thread (void * th_argv)
 			char req[REQUEST_SIZE];
 			char mode[MODE_SIZE];
 
-			DPRINT ("[STAT WORKER] Waiting for new request.\n");
+            slog_live ("[STAT WORKER] Waiting for new request.");
 			//Save the request to be served.
 			recv_stream(ucp_data_worker, arguments->server_ep, req, REQUEST_SIZE);
 
@@ -922,7 +886,7 @@ void * srv_worker_thread (void * th_argv)
 			else
 				more = SET_OP;
 
-			DPRINT ("[STAT WORKER] Request - client_id '%" PRIu32 "', mode '%s', req '%s'\n", client_id, mode, req_content)
+			slog_live ("[STAT WORKER] Request - client_id '%" PRIu32 "', mode '%s', req '%s'", client_id, mode, req_content)
 				//Expeted incomming message format: "SIZE_IN_KB KEY"
 				int32_t req_size = strlen(req_content);
 
@@ -1011,7 +975,7 @@ void * srv_worker_thread (void * th_argv)
 									//Check if there was an associated block to the key.
 									int err = map->get(key, &address_, &block_size_rtvd);
 									pthread_mutex_unlock(&mp);
-									DPRINT("[STAT WORKER] map->get (key %s, block_size_rtvd %ld) get res %d\n",key.c_str(),block_size_rtvd, err);
+									slog_live("[STAT WORKER] map->get (key %s, block_size_rtvd %ld) get res %d",key.c_str(),block_size_rtvd, err);
 
 									if(err == 0){
 										//Send the error code block.
@@ -1143,7 +1107,7 @@ void * srv_worker_thread (void * th_argv)
 					//More messages will arrive to the socket.
 				case SET_OP:
 					{
-						DPRINT("[STAT WORKER] Creating dataset %s.\n",key.c_str());
+						slog_live("[STAT WORKER] Creating dataset %s.",key.c_str());
 						pthread_mutex_lock(&mp);
 						//If the record was not already stored, add the block.
 						if (!map->get(key, &address_, &block_size_rtvd))
@@ -1151,13 +1115,13 @@ void * srv_worker_thread (void * th_argv)
 							pthread_mutex_unlock(&mp);
 							//Receive the block into the buffer.
 							char * buffer = (char *) malloc(block_size_recv);
-							DPRINT("[STAT WORKER] Recv dynamic buffer size %ld\n", block_size_recv);
+							slog_live("[STAT WORKER] Recv dynamic buffer size %ld", block_size_recv);
 							recv_dynamic_stream(ucp_data_worker, arguments->server_ep, buffer, BUFFER);
-							DPRINT("[STAT WORKER] END Recv dynamic \n");
+							slog_live("[STAT WORKER] END Recv dynamic");
 
 							int32_t insert_successful;
 							insert_successful = map->put(key, buffer, block_size_recv);
-							DPRINT("[STAT WORKER] map->put (key %s) err %d\n",key.c_str(), insert_successful);
+							slog_live("[STAT WORKER] map->put (key %s) err %d",key.c_str(), insert_successful);
 
 							if (insert_successful != 0)
 							{
@@ -1182,7 +1146,7 @@ void * srv_worker_thread (void * th_argv)
 							}
 							//Update the pointer.
 							arguments->pt += block_size_recv;
-							DPRINT("[STAT WORKER] Created dataset %s.\n",key.c_str());
+							slog_live("[STAT WORKER] Created dataset %s.",key.c_str());
 
 						}
 						//If was already stored:
@@ -1190,7 +1154,7 @@ void * srv_worker_thread (void * th_argv)
 						{
 							pthread_mutex_unlock(&mp);
 							//Follow a certain behavior if the received block was already stored.
-							DPRINT("[STAT WORKER] LOCAL DATASET_UPDATE %ld\n", block_size_recv);
+							slog_live("[STAT WORKER] LOCAL DATASET_UPDATE %ld", block_size_recv);
 							switch (block_size_recv)
 							{
 								//Update where the blocks of a LOCAL dataset have been stored.
@@ -1226,7 +1190,7 @@ void * srv_worker_thread (void * th_argv)
 
 
 										//Answer the client with the update.
-										DPRINT("[STAT_WORKER] Updating existing dataset %s.\n", key.c_str());
+										slog_live("[STAT_WORKER] Updating existing dataset %s.", key.c_str());
 										char answer[] = "UPDATED!\0";
 										if (send_stream(ucp_data_worker, arguments->server_ep, answer, RESPONSE_SIZE) < 0)
 										{
@@ -1243,7 +1207,7 @@ void * srv_worker_thread (void * th_argv)
 
 								default:
 									{
-										DPRINT("[STAT_WORKER] Updating existing dataset 2222 %s.\n", key.c_str());
+										slog_live("[STAT_WORKER] Updating existing dataset %s.", key.c_str());
 										//Clear the corresponding memory region.
 										char * buffer = (char *) malloc(block_size_recv);
 										//Receive the block into the buffer.
@@ -1302,10 +1266,10 @@ void * srv_worker_thread (void * th_argv)
 		}
 
 
-		for (;;)
-		{
-			ucp_conn_request_h conn_req;
-			DPRINT("[DATA DISPATCHER] Waiting for connection requests.\n");
+			for (;;)
+			{
+				ucp_conn_request_h conn_req;
+				slog_live("[DATA DISPATCHER] Waiting for connection requests.");
 
 			while (StsQueue.size(context.conn_request) == 0) {
 				ucp_worker_progress(arguments->ucp_worker);
@@ -1368,26 +1332,26 @@ void * srv_worker_thread (void * th_argv)
 				}
 
 
-				DPRINT("[DATA DISPATCHER] Replied client %s.\n",response_);
-				continue;
-			}
-			//Check if someone is requesting identity resources.
-			else if (*((int32_t *) req) == WHO) // MIRAR
-			{
-				//Provide the uri of this instance.
-				if (send_stream(ucp_data_worker, server_ep, arguments->my_uri, RESPONSE_SIZE) < 0) // MIRAR
-				{
-					perror("ERRIMSS_WHOREQUEST");
-					ep_flush(server_ep, ucp_data_worker);
-					ep_close(ucp_data_worker, server_ep, UCP_EP_CLOSE_MODE_FLUSH);
-					pthread_exit(NULL);
+				    slog_live("[DATA DISPATCHER] Replied client %s.",response_);
+					continue;
 				}
+				//Check if someone is requesting identity resources.
+				else if (*((int32_t *) req) == WHO) // MIRAR
+				{
+					//Provide the uri of this instance.
+					if (send_stream(ucp_data_worker, server_ep, arguments->my_uri, RESPONSE_SIZE) < 0) // MIRAR
+					{
+						perror("ERRIMSS_WHOREQUEST");
+						ep_flush(server_ep, ucp_data_worker);
+						ep_close(ucp_data_worker, server_ep, UCP_EP_CLOSE_MODE_FLUSH);
+						pthread_exit(NULL);
+					}
+				}
+				//context.conn_request = NULL;
+				ep_close(ucp_data_worker, server_ep, UCP_EP_CLOSE_MODE_FLUSH);
 			}
-			//context.conn_request = NULL;
-			ep_close(ucp_data_worker, server_ep, UCP_EP_CLOSE_MODE_FLUSH);
+			pthread_exit(NULL);
 		}
-		pthread_exit(NULL);
-	}
 
 	//Metadata dispatcher thread method.
 	void * dispatcher(void * th_argv)
@@ -1424,7 +1388,7 @@ void * srv_worker_thread (void * th_argv)
 		{
 			ucp_ep_h server_ep;
 			ucp_conn_request_h conn_req;
-			DPRINT("[DISPATCHER] Waiting for connection requests.\n");
+			slog_live("[DISPATCHER] Waiting for connection requests.");
 
 			while (StsQueue.size(context.conn_request) == 0) {
 				ucp_worker_progress(arguments->ucp_worker);
@@ -1470,33 +1434,33 @@ void * srv_worker_thread (void * th_argv)
 				if (err) {
 					sprintf(response_, "%s:%d:%" PRIu32 "", "none", port_,  client_id_);
 
-				} else {
-					ip_ = inet_ntoa(( (struct sockaddr_in *)&ifr.ifr_addr )->sin_addr); 
-					sprintf(response_, "%s:%d:%" PRIu32 "", ip_ , port_, client_id_);
-					DPRINT("[DISPATCHER]  New IP is %s\n",ip_);
+					} else {
+						ip_ = inet_ntoa(( (struct sockaddr_in *)&ifr.ifr_addr )->sin_addr); 
+						sprintf(response_, "%s:%d:%" PRIu32 "", ip_ , port_, client_id_);
+						slog_live("[DISPATCHER]  New IP is %s",ip_);
+					}
+
+
+
+					//Send communication specifications.
+					if (send_stream(ucp_data_worker, server_ep, response_, RESPONSE_SIZE) < 0)
+					{
+						perror("ERRIMSS_STATDISP_SENDBLOCK");
+						pthread_exit(NULL);
+					}
+					slog_live("[DISPATCHER] Replied client %s.",response_);
 				}
-
-
-
-				//Send communication specifications.
-				if (send_stream(ucp_data_worker, server_ep, response_, RESPONSE_SIZE) < 0)
+				//Check if someone is requesting identity resources.
+				else if (*((int32_t *) req) == WHO)
 				{
-					perror("ERRIMSS_STATDISP_SENDBLOCK");
-					pthread_exit(NULL);
+					//Provide the uri of this instance.
+					if (send_stream(ucp_data_worker, server_ep, arguments->my_uri, RESPONSE_SIZE) < 0)
+					{
+						perror("ERRIMSS_WHOREQUEST");
+						pthread_exit(NULL);
+					}
+					slog_live("[DISPATCHER] Replied client %s.", arguments->my_uri);
 				}
-				DPRINT("[DISPATCHER] Replied client %s.\n",response_);
-			}
-			//Check if someone is requesting identity resources.
-			else if (*((int32_t *) req) == WHO)
-			{
-				//Provide the uri of this instance.
-				if (send_stream(ucp_data_worker, server_ep, arguments->my_uri, RESPONSE_SIZE) < 0)
-				{
-					perror("ERRIMSS_WHOREQUEST");
-					pthread_exit(NULL);
-				}
-				DPRINT("[DISPATCHER] Replied client %s.\n", arguments->my_uri);
-			}
 
 			/* Reinitialize the server's context to be used for the next client */
 			ep_close(ucp_data_worker, server_ep, UCP_EP_CLOSE_MODE_FLUSH);

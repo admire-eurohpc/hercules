@@ -25,8 +25,8 @@ extern "C" {
 		return reinterpret_cast<void*> (new Map);
 	}
 
+	// Insert the element "p = {v,stat,aux}" with key "k" to the map "map".
 	void map_put(void* map, char* k, int v, struct stat stat, char * aux) {
-
 		Map* m = reinterpret_cast<Map*> (map);
 		struct elements p = {v,stat,aux};
 		m->insert(std::pair<std::string, struct elements>(std::string(k),p));
@@ -38,14 +38,18 @@ extern "C" {
 		search->second.stat  = stat;
 	}
 
+	// Removes the element with key "k" from the map "map".
+	// int map_erase(void* map, char* k) {
 	void map_erase(void* map, char* k) {
 		Map* m = reinterpret_cast<Map*> (map);
+		//int ret = 0;
 		auto search = m->find(std::string(k));
 
 		if (search != m->end()) {
 			free(search->second.aux);
-		} 
+		}
 		m->erase(std::string(k));
+		//return ret;
 	}
 
 	int map_search(void* map, const char* k, int *v, struct stat *stat, char ** aux) {

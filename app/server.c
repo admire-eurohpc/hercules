@@ -70,9 +70,22 @@ int32_t main(int32_t argc, char **argv)
 
 	if (getenv("IMSS_DEBUG") != NULL) {
 		IMSS_DEBUG = 1;
+		// init log file.
+		//char log_path[1000];
+    	//sprintf(log_path, "./server%c", args.type);
+		//args.type == TYPE_DATA_SERVER ? sprintf(log_path, "data"); : sprintf(log_path, "metadata");
+		//slog_init(log_path, SLOG_INFO, 1, 0, 1, 1, 1);
 	}
-
+	
+	// get arguments.
 	parse_args(argc, argv, &args);
+
+	time_t t = time(NULL);
+  	struct tm tm = *localtime(&t);
+	char log_path[1000];
+    sprintf(log_path, "./%c-server-%02d:%02d:%02d", args.type, tm.tm_hour, tm.tm_min, tm.tm_sec);
+	slog_init(log_path, SLOG_LIVE, 1, 0, 1, 1, 1);
+	slog_info(",Time(msec), Comment, RetCode");
 
 	DPRINT("[SERVER] Starting server.\n");
 	DPRINT("[CLI PARAMS] type = %c port = %" PRIu16 " bufsize = %" PRId64 " ", args.type, args.port, args.bufsize);
