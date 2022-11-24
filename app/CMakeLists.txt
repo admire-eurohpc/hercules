@@ -1,5 +1,5 @@
 set_source_files_properties(../src/comms.c ../src/crc.c ../src/directory.c ../src/hercules.c ../src/imss.c PROPERTIES LANGUAGE CXX )
-set_source_files_properties(../src/memalloc.c ../src/policies.c ../src/stat.c ../src/workers.c ../src/arg_parser.c PROPERTIES LANGUAGE CXX )
+set_source_files_properties(../src/memalloc.c ../src/policies.c ../src/stat.c ../src/workers.c ../src/arg_parser.c ../src/map_server_eps.cpp PROPERTIES LANGUAGE CXX )
 set_source_files_properties(./server.c ./release_imss.c PROPERTIES LANGUAGE CXX )
 
 ADD_EXECUTABLE( server 
@@ -15,6 +15,7 @@ ADD_EXECUTABLE( server
 		../src/records.cpp
 		../src/arg_parser.c
 		../src/slog.c
+		../src/map_server_eps.cpp
 )
 
 #ADD_EXECUTABLE( release_imss 
@@ -35,6 +36,7 @@ ADD_LIBRARY( imss_static STATIC
 		../src/records.cpp
 		../src/map_ep.cpp
 		../src/slog.c
+		../src/map_server_eps.cpp
 )
 
 ADD_LIBRARY( imss_shared SHARED
@@ -50,6 +52,7 @@ ADD_LIBRARY( imss_shared SHARED
 		../src/records.cpp
 		../src/map_ep.cpp
 		../src/slog.c
+		../src/map_server_eps.cpp
 )
 
 SET(IMSS_INC "-I${CMAKE_SOURCE_DIR}/include")

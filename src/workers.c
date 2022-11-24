@@ -10,6 +10,7 @@
 #include "workers.h"
 #include "directory.h"
 #include "records.hpp"
+#include "map_server_eps.hpp"
 #include <sys/time.h>
 #include <inttypes.h>
 #include <sys/socket.h>
@@ -43,6 +44,9 @@ StsHeader *mem_pool;
 char att_imss_uri[URI_];
 
 static long iov_cnt            = 1;
+
+// Map that stores server side endpoints
+void *map_server_eps;
 
 
 pthread_mutex_t tree_mut = PTHREAD_MUTEX_INITIALIZER;
@@ -87,7 +91,6 @@ void *srv_worker(void *th_argv)
     ucp_am_handler_param_t param;
 	ucs_status_t status;
 	test_req_t ctx;
-	ucp_worker_h     ucp_data_worker;
 	int ret = 0;
 
     p_argv *arguments = (p_argv *)th_argv;
@@ -121,6 +124,7 @@ void *srv_worker(void *th_argv)
 	ep_params.err_handler.cb = err_cb_server;
 	ep_params.err_handler.arg = NULL;
 
+	map_server_eps = map_server_eps_create();
 
 	for (;;)
 	{
@@ -170,18 +174,23 @@ void *srv_worker(void *th_argv)
 	
 		buffer_free(iov);
 
-		ep_params.address = peer_addr;
-		ep_params.user_data = &ep_status;
-
-		arguments->ucp_data_worker = arguments->ucp_worker;
-		
-		status = ucp_ep_create(arguments->ucp_data_worker, &ep_params, &ep);
+		//TODO
+		// look for this peer_addr in the map and get the ep
+		ret = map_server_eps_search(map_server_eps, peer_addr, &ep);
+		// create ep if it's not in the map
+		if (ret < 0) {
+			ep_params.address = peer_addr;
+			ep_params.user_data = &ep_status;
+			status = ucp_ep_create(arguments->ucp_worker, &ep_params, &ep);
+			// add ep to the map
+			map_server_eps_put(map_server_eps, peer_addr, ep);
+		}
 
 		arguments->server_ep = ep;
 		srv_worker_helper(arguments);
 
-		ucp_ep_close_nb(ep, UCP_EP_CLOSE_MODE_FORCE);
-		free(peer_addr);
+		//ucp_ep_close_nb(ep, UCP_EP_CLOSE_MODE_FORCE);
+		free(peer_addr); //TODO: can peer_addr be freed after creating the ep even if the ep will persist??
 	}
 }
 
@@ -210,7 +219,7 @@ int srv_worker_helper(p_argv *arguments)
 
 	slog_debug("[srv_worker_thread] Waiting for new request.");
 	// Save the request to be served.
-	TIMING(ret = recv_stream(arguments->ucp_data_worker, arguments->server_ep, req, REQUEST_SIZE), "[srv_worker_thread] Save the request to be served");
+	TIMING(ret = recv_stream(arguments->ucp_worker, arguments->server_ep, req, REQUEST_SIZE), "[srv_worker_thread] Save the request to be served");
 	slog_debug("[srv_worker_thread] request to be served %s", req);
 
 	// slog_info("********** %d",ret);
@@ -258,7 +267,7 @@ int srv_worker_helper(p_argv *arguments)
 			if (ret == 0)
 			{
 				// Send the error code block.
-				ret = send_dynamic_stream(arguments->ucp_data_worker, arguments->server_ep, err_code, STRING);
+				ret = send_dynamic_stream(arguments->ucp_worker, arguments->server_ep, err_code, STRING);
 				if (ret < 0)
 				{
 					perror("ERRIMSS_WORKER_SENDERR");
@@ -268,7 +277,7 @@ int srv_worker_helper(p_argv *arguments)
 			else
 			{
 				// Send the requested block.
-				TIMING(ret = send_stream(arguments->ucp_data_worker, arguments->server_ep, address_, block_size_rtvd), "[srv_worker_thread][READ_OP][READ_OP] Send the requested block");
+				TIMING(ret = send_stream(arguments->ucp_worker, arguments->server_ep, address_, block_size_rtvd), "[srv_worker_thread][READ_OP][READ_OP] Send the requested block");
 				if (ret < 0)
 				{
 					perror("ERRIMSS_WORKER_SENDBLOCK");
@@ -300,7 +309,7 @@ int srv_worker_helper(p_argv *arguments)
 			}
 
 			char release_msg[] = "RENAME\0";
-			TIMING(ret = send_stream(arguments->ucp_data_worker, arguments->server_ep, release_msg, RESPONSE_SIZE), "[srv_worker_thread][READ_OP][RENAME_OP] Send rename");
+			TIMING(ret = send_stream(arguments->ucp_worker, arguments->server_ep, release_msg, RESPONSE_SIZE), "[srv_worker_thread][READ_OP][RENAME_OP] Send rename");
 			if (ret < 0)
 			{
 				perror("ERRIMSS_PUBLISH_RENAMEMSG");
@@ -322,7 +331,7 @@ int srv_worker_helper(p_argv *arguments)
 			}
 
 			char release_msg[] = "RENAME\0";
-			TIMING(ret = send_stream(arguments->ucp_data_worker, arguments->server_ep, release_msg, RESPONSE_SIZE), "[srv_worker_thread][READ_OP][RENAME_DIR_DIR_OP] Send rename");
+			TIMING(ret = send_stream(arguments->ucp_worker, arguments->server_ep, release_msg, RESPONSE_SIZE), "[srv_worker_thread][READ_OP][RENAME_DIR_DIR_OP] Send rename");
 			if (ret < 0)
 			{
 				perror("ERRIMSS_PUBLISH_RENAMEMSG");
@@ -385,7 +394,7 @@ int srv_worker_helper(p_argv *arguments)
 					{ // If dont exist
 						// Send the error code block.
 						// std::cout <<"SERVER READV NO EXISTE element:" << element << '';
-						TIMING(ret = send_dynamic_stream(arguments->ucp_data_worker, arguments->server_ep, err_code, STRING), "[srv_worker_thread][READ_OP][READV] send_dynamic_stream");
+						TIMING(ret = send_dynamic_stream(arguments->ucp_worker, arguments->server_ep, err_code, STRING), "[srv_worker_thread][READ_OP][READV] send_dynamic_stream");
 						if (ret < 0)
 						{
 							perror("ERRIMSS_WORKER_SENDERR");
@@ -439,7 +448,7 @@ int srv_worker_helper(p_argv *arguments)
 					}
 					++curr_blk;
 				}
-				TIMING(ret = send_stream(arguments->ucp_data_worker, arguments->server_ep, buf, size), ("[srv_worker_thread][READ_OP][READV] send buf: %s", buf));
+				TIMING(ret = send_stream(arguments->ucp_worker, arguments->server_ep, buf, size), ("[srv_worker_thread][READ_OP][READV] send buf: %s", buf));
 				// Send the requested block.
 				if (ret < 0)
 				{
@@ -476,7 +485,7 @@ int srv_worker_helper(p_argv *arguments)
 
 				char *msg = (char *)calloc(msg_size, sizeof(char));
 
-				TIMING(ret = recv_stream(arguments->ucp_data_worker, arguments->server_ep, msg, msg_size), "[srv_worker_thread][READ_OP][SPLIT_READV] recv_stream");
+				TIMING(ret = recv_stream(arguments->ucp_worker, arguments->server_ep, msg, msg_size), "[srv_worker_thread][READ_OP][SPLIT_READV] recv_stream");
 
 				// Send the requested block.
 				if (ret < 0)
@@ -521,7 +530,7 @@ int srv_worker_helper(p_argv *arguments)
 					if (map->get(element, &address_, &block_size_rtvd) == 0)
 					{ // If dont exist
 						// Send the error code block.
-						if (send_dynamic_stream(arguments->ucp_data_worker, arguments->server_ep, err_code, STRING) < 0)
+						if (send_dynamic_stream(arguments->ucp_worker, arguments->server_ep, err_code, STRING) < 0)
 						{
 							return -1;
 							pthread_exit(NULL);
@@ -531,7 +540,7 @@ int srv_worker_helper(p_argv *arguments)
 					memcpy(buf + byte_count, address_, blocksize);
 					byte_count += blocksize;
 				}
-				TIMING(ret = send_stream(arguments->ucp_data_worker, arguments->server_ep, buf, byte_count), ("[srv_worker_thread][READ_OP][READV] send buf: %s", buf));
+				TIMING(ret = send_stream(arguments->ucp_worker, arguments->server_ep, buf, byte_count), ("[srv_worker_thread][READ_OP][READV] send buf: %s", buf));
 				// Send the requested block.
 				if (ret < 0)
 				{
@@ -544,7 +553,7 @@ int srv_worker_helper(p_argv *arguments)
 		case WHO:
 		{
 			// Provide the uri of this instance.
-			TIMING(ret = send_stream(arguments->ucp_data_worker, arguments->server_ep, arguments->my_uri, strlen(arguments->my_uri)), ("[srv_worker_thread][READ_OP][WHO] send uri: %s", arguments->my_uri));
+			TIMING(ret = send_stream(arguments->ucp_worker, arguments->server_ep, arguments->my_uri, strlen(arguments->my_uri)), ("[srv_worker_thread][READ_OP][WHO] send uri: %s", arguments->my_uri));
 			if (ret < 0)
 			{
 				perror("ERRIMSS_WHOREQUEST");
@@ -602,7 +611,7 @@ int srv_worker_helper(p_argv *arguments)
 			char *buf = (char *)malloc(size);
 
 			// Receive all blocks into the buffer.
-			recv_stream(arguments->ucp_data_worker, arguments->server_ep, buf, size);
+			recv_stream(arguments->ucp_worker, arguments->server_ep, buf, size);
 
 			// printf("WRITEV-buffer=%s",buf);
 			int pos = path.find('$');
@@ -737,7 +746,7 @@ int srv_worker_helper(p_argv *arguments)
 			// Receive all blocks into the buffer.
 			char *buf = (char *)malloc(size);
 			// int size_recv = -1;
-			TIMING(ret = recv_stream(arguments->ucp_data_worker, arguments->server_ep, buf, size), ("[srv_worker_thread][WRITE_OP] buf: %s", buf));
+			TIMING(ret = recv_stream(arguments->ucp_worker, arguments->server_ep, buf, size), ("[srv_worker_thread][WRITE_OP] buf: %s", buf));
 			if (ret < 0)
 			{
 				perror("ERRIMSS_WRITE_OP_BUF");
@@ -799,7 +808,7 @@ int srv_worker_helper(p_argv *arguments)
 				// if (buffer == NULL)
 				char *buffer = (char *)malloc(block_size_recv);
 
-				TIMING(recv_stream(arguments->ucp_data_worker, arguments->server_ep, buffer, block_size_recv), "[srv_worker_thread][WRITE_OP] recv_stream: Receive the block into the buffer.");
+				TIMING(recv_stream(arguments->ucp_worker, arguments->server_ep, buffer, block_size_recv), "[srv_worker_thread][WRITE_OP] recv_stream: Receive the block into the buffer.");
 				struct stat *stats = (struct stat *)buffer;
 				int32_t insert_successful;
 
@@ -826,7 +835,7 @@ int srv_worker_helper(p_argv *arguments)
 					slog_debug("[srv_worker_thread][WRITE_OP] Updating block $0");
 					struct stat *old, *latest;
 					char *buffer = (char *)malloc(block_size_rtvd);
-					TIMING(recv_stream(arguments->ucp_data_worker, arguments->server_ep, buffer, block_size_rtvd), "[srv_worker_thread][WRITE_OP] recv_stream Updating block $0");
+					TIMING(recv_stream(arguments->ucp_worker, arguments->server_ep, buffer, block_size_rtvd), "[srv_worker_thread][WRITE_OP] recv_stream Updating block $0");
 					old = (struct stat *)address_;
 					latest = (struct stat *)buffer;
 					slog_debug("[srv_worker_thread] File size new %ld old %ld", latest->st_size, old->st_size);
@@ -838,7 +847,7 @@ int srv_worker_helper(p_argv *arguments)
 				}
 				else
 				{
-					TIMING(recv_stream(arguments->ucp_data_worker, arguments->server_ep, address_, block_size_rtvd), ("[srv_worker_thread][WRITE_OP] recv_stream Updated non 0 existing block"));
+					TIMING(recv_stream(arguments->ucp_worker, arguments->server_ep, address_, block_size_rtvd), ("[srv_worker_thread][WRITE_OP] recv_stream Updated non 0 existing block"));
 					slog_debug("[srv_worker_thread][WRITE_OP] non 0 key.c_str(): %s", key.c_str());
 					// slog_debug("address_=%x", address_);
 				}
@@ -885,8 +894,7 @@ void *stat_worker(void *th_argv)
     ucp_am_handler_param_t param;
 	ucs_status_t status;
 	test_req_t ctx;
-
-
+	int ret = 0;
 
     p_argv *arguments = (p_argv *)th_argv;
 	am_data_desc_t *am_data = arguments->am_data;
@@ -919,9 +927,7 @@ void *stat_worker(void *th_argv)
 	ep_params.err_handler.cb = err_cb_server;
 	ep_params.err_handler.arg = NULL;
 
-    
-
-	
+	map_server_eps = map_server_eps_create();	
 
 	for (;;)
 	{
@@ -971,21 +977,28 @@ void *stat_worker(void *th_argv)
 	
 		buffer_free(iov);
 
-		ep_params.address = peer_addr;
-		ep_params.user_data = &ep_status;
-		status = ucp_ep_create(arguments->ucp_worker, &ep_params, &ep);
+		//TODO
+		// look for this peer_addr in the map and get the ep
+		ret = map_server_eps_search(map_server_eps, peer_addr, &ep);
+		// create ep if it's not in the map
+		if (ret < 0) {
+			ep_params.address = peer_addr;
+			ep_params.user_data = &ep_status;
+			status = ucp_ep_create(arguments->ucp_worker, &ep_params, &ep);
+			// add ep to the map
+			map_server_eps_put(map_server_eps, peer_addr, ep);
+		}
 
 		arguments->server_ep = ep;
 		stat_worker_helper(arguments);
 
-		ucp_ep_close_nb(ep, UCP_EP_CLOSE_MODE_FORCE);
+		// ucp_ep_close_nb(ep, UCP_EP_CLOSE_MODE_FORCE);
 		free(peer_addr);
 	}
 }
 
 int stat_worker_helper(p_argv *arguments)
 {
-	ucp_worker_h ucp_data_worker;
 	ucs_status_t status;
 	int ret;
 

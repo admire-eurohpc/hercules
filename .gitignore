@@ -24,3 +24,4 @@ Makefile
 bash/scripts
 prev_CMakes
 hostfiles
+.vscode
