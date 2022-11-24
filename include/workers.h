@@ -2,6 +2,7 @@
 #define WORKER_H
 
 #include "imss.h"
+#include "comms.h"
 #include "records.hpp"
 #include <memory>
 
@@ -48,19 +49,22 @@ typedef struct {
 	ucp_ep_h      server_ep;
 	size_t		  blocksize;
 	uint64_t	  storage_size;
+	am_data_desc_t * am_data;
 } p_argv;
 
 
 //Thread method attending client data requests.
 void * srv_worker (void * th_argv);
-void * srv_worker_thread (void * th_argv);
+int srv_worker_helper (p_argv *arguments);
+
+
 
 //Thread method searching and cleaning nodes with st_nlink=0
 void * garbage_collector (void * th_argv);
 
 //Thread method attending client metadata requests.
 void * stat_worker (void * th_argv);
-void * stat_worker_thread (void * th_argv);
+int stat_worker_helper (p_argv *arguments);
 
 //Dispatcher thread method distributing clients among the pool server threads.
 void * srv_attached_dispatcher (void * th_argv);

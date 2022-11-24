@@ -6,16 +6,18 @@
 #include "map_ep.hpp"
 #include <errno.h>
 #include <netdb.h>
+#include <unistd.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 
-static sa_family_t ai_family   = AF_INET;
+static sa_family_t ai_family = AF_INET;
 
 /* asynchronous writes stuff */
-extern void *map_ep; //map_ep used for async write
-extern int32_t is_client; //used to make sure the server doesn't do map_ep stuff
+extern void *map_ep;	  // map_ep used for async write
+extern int32_t is_client; // used to make sure the server doesn't do map_ep stuff
 pthread_mutex_t map_ep_mutex;
+
 
 
 /**
@@ -29,61 +31,62 @@ int init_worker(ucp_context_h ucp_context, ucp_worker_h *ucp_worker)
 
 	memset(&worker_params, 0, sizeof(worker_params));
 
-	worker_params.field_mask  = UCP_WORKER_PARAM_FIELD_THREAD_MODE;
-	worker_params.thread_mode = UCS_THREAD_MODE_MULTI;
-	//worker_params.thread_mode = UCS_THREAD_MODE_SINGLE  ;
+	worker_params.field_mask = UCP_WORKER_PARAM_FIELD_THREAD_MODE;
+	worker_params.thread_mode = UCS_THREAD_MODE_MULTI  ;
 
 	status = ucp_worker_create(ucp_context, &worker_params, ucp_worker);
-	if (status != UCS_OK) {
-		fprintf(stderr, "failed to ucp_worker_create (%s)\n", ucs_status_string(status));
+	if (status != UCS_OK)
+	{
+		fprintf(stderr, "failed to ucp_worker_create (%s)", ucs_status_string(status));
 		ret = -1;
 	}
 
-	DPRINT( "[COMM] Inicializated worker result: %d\n", ret); 
+	slog_debug("[COMM] Inicializated worker result: %d", ret);
 	return ret;
 }
 
 /**
  * Initialize the UCP context and worker.
  */
-int init_context(ucp_context_h *ucp_context,  ucp_config_t *config,  ucp_worker_h *ucp_worker, send_recv_type_t send_recv_type)
+int init_context(ucp_context_h *ucp_context, ucp_config_t *config, ucp_worker_h *ucp_worker, send_recv_type_t send_recv_type)
 {
 	/* UCP objects */
 	ucp_params_t ucp_params;
 	ucs_status_t status;
 	int ret = 0;
 
-
-	//status = ucp_config_read(NULL, NULL, &config);
-	//ucp_config_print(config, stdout, NULL, UCS_CONFIG_PRINT_CONFIG);
+	// status = ucp_config_read(NULL, NULL, &config);
+	// ucp_config_print(config, stdout, NULL, UCS_CONFIG_PRINT_CONFIG);
 
 	/* UCP initialization */
 	memset(&ucp_params, 0, sizeof(ucp_params));
 
 	/* UCP initialization */
-	ucp_params.field_mask = UCP_PARAM_FIELD_FEATURES;
+	ucp_params.field_mask = UCP_PARAM_FIELD_FEATURES |
+							UCP_PARAM_FIELD_REQUEST_SIZE |
+							UCP_PARAM_FIELD_REQUEST_INIT;
 
-	if (send_recv_type == CLIENT_SERVER_SEND_RECV_STREAM) {
-		ucp_params.features = UCP_FEATURE_STREAM;
-	} else if (send_recv_type == CLIENT_SERVER_SEND_RECV_TAG) {
-		ucp_params.features = UCP_FEATURE_TAG;
-	} else {
-		ucp_params.features = UCP_FEATURE_AM;
-	}
+	ucp_params.features = UCP_FEATURE_AM |
+	                      UCP_FEATURE_STREAM |
+						  UCP_FEATURE_WAKEUP;
+	ucp_params.request_size    = sizeof(struct ucx_context);
+    ucp_params.request_init    = request_init;
 
 	status = ucp_init(&ucp_params, config, ucp_context);
-	if (status != UCS_OK) {
-		fprintf(stderr, "failed to ucp_init (%s)\n", ucs_status_string(status));
+	if (status != UCS_OK)
+	{
+		fprintf(stderr, "failed to ucp_init (%s)", ucs_status_string(status));
 		ret = -1;
 		goto err;
 	}
 
 	ret = init_worker(*ucp_context, ucp_worker);
-	if (ret != 0) {
+	if (ret != 0)
+	{
 		goto err_cleanup;
 	}
 
-	DPRINT( "[COMM] Inicializated context result: %d\n", ret); 
+	slog_debug("[COMM] Inicializated context result: %d", ret);
 	return ret;
 
 err_cleanup:
@@ -97,7 +100,6 @@ ucs_status_t start_client(ucp_worker_h ucp_worker, const char *address_str, int 
 	ucp_ep_params_t ep_params;
 	struct sockaddr_storage connect_addr;
 	ucs_status_t status;
-
 
 	set_sock_addr(address_str, &connect_addr, port);
 
@@ -115,176 +117,229 @@ ucs_status_t start_client(ucp_worker_h ucp_worker, const char *address_str, int 
 	 *                                        removed, the error handling mode
 	 *                                        will be removed.
 	 */
-	ep_params.field_mask       = UCP_EP_PARAM_FIELD_FLAGS       |
-		UCP_EP_PARAM_FIELD_SOCK_ADDR   |
-		UCP_EP_PARAM_FIELD_ERR_HANDLER |
-		UCP_EP_PARAM_FIELD_ERR_HANDLING_MODE;
-	ep_params.err_mode         = UCP_ERR_HANDLING_MODE_PEER;
-	ep_params.err_handler.cb   = err_cb_client;
-	ep_params.err_handler.arg  = NULL;
-	ep_params.flags            = UCP_EP_PARAMS_FLAGS_CLIENT_SERVER;
-	ep_params.sockaddr.addr    = (struct sockaddr*)&connect_addr;
+	ep_params.field_mask = UCP_EP_PARAM_FIELD_FLAGS |
+						   UCP_EP_PARAM_FIELD_SOCK_ADDR |
+						   UCP_EP_PARAM_FIELD_ERR_HANDLER |
+						   UCP_EP_PARAM_FIELD_ERR_HANDLING_MODE;
+	ep_params.err_mode = UCP_ERR_HANDLING_MODE_PEER;
+	ep_params.err_handler.cb = err_cb_client;
+	ep_params.err_handler.arg = NULL;
+	ep_params.flags = UCP_EP_PARAMS_FLAGS_CLIENT_SERVER;
+	ep_params.sockaddr.addr = (struct sockaddr *)&connect_addr;
 	ep_params.sockaddr.addrlen = sizeof(connect_addr);
 
 	status = ucp_ep_create(ucp_worker, &ep_params, client_ep);
-	if (status != UCS_OK) {
-		fprintf(stderr, "failed to connect to %s (%s)\n", address_str,
+	if (status != UCS_OK)
+	{
+		fprintf(stderr, "failed to connect to %s (%s)", address_str,
 				ucs_status_string(status));
 	}
 
-	if (is_client) {
-		StsHeader * queue = StsQueue.create();
+	if (is_client)
+	{
+		StsHeader *queue = StsQueue.create();
 		/* see if the map_ep exists, otherwise create it */
-		if (!map_ep) {
+		if (!map_ep)
+		{
 			pthread_mutex_lock(&map_ep_mutex);
 			map_ep = map_ep_create();
 			pthread_mutex_unlock(&map_ep_mutex);
-
 		}
-		//add an entry to the map_ep for this ep
+		// add an entry to the map_ep for this ep
 		pthread_mutex_lock(&map_ep_mutex);
 		map_ep_put(map_ep, *client_ep, queue);
 		pthread_mutex_unlock(&map_ep_mutex);
 	}
 
-	DPRINT( "[COMM] Started client\n");
+	slog_debug("[COMM] Started client");
 	return status;
 }
 
-size_t send_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, const char * msg, size_t msg_length)
+size_t send_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, const char *msg, size_t msg_length)
 {
-	//printf("[SEND_STREAM] msg=%s, size=%ld\n",msg,msg_length);
-    DPRINT("[COMM] Sending stream (%ld bytes).\n", msg_length);
+	// printf("[SEND_STREAM] msg=%s, size=%ld",msg,msg_length);
+	slog_debug("[COMM] Sending stream (%ld bytes).", msg_length);
 	ucp_request_param_t param;
-	test_req_t * request;
+	test_req_t *request;
 	test_req_t ctx;
 
-	ctx.complete       = 0;
+	ctx.complete = 0;
 	param.op_attr_mask = UCP_OP_ATTR_FIELD_CALLBACK |
-		UCP_OP_ATTR_FIELD_DATATYPE |
-		UCP_OP_ATTR_FIELD_USER_DATA;
-	param.datatype     = ucp_dt_make_contig(1);
-	param.user_data    = &ctx;
+						 UCP_OP_ATTR_FIELD_DATATYPE |
+						 UCP_OP_ATTR_FIELD_USER_DATA;
+	param.datatype = ucp_dt_make_contig(1);
+	param.user_data = &ctx;
 
 	/* Client sends a message to the server using the stream API */
 	param.cb.send = send_cb;
-	request       = (test_req_t*) ucp_stream_send_nbx(ep, msg, msg_length, &param);
+	request = (test_req_t *)ucp_stream_send_nbx(ep, msg, msg_length, &param);
+	if (UCS_PTR_IS_ERR(request)) {
+		perror("Error sending to endpoint");
+		slog_debug("[COMM] Error sending to endpoint.");
+		return -1;
+	}
 
 	size_t length = 0;
-	request_finalize(ucp_worker, (test_req_t *)request, &ctx); 
-	//ucp_stream_recv_request_test(request, &length);
-
+	request_finalize(ucp_worker, (test_req_t *)request, &ctx);
+	// ucp_stream_recv_request_test(request, &length);
 	return msg_length;
 }
 
 
-size_t send_istream(ucp_worker_h ucp_worker, ucp_ep_h ep, const char * msg, size_t msg_length)
-{
-	//printf("[SEND_STREAM] msg=%s, size=%ld\n",msg,msg_length);
 
-    DPRINT("[COMM] Sending istream (%ld bytes).\n", msg_length);
+
+size_t send_stream_addr(ucp_worker_h ucp_worker, ucp_ep_h ep, ucp_address_t *addr, size_t addr_len)
+{
+	ucs_status_t status;
+	struct ucx_context *request;
+    size_t msg_len;
+	ucp_request_param_t send_param;
+	test_req_t ctx;
+
+	msg_addr_t * msg;
+
+	msg_len = 512;
+	msg = (msg_addr_t *) malloc(msg_len);
+
+	msg->data_len = addr_len;
+	memcpy(msg + 1, addr, addr_len);
+
+    ctx.complete = 0;
+
+	send_param.op_attr_mask = UCP_OP_ATTR_FIELD_CALLBACK |
+                               UCP_OP_ATTR_FIELD_DATATYPE |
+                               UCP_OP_ATTR_FIELD_USER_DATA |
+						       UCP_OP_ATTR_FLAG_NO_IMM_CMPL;
+
+    send_param.datatype = ucp_dt_make_contig(1);
+	send_param.cb.send = (ucp_send_nbx_callback_t)send_cb;
+	send_param.user_data = &ctx;
+
+	request = (struct ucx_context *) ucp_am_send_nbx(ep, AM_ID, NULL, 0ul,  msg, msg_len, &send_param);
+    if  (UCS_PTR_IS_ERR(request)) {
+		free(msg);
+        perror("Error sending to endpoint");
+        slog_debug("[COMM] Error sending to endpoint.");
+        return -1;
+    }
+
+    request_finalize(ucp_worker, (test_req_t *)request, &ctx);
+	free(msg);
+	return addr_len;
+}
+
+
+size_t send_istream(ucp_worker_h ucp_worker, ucp_ep_h ep, const char *msg, size_t msg_length)
+{
+	// printf("[SEND_STREAM] msg=%s, size=%ld",msg,msg_length);
+
+	slog_debug("[COMM] Sending istream (%ld bytes).", msg_length);
 	ucp_request_param_t param;
-	ucx_async_t * pending = (ucx_async_t *) malloc(sizeof(ucx_async_t));
+	ucx_async_t *pending = (ucx_async_t *)malloc(sizeof(ucx_async_t));
 	StsHeader *req_queue;
 
 	/* set up ucx_async_t object to push it */
 	pending->ctx.complete = 0;
 
 	param.op_attr_mask = UCP_OP_ATTR_FIELD_CALLBACK |
-		UCP_OP_ATTR_FIELD_DATATYPE |
-		UCP_OP_ATTR_FIELD_USER_DATA;
-	param.datatype     = ucp_dt_make_contig(1);
-	param.user_data    = pending;
+						 UCP_OP_ATTR_FIELD_DATATYPE |
+						 UCP_OP_ATTR_FIELD_USER_DATA;
+	param.datatype = ucp_dt_make_contig(1);
+	param.user_data = pending;
 
-	pending->tmp_msg = (char *) malloc(msg_length);
+	pending->tmp_msg = (char *)malloc(msg_length);
 	memcpy(pending->tmp_msg, msg, msg_length);
 	/* Client sends a message to the server using the stream API */
 	param.cb.send = isend_cb;
-	pending->request       = (test_req_t*) ucp_stream_send_nbx(ep, pending->tmp_msg, msg_length, &param);
-
+	pending->request = (test_req_t *)ucp_stream_send_nbx(ep, pending->tmp_msg, msg_length, &param);
 
 	/* find this ep's queue in the map_ep */
-	pthread_mutex_lock(&map_ep_mutex);
+	/*pthread_mutex_lock(&map_ep_mutex);
 	int found = map_ep_search(map_ep, ep, &req_queue);
-	if (!found) {
+	if (!found)
+	{
 		req_queue = StsQueue.create();
 		map_ep_put(map_ep, ep, req_queue);
 	}
 	pthread_mutex_unlock(&map_ep_mutex);
 
 	StsQueue.push(req_queue, pending);
+	*/
 	return msg_length;
 }
 
-
-size_t recv_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, char * msg, size_t msg_length)
+size_t recv_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, char *msg, size_t msg_length)
 {
-    DPRINT("[COMM] Recv stream (%ld bytes).\n", msg_length);
+	slog_debug("[COMM] Recv stream (%ld bytes).", msg_length);
 
 	ucp_request_param_t param;
-	test_req_t * request;
+	test_req_t *request;
 	test_req_t ctx;
 
-	ctx.complete       = 0;
+	ctx.complete = 0;
 	param.op_attr_mask = UCP_OP_ATTR_FIELD_CALLBACK |
-		UCP_OP_ATTR_FIELD_DATATYPE |
-		UCP_OP_ATTR_FIELD_USER_DATA;
-	param.datatype     = ucp_dt_make_contig(1);
-	param.user_data    = &ctx;
+						 UCP_OP_ATTR_FIELD_DATATYPE |
+						 UCP_OP_ATTR_FIELD_USER_DATA;
+	param.datatype = ucp_dt_make_contig(1);
+	param.user_data = &ctx;
 	/* Server receives a message from the client using the stream API */
-	param.op_attr_mask  |= UCP_OP_ATTR_FIELD_FLAGS;
-	param.flags          = UCP_STREAM_RECV_FLAG_WAITALL;
+	param.op_attr_mask |= UCP_OP_ATTR_FIELD_FLAGS;
+	param.flags = UCP_STREAM_RECV_FLAG_WAITALL;
 	param.cb.recv_stream = stream_recv_cb;
-	request              = (test_req_t*) ucp_stream_recv_nbx(ep, msg, msg_length, &msg_length, &param);
+	request = (test_req_t *)ucp_stream_recv_nbx(ep, msg, msg_length, &msg_length, &param);
 
 	return request_finalize(ucp_worker, request, &ctx);
-	//printf("[RECV_STREAM] msg=%s, size=%ld\n",msg,msg_length);
-	// size_t length = 0;
-	//ucp_stream_recv_request_test(&request, &length);
-	// return msg_length;
+	// printf("[RECV_STREAM] msg=%s, size=%ld",msg,msg_length);
+	//  size_t length = 0;
+	// ucp_stream_recv_request_test(&request, &length);
+	//  return msg_length;
 }
-
 
 void set_sock_addr(const char *address_str, struct sockaddr_storage *saddr, int server_port)
 {
 	struct sockaddr_in *sa_in;
 	struct sockaddr_in6 *sa_in6;
 
-
 	/* The server will listen on INADDR_ANY */
 	memset(saddr, 0, sizeof(*saddr));
 
-	switch (ai_family) {
-		case AF_INET:
-			sa_in = (struct sockaddr_in*)saddr;
-			if (address_str != NULL) {
-				struct hostent *host_entry;
-				char *ip;
+	switch (ai_family)
+	{
+	case AF_INET:
+		sa_in = (struct sockaddr_in *)saddr;
+		if (address_str != NULL)
+		{
+			struct hostent *host_entry;
+			char *ip;
 
-				host_entry = gethostbyname(address_str);
-				ip = inet_ntoa(*((struct in_addr*) host_entry->h_addr_list[0])); 
-				int err = inet_pton(AF_INET, ip, &sa_in->sin_addr);
-			} else {
-				sa_in->sin_addr.s_addr = INADDR_ANY;
-			}
-			sa_in->sin_family = AF_INET;
-			sa_in->sin_port   = htons(server_port);
-			break;
-		case AF_INET6:
-			sa_in6 = (struct sockaddr_in6*)saddr;
-			if (address_str != NULL) {
-				inet_pton(AF_INET6, address_str, &sa_in6->sin6_addr);
-			} else {
-				sa_in6->sin6_addr = in6addr_any;
-			}
-			sa_in6->sin6_family = AF_INET6;
-			sa_in6->sin6_port   = htons(server_port);
-			break;
-		default:
-			fprintf(stderr, "Invalid address family");
-			break;
+			host_entry = gethostbyname(address_str);
+			ip = inet_ntoa(*((struct in_addr *)host_entry->h_addr_list[0]));
+			int err = inet_pton(AF_INET, ip, &sa_in->sin_addr);
+		}
+		else
+		{
+			sa_in->sin_addr.s_addr = INADDR_ANY;
+		}
+		sa_in->sin_family = AF_INET;
+		sa_in->sin_port = htons(server_port);
+		break;
+	case AF_INET6:
+		sa_in6 = (struct sockaddr_in6 *)saddr;
+		if (address_str != NULL)
+		{
+			inet_pton(AF_INET6, address_str, &sa_in6->sin6_addr);
+		}
+		else
+		{
+			sa_in6->sin6_addr = in6addr_any;
+		}
+		sa_in6->sin6_family = AF_INET6;
+		sa_in6->sin6_port = htons(server_port);
+		break;
+	default:
+		fprintf(stderr, "Invalid address family");
+		break;
 	}
-
 }
 
 /**
@@ -295,15 +350,18 @@ ucs_status_t request_wait(ucp_worker_h ucp_worker, void *request, test_req_t *ct
 	ucs_status_t status;
 
 	/* if operation was completed immediately */
-	if (request == NULL) {
+	if (request == NULL)
+	{
 		return UCS_OK;
 	}
 
-	if (UCS_PTR_IS_ERR(request)) {
+	if (UCS_PTR_IS_ERR(request))
+	{
 		return UCS_PTR_STATUS(request);
 	}
 
-	while (ctx->complete == 0) {
+	while (ctx->complete == 0)
+	{
 		ucp_worker_progress(ucp_worker);
 	}
 	status = ucp_request_check_status(request);
@@ -313,8 +371,16 @@ ucs_status_t request_wait(ucp_worker_h ucp_worker, void *request, test_req_t *ct
 	return status;
 }
 
+
+void request_init(void *request)
+{
+    struct ucx_context *contex = (struct ucx_context *)request;
+    contex->completed = 0;
+}
+
+
 void stream_recv_cb(void *request, ucs_status_t status, size_t length,
-		void *user_data)
+					void *user_data)
 {
 	common_cb(user_data, "stream_recv_cb");
 }
@@ -324,9 +390,26 @@ void stream_recv_cb(void *request, ucs_status_t status, size_t length,
  * active message.
  */
 void am_recv_cb(void *request, ucs_status_t status, size_t length,
-		void *user_data)
+				void *user_data)
 {
 	common_cb(user_data, "am_recv_cb");
+}
+
+
+
+void send_handler(void *request, ucs_status_t status, void *ctx)
+{
+	struct ucx_context *context = (struct ucx_context *)request;
+	const char *str = (const char *)ctx;
+	context->completed = 1;
+}
+
+
+
+void recv_handler(void *request, ucs_status_t status, ucp_tag_recv_info_t *info)
+{
+	struct ucx_context *context = (struct ucx_context *)request;
+	context->completed = 1;
 }
 
 /**
@@ -340,9 +423,9 @@ void send_cb(void *request, ucs_status_t status, void *user_data)
 
 void isend_cb(void *request, ucs_status_t status, void *user_data)
 {
-	ucx_async_t * pending;
+	ucx_async_t *pending;
 
-	pending = (ucx_async_t *) user_data;
+	pending = (ucx_async_t *)user_data;
 
 	free(pending->tmp_msg);
 	pending->ctx.complete = 1;
@@ -354,27 +437,78 @@ void isend_cb(void *request, ucs_status_t status, void *user_data)
 void err_cb_client(void *arg, ucp_ep_h ep, ucs_status_t status)
 {
 	if (status != UCS_ERR_CONNECTION_RESET && status != UCS_ERR_ENDPOINT_TIMEOUT)
-		printf("client error handling callback was invoked with status %d (%s)\n", status, ucs_status_string(status));
-	DPRINT( "[COMM] Client error handling callback was invoked with status %d (%s)\n", status, ucs_status_string(status));
+		printf("client error handling callback was invoked with status %d (%s)", status, ucs_status_string(status));
+	slog_debug("[COMM] Client error handling callback was invoked with status %d (%s)", status, ucs_status_string(status));
 }
 
 void err_cb_server(void *arg, ucp_ep_h ep, ucs_status_t status)
 {
 	if (status != UCS_ERR_CONNECTION_RESET && status != UCS_ERR_ENDPOINT_TIMEOUT)
-		printf("server error handling callback was invoked with status %d (%s)\n",  status, ucs_status_string(status));
+		printf("server error handling callback was invoked with status %d (%s)", status, ucs_status_string(status));
 }
 
 void common_cb(void *user_data, const char *type_str)
 {
 	test_req_t *ctx;
 
-	if (user_data == NULL) {
-		fprintf(stderr, "user_data passed to %s mustn't be NULL\n", type_str);
+	if (user_data == NULL)
+	{
+		fprintf(stderr, "user_data passed to %s mustn't be NULL", type_str);
 		return;
 	}
 
-	ctx           = (test_req *)user_data;
+	ctx = (test_req *)user_data;
 	ctx->complete = 1;
+}
+
+ucs_status_t ucp_am_data_cb(void *arg, const void *header, size_t header_length, void *data, size_t length, const ucp_am_recv_param_t *param)
+{
+    ucp_dt_iov_t *iov;
+    size_t idx;
+    size_t offset;
+
+    am_data_desc_t * am_data = (am_data_desc_t *)arg;
+
+ /*   if (length != iov_cnt * test_string_length) {
+        fprintf(stderr, "received wrong data length %ld (expected %ld)",
+                length, iov_cnt * test_string_length);
+        return UCS_OK;
+    }
+
+*/	
+/*
+    if (header_length != 0) {
+        fprintf(stderr, "received unexpected header, length %ld", header_length);
+    }
+*/
+    am_data->complete = 1;
+    if (param->recv_attr & UCP_AM_RECV_ATTR_FLAG_RNDV) {
+        /* Rendezvous request arrived, data contains an internal UCX descriptor,
+         * which has to be passed to ucp_am_recv_data_nbx function to confirm
+         * data transfer.
+         */
+        am_data->is_rndv = 1;
+        am_data->desc    = data;
+        return UCS_INPROGRESS;
+    }
+    /* Message delivered with eager protocol, data should be available
+     * immediately
+     */
+    am_data->is_rndv = 0;
+
+    iov = (ucp_dt_iov_t *)am_data->recv_buf;
+	offset = 0;
+    for (idx = 0; idx < 1; idx++) {
+        memcpy(iov[idx].buffer, UCS_PTR_BYTE_OFFSET(data, offset),iov[idx].length);
+        offset += iov[idx].length;
+    }
+
+    return UCS_OK;
+}
+
+
+void flush_cb(void *request, ucs_status_t status) {
+
 }
 
 int request_finalize(ucp_worker_h ucp_worker, test_req_t *request, test_req_t *ctx)
@@ -383,13 +517,14 @@ int request_finalize(ucp_worker_h ucp_worker, test_req_t *request, test_req_t *c
 	ucs_status_t status;
 
 	status = request_wait(ucp_worker, request, ctx);
-	if (status != UCS_OK) {
-		fprintf(stderr, "unable to complete UCX message (%s)\n", ucs_status_string(status));
+	if (status != UCS_OK)
+	{
+		fprintf(stderr, "unable to complete UCX message (%s)", ucs_status_string(status));
 		ret = -1;
-		//goto release_iov;
+		// goto release_iov;
 	}
 
-//release_iov:
+	// release_iov:
 	return ret;
 }
 
@@ -402,33 +537,34 @@ ucs_status_t start_server(ucp_worker_h ucp_worker, ucx_server_ctx_t *context, uc
 
 	set_sock_addr(address_str, &listen_addr, port);
 
-	params.field_mask         = UCP_LISTENER_PARAM_FIELD_SOCK_ADDR | UCP_LISTENER_PARAM_FIELD_CONN_HANDLER;
-	params.sockaddr.addr      = (const struct sockaddr*)&listen_addr;
-	params.sockaddr.addrlen   = sizeof(listen_addr);
-	params.conn_handler.cb    = server_conn_handle_cb;
-	params.conn_handler.arg   = context;
+	params.field_mask = UCP_LISTENER_PARAM_FIELD_SOCK_ADDR | UCP_LISTENER_PARAM_FIELD_CONN_HANDLER;
+	params.sockaddr.addr = (const struct sockaddr *)&listen_addr;
+	params.sockaddr.addrlen = sizeof(listen_addr);
+	params.conn_handler.cb = server_conn_handle_cb;
+	params.conn_handler.arg = context;
 
 	/* Create a listener on the server side to listen on the given address.*/
 	status = ucp_listener_create(ucp_worker, &params, listener_p);
-	if (status != UCS_OK) {
-		fprintf(stderr, "failed to listen (%s)\n", ucs_status_string(status));
+	if (status != UCS_OK)
+	{
+		fprintf(stderr, "failed to listen (%s)", ucs_status_string(status));
 		goto out;
 	}
 
 	/* Query the created listener to get the port it is listening on. */
 	attr.field_mask = UCP_LISTENER_ATTR_FIELD_SOCKADDR;
 	status = ucp_listener_query(*listener_p, &attr);
-	if (status != UCS_OK) {
-		fprintf(stderr, "failed to query the listener (%s)\n", ucs_status_string(status));
+	if (status != UCS_OK)
+	{
+		fprintf(stderr, "failed to query the listener (%s)", ucs_status_string(status));
 		ucp_listener_destroy(*listener_p);
 		goto out;
 	}
 
-	DPRINT( "[COMM] Started server with status %d \n", status);
+	slog_debug("[COMM] Started server with status %d ", status);
 out:
 	return status;
 }
-
 
 /**
  * The callback on the server side which is invoked upon receiving a connection
@@ -444,120 +580,156 @@ void server_conn_handle_cb(ucp_conn_request_h conn_request, void *arg)
 
 	attr.field_mask = UCP_CONN_REQUEST_ATTR_FIELD_CLIENT_ADDR;
 	status = ucp_conn_request_query(conn_request, &attr);
-	if (status == UCS_OK) {
-		DPRINT("[COMM] Server received a connection request from client at address %s:%s\n",
-		  sockaddr_get_ip_str(&attr.client_address, ip_str, sizeof(ip_str)),
-		  sockaddr_get_port_str(&attr.client_address, port_str, sizeof(port_str)));
-	} else if (status != UCS_ERR_UNSUPPORTED) {
-		fprintf(stderr, "failed to query the connection request (%s)\n",
+	if (status == UCS_OK)
+	{
+		slog_debug("[COMM] Server received a connection request from client at address %s:%s",
+			   sockaddr_get_ip_str(&attr.client_address, ip_str, sizeof(ip_str)),
+			   sockaddr_get_port_str(&attr.client_address, port_str, sizeof(port_str)));
+	}
+	else if (status != UCS_ERR_UNSUPPORTED)
+	{
+		fprintf(stderr, "failed to query the connection request (%s)",
 				ucs_status_string(status));
 	}
 
 	StsQueue.push(context->conn_request, conn_request);
 }
 
-char* sockaddr_get_ip_str(const struct sockaddr_storage *sock_addr,
-		char *ip_str, size_t max_size)
+char *sockaddr_get_ip_str(const struct sockaddr_storage *sock_addr,
+						  char *ip_str, size_t max_size)
 {
-	struct sockaddr_in  addr_in;
+	struct sockaddr_in addr_in;
 	struct sockaddr_in6 addr_in6;
 
-	switch (sock_addr->ss_family) {
-		case AF_INET:
-			memcpy(&addr_in, sock_addr, sizeof(struct sockaddr_in));
-			inet_ntop(AF_INET, &addr_in.sin_addr, ip_str, max_size);
-			return ip_str;
-		case AF_INET6:
-			memcpy(&addr_in6, sock_addr, sizeof(struct sockaddr_in6));
-			inet_ntop(AF_INET6, &addr_in6.sin6_addr, ip_str, max_size);
-			return ip_str;
-		default:
-			return NULL;
+	switch (sock_addr->ss_family)
+	{
+	case AF_INET:
+		memcpy(&addr_in, sock_addr, sizeof(struct sockaddr_in));
+		inet_ntop(AF_INET, &addr_in.sin_addr, ip_str, max_size);
+		return ip_str;
+	case AF_INET6:
+		memcpy(&addr_in6, sock_addr, sizeof(struct sockaddr_in6));
+		inet_ntop(AF_INET6, &addr_in6.sin6_addr, ip_str, max_size);
+		return ip_str;
+	default:
+		return NULL;
 	}
 }
 
-char* sockaddr_get_port_str(const struct sockaddr_storage *sock_addr,
-		char *port_str, size_t max_size)
+char *sockaddr_get_port_str(const struct sockaddr_storage *sock_addr,
+							char *port_str, size_t max_size)
 {
-	struct sockaddr_in  addr_in;
+	struct sockaddr_in addr_in;
 	struct sockaddr_in6 addr_in6;
 
-	switch (sock_addr->ss_family) {
-		case AF_INET:
-			memcpy(&addr_in, sock_addr, sizeof(struct sockaddr_in));
-			snprintf(port_str, max_size, "%d", ntohs(addr_in.sin_port));
-			return port_str;
-		case AF_INET6:
-			memcpy(&addr_in6, sock_addr, sizeof(struct sockaddr_in6));
-			snprintf(port_str, max_size, "%d", ntohs(addr_in6.sin6_port));
-			return port_str;
-		default:
-			return NULL;
+	switch (sock_addr->ss_family)
+	{
+	case AF_INET:
+		memcpy(&addr_in, sock_addr, sizeof(struct sockaddr_in));
+		snprintf(port_str, max_size, "%d", ntohs(addr_in.sin_port));
+		return port_str;
+	case AF_INET6:
+		memcpy(&addr_in6, sock_addr, sizeof(struct sockaddr_in6));
+		snprintf(port_str, max_size, "%d", ntohs(addr_in6.sin6_port));
+		return port_str;
+	default:
+		return NULL;
 	}
 }
-
 
 ucs_status_t server_create_ep(ucp_worker_h data_worker,
-		ucp_conn_request_h conn_request,
-		ucp_ep_h *server_ep)
+							  ucp_conn_request_h conn_request,
+							  ucp_ep_h *server_ep)
 {
 	ucp_ep_params_t ep_params;
-	ucs_status_t    status;
+	ucs_status_t status;
 
 	/* Server creates an ep to the client on the data worker.
 	 * This is not the worker the listener was created on.
 	 * The client side should have initiated the connection, leading
 	 * to this ep's creation */
-	ep_params.field_mask      = UCP_EP_PARAM_FIELD_ERR_HANDLER | UCP_EP_PARAM_FIELD_CONN_REQUEST;
-	ep_params.conn_request    = conn_request;
-	ep_params.err_handler.cb  = err_cb_server;
+	ep_params.field_mask = UCP_EP_PARAM_FIELD_ERR_HANDLER | UCP_EP_PARAM_FIELD_CONN_REQUEST;
+	ep_params.conn_request = conn_request;
+	ep_params.err_handler.cb = err_cb_server;
 	ep_params.err_mode = UCP_ERR_HANDLING_MODE_PEER;
 	ep_params.err_handler.arg = NULL;
 
 	status = ucp_ep_create(data_worker, &ep_params, server_ep);
-	if (status != UCS_OK) {
-		fprintf(stderr, "failed to create an endpoint on the server: (%s)\n", ucs_status_string(status));
+	if (status != UCS_OK)
+	{
+		fprintf(stderr, "failed to create an endpoint on the server: (%s)", ucs_status_string(status));
 	}
 
-	DPRINT( "[COMM] Created server endpoint\n");
+	slog_debug("[COMM] Created server endpoint");
 	return status;
 }
 
 
+ucs_status_t client_create_ep(ucp_worker_h worker, ucp_ep_h *ep, ucp_address_t *peer_addr)
+{
+    ucp_ep_params_t ep_params;
+    ucs_status_t status;
+	ucs_status_t ep_status = UCS_OK;
 
-//Method sending a data structure with dynamic memory allocation fields.
+    /* Server creates an ep to the client on the data worker.
+     * This is not the worker the listener was created on.
+     * The client side should have initiated the connection, leading
+     * to this ep's creation */
+
+
+	ep_params.field_mask = UCP_EP_PARAM_FIELD_REMOTE_ADDRESS |
+		UCP_EP_PARAM_FIELD_ERR_HANDLING_MODE |
+		UCP_EP_PARAM_FIELD_ERR_HANDLER |
+		UCP_EP_PARAM_FIELD_USER_DATA;
+	ep_params.address = peer_addr;
+	ep_params.err_mode = UCP_ERR_HANDLING_MODE_NONE;
+	ep_params.err_handler.cb = err_cb_client;
+	ep_params.err_handler.arg = NULL;
+	ep_params.user_data = &ep_status;
+
+	status = ucp_ep_create(worker, &ep_params, ep);
+	if (status != UCS_OK)
+	{
+		fprintf(stderr, "failed to create an endpoint on the server: (%s)", ucs_status_string(status));
+	}
+
+	slog_debug("[COMM] Created client endpoint");
+	return status;
+}
+
+// Method sending a data structure with dynamic memory allocation fields.
 int32_t send_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep,
-		void *  data_struct,
+		void *data_struct,
 		int32_t data_type)
 {
-	//Buffer containing the structures' information.
-	char * info_buffer;
-	//Buffer size.
+	// Buffer containing the structures' information.
+	char *info_buffer;
+	// Buffer size.
 	size_t msg_size;
 
-	DPRINT( "[COMM] send_dynamic_stream start \n"); 
-	//Formalize the information to be sent.
+	slog_debug("[COMM] send_dynamic_stream start ");
+	// Formalize the information to be sent.
 	switch (data_type)
 	{
 		case IMSS_INFO:
 			{
-				imss_info * struct_ = (imss_info *) data_struct;
+				imss_info *struct_ = (imss_info *)data_struct;
 
-				//Calculate the total size of the buffer storing the structure.
+				// Calculate the total size of the buffer storing the structure.
 				msg_size = sizeof(imss_info) + (LINE_LENGTH * struct_->num_storages);
 
-				//Reserve the corresponding amount of memory for the previous buffer.
-				info_buffer = (char *) malloc(msg_size * sizeof(char));
+				// Reserve the corresponding amount of memory for the previous buffer.
+				info_buffer = (char *)malloc(msg_size * sizeof(char));
 
-				//Control variables dealing with incomming memory management actions.
-				char * offset_pt = info_buffer;
+				// Control variables dealing with incomming memory management actions.
+				char *offset_pt = info_buffer;
 
-				//Copy the actual structure to the buffer.
+				// Copy the actual structure to the buffer.
 				memcpy(offset_pt, struct_, sizeof(imss_info));
 
 				offset_pt += sizeof(imss_info);
 
-				//Copy the remaining dynamic fields into the buffer.
+				// Copy the remaining dynamic fields into the buffer.
 				for (int32_t i = 0; i < struct_->num_storages; i++)
 				{
 					memcpy(offset_pt, struct_->ips[i], LINE_LENGTH);
@@ -569,113 +741,115 @@ int32_t send_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep,
 
 		case DATASET_INFO:
 			{
-				dataset_info * struct_ = (dataset_info *) data_struct;
+				dataset_info *struct_ = (dataset_info *)data_struct;
 
-				//Calculate the total size of the buffer storing the structure.
+				// Calculate the total size of the buffer storing the structure.
 				msg_size = sizeof(dataset_info);
 
-				//If the dataset is a LOCAL one, the list of position characters must be added.
+				// If the dataset is a LOCAL one, the list of position characters must be added.
 				if (!strcmp(struct_->policy, "LOCAL"))
 					msg_size += (struct_->num_data_elem * sizeof(uint16_t));
 
-				//Reserve the corresponding amount of memory for the previous buffer.
-				info_buffer = (char *) malloc(msg_size * sizeof(char));
+				// Reserve the corresponding amount of memory for the previous buffer.
+				info_buffer = (char *)malloc(msg_size * sizeof(char));
 
-				//Serialize the provided message into the buffer.
+				// Serialize the provided message into the buffer.
 
-				char * offset_pt = info_buffer;
+				char *offset_pt = info_buffer;
 
-				//Copy the actual structure to the buffer.
+				// Copy the actual structure to the buffer.
 				memcpy(info_buffer, struct_, msg_size);
 
-				//Copy the remaining 'data_locations' field if the dataset is a LOCAL one.
+				// Copy the remaining 'data_locations' field if the dataset is a LOCAL one.
 				if (!strcmp(struct_->policy, "LOCAL"))
 				{
 					offset_pt += sizeof(dataset_info);
 					memcpy(offset_pt, struct_->data_locations, (struct_->num_data_elem * sizeof(uint16_t)));
 				}
-                DPRINT( "[COMM] Prepared DATASET_INFO for sending.\n");
+				slog_debug("[COMM] Prepared DATASET_INFO for sending.");
 				break;
 			}
 		case STRING:
 			{
-				msg_size = strlen((char*) data_struct) + 1;
+				msg_size = strlen((char *)data_struct) + 1;
 				info_buffer = (char *)data_struct;
-				DPRINT( "[COMM] \t\t string=%s \n",(char*) data_struct);
+				slog_debug("[COMM] \t\t string=%s ", (char *)data_struct);
 				break;
 			}
 		case MSG:
 			{
-				msg_t * msg = (msg_t *) data_struct;
+				msg_t *msg = (msg_t *)data_struct;
 				msg_size = msg->size;
 				info_buffer = msg->data;
-				DPRINT( "[COMM] \t\t msg size=%ld \n", msg_size = msg->size );
+				slog_debug("[COMM] \t\t msg size=%ld ", msg_size = msg->size);
 			}
 	}
 
-	//Send the buffer.
-	if (send_stream(ucp_worker, ep, (char*)&msg_size, sizeof(size_t)) < 0) {
+	// Send the buffer.
+	if (send_stream(ucp_worker, ep, (char *)&msg_size, sizeof(size_t)) < 0)
+	{
 		perror("ERRIMSS_SENDDYNAMSTRUCT");
 		return -1;
 	}
 
-	if (send_stream(ucp_worker, ep, info_buffer, msg_size) < 0) {
+	if (send_stream(ucp_worker, ep, info_buffer, msg_size) < 0)
+	{
 		perror("ERRIMSS_SENDDYNAMSTRUCT");
 		return -1;
 	}
 	// TODO free info_buffer
-	DPRINT( "[COMM] send_dynamic_stream end %ld \n", msg_size); 
+	slog_debug("[COMM] send_dynamic_stream end %ld ", msg_size);
 	return msg_size;
 }
 
-//Method retrieving a serialized dynamic data structure.
+// Method retrieving a serialized dynamic data structure.
 int32_t recv_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep,
-		void *  data_struct,
+		void *data_struct,
 		int32_t data_type)
 {
 	size_t length;
 	char result[BUFFER_SIZE];
 
-	DPRINT( "[COMM] recv_dynamic_stream start \n"); 
-	if (recv_stream(ucp_worker, ep, (char*)&length, sizeof(size_t)) < 0)
+	slog_debug("[COMM] recv_dynamic_stream start ");
+	if (recv_stream(ucp_worker, ep, (char *)&length, sizeof(size_t)) < 0)
 	{
 		perror("ERRIMSS_RECVDYNAMSTRUCT_RECV");
 		return -1;
 	}
 
-	if (recv_stream(ucp_worker, ep, result, length) < 0) 
+	if (recv_stream(ucp_worker, ep, result, length) < 0)
 	{
 		perror("ERRIMSS_RECVDYNAMSTRUCT_RECV");
 		return -1;
 	}
 
-	char * msg_data = result;
-	//Formalize the received information.
+	char *msg_data = result;
+	// Formalize the received information.
 	switch (data_type)
 	{
 		case IMSS_INFO:
 			{
-				DPRINT(" \t\t receiving IMSS_INFO %ld\n",length);
-				imss_info * struct_ = (imss_info *) data_struct;
+				slog_debug(" \t\t receiving IMSS_INFO %ld", length);
+				imss_info *struct_ = (imss_info *)data_struct;
 
-				//Copy the actual structure into the one provided through reference.
+				// Copy the actual structure into the one provided through reference.
 				memcpy(struct_, msg_data, sizeof(imss_info));
 
 				if (!strncmp("$ERRIMSS_NO_KEY_AVAIL$", struct_->uri_, 22))
 				{
-					DPRINT("[COMM] recv_dynamic_stream end %ld\n", length); 
+					slog_debug("[COMM] recv_dynamic_stream end %ld", length);
 					return length;
 				}
 
 				msg_data += sizeof(imss_info);
 
-				//Copy the dynamic fields into the structure.
+				// Copy the dynamic fields into the structure.
 
-				struct_->ips = (char **) malloc(struct_->num_storages * sizeof(char *));
+				struct_->ips = (char **)malloc(struct_->num_storages * sizeof(char *));
 
 				for (int32_t i = 0; i < struct_->num_storages; i++)
 				{
-					struct_->ips[i] = (char *) malloc(LINE_LENGTH * sizeof(char));
+					struct_->ips[i] = (char *)malloc(LINE_LENGTH * sizeof(char));
 					memcpy(struct_->ips[i], msg_data, LINE_LENGTH);
 					msg_data += LINE_LENGTH;
 				}
@@ -685,19 +859,19 @@ int32_t recv_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep,
 
 		case DATASET_INFO:
 			{
-	
+
 				if (!strncmp("$ERRIMSS_NO_KEY_AVAIL$", msg_data, 22))
 				{
-					DPRINT("[COMM] recv_dynamic_stream end 22\n");
+					slog_debug("[COMM] recv_dynamic_stream end 22");
 					return 22;
 				}
-     			DPRINT(" \t\t DATASET_INFO %ld\n", length);
-				dataset_info * struct_ = (dataset_info *) data_struct;
+				slog_debug(" \t\t DATASET_INFO %ld", length);
+				dataset_info *struct_ = (dataset_info *)data_struct;
 
-				//Copy the actual structure into the one provided through reference.
+				// Copy the actual structure into the one provided through reference.
 				memcpy(struct_, msg_data, sizeof(dataset_info));
 
-				//If the size of the message received was bigger than sizeof(dataset_info), something more came with it.
+				// If the size of the message received was bigger than sizeof(dataset_info), something more came with it.
 
 				/*if (zmq_msg_size(&msg_struct) > sizeof(dataset_info)) MIRAR
 				  {
@@ -714,17 +888,17 @@ int32_t recv_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep,
 		case BUFFER:
 			{
 
-				DPRINT(" \t\t receiving STRING or BUFFER %ld\n", length);
+				slog_debug(" \t\t receiving STRING or BUFFER %ld", length);
 				if (!strncmp("$ERRIMSS_NO_KEY_AVAIL$", msg_data, 22))
 				{
-					DPRINT("[COMM] recv_dynamic_stream end %ld\n", length); 
+					slog_debug("[COMM] recv_dynamic_stream end %ld", length);
 					return length;
 				}
 				memcpy(data_struct, result, length);
 				break;
 			}
 	}
-	DPRINT("[COMM] recv_dynamic_stream end %ld\n", length); 
+	slog_debug("[COMM] recv_dynamic_stream end %ld", length);
 	return length;
 }
 
@@ -733,28 +907,10 @@ void ep_close(ucp_worker_h ucp_worker, ucp_ep_h ep, uint64_t flags)
 	ucp_request_param_t param;
 	ucs_status_t status;
 	void *close_req;
-	StsHeader *req_queue;
-	ucx_async_t *async;
 
 	param.op_attr_mask = UCP_OP_ATTR_FIELD_FLAGS;
 	param.flags        = flags;
-
-	if (is_client) {
-		//look for this ep's queue in the map
-		pthread_mutex_lock(&map_ep_mutex);
-		int found = map_ep_search(map_ep, ep, &req_queue);
-		if (found) {
-			while (StsQueue.size(req_queue) > 0) {
-				async = (ucx_async_t *) StsQueue.pop(req_queue);
-				request_finalize(ucp_worker, async->request, &(async->ctx));
-				free(async);
-			}
-			map_ep_erase(map_ep, ep);
-		}
-		pthread_mutex_unlock(&map_ep_mutex);
-	}
-
-	close_req = ucp_ep_close_nbx(ep, &param);
+	close_req          = ucp_ep_close_nbx(ep, &param);
 	if (UCS_PTR_IS_PTR(close_req)) {
 		do {
 			ucp_worker_progress(ucp_worker);
@@ -766,10 +922,10 @@ void ep_close(ucp_worker_h ucp_worker, ucp_ep_h ep, uint64_t flags)
 	}
 
 	if (status != UCS_OK) {
-		fprintf(stderr, "Failed to close ep %p\n", (void*)ep);
-		DPRINT( "[COMM] Failed to close ep %p\n", (void*)ep);
+		fprintf(stderr, "failed to close ep %p", (void*)ep);
 	}
-	DPRINT("[COMM] Closed endpoint\n");
+
+	slog_debug("[COMM] Closed endpoint");
 }
 
 void empty_function(void *request, ucs_status_t status)
@@ -781,22 +937,124 @@ ucs_status_t ep_flush(ucp_ep_h ep, ucp_worker_h worker)
 	StsHeader *req_queue;
 	ucx_async_t *async;
 
-	DPRINT( "[COMM] Flushed endpoint started.\n");
+	slog_debug("[COMM] Flushed endpoint started.");
 	request = ucp_ep_flush_nb(ep, 0, empty_function);
-	if (request == NULL) {
+	if (request == NULL)
+	{
 		return UCS_OK;
-	} else if (UCS_PTR_IS_ERR(request)) {
+	}
+	else if (UCS_PTR_IS_ERR(request))
+	{
 		return UCS_PTR_STATUS(request);
-	} else {
+	}
+	else
+	{
 		ucs_status_t status;
-	    DPRINT( "[COMM] Flush waiting for completion.\n");
-		do {
+		slog_debug("[COMM] Flush waiting for completion.");
+		do
+		{
 			ucp_worker_progress(worker);
 			status = ucp_request_check_status(request);
 		} while (status == UCS_INPROGRESS);
 		ucp_request_free(request);
-	    DPRINT( "[COMM] Flushed endpoint.\n");
+		slog_debug("[COMM] Flushed endpoint.");
 		return status;
 	}
-	DPRINT( "[COMM] Flushed endpoint.\n");
+	slog_debug("[COMM] Flushed endpoint.");
+}
+
+int connect_common(const char *server, uint16_t server_port, sa_family_t af)
+{
+	int sockfd   = -1;
+	int listenfd = -1;
+	int optval   = 1;
+	char service[8];
+	struct addrinfo hints, *res, *t;
+	int ret;
+
+	snprintf(service, sizeof(service), "%u", server_port);
+	memset(&hints, 0, sizeof(hints));
+	hints.ai_flags    = (server == NULL) ? AI_PASSIVE : 0;
+	hints.ai_family   = af;
+	hints.ai_socktype = SOCK_STREAM;
+
+	ret = getaddrinfo(server, service, &hints, &res);
+	CHKERR_JUMP(ret < 0, "getaddrinfo() failed", out);
+
+	for (t = res; t != NULL; t = t->ai_next) {
+		sockfd = socket(t->ai_family, t->ai_socktype, t->ai_protocol);
+		if (sockfd < 0) {
+			continue;
+		}
+
+		if (server != NULL) {
+			if (connect(sockfd, t->ai_addr, t->ai_addrlen) == 0) {
+				break;
+			}
+		} else {
+			ret = setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &optval,
+					sizeof(optval));
+			CHKERR_JUMP(ret < 0, "server setsockopt()", err_close_sockfd);
+
+			if (bind(sockfd, t->ai_addr, t->ai_addrlen) == 0) {
+				ret = listen(sockfd, 0);
+				CHKERR_JUMP(ret < 0, "listen server", err_close_sockfd);
+
+				/* Accept next connection */
+				listenfd = sockfd;
+				sockfd   = accept(listenfd, NULL, NULL);
+				close(listenfd);
+				break;
+			}
+		}
+
+		close(sockfd);
+		sockfd = -1;
+	}
+
+	CHKERR_ACTION(sockfd < 0,
+			(server) ? "open client socket" : "open server socket",
+			(void)sockfd /* no action */);
+
+out_free_res:
+	freeaddrinfo(res);
+out:
+	return sockfd;
+err_close_sockfd:
+	close(sockfd);
+	sockfd = -1;
+	goto out_free_res;
+}
+
+ucs_status_t ucx_wait(ucp_worker_h ucp_worker, struct ucx_context *request, const char *op_str, const char *data_str)
+{
+	ucs_status_t status;
+
+	if (UCS_PTR_IS_ERR(request))
+	{
+		status = UCS_PTR_STATUS(request);
+	}
+	else if (UCS_PTR_IS_PTR(request))
+	{
+		while (!request->completed)
+		{
+			ucp_worker_progress(ucp_worker);
+		}
+
+		request->completed = 0;
+		status = ucp_request_check_status(request);
+		ucp_request_free(request);
+	}
+	else
+	{
+		status = UCS_OK;
+	}
+
+	if (status != UCS_OK)
+	{
+		fprintf(stderr, "unable to %s %s (%s)", op_str, data_str,
+				ucs_status_string(status));
+	}
+
+	return status;
 }

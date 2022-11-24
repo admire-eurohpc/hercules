@@ -7,162 +7,161 @@
 // to manage logs.
 #include "slog.h"
 
-//Maximum number of bytes assigned to a dataset or IMSS URI.
-#define URI_		256
+// Maximum number of bytes assigned to a dataset or IMSS URI.
+#define URI_ 256
 
-//Maximum number of bytes retrieved from the imss deployment file per line.
-#define LINE_LENGTH	512
+// Maximum number of bytes retrieved from the imss deployment file per line.
+#define LINE_LENGTH 512
 
-//Replication factor assigned to each dataset in creation time.
-#define NONE  1
-#define DRM  2
-#define TRM  3
+// Replication factor assigned to each dataset in creation time.
+#define NONE 1
+#define DRM 2
+#define TRM 3
 
-//Type of IMSS instance to be deployed.
-#define DETACHED	 0
-#define ATTACHED 	 1
+// Type of IMSS instance to be deployed.
+#define DETACHED 0
+#define ATTACHED 1
 
-//IMSS release operation possibilities.
-#define DISCONNECT  0
-#define CLOSE_DETACHED  1
-#define CLOSE_ATTACHED  2
+// IMSS release operation possibilities.
+#define DISCONNECT 0
+#define CLOSE_DETACHED 1
+#define CLOSE_ATTACHED 2
 
+// Inside HERCULES directives.
+#define REQ_MSG 272
+#define KEY 512
+#define MONITOR 1
+#define ELEMENTS 5120
+#define IMSS 0
+#define DATASET 1
 
-
-
-
-//Inside HERCULES directives.
-#define REQ_MSG		272
-#define KEY		512
-#define MONITOR		1
-#define ELEMENTS	5120
-#define IMSS		0
-#define DATASET		1
-
-
-extern int32_t  IMSS_DEBUG;
+extern int32_t IMSS_DEBUG;
 
 #ifdef __DEBUG__
-    #define DPRINT(...) if (IMSS_DEBUG) {fprintf(stderr, __VA_ARGS__);}
+#define DPRINT(...)                   \
+	if (IMSS_DEBUG)                   \
+	{                                 \
+		fprintf(stderr, __VA_ARGS__); \
+	}
 #else
-	#define DPRINT(...)
+#define DPRINT(...)
 #endif
 
 /**
-* Macro to measure the time spend by function_to_call.
-* char*::print_comment: comment to be concatenated to the elapsed time.
-*/
-#define TIMING(function_to_call, print_comment) \
-{\
-    clock_t t;\
-    double time_taken;\
-    int ret = -1;\
-    t = clock();\
-    ret = function_to_call;\
-    t = clock() - t;\
-    time_taken = ((double)t)/(CLOCKS_PER_SEC/1000);\
-    slog_info(",%f, %s, %d", time_taken, print_comment, ret);\
-}
-
+ * Macro to measure the time spend by function_to_call.
+ * char*::print_comment: comment to be concatenated to the elapsed time.
+ */
+#define TIMING(function_to_call, print_comment)                   \
+	{                                                             \
+		clock_t t;                                                \
+		double time_taken;                                        \
+		int ret = -1;                                             \
+		t = clock();                                              \
+		ret = function_to_call;                                   \
+		t = clock() - t;                                          \
+		time_taken = ((double)t) / (CLOCKS_PER_SEC / 1000);       \
+		slog_debug(",%f, %s, %d", time_taken, print_comment, ret); \
+	}
 
 // typedef enum {
 //     CLIENT_SERVER_SEND_RECV_STREAM  = UCS_BIT(0),
 //     CLIENT_SERVER_SEND_RECV_DEFAULT = CLIENT_SERVER_SEND_RECV_STREAM
 // } send_type_t;
 
-//Structure storing all information related to a certain IMSS.
-typedef struct {
+// Structure storing all information related to a certain IMSS.
+typedef struct
+{
 
-	//IMSS URI.
+	// IMSS URI.
 	char uri_[URI_];
-	//Byte specifying the type of structure.
-	char type;// = 'I';
-	//Set of ips comforming the IMSS.
-	char ** ips;
-	//Number of IMSS servers.
+	// Byte specifying the type of structure.
+	char type; // = 'I';
+	// Set of ips comforming the IMSS.
+	char **ips;
+	// Number of IMSS servers.
 	int32_t num_storages;
-	//Server's dispatcher thread connection port.
+	// Server's dispatcher thread connection port.
 	uint16_t conn_port;
 
 } imss_info;
 
-//Structure storing the required connection resources to the IMSS in the client side.
-typedef struct {
-
-	//Set of actual sockets.
-	ucp_ep_h* eps_;
-	//Socket connecting the corresponding client to the server running in the same node.
+// Structure storing the required connection resources to the IMSS in the client side.
+typedef struct
+{
+	// Set of actual sockets.
+	ucp_address_t **peer_addr;
+	// Socket connecting the corresponding client to the server running in the same node.
 	int32_t matching_server;
-
+	ucp_ep_h *eps;
 	uint32_t *id;
-
 } imss_conn;
 
-//Structure merging the previous couple.
-typedef struct {
+// Structure merging the previous couple.
+typedef struct
+{
 	imss_info info;
 	imss_conn conns;
 } imss;
 
-//Structure storing all information related to a certain dataset.
-typedef struct {
+// Structure storing all information related to a certain dataset.
+typedef struct
+{
 
-	//URI identifying a certain dataset.
+	// URI identifying a certain dataset.
 	char uri_[URI_];
-	//Byte specifying the type of structure.
-	char type;// = 'D';
-	//Policy that was followed in order to write the dataset.
+	// Byte specifying the type of structure.
+	char type; // = 'D';
+	// Policy that was followed in order to write the dataset.
 	char policy[8];
-	//Number of data elements conforming the dataset entity.
+	// Number of data elements conforming the dataset entity.
 	int32_t num_data_elem;
-	//Size of each data element (in KB).
+	// Size of each data element (in KB).
 	int32_t data_entity_size;
-	//Number of replications performed along the corresponding IMSS.
+	// Number of replications performed along the corresponding IMSS.
 	int32_t repl_factor;
-	//IMSS descriptor managing the dataset in the current client session.
+	// IMSS descriptor managing the dataset in the current client session.
 	int32_t imss_d;
-	//Connection to the IMSS server running in the same machine.
+	// Connection to the IMSS server running in the same machine.
 	int32_t local_conn;
-	//Actual size
+	// Actual size
 	int64_t size;
-	//Original name when the data was created for the first time, need it for policy CRC16_ in distributed operation rename
+	// Original name when the data was created for the first time, need it for policy CRC16_ in distributed operation rename
 	char original_name[256];
-	//N_servers
+	// N_servers
 	int32_t n_servers;
 	/*************** USED EXCLUSIVELY BY LOCAL DATASETS ***************/
 
-
-	//Vector of characters specifying the position of each data element.
-	uint16_t * data_locations;
-	//Number of blocks written by the client in the current session.
-	uint64_t * num_blocks_written;
-	//Actual blocks written by the client.
-	uint32_t * blocks_written;
+	// Vector of characters specifying the position of each data element.
+	uint16_t *data_locations;
+	// Number of blocks written by the client in the current session.
+	uint64_t *num_blocks_written;
+	// Actual blocks written by the client.
+	uint32_t *blocks_written;
 
 } dataset_info;
 
-
 //[SPLIT READV] Set of arguments passed to each server thread.
-typedef struct {
+typedef struct
+{
 
 	int32_t n_server;
 	const char *path;
 	char *msg;
-	char * buffer; 
+	char *buffer;
 	int32_t size;
 	uint64_t BLKSIZE;
-	int64_t    start_offset;
-	int    stats_size;
-	int    lenght_key;
+	int64_t start_offset;
+	int stats_size;
+	int lenght_key;
 } thread_argv;
 
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
 #endif
 
 	/****************************************************************************************************************************/
 	/****************************************** METADATA SERVICE MANAGEMENT FUNCTIONS  ******************************************/
-
 
 	/* Method creating a communication channel with the IMSS metadata server. Besides, the stat_imss method initializes a set of elements that will be used through the session.
 
@@ -174,7 +173,7 @@ rank	         - Application process identifier used as communications ID in the 
 RETURNS:	 0 - Communication channel and initializations performed successfully.
 -1 - In case of error.
 	 */
-	int32_t stat_init(char * stat_hostfile, uint16_t port, int32_t num_stat_servers, uint32_t rank);
+	int32_t stat_init(char *stat_hostfile, uint16_t port, int32_t num_stat_servers, uint32_t rank);
 
 	/* Method disabling the communication channel with the metadata server. Besides, the current method releases session-related elements previously initialized.
 
@@ -194,16 +193,11 @@ RETURNS:	> 0 - Number of items contained by the specified URI.
 
 WARNING:	The get_dir function allocates memory (performs malloc operations). Therefore, the provided pointers (*buffer & *items) MUST BE FREED once done.
 	 */
-	//FIXME: fix implementation for multiple servers.
-	uint32_t get_dir(char * requested_uri, char ** buffer, char *** items);
-
-
-
-
+	// FIXME: fix implementation for multiple servers.
+	uint32_t get_dir(char *requested_uri, char **buffer, char ***items);
 
 	/****************************************************************************************************************************/
 	/************************************** IN-MEMORY STORAGE SYSTEM MANAGEMENT FUNCTIONS ***************************************/
-
 
 	/* Method initializing an IMSS deployment.
 
@@ -217,7 +211,7 @@ binary_path - Path to the 'server.c' binary. It must be provided if the 'deploym
 RETURNS:	 0 - Initialization procedure was successfully performed.
 -1 - In case of error.
 	 */
-	int32_t init_imss(char * imss_uri, char * hostfile, char * meta_hostfile, int32_t n_servers, uint16_t conn_port, uint64_t buff_size, uint32_t deployment, char * binary_path, uint16_t meta_port);
+	int32_t init_imss(char *imss_uri, char *hostfile, char *meta_hostfile, int32_t n_servers, uint16_t conn_port, uint64_t buff_size, uint32_t deployment, char *binary_path, uint16_t meta_port);
 
 	/* Method initializing the required resources to make use of an existing IMSS.
 
@@ -227,9 +221,9 @@ RETURNS:	 0 - Resources successfully initialized. Communication channels created
 -1 - In case of error.
 -2 - The imss instance has been already opened or created.
 	 */
-	int32_t open_imss(char * imss_uri);
+	int32_t open_imss(char *imss_uri);
 
-	/* Method releasing client-side and/or server-side resources related to a certain IMSS instance. 
+	/* Method releasing client-side and/or server-side resources related to a certain IMSS instance.
 
 RECEIVES:	imss_uri   - IMSS URI that the client desires to release.
 release_op - Specifies if the client will tear down or just disconnect from from an IMSS instance. The following parameters are considered:
@@ -241,7 +235,7 @@ release_op - Specifies if the client will tear down or just disconnect from from
 RETURNS:	 0 - Release operation successfully performed.
 -1 - In case of error.
 	 */
-	int32_t release_imss(char * imss_uri, uint32_t release_op);
+	int32_t release_imss(char *imss_uri, uint32_t release_op);
 
 	/* Method retrieving information related to a certain IMSS instance.
 
@@ -259,7 +253,7 @@ The following function must be called over the provided imss_info structure once
 
 free_imss(imss_info_);
 	 */
-	int32_t stat_imss(char * imss_uri, imss_info * imss_info_);
+	int32_t stat_imss(char *imss_uri, imss_info *imss_info_);
 
 	/* Method providing the URI of the attached IMSS instance.
 
@@ -274,7 +268,7 @@ char * attached_deployment = get_deployed();
 
 free(attached_deployment);
 	 */
-	char * get_deployed();
+	char *get_deployed();
 
 	/* Method providing the URI of the IMSS instance executing at some endpoint.
 
@@ -291,8 +285,7 @@ char * deployment = get_deployed(uri);
 
 free(deployment);
 	 */
-	char * get_deployed_(char * endpoint);
-
+	char *get_deployed_(char *endpoint);
 
 	/****************************************************************************************************************************/
 	/*********************************************** DATASET MANAGEMENT FUNCTIONS ***********************************************/
@@ -308,7 +301,7 @@ repl_factor    - Replication factor assigned to the concerned dataset: NONE, DRM
 RETURNS:	> 0 - Number identifying the created dataset among the client's session.
 -1 - In case of error.
 	 */
-	int32_t create_dataset(char * dataset_uri, char * policy, int32_t num_data_elem, int32_t data_elem_size, int32_t repl_factor);
+	int32_t create_dataset(char *dataset_uri, char *policy, int32_t num_data_elem, int32_t data_elem_size, int32_t repl_factor);
 
 	/* Method creating the required resources in order to READ and WRITE an existing dataset.
 
@@ -317,49 +310,46 @@ RECEIVES:	dataset_uri - URI identifying the dataset to be opened.
 RETURNS:	> 0 - Number identifying the retrieved dataset among the client's session.
 -1 - In case of error.
 	 */
-	int32_t open_dataset(char * dataset_uri);
-
+	int32_t open_dataset(char *dataset_uri);
 
 	/*Method deleting a dataset.
 
 RETURNS:	 0 - Release operation took place successfully.
 -1 - In case of error.*/
-	int32_t delete_dataset(const char * dataset_uri);
+	int32_t delete_dataset(const char *dataset_uri);
 
 	/*Method writev various datasets.
 
 RETURNS:	 0 - Release operation took place successfully.
 -1 - In case of error.*/
-	int32_t writev_multiple(const char * buf, int32_t dataset_id,int64_t data_id,
-			int64_t end_blk, int64_t start_offset, int64_t end_offset, int64_t IMSS_DATA_BSIZE, int64_t size);
+	int32_t writev_multiple(const char *buf, int32_t dataset_id, int64_t data_id,
+							int64_t end_blk, int64_t start_offset, int64_t end_offset, int64_t IMSS_DATA_BSIZE, int64_t size);
 
 	/*Method renaming a dataset in metadata.
 
 RETURNS:	 0 - Release operation took place successfully.
 -1 - In case of error.*/
-	int32_t rename_dataset_metadata_dir_dir(char * old_dir, char * rdir_dest);
-
+	int32_t rename_dataset_metadata_dir_dir(char *old_dir, char *rdir_dest);
 
 	/*Method renaming a dataset in metadata.
 
 RETURNS:	 0 - Release operation took place successfully.
 -1 - In case of error.*/
-	int32_t rename_dataset_metadata(char * old_dataset_uri, char * new_dataset_uri);
+	int32_t rename_dataset_metadata(char *old_dataset_uri, char *new_dataset_uri);
 
 	/*Method renaming a dataset in srv_worker.
 
 RETURNS:	 0 - Release operation took place successfully.
 -1 - In case of error.*/
-	int32_t rename_dataset_srv_worker_dir_dir(char * old_dir, char * rdir_dest,int32_t 	 dataset_id,
-			int32_t 	 data_id);
+	int32_t rename_dataset_srv_worker_dir_dir(char *old_dir, char *rdir_dest, int32_t dataset_id,
+											  int32_t data_id);
 
 	/*Method renaming a dataset in srv_worker.
 
 RETURNS:	 0 - Release operation took place successfully.
 -1 - In case of error.*/
-	int32_t rename_dataset_srv_worker(char * old_dataset_uri, char * new_dataset_uri,int32_t 	 dataset_id,
-			int32_t 	 data_id);
-
+	int32_t rename_dataset_srv_worker(char *old_dataset_uri, char *new_dataset_uri, int32_t dataset_id,
+									  int32_t data_id);
 
 	/* Method releasing the set of resources required to deal with a dataset.
 
@@ -383,31 +373,26 @@ RETURNS:	 0 - No dataset was found with the provided URI.
 
 The current function does not allocate memory.
 	 */
-	int32_t stat_dataset(const char * dataset_uri, dataset_info * dataset_info_);
+	int32_t stat_dataset(const char *dataset_uri, dataset_info *dataset_info_);
 
 	////Method retrieving a whole dataset parallelizing the procedure.
-	//unsigned char * get_dataset(char * dataset_uri, uint64_t * buff_length);
+	// unsigned char * get_dataset(char * dataset_uri, uint64_t * buff_length);
 	//
 	////Method storing a whole dataset parallelizing the procedure.
-	//int32_t set_dataset(char * dataset_uri, unsigned char * buffer, uint64_t offset);
-
-
-
-
+	// int32_t set_dataset(char * dataset_uri, unsigned char * buffer, uint64_t offset);
 
 	/****************************************************************************************************************************/
 	/********************************************* DATA OBJECT MANAGEMENT FUNCTIONS *********************************************/
 
-
-	//Method retrieving a multiple datasets
+	// Method retrieving a multiple datasets
 	int32_t
-		readv_multiple(int32_t 	 dataset_id,
-				int32_t 	 curr_block,
-				int32_t 	 prefetch,
-				char * buffer,
-				uint64_t 	 BLOCKSIZE,
-				int64_t    start_offset,
-				int64_t	size);
+	readv_multiple(int32_t dataset_id,
+				   int32_t curr_block,
+				   int32_t prefetch,
+				   char *buffer,
+				   uint64_t BLOCKSIZE,
+				   int64_t start_offset,
+				   int64_t size);
 
 	/* Method retrieving a data element associated to a certain dataset.
 
@@ -418,9 +403,9 @@ buffer     - Memory address where the requested block will be received. WARNING:
 RETURNS:	 0 - The requested block was successfully retrieved.
 -1 - In case of error.
 	 */
-	int32_t get_data(int32_t dataset_id, int32_t data_id, char * buffer);
+	int32_t get_data(int32_t dataset_id, int32_t data_id, char *buffer);
 
-	int32_t get_ndata(int32_t dataset_id, int32_t data_id, char * buffer, int64_t * len);
+	int32_t get_ndata(int32_t dataset_id, int32_t data_id, char *buffer, int64_t *len);
 	/* Method storing a specific data element.
 
 RECEIVES:	dataset_id - Number identifying the concerned dataset among the client's session.
@@ -430,7 +415,7 @@ buffer     - Buffer containing the data block information.
 RETURNS:	 0 - The requested block was successfully stored.
 -1 - In case of error.
 	 */
-	int32_t set_data(int32_t dataset_id, int32_t data_id, char * buffer);
+	int32_t set_data(int32_t dataset_id, int32_t data_id, char *buffer);
 
 	/* Method retrieving the location of a specific data object.
 
@@ -441,7 +426,7 @@ num_storages - Reference to an int32_t variable where the number of storages con
 RETURNS:	char ** - List of IPs or DNSs where the concerned block is stored.
 NULL    - The requested data block did not existed.
 
-WARNING:	The get_dataloc function allocates memory (performs malloc operations). 
+WARNING:	The get_dataloc function allocates memory (performs malloc operations).
 
 Therefore, the next steps must be followed in order to free the reserved memory:
 
@@ -458,12 +443,12 @@ char ** locations = get_dataloc(datasetd, data_id, &num_storages);
 	 */
 
 	int32_t
-		set_ndata(int32_t 	 dataset_id,
-				int32_t 	 data_id,
-				char * buffer,
-				uint32_t size);
+	set_ndata(int32_t dataset_id,
+			  int32_t data_id,
+			  char *buffer,
+			  uint32_t size);
 
-	char ** get_dataloc(const char * dataset, int32_t data_id, int32_t * num_storages);
+	char **get_dataloc(const char *dataset, int32_t data_id, int32_t *num_storages);
 
 	/* Method specifying the type (DATASET or IMSS INSTANCE) of a provided URI.
 
@@ -474,25 +459,24 @@ RETURNS:	0 - No entity associated to the URI provided exists.
 2 - The URI provided corresponds to a dataset.
 -1 - In case of error.
 	 */
-	int32_t get_type(char * uri);
+	int32_t get_type(char *uri);
 
-	//Method retriving list of servers to read.
+	// Method retriving list of servers to read.
 	int32_t
-		split_location_servers(int** list_servers,int32_t dataset_id,  int32_t curr_blk, int32_t end_blk);
+	split_location_servers(int **list_servers, int32_t dataset_id, int32_t curr_blk, int32_t end_blk);
 
-	//Method writing multiple data to a specific server
-	void *
-		split_writev(void * th_argv);
+	// Method writing multiple data to a specific server
 
-	//Method retrieving multiple data from a specific server
-	void *
-		split_readv(void * th_argv);
+	void * split_writev(void *th_argv);
+
+	// Method retrieving multiple data from a specific server
+	void * split_readv(void *th_argv);
 	/*int32_t
 	  split_readv(int32_t n_server,
-	  char * path, 
-	  char * msg, 
-	  unsigned char * buffer, 
-	  int32_t size, 
+	  char * path,
+	  char * msg,
+	  unsigned char * buffer,
+	  int32_t size,
 	  uint64_t BLKSIZE,
 	  int64_t    start_offset,
 	  int    stats_size);*/
@@ -500,14 +484,13 @@ RETURNS:	0 - No entity associated to the URI provided exists.
 	/****************************************************************************************************************************/
 	/************************************************** DATA RELEASE RESOURCES **************************************************/
 
-
 	/* Method releasing an imss_info structure provided by the stat_imss function.
 
 RECEIVES:	imss_info_ - Reference to the imss_info structure that must be freed.
 
 RETURNS:	0 - Resources were released successfully.
 	 */
-	int32_t free_imss(imss_info * imss_info_);
+	int32_t free_imss(imss_info *imss_info_);
 
 	/* Method releasing a dataset structure previously provided to the client.
 
@@ -515,8 +498,7 @@ RECEIVES:	dataset_info_ - Reference to the dataset_info structure to be freed.
 
 RETURNS:	0 - Resources were released successfully.
 	 */
-	int32_t free_dataset(dataset_info * dataset_info_);
-
+	int32_t free_dataset(dataset_info *dataset_info_);
 
 #ifdef __cplusplus
 }

@@ -15,30 +15,40 @@
 #include "map_ep.hpp"
 #include <inttypes.h>
 
+// Pointer to the tree's root node.
+extern GNode *tree_root;
+extern pthread_mutex_t tree_mut;
+// URI of the created IMSS.
+char *imss_uri;
 
-//Pointer to the tree's root node.
-extern GNode * 		tree_root;
-extern pthread_mutex_t 	tree_mut;
-//URI of the created IMSS.
-char * 			imss_uri;
+// Initial buffer address.
+extern char *buffer_address;
+// Set of locks dealing with the memory buffer access.
+extern pthread_mutex_t *region_locks;
+// Segment size (amount of memory assigned to each thread).
+extern uint64_t buffer_segment;
 
-//Initial buffer address.
-extern char *   buffer_address;
-//Set of locks dealing with the memory buffer access.
-extern pthread_mutex_t * region_locks;
-//Segment size (amount of memory assigned to each thread).
-extern uint64_t 	 buffer_segment;
+extern ucp_worker_h *ucp_worker_threads;
+extern ucp_address_t **local_addr;
+extern size_t *local_addr_len;
+
+extern StsHeader *mem_pool;
 
 /* UCP objects */
 ucp_context_h ucp_context;
-ucp_worker_h  ucp_worker;
+ucp_worker_h ucp_worker;
 
-ucp_ep_h     pub_ep;
+ucp_ep_h pub_ep;
 
-void * map_ep; // map_ep used for async write; server doesn't use it
+void *map_ep;		   // map_ep used for async write; server doesn't use it
 int32_t is_client = 0; // also used for async write
 
-int32_t  IMSS_DEBUG = 0;
+int32_t IMSS_DEBUG = 0;
+int32_t IMSS_DEBUG_FILE = 0;
+int32_t IMSS_DEBUG_SCREEN = 0;
+
+
+#define RAM_STORAGE_USE_PCT 0.75f // percentage of free system RAM to be used for storage
 
 
 int32_t main(int32_t argc, char **argv)
@@ -46,127 +56,194 @@ int32_t main(int32_t argc, char **argv)
 	// Print off a hello world message
 
 	uint16_t bind_port, aux_bind_port;
-	char *   stat_add;
-	char *   metadata_file;
-	char *   deployfile;
-	int64_t  buffer_size, stat_port, num_servers;
-	void * 	 socket;
+	char *stat_add;
+	char *metadata_file;
+	char *deployfile;
+	int64_t buffer_size, stat_port, num_servers;
+	void *socket;
+	ucp_address_t *req_addr;
+	am_data_desc_t *am_data;
+	size_t req_addr_len;
+	ucp_ep_params_t ep_params;
+	ucp_address_t *peer_addr;
+	size_t addr_len;
 
 	// memory pool stuff
-	uint64_t block_size; //In KB 
-	uint64_t storage_size; //In GB
+	uint64_t block_size;   // In KB
+	uint64_t storage_size; // In GB
 
 	ucs_status_t status;
-	ucp_ep_h     client_ep;
+	ucp_ep_h client_ep;
 
 	ucp_am_handler_param_t param;
-	int              ret;
-    ucp_config_t *config;
+	int ret;
+	ucp_config_t *config;
+
+	uint64_t max_system_ram_allowed;
+	uint64_t max_storage_size; // memory pool size
+	uint32_t num_blocks;
+
 
 	/***************************************************************/
 	/******************** PARSE INPUT ARGUMENTS ********************/
 	/***************************************************************/
 	struct arguments args;
 
-	if (getenv("IMSS_DEBUG") != NULL) {
+	if (getenv("IMSS_DEBUG") != NULL)
+	{
+		if (strstr(getenv("IMSS_DEBUG"), "file"))
+			IMSS_DEBUG_FILE = 1;
+		if (strstr(getenv("IMSS_DEBUG"), "screen"))
+            IMSS_DEBUG_SCREEN = 1;
 		IMSS_DEBUG = 1;
-		// init log file.
-		//char log_path[1000];
-    	//sprintf(log_path, "./server%c", args.type);
-		//args.type == TYPE_DATA_SERVER ? sprintf(log_path, "data"); : sprintf(log_path, "metadata");
-		//slog_init(log_path, SLOG_INFO, 1, 0, 1, 1, 1);
 	}
-	
+
 	// get arguments.
 	parse_args(argc, argv, &args);
 
 	time_t t = time(NULL);
-  	struct tm tm = *localtime(&t);
+	struct tm tm = *localtime(&t);
 	char log_path[1000];
-    sprintf(log_path, "./%c-server-%02d:%02d:%02d", args.type, tm.tm_hour, tm.tm_min, tm.tm_sec);
-	slog_init(log_path, SLOG_LIVE, 1, 0, 1, 1, 1);
+	sprintf(log_path, "./%c-server.%02d-%02d-%02d", args.type, tm.tm_hour, tm.tm_min, tm.tm_sec);
+	slog_init(log_path, SLOG_DEBUG, IMSS_DEBUG_FILE, IMSS_DEBUG_SCREEN, 1, 1, 1);
 	slog_info(",Time(msec), Comment, RetCode");
 
-	DPRINT("[SERVER] Starting server.\n");
-	DPRINT("[CLI PARAMS] type = %c port = %" PRIu16 " bufsize = %" PRId64 " ", args.type, args.port, args.bufsize);
-	if (args.type == TYPE_DATA_SERVER) {
-		DPRINT("imss_uri = %s stat-host = %s stat-port = %" PRId64 " num-servers = %" PRId64 " deploy-hostfile = %s block-size = %" PRIu64 " storage-size = %" PRIu64 "\n",
-		args.imss_uri, args.stat_host, args.stat_port, args.num_servers, args.deploy_hostfile, args.block_size, args.storage_size);
-	} else {
-		DPRINT("stat-logfile = %s\n", args.stat_logfile);
+	slog_debug("[SERVER] Starting server.");
+	slog_debug("[CLI PARAMS] type = %c port = %" PRIu16 " bufsize = %" PRId64 " ", args.type, args.port, args.bufsize);
+	if (args.type == TYPE_DATA_SERVER)
+	{
+		slog_debug("imss_uri = %s stat-host = %s stat-port = %" PRId64 " num-servers = %" PRId64 " deploy-hostfile = %s block-size = %" PRIu64 " storage-size = %" PRIu64 "",
+			   args.imss_uri, args.stat_host, args.stat_port, args.num_servers, args.deploy_hostfile, args.block_size, args.storage_size);
+	}
+	else
+	{
+		slog_debug("stat-logfile = %s", args.stat_logfile);
 	}
 
+	status = ucp_config_read(NULL, NULL, &config);
 
-
-    status = ucp_config_read(NULL, NULL, &config);
-    ucp_config_modify(config, "UCX_TCP_CM_REUSEADDR", "y");
-
-	//bind port number.
+	// bind port number.
 	bind_port = args.port;
-	aux_bind_port	= bind_port;
-	//buffer size provided
+	aux_bind_port = bind_port;
+	// buffer size provided
 	buffer_size = args.bufsize;
-	//set up imss uri (default value is already set up in args)
-	imss_uri 	= (char *) calloc(32, sizeof(char));
+	// set up imss uri (default value is already set up in args)
+	imss_uri = (char *)calloc(32, sizeof(char));
 
 	/* Initialize the UCX required objects */
-	ret = init_context(&ucp_context, config,  &ucp_worker, CLIENT_SERVER_SEND_RECV_STREAM);
-	if (ret != 0) {
+	ret = init_context(&ucp_context, config, &ucp_worker, CLIENT_SERVER_SEND_RECV_STREAM);
+	if (ret != 0)
+	{
 		perror("ERRIMSS_INIT_CONTEXT");
 		return -1;
+	}
+
+	/* Set memory pool size */
+	max_storage_size = args.storage_size * GB;
+	// get max RAM we could use for storage
+	max_system_ram_allowed = (uint64_t)sysconf(_SC_AVPHYS_PAGES) * sysconf(_SC_PAGESIZE) * RAM_STORAGE_USE_PCT;
+
+	// make sure we don't use more memory than available
+	if (max_storage_size >= max_system_ram_allowed)
+	{
+		max_storage_size = max_system_ram_allowed;
+	}
+
+	// init memory pool
+	mem_pool = StsQueue.create();
+	// figure out how many blocks we need and allocate them
+	num_blocks = max_storage_size / (args.block_size * KB);
+	for (int i = 0; i < num_blocks; ++i)
+	{
+		char *buffer = (char *)malloc(args.block_size * KB);
+		StsQueue.push(mem_pool, buffer);
 	}
 
 	/* CHECK THIS OUT!
 	 ***************************************************
 	 In relation to the type argument provided, an IMSS or a metadata server will be deployed. */
 
-	//IMSS server.
+	// IMSS server.
 	if (args.type == TYPE_DATA_SERVER)
 	{
-		//IMSS name.
+		// IMSS name.
 		strcpy(imss_uri, args.imss_uri);
-		//machine name where the metadata server is being executed.
-		stat_add	= args.stat_host;
-		//port that the metadata server is listening on.
-		stat_port 	= args.stat_port;
-		//number of servers conforming the IMSS deployment.
-		num_servers	= args.num_servers;
-		//IMSS' MPI deployment file.
-		deployfile	= args.deploy_hostfile;
-		//data block size
-		block_size  = args.block_size;
-		//total storage size
+		// machine name where the metadata server is being executed.
+		stat_add = args.stat_host;
+		// port that the metadata server is listening on.
+		stat_port = args.stat_port;
+		// number of servers conforming the IMSS deployment.
+		num_servers = args.num_servers;
+		// IMSS' MPI deployment file.
+		deployfile = args.deploy_hostfile;
+		// data block size
+		block_size = args.block_size;
+		// total storage size
 		storage_size = args.storage_size;
 
 		int32_t imss_exists = 0;
 
-		//Check if the provided URI has been already reserved by any other instance.
+		// Check if the provided URI has been already reserved by any other instance.
 		if (!args.id)
 		{
-			//Connect to the specified endpoint.
-			status = start_client(ucp_worker, stat_add, stat_port + 1, &client_ep); // port, rank,
-			if (status != UCS_OK) {
-				fprintf(stderr, "failed to start client (%s)\n", ucs_status_string(status));
+			ucs_status_t status;
+			int oob_sock;
+			int ret = 0;
+			ucs_status_t ep_status = UCS_OK;
+			
+
+			uint32_t id = args.id;
+
+			oob_sock = connect_common(stat_add, stat_port, AF_INET);
+
+			char request[REQUEST_SIZE];
+			sprintf(request, "%" PRIu32 " GET %s", id, "MAIN!QUERRY");
+
+			if (send(oob_sock, request, REQUEST_SIZE, 0) < 0)
+			{
+				perror("ERRIMSS_STAT_HELLO");
 				return -1;
 			}
 
-			uint32_t id = CLOSE_EP;
+			ret = recv(oob_sock, &addr_len, sizeof(addr_len), MSG_WAITALL);
+			peer_addr = (ucp_address *)malloc(addr_len);
+			ret = recv(oob_sock, peer_addr, addr_len, MSG_WAITALL);
+			close(oob_sock);
 
-			//Formated imss uri to be sent to the metadata server.
+			/* Send client UCX address to server */
+			ep_params.field_mask = UCP_EP_PARAM_FIELD_REMOTE_ADDRESS |
+								   UCP_EP_PARAM_FIELD_ERR_HANDLING_MODE |
+								   UCP_EP_PARAM_FIELD_ERR_HANDLER |
+								   UCP_EP_PARAM_FIELD_USER_DATA;
+			ep_params.address = peer_addr;
+			ep_params.err_mode = UCP_ERR_HANDLING_MODE_NONE;
+			ep_params.err_handler.cb = err_cb_client;
+			ep_params.err_handler.arg = NULL;
+			ep_params.user_data = &ep_status;
+
+			status = ucp_ep_create(ucp_worker, &ep_params, &client_ep);
+
+			// Formated imss uri to be sent to the metadata server.
 			char formated_uri[REQUEST_SIZE];
 			sprintf(formated_uri, "%" PRIu32 " GET 0 %s", id, imss_uri);
 
-			//Send the request.
+			status = ucp_worker_get_address(ucp_worker, &req_addr, &req_addr_len);
+
+			if (send_stream_addr(ucp_worker, client_ep, req_addr, req_addr_len) < 0)
+			{
+				perror("ERRIMSS_RLSIMSS_SENDADDR");
+				return -1;
+			}
+			// Send the request.
 			if (send_stream(ucp_worker, client_ep, formated_uri, REQUEST_SIZE) < 0)
 			{
 				perror("ERRIMSS_DATASET_REQ");
 				return -1;
 			}
 
-			ep_flush(client_ep, ucp_worker);
 			imss_info imss_info_;
 
-			//Receive the associated structure.
+			// Receive the associated structure.
 			ret = recv_dynamic_stream(ucp_worker, client_ep, &imss_info_, BUFFER);
 
 			if (ret >= sizeof(imss_info))
@@ -177,7 +254,7 @@ int32_t main(int32_t argc, char **argv)
 				free(imss_info_.ips);
 			}
 
-			ep_close(ucp_worker, client_ep, UCP_EP_CLOSE_MODE_FLUSH);
+            ucp_ep_close_nb(client_ep, UCP_EP_CLOSE_MODE_FORCE);
 		}
 
 		if (imss_exists)
@@ -186,16 +263,16 @@ int32_t main(int32_t argc, char **argv)
 			return 0;
 		}
 	}
-	//Metadata server.
+	// Metadata server.
 	else
 	{
-		//metadata file.
-		metadata_file	= args.stat_logfile;
+		// metadata file.
+		metadata_file = args.stat_logfile;
 
-		//Create the tree_root node.
-		char * root_data = (char *) calloc(8, sizeof(char));
-		strcpy(root_data,"imss://");
-		tree_root = g_node_new((void *) root_data);
+		// Create the tree_root node.
+		char *root_data = (char *)calloc(8, sizeof(char));
+		strcpy(root_data, "imss://");
+		tree_root = g_node_new((void *)root_data);
 
 		if (pthread_mutex_init(&tree_mut, NULL) != 0)
 		{
@@ -204,29 +281,27 @@ int32_t main(int32_t argc, char **argv)
 		}
 	}
 
-
 	/***************************************************************/
 	/******************** INPROC COMMUNICATIONS ********************/
 	/***************************************************************/
-	//ucx_server_ctx_t context;
-	//ucp_worker_h     ucp_data_worker;
+	// ucx_server_ctx_t context;
+	// ucp_worker_h     ucp_data_worker;
 
-
-	//ret = init_worker(ucp_context, &ucp_data_worker);
-	//if (ret != 0) {
+	// ret = init_worker(ucp_context, &ucp_data_worker);
+	// if (ret != 0) {
 	//	perror("ERRIMSS_WORKER_INIT");
 	//	pthread_exit(NULL);
-	//}
+	// }
 
 	/* Initialize the server's context. */
-	//context.conn_request = NULL;
+	// context.conn_request = NULL;
 
-	//status = start_server(ucp_worker, &context, &context.listener, NULL, 0);
-	//status = start_server(ucp_worker, &context, &context.listener, NULL, bind_port + 1000);
-	//if (status != UCS_OK) {
+	// status = start_server(ucp_worker, &context, &context.listener, NULL, 0);
+	// status = start_server(ucp_worker, &context, &context.listener, NULL, bind_port + 1000);
+	// if (status != UCS_OK) {
 	//	perror("ERRIMSS_STAR_SERVER");
 	//	pthread_exit(NULL);
-	//} 
+	// }
 	/*
 	   while (context.conn_request == NULL) {
 	   ucp_worker_progress(ucp_worker);
@@ -236,22 +311,22 @@ int32_t main(int32_t argc, char **argv)
 	   perror("ERRIMSS_SERVER_CREATE_EP");
 	   pthread_exit(NULL);
 	   }
-	   */
-	//Map tracking saved records.
-	std::shared_ptr<map_records> map(new map_records(buffer_size*KB));
+	 */
+	// Map tracking saved records.
+	std::shared_ptr<map_records> map(new map_records(buffer_size * KB));
 
 	int64_t data_reserved;
-	//Pointer to the allocated buffer memory.
-	char * buffer;
-	//Size of the buffer involved.
-	uint64_t size = (uint64_t) buffer_size*KB;
-	//Check if the requested data is available in the current node.
+	// Pointer to the allocated buffer memory.
+	char *buffer;
+	// Size of the buffer involved.
+	uint64_t size = (uint64_t)buffer_size * KB;
+	// Check if the requested data is available in the current node.
 	if ((data_reserved = memalloc(size, &buffer)) == -1)
 		return -1;
 
 	buffer_address = buffer;
 
-	//Metadata bytes written into the buffer.
+	// Metadata bytes written into the buffer.
 	uint64_t bytes_written = 0;
 
 	if (args.type == TYPE_METADATA_SERVER)
@@ -259,72 +334,89 @@ int32_t main(int32_t argc, char **argv)
 		if ((buffer_address = metadata_read(metadata_file, map.get(), buffer, &bytes_written)) == NULL)
 			return -1;
 
-		//Obtain the remaining free amount of data reserved to the buffer after the metadata read operation.
+		// Obtain the remaining free amount of data reserved to the buffer after the metadata read operation.
 		data_reserved -= bytes_written;
 	}
 
-	//Buffer segment size assigned to each thread.
-	buffer_segment = data_reserved/THREAD_POOL;
+	// Buffer segment size assigned to each thread.
+	buffer_segment = data_reserved / THREAD_POOL;
 
-	//Initialize pool of threads.
-	pthread_t threads[(THREAD_POOL+1)];
-	//Thread arguments.
-	p_argv arguments[(THREAD_POOL+1)];
+	// Initialize pool of threads.
+	pthread_t threads[(THREAD_POOL + 1)];
+	// Thread arguments.
+	p_argv arguments[(THREAD_POOL + 1)];
 
 	if (args.type == TYPE_DATA_SERVER)
-		region_locks = (pthread_mutex_t *) calloc(THREAD_POOL, sizeof(pthread_mutex_t));
+		region_locks = (pthread_mutex_t *)calloc(THREAD_POOL, sizeof(pthread_mutex_t));
 
-	//Execute all threads.
-	for (int32_t i = 0; i < (THREAD_POOL+1); i++)
+	ucp_worker_threads = (ucp_worker_h *)malloc((THREAD_POOL + 1) * sizeof(ucp_worker_h));
+	local_addr = (ucp_address_t **)malloc((THREAD_POOL + 1) * sizeof(ucp_address_t *));
+	local_addr_len = (size_t *)malloc((THREAD_POOL + 1) * sizeof(size_t));
+	am_data = (am_data_desc_t *)malloc((THREAD_POOL + 1) * sizeof(am_data_desc_t));
+
+	// Execute all threads.
+	for (int32_t i = 0; i < (THREAD_POOL + 1); i++)
 	{
-		//Add port number to thread arguments.
-		arguments[i].port = (bind_port)++;
+		ret = init_worker(ucp_context, &ucp_worker_threads[i]);
+
+		// Add port number to thread arguments.
 		arguments[i].ucp_context = ucp_context;
-		arguments[i].ucp_worker = ucp_worker;
 		arguments[i].blocksize = block_size;
 		arguments[i].storage_size = storage_size;
-		//Add the instance URI to the thread arguments.
+		arguments[i].ucp_worker = ucp_worker_threads[i];
+		arguments[i].port = args.port;
+		am_data[i].complete = 0;
+		am_data[i].is_rndv = 0;
+		am_data[i].desc = NULL;
+		am_data[i].recv_buf = NULL;
+		arguments[i].am_data = &am_data[i];
+		// Add the instance URI to the thread arguments.
 		strcpy(arguments[i].my_uri, imss_uri);
 
-		//Deploy all dispatcher + service threads.
-		if (!i)
+		if (ret != 0)
 		{
-			DPRINT("[SERVER] Creating dispatcher thread.\n");
-			//Deploy a thread distributing incomming clients among all ports.
-			if (pthread_create(&threads[i], NULL, dispatcher, (void *) &arguments[i]) == -1)
+			perror("ERRIMSS_WORKER_INIT");
+			pthread_exit(NULL);
+		}
+		status = ucp_worker_get_address(ucp_worker_threads[i], &local_addr[i], &local_addr_len[i]);
+
+		// Deploy all dispatcher + service threads.
+		if (i == 0)
+		{
+			slog_debug("[SERVER] Creating dispatcher thread.");
+			// Deploy a thread distributing incomming clients among all ports.
+			if (pthread_create(&threads[i], NULL, dispatcher, (void *)&arguments[i]) == -1)
 			{
-				//Notify thread error deployment.
+				// Notify thread error deployment.
 				perror("ERRIMSS_DISPATCHER_DEPLOY");
 				return -1;
 			}
 		}
 		else
 		{
-			//Add the reference to the map into the set of thread arguments.
+			// Add the reference to the map into the set of thread arguments.
 			arguments[i].map = map;
-			//Specify the address used by each thread to write inside the buffer.
-			arguments[i].pt = (char *) ((i-1)*buffer_segment + buffer_address);
-			arguments[i].ucp_context = ucp_context;
-			arguments[i].ucp_worker = ucp_worker;
+			// Specify the address used by each thread to write inside the buffer.
+			arguments[i].pt = (char *)((i - 1) * buffer_segment + buffer_address);
 
-			//IMSS server.
+			// IMSS server.
 			if (args.type == TYPE_DATA_SERVER)
-			{	
-				DPRINT("[SERVER] Creating data thread.\n");
-				if (pthread_create(&threads[i], NULL, srv_worker, (void *) &arguments[i]) == -1)
+			{
+				slog_debug("[SERVER] Creating data thread.");
+				if (pthread_create(&threads[i], NULL, srv_worker, (void *)&arguments[i]) == -1)
 				{
-					//Notify thread error deployment.
+					// Notify thread error deployment.
 					perror("ERRIMSS_SRVWORKER_DEPLOY");
 					return -1;
 				}
 			}
-			//Metadata server.
+			// Metadata server.
 			else
 			{
-				DPRINT("[SERVER] Creating metadata thread.\n");
-				if (pthread_create(&threads[i], NULL, stat_worker, (void *) &arguments[i]) == -1)
+				slog_debug("[SERVER] Creating metadata thread.");
+				if (pthread_create(&threads[i], NULL, stat_worker, (void *)&arguments[i]) == -1)
 				{
-					//Notify thread error deployment.
+					// Notify thread error deployment.
 					perror("ERRIMSS_STATWORKER_DEPLOY");
 					return -1;
 				}
@@ -332,19 +424,19 @@ int32_t main(int32_t argc, char **argv)
 		}
 	}
 
-	//Notify to the metadata server the deployment of a new IMSS.
+	// Notify to the metadata server the deployment of a new IMSS.
 	if ((args.type == TYPE_DATA_SERVER) && !args.id && stat_port)
 	{
-		//Metadata structure containing the novel IMSS info.
+		// Metadata structure containing the novel IMSS info.
 		imss_info my_imss;
 
 		strcpy(my_imss.uri_, imss_uri);
-		my_imss.ips = (char **) calloc(num_servers, sizeof(char *));
-		my_imss.num_storages 	= num_servers;
-		my_imss.conn_port	= aux_bind_port;
-		my_imss.type	= 'I';//extremely important
-		//FILE entity managing the IMSS deployfile.
-		FILE * svr_nodes;
+		my_imss.ips = (char **)calloc(num_servers, sizeof(char *));
+		my_imss.num_storages = num_servers;
+		my_imss.conn_port = aux_bind_port;
+		my_imss.type = 'I'; // extremely important
+		// FILE entity managing the IMSS deployfile.
+		FILE *svr_nodes;
 
 		if ((svr_nodes = fopen(deployfile, "r+")) == NULL)
 		{
@@ -352,38 +444,40 @@ int32_t main(int32_t argc, char **argv)
 			return -1;
 		}
 
-		//Number of characters successfully read from the line.
+		// Number of characters successfully read from the line.
 		int32_t n_chars;
 		for (int32_t i = 0; i < num_servers; i++)
 		{
-			//Allocate resources in the metadata structure so as to store the current IMSS's IP.
-			(my_imss.ips)[i] = (char *) calloc(LINE_LENGTH, sizeof(char));
+			// Allocate resources in the metadata structure so as to store the current IMSS's IP.
+			(my_imss.ips)[i] = (char *)calloc(LINE_LENGTH, sizeof(char));
 			size_t l_size = LINE_LENGTH;
 
-			//Save IMSS metadata deployment.
+			// Save IMSS metadata deployment.
 			n_chars = getline(&((my_imss.ips)[i]), &l_size, svr_nodes);
 
-			//Erase the new line character ('\n') from the string.
+			// Erase the new line character ('') from the string.
 			((my_imss.ips)[i])[n_chars - 1] = '\0';
 		}
 
-		//Close the file.
+		// Close the file.
 		if (fclose(svr_nodes) != 0)
 		{
 			perror("ERRIMSS_DEPLOYFILE_CLOSE");
 			return -1;
 		}
 
-		status = start_client(ucp_worker, stat_add, stat_port + 1, &client_ep); // port, rank,
-		if (status != UCS_OK) {
-			fprintf(stderr, "failed to start client (%s)\n", ucs_status_string(status));
-			return -1;
-		}
-
 		char key_plus_size[REQUEST_SIZE];
 		uint32_t id = CLOSE_EP;
-		//Send the created structure to the metadata server.
-		sprintf(key_plus_size, "%" PRIu32 " SET %lu %s", id,  (sizeof(imss_info)+my_imss.num_storages*LINE_LENGTH), my_imss.uri_);
+		// Send the created structure to the metadata server.
+		sprintf(key_plus_size, "%" PRIu32 " SET %lu %s", id, (sizeof(imss_info) + my_imss.num_storages * LINE_LENGTH), my_imss.uri_);
+
+		status = ucp_ep_create(ucp_worker, &ep_params, &client_ep);
+
+		if (send_stream_addr(ucp_worker, client_ep, req_addr, req_addr_len) < 0)
+		{
+			perror("ERRIMSS_RLSIMSS_SENDADDR");
+			return -1;
+		}
 
 		if (send_stream(ucp_worker, client_ep, key_plus_size, REQUEST_SIZE) < 0) // SNDMORE
 		{
@@ -391,9 +485,10 @@ int32_t main(int32_t argc, char **argv)
 			return -1;
 		}
 
-		DPRINT("[SERVER] Creating IMSS_INFO at metadata server. \n");
-		//Send the new IMSS metadata structure to the metadata server entity.
-		if (send_dynamic_stream(ucp_worker, client_ep, (char *) &my_imss, IMSS_INFO) == -1)
+
+		slog_debug("[SERVER] Creating IMSS_INFO at metadata server. ");
+		// Send the new IMSS metadata structure to the metadata server entity.
+		if (send_dynamic_stream(ucp_worker, client_ep, (char *)&my_imss, IMSS_INFO) == -1)
 			return -1;
 
 		ep_flush(client_ep, ucp_worker);
@@ -402,12 +497,11 @@ int32_t main(int32_t argc, char **argv)
 			free(my_imss.ips[i]);
 		free(my_imss.ips);
 
-		usleep(250);
-		ep_close(ucp_worker, client_ep, UCP_EP_CLOSE_MODE_FLUSH);
+        ucp_ep_close_nb(client_ep, UCP_EP_CLOSE_MODE_FORCE);
 	}
 
-	//Wait for threads to finish.
-	for (int32_t i = 0; i < (THREAD_POOL+1); i++)
+	// Wait for threads to finish.
+	for (int32_t i = 0; i < (THREAD_POOL + 1); i++)
 	{
 		if (pthread_join(threads[i], NULL) != 0)
 		{
@@ -416,16 +510,16 @@ int32_t main(int32_t argc, char **argv)
 		}
 	}
 
-	//Write the metadata structures retrieved by the metadata server threads.
+	// Write the metadata structures retrieved by the metadata server threads.
 	if (args.type == TYPE_METADATA_SERVER)
 	{
 		if (metadata_write(metadata_file, buffer, map.get(), arguments, buffer_segment, bytes_written) == -1)
 
 			return -1;
 
-		//free(imss_uri);
+		// free(imss_uri);
 
-		//Freeing all resources of the tree structure.
+		// Freeing all resources of the tree structure.
 		g_node_traverse(tree_root, G_PRE_ORDER, G_TRAVERSE_ALL, -1, gnodetraverse, NULL);
 
 		if (pthread_mutex_destroy(&tree_mut) != 0)
@@ -437,12 +531,11 @@ int32_t main(int32_t argc, char **argv)
 	else
 		free(region_locks);
 
-	//Close publisher socket.
-	//ep_close(ucp_worker, pub_ep, UCP_EP_CLOSE_MODE_FORCE);
+	// Close publisher socket.
+	// ep_close(ucp_worker, pub_ep, UCP_EP_CLOSE_MODE_FORCE);
 
-	//Free the memory buffer.
+	// Free the memory buffer.
 	free(buffer);
-	//Free the publisher release address.
+	// Free the publisher release address.
 	return 0;
 }
-

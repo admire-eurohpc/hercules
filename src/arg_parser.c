@@ -141,8 +141,8 @@ int parse_args (int argc, char ** argv, struct arguments * args)
     strcpy(args->imss_uri, "imss://");
     args->stat_port = 0;
     args->num_servers = 0;
-    args->block_size = 0;
-    args->storage_size = 0;
+    args->block_size = 64; //In KB
+    args->storage_size = 8; // Un GB
 
     /* Parse arguments; every option seen by parse_opt will be
         reflected in arguments */
