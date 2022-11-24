@@ -1,3 +1,5 @@
+![Screenshot](hercules.png)
+
 # Design summary
 
 The architectural design of IMSS follows a client-server design model where the client itself will be responsible of the server entities deployment. We propose an application-attached deployment constrained to application's nodes and an application-detached considering offshore nodes. 
