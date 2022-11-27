@@ -43,9 +43,9 @@ ucp_ep_h pub_ep;
 void *map_ep;		   // map_ep used for async write; server doesn't use it
 int32_t is_client = 0; // also used for async write
 
-int32_t IMSS_DEBUG = 0;
 int32_t IMSS_DEBUG_FILE = 0;
-int32_t IMSS_DEBUG_SCREEN = 0;
+int32_t IMSS_DEBUG_SCREEN = 1;
+int     IMSS_DEBUG_LEVEL = SLOG_FATAL;
 
 
 #define RAM_STORAGE_USE_PCT 0.75f // percentage of free system RAM to be used for storage
@@ -62,7 +62,6 @@ int32_t main(int32_t argc, char **argv)
 	int64_t buffer_size, stat_port, num_servers;
 	void *socket;
 	ucp_address_t *req_addr;
-	am_data_desc_t *am_data;
 	size_t req_addr_len;
 	ucp_ep_params_t ep_params;
 	ucp_address_t *peer_addr;
@@ -93,9 +92,12 @@ int32_t main(int32_t argc, char **argv)
 	{
 		if (strstr(getenv("IMSS_DEBUG"), "file"))
 			IMSS_DEBUG_FILE = 1;
-		if (strstr(getenv("IMSS_DEBUG"), "screen"))
+		if (strstr(getenv("IMSS_DEBUG"), "stdout"))
             IMSS_DEBUG_SCREEN = 1;
-		IMSS_DEBUG = 1;
+		if (strstr(getenv("IMSS_DEBUG"), "debug"))
+			IMSS_DEBUG_LEVEL = SLOG_DEBUG;
+        if (strstr(getenv("IMSS_DEBUG"), "all")) 
+			IMSS_DEBUG_LEVEL = SLOG_LIVE;
 	}
 
 	// get arguments.
@@ -105,7 +107,7 @@ int32_t main(int32_t argc, char **argv)
 	struct tm tm = *localtime(&t);
 	char log_path[1000];
 	sprintf(log_path, "./%c-server.%02d-%02d-%02d", args.type, tm.tm_hour, tm.tm_min, tm.tm_sec);
-	slog_init(log_path, SLOG_DEBUG, IMSS_DEBUG_FILE, IMSS_DEBUG_SCREEN, 1, 1, 1);
+	slog_init(log_path, IMSS_DEBUG_LEVEL, IMSS_DEBUG_FILE, IMSS_DEBUG_SCREEN, 1, 1, 1);
 	slog_info(",Time(msec), Comment, RetCode");
 
 	slog_debug("[SERVER] Starting server.");
@@ -228,18 +230,13 @@ int32_t main(int32_t argc, char **argv)
 			sprintf(formated_uri, "%" PRIu32 " GET 0 %s", id, imss_uri);
 
 			status = ucp_worker_get_address(ucp_worker, &req_addr, &req_addr_len);
-
-			if (send_stream_addr(ucp_worker, client_ep, req_addr, req_addr_len) < 0)
+			// Send the request.
+			if (send_req(ucp_worker, client_ep, req_addr, req_addr_len, formated_uri) < 0)
 			{
 				perror("ERRIMSS_RLSIMSS_SENDADDR");
 				return -1;
 			}
-			// Send the request.
-			if (send_stream(ucp_worker, client_ep, formated_uri, REQUEST_SIZE) < 0)
-			{
-				perror("ERRIMSS_DATASET_REQ");
-				return -1;
-			}
+			
 
 			imss_info imss_info_;
 
@@ -254,7 +251,7 @@ int32_t main(int32_t argc, char **argv)
 				free(imss_info_.ips);
 			}
 
-            ucp_ep_close_nb(client_ep, UCP_EP_CLOSE_MODE_FORCE);
+            //ucp_ep_close_nb(client_ep, UCP_EP_CLOSE_MODE_FORCE);
 		}
 
 		if (imss_exists)
@@ -352,7 +349,6 @@ int32_t main(int32_t argc, char **argv)
 	ucp_worker_threads = (ucp_worker_h *)malloc((THREAD_POOL + 1) * sizeof(ucp_worker_h));
 	local_addr = (ucp_address_t **)malloc((THREAD_POOL + 1) * sizeof(ucp_address_t *));
 	local_addr_len = (size_t *)malloc((THREAD_POOL + 1) * sizeof(size_t));
-	am_data = (am_data_desc_t *)malloc((THREAD_POOL + 1) * sizeof(am_data_desc_t));
 
 	// Execute all threads.
 	for (int32_t i = 0; i < (THREAD_POOL + 1); i++)
@@ -365,11 +361,7 @@ int32_t main(int32_t argc, char **argv)
 		arguments[i].storage_size = storage_size;
 		arguments[i].ucp_worker = ucp_worker_threads[i];
 		arguments[i].port = args.port;
-		am_data[i].complete = 0;
-		am_data[i].is_rndv = 0;
-		am_data[i].desc = NULL;
-		am_data[i].recv_buf = NULL;
-		arguments[i].am_data = &am_data[i];
+ 
 		// Add the instance URI to the thread arguments.
 		strcpy(arguments[i].my_uri, imss_uri);
 
@@ -471,20 +463,13 @@ int32_t main(int32_t argc, char **argv)
 		// Send the created structure to the metadata server.
 		sprintf(key_plus_size, "%" PRIu32 " SET %lu %s", id, (sizeof(imss_info) + my_imss.num_storages * LINE_LENGTH), my_imss.uri_);
 
-		status = ucp_ep_create(ucp_worker, &ep_params, &client_ep);
+		//status = ucp_ep_create(ucp_worker, &ep_params, &client_ep);
 
-		if (send_stream_addr(ucp_worker, client_ep, req_addr, req_addr_len) < 0)
+		if (send_req(ucp_worker, client_ep, req_addr, req_addr_len, key_plus_size) < 0)
 		{
 			perror("ERRIMSS_RLSIMSS_SENDADDR");
 			return -1;
 		}
-
-		if (send_stream(ucp_worker, client_ep, key_plus_size, REQUEST_SIZE) < 0) // SNDMORE
-		{
-			perror("ERRIMSS_SRV_SENDKEY");
-			return -1;
-		}
-
 
 		slog_debug("[SERVER] Creating IMSS_INFO at metadata server. ");
 		// Send the new IMSS metadata structure to the metadata server entity.
@@ -497,7 +482,7 @@ int32_t main(int32_t argc, char **argv)
 			free(my_imss.ips[i]);
 		free(my_imss.ips);
 
-        ucp_ep_close_nb(client_ep, UCP_EP_CLOSE_MODE_FORCE);
+        //ucp_ep_close_nb(client_ep, UCP_EP_CLOSE_MODE_FORCE);
 	}
 
 	// Wait for threads to finish.

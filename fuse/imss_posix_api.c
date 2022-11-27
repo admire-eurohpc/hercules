@@ -1125,6 +1125,7 @@ int imss_read(const char *path, char *buf, size_t size, off_t offset)
 int imss_write(const char *path, const char *buf, size_t size, off_t off)
 {
 	int ret;
+
 	if (MULTIPLE_WRITE == 2)
 	{
 		ret = imss_split_writev(path, buf, size, off);
@@ -1279,6 +1280,7 @@ int imss_write(const char *path, const char *buf, size_t size, off_t off)
 		pthread_mutex_unlock(&lock);
 	}
 	free(rpath);
+
 	return byte_count;
 }
 
@@ -1751,6 +1753,15 @@ int imss_release(const char *path)
 
 	pthread_mutex_unlock(&lock);
 	free(rpath);
+	return 0;
+}
+
+
+int imss_close(const char *path)
+{
+	imss_release(path);
+	imss_refresh(path);
+
 	return 0;
 }
 

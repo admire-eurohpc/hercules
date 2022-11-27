@@ -249,7 +249,7 @@ void slog(int flag, const char *msg, ...) {
 
 
     /* Check logging levels. */
-    //if (flag > slg.level || flag > slg.file_level){
+    if (flag > slg.level || flag > slg.file_level){
         /* Handle flags. */
         switch (flag)
         {
@@ -302,7 +302,7 @@ void slog(int flag, const char *msg, ...) {
             }
 
         /* Save log in file. */
-        //if (slg.to_file && flag > slg.file_level) {
+        if (slg.to_file && flag > slg.file_level) {
             if (slg.pretty) {
                 if (flag != SLOG_NONE) {
                     sprintf(prints, "[%s] %s", strclr(color, alarm), string);
@@ -319,8 +319,8 @@ void slog(int flag, const char *msg, ...) {
 
             /* Add log line to file. */
             slog_to_file(output, slg.fname, &mdate);
-        //}
-    //}
+        }
+    }
 
     /* Unlock mutex. */
     if (slg.td_safe){

@@ -49,13 +49,13 @@ typedef struct {
 	ucp_ep_h      server_ep;
 	size_t		  blocksize;
 	uint64_t	  storage_size;
-	am_data_desc_t * am_data;
+	ucp_address_t *peer_address;
 } p_argv;
 
 
 //Thread method attending client data requests.
 void * srv_worker (void * th_argv);
-int srv_worker_helper (p_argv *arguments);
+int srv_worker_helper (p_argv *arguments, char * req);
 
 
 
@@ -64,7 +64,7 @@ void * garbage_collector (void * th_argv);
 
 //Thread method attending client metadata requests.
 void * stat_worker (void * th_argv);
-int stat_worker_helper (p_argv *arguments);
+int stat_worker_helper (p_argv *arguments, char * req);
 
 //Dispatcher thread method distributing clients among the pool server threads.
 void * srv_attached_dispatcher (void * th_argv);

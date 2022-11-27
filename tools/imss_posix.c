@@ -49,9 +49,9 @@ uint64_t META_BUFFSIZE = 16;  // In GB
 uint64_t IMSS_BLKSIZE = 1024; // In KB
 uint64_t IMSS_BUFFSIZE = 2;	  // In GB
 int32_t REPL_FACTOR = 1;	  // Default none
-int32_t IMSS_DEBUG = 0;
 int32_t IMSS_DEBUG_FILE = 0;
-int32_t IMSS_DEBUG_SCREEN = 0;
+int32_t IMSS_DEBUG_SCREEN = 1;
+int     IMSS_DEBUG_LEVEL = SLOG_FATAL;
 
 uint16_t PREFETCH = 6;
 
@@ -194,7 +194,7 @@ __attribute__((constructor)) void
 imss_posix_init(void)
 {
 	// if (IMSS_DEBUG)
-	// fprintf(stderr, "IMSS2 client starting\n");
+	// slog_fatal( "IMSS2 client starting\n");
 
 	map_fd = map_fd_create();
 
@@ -209,7 +209,7 @@ imss_posix_init(void)
 		if (hercules_init(0, STORAGE_SIZE, IMSS_SRV_PORT, 1, METADATA_PORT, META_BUFFSIZE, METADATA_FILE) == -1)
 		{
 			// In case of error notify and exit
-			fprintf(stderr, "[IMSS-FUSE]	Hercules init failed, cannot deploy IMSS.\n");
+			slog_fatal( "[IMSS-FUSE]	Hercules init failed, cannot deploy IMSS.\n");
 		}
 	}
 
@@ -224,13 +224,17 @@ imss_posix_init(void)
 	sprintf(hostname, "%s:%d", hostname, getpid());
 
     if (getenv("IMSS_DEBUG") != NULL)
-    {
-        if (strstr(getenv("IMSS_DEBUG"), "file"))
-            IMSS_DEBUG_FILE = 1;
-        if (strstr(getenv("IMSS_DEBUG"), "screen"))
+	{
+		if (strstr(getenv("IMSS_DEBUG"), "file"))
+			IMSS_DEBUG_FILE = 1;
+		if (strstr(getenv("IMSS_DEBUG"), "stdout"))
             IMSS_DEBUG_SCREEN = 1;
-        IMSS_DEBUG = 1;
-    }
+		if (strstr(getenv("IMSS_DEBUG"), "debug"))
+			IMSS_DEBUG_LEVEL = SLOG_DEBUG;
+        if (strstr(getenv("IMSS_DEBUG"), "all")) 
+			IMSS_DEBUG_LEVEL = SLOG_LIVE;
+	}
+
 	rank = MurmurOAAT32(hostname);
 
 	// log init.
@@ -238,7 +242,7 @@ imss_posix_init(void)
 	struct tm tm = *localtime(&t);
 	sprintf(log_path, "./client.%02d-%02d-%02d.%d", tm.tm_hour, tm.tm_min, tm.tm_sec, rank);
 	sprintf(log_path, "./client.%02d-%02d-%02d.%d", tm.tm_hour, tm.tm_min, tm.tm_sec, rank);
-	slog_init(log_path, SLOG_DEBUG, IMSS_DEBUG_FILE, IMSS_DEBUG_SCREEN, 1, 1, 1);
+	slog_init(log_path, IMSS_DEBUG_LEVEL, IMSS_DEBUG_FILE, IMSS_DEBUG_SCREEN, 1, 1, 1);
 	slog_info(",Time(msec), Comment, RetCode");
 
 
@@ -272,7 +276,7 @@ imss_posix_init(void)
 		// Initialize the IMSS servers
 		if (init_imss(IMSS_ROOT, IMSS_HOSTFILE, META_HOSTFILE, N_SERVERS, IMSS_SRV_PORT, IMSS_BUFFSIZE, deployment, "/home/hcristobal/imss/build/server", METADATA_PORT) < 0)
 		{
-			fprintf(stderr, "[IMSS-FUSE]	IMSS init failed, cannot create servers.\n");
+			slog_fatal( "[IMSS-FUSE]	IMSS init failed, cannot create servers.\n");
 		}
 	}
 
@@ -399,8 +403,7 @@ int close(int fd)
 	if (map_fd_search_by_val(map_fd, path, fd) == 1)
 	{
 		slog_debug("[POSIX %d]. Calling 'close'.", rank);
-		imss_release(path);
-		imss_refresh(path);
+		imss_close(path);
 	}
 	else
 	{
@@ -1136,7 +1139,7 @@ struct dirent *readdir(DIR *dirp)
 	{
 		char buf[KB * KB] = {0};
 		char *token;
-		// fprintf(stderr,"CUSTOM IMSS_READDIR\n");
+		// slog_fatal("CUSTOM IMSS_READDIR\n");
 		imss_readdir(path, buf, myfiller, 0);
 		unsigned long pos = telldir(dirp);
 

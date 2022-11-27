@@ -32,7 +32,7 @@ int init_worker(ucp_context_h ucp_context, ucp_worker_h *ucp_worker)
 	memset(&worker_params, 0, sizeof(worker_params));
 
 	worker_params.field_mask = UCP_WORKER_PARAM_FIELD_THREAD_MODE;
-	worker_params.thread_mode = UCS_THREAD_MODE_MULTI  ;
+	worker_params.thread_mode = UCS_THREAD_MODE_SINGLE  ;
 
 	status = ucp_worker_create(ucp_context, &worker_params, ucp_worker);
 	if (status != UCS_OK)
@@ -66,8 +66,7 @@ int init_context(ucp_context_h *ucp_context, ucp_config_t *config, ucp_worker_h 
 							UCP_PARAM_FIELD_REQUEST_SIZE |
 							UCP_PARAM_FIELD_REQUEST_INIT;
 
-	ucp_params.features = UCP_FEATURE_AM |
-	                      UCP_FEATURE_STREAM |
+	ucp_params.features = UCP_FEATURE_TAG |
 						  UCP_FEATURE_WAKEUP;
 	ucp_params.request_size    = sizeof(struct ucx_context);
     ucp_params.request_init    = request_init;
@@ -160,8 +159,8 @@ size_t send_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, const char *msg, size_t
 	// printf("[SEND_STREAM] msg=%s, size=%ld",msg,msg_length);
 	slog_debug("[COMM] Sending stream (%ld bytes).", msg_length);
 	ucp_request_param_t param;
-	test_req_t *request;
-	test_req_t ctx;
+	send_req_t *request;
+	send_req_t ctx;
 
 	ctx.complete = 0;
 	param.op_attr_mask = UCP_OP_ATTR_FIELD_CALLBACK |
@@ -172,7 +171,8 @@ size_t send_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, const char *msg, size_t
 
 	/* Client sends a message to the server using the stream API */
 	param.cb.send = send_cb;
-	request = (test_req_t *)ucp_stream_send_nbx(ep, msg, msg_length, &param);
+	//request = (send_req_t *)ucp_stream_send_nbx(ep, msg, msg_length, &param);
+	request =  (send_req_t *)ucp_stream_send_nbx(ep, msg, msg_length, &param);
 	if (UCS_PTR_IS_ERR(request)) {
 		perror("Error sending to endpoint");
 		slog_debug("[COMM] Error sending to endpoint.");
@@ -180,31 +180,68 @@ size_t send_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, const char *msg, size_t
 	}
 
 	size_t length = 0;
-	request_finalize(ucp_worker, (test_req_t *)request, &ctx);
+	request_finalize(ucp_worker, (send_req_t *)request, &ctx);
 	// ucp_stream_recv_request_test(request, &length);
+
 	return msg_length;
 }
 
 
 
 
-size_t send_stream_addr(ucp_worker_h ucp_worker, ucp_ep_h ep, ucp_address_t *addr, size_t addr_len)
+size_t send_data(ucp_worker_h ucp_worker, ucp_ep_h ep, const char *msg, size_t msg_len) {
+	ucs_status_t status;
+	struct ucx_context *request;
+	ucp_request_param_t send_param;
+	send_req_t ctx;
+
+
+    ctx.buffer = (char *)malloc(msg_len);
+    ctx.complete = 0;
+	memcpy (ctx.buffer, msg, msg_len);
+
+	send_param.op_attr_mask = UCP_OP_ATTR_FIELD_CALLBACK |
+                              UCP_OP_ATTR_FIELD_USER_DATA;
+    send_param.cb.send      = send_handler;
+    send_param.user_data    = &ctx;
+
+
+	request = (struct ucx_context *) ucp_tag_send_nbx(ep, ctx.buffer, msg_len, tag_data, &send_param);
+    if  (UCS_PTR_IS_ERR(request)) {
+        slog_fatal("[COMM] Error sending to endpoint.");
+        return -1;
+    }
+	if  (UCS_PTR_IS_ERR(request)) {
+		free(ctx.buffer);
+        slog_fatal("[COMM] Error sending to endpoint.");
+        return 0;
+    }
+
+// t = clock();
+   // status                  = ucx_wait(ucp_worker, request, "send",   addr_msg_str);
+
+	return msg_len;	
+}
+
+size_t send_req(ucp_worker_h ucp_worker, ucp_ep_h ep, ucp_address_t *addr, size_t addr_len, char * req)
 {
 	ucs_status_t status;
 	struct ucx_context *request;
     size_t msg_len;
 	ucp_request_param_t send_param;
-	test_req_t ctx;
+	send_req_t ctx;
 
-	msg_addr_t * msg;
+	msg_req_t * msg;
 
-	msg_len = 512;
-	msg = (msg_addr_t *) malloc(msg_len);
+	msg_len = sizeof(uint64_t) + REQUEST_SIZE + addr_len;
+	msg = (msg_req_t *) malloc(msg_len);
 
-	msg->data_len = addr_len;
+	msg->addr_len = addr_len;
+	memcpy(msg->request, req, REQUEST_SIZE);
 	memcpy(msg + 1, addr, addr_len);
 
     ctx.complete = 0;
+	ctx.buffer = (char*) msg;
 
 	send_param.op_attr_mask = UCP_OP_ATTR_FIELD_CALLBACK |
                                UCP_OP_ATTR_FIELD_DATATYPE |
@@ -215,17 +252,16 @@ size_t send_stream_addr(ucp_worker_h ucp_worker, ucp_ep_h ep, ucp_address_t *add
 	send_param.cb.send = (ucp_send_nbx_callback_t)send_cb;
 	send_param.user_data = &ctx;
 
-	request = (struct ucx_context *) ucp_am_send_nbx(ep, AM_ID, NULL, 0ul,  msg, msg_len, &send_param);
+	request = (struct ucx_context *) ucp_tag_send_nbx(ep, ctx.buffer, msg_len, tag_req, &send_param);
     if  (UCS_PTR_IS_ERR(request)) {
-		free(msg);
-        perror("Error sending to endpoint");
-        slog_debug("[COMM] Error sending to endpoint.");
-        return -1;
+		free(ctx.buffer);
+        slog_fatal("[COMM] Error sending to endpoint.");
+        return 0;
     }
-
-    request_finalize(ucp_worker, (test_req_t *)request, &ctx);
-	free(msg);
-	return addr_len;
+	//ucx_wait(ucp_worker, request, "send", data_msg_str);
+    request_finalize(ucp_worker, (send_req_t *)request, &ctx);
+	
+	return msg_len;
 }
 
 
@@ -251,7 +287,7 @@ size_t send_istream(ucp_worker_h ucp_worker, ucp_ep_h ep, const char *msg, size_
 	memcpy(pending->tmp_msg, msg, msg_length);
 	/* Client sends a message to the server using the stream API */
 	param.cb.send = isend_cb;
-	pending->request = (test_req_t *)ucp_stream_send_nbx(ep, pending->tmp_msg, msg_length, &param);
+	pending->request = (send_req_t *)ucp_stream_send_nbx(ep, pending->tmp_msg, msg_length, &param);
 
 	/* find this ep's queue in the map_ep */
 	/*pthread_mutex_lock(&map_ep_mutex);
@@ -273,8 +309,8 @@ size_t recv_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, char *msg, size_t msg_l
 	slog_debug("[COMM] Recv stream (%ld bytes).", msg_length);
 
 	ucp_request_param_t param;
-	test_req_t *request;
-	test_req_t ctx;
+	send_req_t *request;
+	send_req_t ctx;
 
 	ctx.complete = 0;
 	param.op_attr_mask = UCP_OP_ATTR_FIELD_CALLBACK |
@@ -286,13 +322,81 @@ size_t recv_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, char *msg, size_t msg_l
 	param.op_attr_mask |= UCP_OP_ATTR_FIELD_FLAGS;
 	param.flags = UCP_STREAM_RECV_FLAG_WAITALL;
 	param.cb.recv_stream = stream_recv_cb;
-	request = (test_req_t *)ucp_stream_recv_nbx(ep, msg, msg_length, &msg_length, &param);
+	request = (send_req_t *)ucp_stream_recv_nbx(ep, msg, msg_length, &msg_length, &param);
 
 	return request_finalize(ucp_worker, request, &ctx);
-	// printf("[RECV_STREAM] msg=%s, size=%ld",msg,msg_length);
-	//  size_t length = 0;
-	// ucp_stream_recv_request_test(&request, &length);
-	//  return msg_length;
+
+}
+
+size_t recv_data(ucp_worker_h ucp_worker, ucp_ep_h ep, char *msg)
+{
+	ucp_tag_recv_info_t info_tag;
+    ucp_tag_message_h msg_tag;
+	ucp_request_param_t recv_param;
+	struct ucx_context *request;
+	ucs_status_t status;
+
+	do {
+        /* Progressing before probe to update the state */
+        ucp_worker_progress(ucp_worker);
+
+        /* Probing incoming events in non-block mode */
+        msg_tag = ucp_tag_probe_nb(ucp_worker, tag_data, tag_mask, 0, &info_tag);
+    } while (msg_tag == NULL);
+
+    recv_param.op_attr_mask = UCP_OP_ATTR_FIELD_DATATYPE |
+                                     UCP_OP_ATTR_FIELD_CALLBACK |
+                                     UCP_OP_ATTR_FIELD_USER_DATA;
+                            
+    recv_param.datatype     = ucp_dt_make_contig(1);
+    recv_param.cb.recv      = recv_handler;
+
+    request = (struct ucx_context *)ucp_tag_recv_nbx(ucp_worker, msg, info_tag.length, tag_data, tag_mask , &recv_param);
+	slog_debug("[COMM] Recv stream (%ld bytes).", info_tag.length);
+
+    return info_tag.length;
+}
+
+size_t recv_req(ucp_worker_h ucp_worker, ucp_ep_h ep, char *msg)
+{
+	ucp_tag_recv_info_t info_tag;
+    ucp_tag_message_h msg_tag;
+	ucp_request_param_t recv_param;
+	struct ucx_context *request;
+	ucs_status_t status;
+
+    double time_taken;
+
+ clock_t t;
+	
+	 t = clock();
+	do {
+        /* Progressing before probe to update the state */
+        ucp_worker_progress(ucp_worker);
+
+        /* Probing incoming events in non-block mode */
+        msg_tag = ucp_tag_probe_nb(ucp_worker, tag_req, tag_mask, 0, &info_tag);
+    } while (msg_tag == NULL);
+
+    recv_param.op_attr_mask = UCP_OP_ATTR_FIELD_DATATYPE |
+                                     UCP_OP_ATTR_FIELD_CALLBACK |
+                                     UCP_OP_ATTR_FIELD_USER_DATA;
+                            
+    recv_param.datatype     = ucp_dt_make_contig(1);
+    recv_param.cb.recv      = recv_handler;
+
+    request = (struct ucx_context *)ucp_tag_recv_nbx(ucp_worker, msg, info_tag.length, tag_req, tag_mask , &recv_param);
+	slog_debug("[COMM] Recv stream (%ld bytes).", info_tag.length);
+   /* status  = ucx_wait(ucp_worker, request, "receive", addr_msg_str);
+    if (status != UCS_OK) {
+        free(msg);
+        slog_fatal("[COMM] Error sending to endpoint.");
+		return 0;
+    }*/
+   time_taken = ((double)clock() - (double)t) / (CLOCKS_PER_SEC);
+        fprintf(stderr, "SPEED RECV %f \n",  ((double)info_tag.length / (1024 *1204))   /   time_taken);
+
+    return info_tag.length;
 }
 
 void set_sock_addr(const char *address_str, struct sockaddr_storage *saddr, int server_port)
@@ -345,7 +449,7 @@ void set_sock_addr(const char *address_str, struct sockaddr_storage *saddr, int 
 /**
  * Progress the request until it completes.
  */
-ucs_status_t request_wait(ucp_worker_h ucp_worker, void *request, test_req_t *ctx)
+ucs_status_t request_wait(ucp_worker_h ucp_worker, void *request, send_req_t *ctx)
 {
 	ucs_status_t status;
 
@@ -400,18 +504,20 @@ void am_recv_cb(void *request, ucs_status_t status, size_t length,
 void send_handler(void *request, ucs_status_t status, void *ctx)
 {
 	struct ucx_context *context = (struct ucx_context *)request;
-	const char *str = (const char *)ctx;
 	context->completed = 1;
+	ucp_request_free(request);
 }
 
 
 
-void recv_handler(void *request, ucs_status_t status, ucp_tag_recv_info_t *info)
+ void recv_handler(void *request, ucs_status_t status,
+                         const ucp_tag_recv_info_t *info, void *user_data)
 {
-	struct ucx_context *context = (struct ucx_context *)request;
-	context->completed = 1;
-}
+    struct ucx_context *context = (struct ucx_context *)request;
+    context->completed = 1;
+	ucp_request_free(request);
 
+}
 /**
  * The callback on the sending side, which is invoked after finishing sending
  * the message.
@@ -449,7 +555,7 @@ void err_cb_server(void *arg, ucp_ep_h ep, ucs_status_t status)
 
 void common_cb(void *user_data, const char *type_str)
 {
-	test_req_t *ctx;
+	send_req_t *ctx;
 
 	if (user_data == NULL)
 	{
@@ -457,61 +563,19 @@ void common_cb(void *user_data, const char *type_str)
 		return;
 	}
 
-	ctx = (test_req *)user_data;
+	ctx = (send_req_t *)user_data;
 	ctx->complete = 1;
+	if (ctx->buffer)
+		free(ctx->buffer);
 }
 
-ucs_status_t ucp_am_data_cb(void *arg, const void *header, size_t header_length, void *data, size_t length, const ucp_am_recv_param_t *param)
-{
-    ucp_dt_iov_t *iov;
-    size_t idx;
-    size_t offset;
-
-    am_data_desc_t * am_data = (am_data_desc_t *)arg;
-
- /*   if (length != iov_cnt * test_string_length) {
-        fprintf(stderr, "received wrong data length %ld (expected %ld)",
-                length, iov_cnt * test_string_length);
-        return UCS_OK;
-    }
-
-*/	
-/*
-    if (header_length != 0) {
-        fprintf(stderr, "received unexpected header, length %ld", header_length);
-    }
-*/
-    am_data->complete = 1;
-    if (param->recv_attr & UCP_AM_RECV_ATTR_FLAG_RNDV) {
-        /* Rendezvous request arrived, data contains an internal UCX descriptor,
-         * which has to be passed to ucp_am_recv_data_nbx function to confirm
-         * data transfer.
-         */
-        am_data->is_rndv = 1;
-        am_data->desc    = data;
-        return UCS_INPROGRESS;
-    }
-    /* Message delivered with eager protocol, data should be available
-     * immediately
-     */
-    am_data->is_rndv = 0;
-
-    iov = (ucp_dt_iov_t *)am_data->recv_buf;
-	offset = 0;
-    for (idx = 0; idx < 1; idx++) {
-        memcpy(iov[idx].buffer, UCS_PTR_BYTE_OFFSET(data, offset),iov[idx].length);
-        offset += iov[idx].length;
-    }
-
-    return UCS_OK;
-}
 
 
 void flush_cb(void *request, ucs_status_t status) {
 
 }
 
-int request_finalize(ucp_worker_h ucp_worker, test_req_t *request, test_req_t *ctx)
+int request_finalize(ucp_worker_h ucp_worker, send_req_t *request, send_req_t *ctx)
 {
 	int ret = 0;
 	ucs_status_t status;
@@ -785,14 +849,7 @@ int32_t send_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep,
 			}
 	}
 
-	// Send the buffer.
-	if (send_stream(ucp_worker, ep, (char *)&msg_size, sizeof(size_t)) < 0)
-	{
-		perror("ERRIMSS_SENDDYNAMSTRUCT");
-		return -1;
-	}
-
-	if (send_stream(ucp_worker, ep, info_buffer, msg_size) < 0)
+	if (send_data(ucp_worker, ep, info_buffer, msg_size) < 0)
 	{
 		perror("ERRIMSS_SENDDYNAMSTRUCT");
 		return -1;
@@ -811,13 +868,9 @@ int32_t recv_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep,
 	char result[BUFFER_SIZE];
 
 	slog_debug("[COMM] recv_dynamic_stream start ");
-	if (recv_stream(ucp_worker, ep, (char *)&length, sizeof(size_t)) < 0)
-	{
-		perror("ERRIMSS_RECVDYNAMSTRUCT_RECV");
-		return -1;
-	}
+	length = recv_data(ucp_worker, ep, result);
 
-	if (recv_stream(ucp_worker, ep, result, length) < 0)
+	if ( length == 0)
 	{
 		perror("ERRIMSS_RECVDYNAMSTRUCT_RECV");
 		return -1;

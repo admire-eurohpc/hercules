@@ -52,4 +52,6 @@ int imss_chmod(const char *path, mode_t mode);
 int imss_chown(const char *path, uid_t uid, gid_t gid);
 int imss_rename(const char *old_path, const char *new_path);
 
+int imss_close(const char *path);
+
 #endif
