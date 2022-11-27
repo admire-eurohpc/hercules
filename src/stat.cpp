@@ -8,6 +8,7 @@
 #include "imss.h"
 #include "directory.h"
 
+extern int  IMSS_THREAD_POOL;
 
 //Method retrieving the set of dataset metadata structures stored in a metadata file.
 char *
@@ -151,7 +152,7 @@ metadata_write(char * 		metadata_file,
 	fseek(meta_file, OFFSET, SEEK_SET);
 
 	//Write the metadata chunck stored by each metadata server thread.
-	for (uint32_t i = 0; i < THREAD_POOL; i++)
+	for (uint32_t i = 0; i < IMSS_THREAD_POOL; i++)
 	{
 		//Write the metadata info written into the buffer through a previous invocation of the metadata_read function.
 		if (!i)

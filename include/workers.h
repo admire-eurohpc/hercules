@@ -20,9 +20,6 @@
 #define SPLIT_READV 	  9
 #define SPLIT_WRITEV	 10
 
-
-#define THREAD_POOL		1
-
 #define GET_OP 0
 #define SET_OP 1
 
@@ -30,6 +27,9 @@
 
 #define KB			1024
 #define GB 			1073741824
+
+
+#define MAX_THREAD_POOL_SIZE 16
 
 
 //Set of arguments passed to each server thread.

@@ -47,6 +47,7 @@ int32_t IMSS_DEBUG_FILE = 0;
 int32_t IMSS_DEBUG_SCREEN = 1;
 int     IMSS_DEBUG_LEVEL = SLOG_FATAL;
 
+int 	IMSS_THREAD_POOL = 1;
 
 #define RAM_STORAGE_USE_PCT 0.75f // percentage of free system RAM to be used for storage
 
@@ -99,6 +100,12 @@ int32_t main(int32_t argc, char **argv)
         if (strstr(getenv("IMSS_DEBUG"), "all")) 
 			IMSS_DEBUG_LEVEL = SLOG_LIVE;
 	}
+
+	if (getenv("IMSS_THREAD_POOL") != NULL)
+	{
+		IMSS_THREAD_POOL = atoi(getenv("IMSS_THREAD_POOL"));
+	}
+	
 
 	// get arguments.
 	parse_args(argc, argv, &args);
@@ -336,22 +343,22 @@ int32_t main(int32_t argc, char **argv)
 	}
 
 	// Buffer segment size assigned to each thread.
-	buffer_segment = data_reserved / THREAD_POOL;
+	buffer_segment = data_reserved / IMSS_THREAD_POOL;
 
 	// Initialize pool of threads.
-	pthread_t threads[(THREAD_POOL + 1)];
+	pthread_t threads[(IMSS_THREAD_POOL + 1)];
 	// Thread arguments.
-	p_argv arguments[(THREAD_POOL + 1)];
+	p_argv arguments[(IMSS_THREAD_POOL + 1)];
 
 	if (args.type == TYPE_DATA_SERVER)
-		region_locks = (pthread_mutex_t *)calloc(THREAD_POOL, sizeof(pthread_mutex_t));
+		region_locks = (pthread_mutex_t *)calloc(IMSS_THREAD_POOL, sizeof(pthread_mutex_t));
 
-	ucp_worker_threads = (ucp_worker_h *)malloc((THREAD_POOL + 1) * sizeof(ucp_worker_h));
-	local_addr = (ucp_address_t **)malloc((THREAD_POOL + 1) * sizeof(ucp_address_t *));
-	local_addr_len = (size_t *)malloc((THREAD_POOL + 1) * sizeof(size_t));
+	ucp_worker_threads = (ucp_worker_h *)malloc((IMSS_THREAD_POOL + 1) * sizeof(ucp_worker_h));
+	local_addr = (ucp_address_t **)malloc((IMSS_THREAD_POOL + 1) * sizeof(ucp_address_t *));
+	local_addr_len = (size_t *)malloc((IMSS_THREAD_POOL + 1) * sizeof(size_t));
 
 	// Execute all threads.
-	for (int32_t i = 0; i < (THREAD_POOL + 1); i++)
+	for (int32_t i = 0; i < (IMSS_THREAD_POOL + 1); i++)
 	{
 		ret = init_worker(ucp_context, &ucp_worker_threads[i]);
 
@@ -486,7 +493,7 @@ int32_t main(int32_t argc, char **argv)
 	}
 
 	// Wait for threads to finish.
-	for (int32_t i = 0; i < (THREAD_POOL + 1); i++)
+	for (int32_t i = 0; i < (IMSS_THREAD_POOL + 1); i++)
 	{
 		if (pthread_join(threads[i], NULL) != 0)
 		{

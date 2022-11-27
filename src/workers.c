@@ -57,8 +57,9 @@ ucp_worker_h *ucp_worker_threads;
 ucp_address_t **local_addr;
 size_t *local_addr_len;
 
-#define GARBAGE_COLLECTOR_PERIOD 120
+extern int 	IMSS_THREAD_POOL;
 
+#define GARBAGE_COLLECTOR_PERIOD 120
 
 // Thread method attending client read-write data requests.
 void *srv_worker(void *th_argv)
@@ -1344,7 +1345,7 @@ void *srv_attached_dispatcher(void *th_argv)
 			char response_[RESPONSE_SIZE];
 			memset(response_, '\0', RESPONSE_SIZE);
 			// Port that the new client will be forwarded to.
-			int32_t port_ = arguments->port + 1 + (client_id_ % THREAD_POOL);
+			int32_t port_ = arguments->port + 1 + (client_id_ % IMSS_THREAD_POOL);
 			// Wrap the previous info into the ZMQ message.
 			sprintf(response_, "%d%c%d", port_, '-', client_id_++);
 
@@ -1443,8 +1444,8 @@ void *dispatcher(void *th_argv)
 				// Check if the client is requesting connection resources.
 				if (!strncmp(req_content, "HELLO!", 6))
 				{
-					ret = send(sockfd, &local_addr_len[(client % THREAD_POOL) + 1], sizeof(local_addr_len[(client % THREAD_POOL) + 1]), 0);
-					ret = send(sockfd, local_addr[(client % THREAD_POOL) + 1], local_addr_len[(client % THREAD_POOL) + 1], 0);
+					ret = send(sockfd, &local_addr_len[(client % IMSS_THREAD_POOL) + 1], sizeof(local_addr_len[(client % IMSS_THREAD_POOL) + 1]), 0);
+					ret = send(sockfd, local_addr[(client % IMSS_THREAD_POOL) + 1], local_addr_len[(client % IMSS_THREAD_POOL) + 1], 0);
 					client++;
 					slog_debug("[DISPATCHER] Replied client.");
 				}
@@ -1461,7 +1462,7 @@ void *dispatcher(void *th_argv)
 					slog_debug("[DISPATCHER] Replied client %s.", arguments->my_uri);
 				}
 
-				// MIRAR ucp_worker_release_address(ucp_worker_threads[client_id_ % THREAD_POOL], local_addr);
+				// MIRAR ucp_worker_release_address(ucp_worker_threads[client_id_ % IMSS_THREAD_POOL], local_addr);
 				close(sockfd);
 			}
 		}
