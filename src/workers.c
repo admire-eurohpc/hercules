@@ -60,32 +60,9 @@ size_t *local_addr_len;
 #define GARBAGE_COLLECTOR_PERIOD 120
 
 
-void buffer_free(ucp_dt_iov_t *iov)
-{
-    size_t idx;
-    for (idx = 0; idx < iov_cnt; idx++) {
-        free(iov[idx].buffer);
-    }
-}
-
-int buffer_malloc(ucp_dt_iov_t *iov)
-{
-    size_t idx;
-    for (idx = 0; idx < iov_cnt; idx++) {
-        iov[idx].length = 512;
-        iov[idx].buffer = malloc(iov[idx].length);
-        if (iov[idx].buffer == NULL) {
-            buffer_free(iov);
-            return -1;
-        }
-    }
-    return 0;
-}
-
 // Thread method attending client read-write data requests.
 void *srv_worker(void *th_argv)
 {
-ucp_dt_iov_t *iov = (ucp_dt_iov_t *)malloc(iov_cnt * sizeof(ucp_dt_iov_t));
 	ucp_ep_params_t ep_params;
 
     ucp_am_handler_param_t param;
@@ -146,9 +123,6 @@ ucp_dt_iov_t *iov = (ucp_dt_iov_t *)malloc(iov_cnt * sizeof(ucp_dt_iov_t));
 		req = msg->request;
 
 		memcpy(peer_addr, msg + 1, peer_addr_len);
-
-	
-		buffer_free(iov);
 
 		//TODO
 		// look for this peer_addr in the map and get the ep
@@ -781,10 +755,10 @@ int srv_worker_helper(p_argv *arguments, char * req)
 			// if the block was not already stored:
 			if (ret == 0)
 			{
-				// char *buffer = (char *)StsQueue.pop(mem_pool);
+				 char *buffer = (char *)StsQueue.pop(mem_pool);
 				//  Receive the block into the buffer.
 				// if (buffer == NULL)
-				char *buffer = (char *)malloc(block_size_recv);
+				//char *buffer = (char *)malloc(block_size_recv);
 				TIMING(recv_data(arguments->ucp_worker, arguments->server_ep, buffer), "[srv_worker_thread][WRITE_OP] recv_data: Receive the block into the buffer.");
 				struct stat *stats = (struct stat *)buffer;
 				int32_t insert_successful;
