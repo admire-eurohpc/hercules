@@ -225,7 +225,7 @@ int32_t main(int32_t argc, char **argv)
 								   UCP_EP_PARAM_FIELD_ERR_HANDLER |
 								   UCP_EP_PARAM_FIELD_USER_DATA;
 			ep_params.address = peer_addr;
-			ep_params.err_mode = UCP_ERR_HANDLING_MODE_NONE;
+			ep_params.err_mode = UCP_ERR_HANDLING_MODE_PEER;
 			ep_params.err_handler.cb = err_cb_client;
 			ep_params.err_handler.arg = NULL;
 			ep_params.user_data = &ep_status;
@@ -258,7 +258,6 @@ int32_t main(int32_t argc, char **argv)
 				free(imss_info_.ips);
 			}
 
-            //ucp_ep_close_nb(client_ep, UCP_EP_CLOSE_MODE_FORCE);
 		}
 
 		if (imss_exists)
@@ -482,8 +481,6 @@ int32_t main(int32_t argc, char **argv)
 		// Send the new IMSS metadata structure to the metadata server entity.
 		if (send_dynamic_stream(ucp_worker, client_ep, (char *)&my_imss, IMSS_INFO) == -1)
 			return -1;
-
-		ep_flush(client_ep, ucp_worker);
 
 		for (int32_t i = 0; i < num_servers; i++)
 			free(my_imss.ips[i]);

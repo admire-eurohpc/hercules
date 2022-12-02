@@ -49,7 +49,8 @@ typedef struct {
 	ucp_ep_h      server_ep;
 	size_t		  blocksize;
 	uint64_t	  storage_size;
-	ucp_address_t *peer_address;
+	ucp_address_t * peer_address;
+	uint64_t worker_uid;
 } p_argv;
 
 

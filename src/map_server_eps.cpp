@@ -15,28 +15,28 @@ void* map_server_eps_create() {
 }
 
 
-void map_server_eps_put(void * map, ucp_address_t *peer_address, ucp_ep_h ep) {
+void map_server_eps_put(void * map, uint64_t uuid, ucp_ep_h ep) {
 	map_server_eps_t * m = reinterpret_cast<map_server_eps_t*> (map);
-	m->insert(std::pair<ucp_address_t*, ucp_ep_h>(peer_address,ep));
+	m->insert(std::pair<uint64_t, ucp_ep_h>(uuid,ep));
 }
 
 
-void map_server_eps_erase(void* map, ucp_address_t *peer_address) {
+void map_server_eps_erase(void* map, uint64_t uuid) {
 	map_server_eps_t * m = reinterpret_cast<map_server_eps_t*> (map);
-	auto search = m->find(peer_address);
+	auto search = m->find(uuid);
 
 	//TODO
 	// close ep if found
 	if (search != m->end()) {
 		ucp_ep_close_nb(search->second, UCP_EP_CLOSE_MODE_FORCE);
 	} 
-	m->erase(peer_address);
+	m->erase(uuid);
 }
 
 
-int map_server_eps_search(void * map, ucp_address_t *peer_address, ucp_ep_h *ep) {
+int map_server_eps_search(void * map, uint64_t uuid, ucp_ep_h *ep) {
 	map_server_eps_t * m = reinterpret_cast<map_server_eps_t*> (map);
-	auto search = m->find(peer_address);
+	auto search = m->find(uuid);
 
 	if (search != m->end()) {
 		*ep = (search->second);
@@ -45,3 +45,4 @@ int map_server_eps_search(void * map, ucp_address_t *peer_address, ucp_ep_h *ep)
 		return -1;
 	}
 }
+
