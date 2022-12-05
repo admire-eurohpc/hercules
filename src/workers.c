@@ -97,18 +97,17 @@ void *srv_worker(void *th_argv)
 		ucp_request_param_t  recv_param;
 
 
+                        clock_t t;
+        double time_taken;
+                t = clock();
 
-		//while (!am_data->complete) {
-		//    if (ucp_worker_progress(arguments->ucp_worker) == 0) {
-		//        ucp_worker_wait(arguments->ucp_worker);
-		//    }
-		//}
-		do {
-			/* Progressing before probe to update the state */
-			ucp_worker_progress(arguments->ucp_worker);
-			/* Probing incoming events in non-block mode */
-			msg_tag = ucp_tag_probe_nb(arguments->ucp_worker, tag_req, tag_mask, 1, &info_tag);
-		} while (msg_tag == NULL);
+ 
+do {
+                                /* Progressing before probe to update the state */
+                                ucp_worker_progress(arguments->ucp_worker);
+                                /* Probing incoming events in non-block mode */
+                                msg_tag = ucp_tag_probe_nb(arguments->ucp_worker, tag_req, tag_mask, 1, &info_tag);
+                        } while (msg_tag == NULL);
 
 		msg = (msg_req_t *) malloc(info_tag.length);
 
@@ -120,13 +119,14 @@ void *srv_worker(void *th_argv)
 
 		request = (struct ucx_context *) ucp_tag_msg_recv_nbx(arguments->ucp_worker, msg, info_tag.length, msg_tag, &recv_param);
 
+		status  = ucx_wait(arguments->ucp_worker, request, "receive", "srv_worker");
 
 		peer_addr_len = msg->addr_len;
 		peer_addr = (ucp_address *)malloc(peer_addr_len);
 		req = msg->request;
 
 		memcpy(peer_addr, msg + 1, peer_addr_len);
-		
+
 		ucp_worker_address_attr_t attr;
 		attr.field_mask = UCP_WORKER_ADDRESS_ATTR_FIELD_UID;
 		ucp_worker_address_query(peer_addr, &attr);
@@ -150,6 +150,11 @@ void *srv_worker(void *th_argv)
 		arguments->worker_uid = attr.worker_uid;
 
 		srv_worker_helper(arguments, req);
+		t = clock() - t;
+
+		time_taken = ((double)t) / CLOCKS_PER_SEC; // in seconds
+		slog_info("[srv_worker_helper] Serving time %f s", time_taken);
+
 
 		free(peer_addr);
 	}
@@ -446,7 +451,7 @@ int srv_worker_helper(p_argv *arguments, char * req)
 
 								char *msg = (char *)calloc(msg_size, sizeof(char));
 
-								TIMING(ret = recv_data(arguments->ucp_worker, arguments->server_ep, msg), "[srv_worker_thread][READ_OP][SPLIT_READV] recv_data");
+								TIMING(ret = recv_data(arguments->ucp_worker, arguments->server_ep, msg, 0), "[srv_worker_thread][READ_OP][SPLIT_READV] recv_data");
 
 								// Send the requested block.
 								if (ret < 0)
@@ -572,7 +577,7 @@ int srv_worker_helper(p_argv *arguments, char * req)
 					char *buf = (char *)malloc(size);
 
 					// Receive all blocks into the buffer.
-					recv_data(arguments->ucp_worker, arguments->server_ep, buf);
+					recv_data(arguments->ucp_worker, arguments->server_ep, buf, 0);
 
 					// printf("WRITEV-buffer=%s",buf);
 					int pos = path.find('$');
@@ -707,7 +712,7 @@ int srv_worker_helper(p_argv *arguments, char * req)
 					// Receive all blocks into the buffer.
 					char *buf = (char *)malloc(size);
 					// int size_recv = -1;
-					TIMING(ret = recv_data(arguments->ucp_worker, arguments->server_ep, buf), ("[srv_worker_thread][WRITE_OP] buf: %s", buf));
+					TIMING(ret = recv_data(arguments->ucp_worker, arguments->server_ep, buf, 0), ("[srv_worker_thread][WRITE_OP] buf: %s", buf));
 					if (ret < 0)
 					{
 						perror("ERRIMSS_WRITE_OP_BUF");
@@ -768,7 +773,7 @@ int srv_worker_helper(p_argv *arguments, char * req)
 						//  Receive the block into the buffer.
 						// if (buffer == NULL)
 						//char *buffer = (char *)malloc(block_size_recv);
-						TIMING(recv_data(arguments->ucp_worker, arguments->server_ep, buffer), "[srv_worker_thread][WRITE_OP] recv_data: Receive the block into the buffer.");
+						TIMING(recv_data(arguments->ucp_worker, arguments->server_ep, buffer, 1), "[srv_worker_thread][WRITE_OP] recv_data: Receive the block into the buffer.");
 						struct stat *stats = (struct stat *)buffer;
 						int32_t insert_successful;
 
@@ -795,7 +800,7 @@ int srv_worker_helper(p_argv *arguments, char * req)
 							slog_debug("[srv_worker_thread][WRITE_OP] Updating block $0");
 							struct stat *old, *latest;
 							char *buffer = (char *)malloc(block_size_rtvd);
-							TIMING(recv_data(arguments->ucp_worker, arguments->server_ep, buffer), "[srv_worker_thread][WRITE_OP] recv_data Updating block $0");
+							TIMING(recv_data(arguments->ucp_worker, arguments->server_ep, buffer, 0), "[srv_worker_thread][WRITE_OP] recv_data Updating block $0");
 							old = (struct stat *)address_;
 							latest = (struct stat *)buffer;
 							slog_debug("[srv_worker_thread] File size new %ld old %ld", latest->st_size, old->st_size);
@@ -807,7 +812,7 @@ int srv_worker_helper(p_argv *arguments, char * req)
 						}
 						else
 						{
-							TIMING(recv_data(arguments->ucp_worker, arguments->server_ep, address_), ("[srv_worker_thread][WRITE_OP] recv_data Updated non 0 existing block"));
+							TIMING(recv_data(arguments->ucp_worker, arguments->server_ep, address_, 1), ("[srv_worker_thread][WRITE_OP] recv_data Updated non 0 existing block"));
 							slog_debug("[srv_worker_thread][WRITE_OP] non 0 key.c_str(): %s", key.c_str());
 							// slog_debug("address_=%x", address_);
 						}
@@ -895,6 +900,9 @@ int srv_worker_helper(p_argv *arguments, char * req)
 			recv_param.cb.recv      = recv_handler;
 
 			request = (struct ucx_context *) ucp_tag_msg_recv_nbx(arguments->ucp_worker, msg, info_tag.length, msg_tag, &recv_param);
+
+
+			status  = ucx_wait(arguments->ucp_worker, request, "receive", "stat_worker");
 
 			peer_addr_len = msg->addr_len;
 			peer_addr = (ucp_address *)malloc(peer_addr_len);
@@ -1212,7 +1220,7 @@ int srv_worker_helper(p_argv *arguments, char * req)
 							case LOCAL_DATASET_UPDATE:
 								{
 									char data_ref[REQUEST_SIZE];
-									if (recv_data(arguments->ucp_worker, arguments->server_ep, data_ref) < 0)
+									if (recv_data(arguments->ucp_worker, arguments->server_ep, data_ref, 0) < 0)
 									{
 										return -1;
 									}
@@ -1296,12 +1304,12 @@ int srv_worker_helper(p_argv *arguments, char * req)
 
 		/* Initialize the server's context. */
 		context.conn_request = StsQueue.create();
-		status = start_server(arguments->ucp_worker, &context, &context.listener, NULL, arguments->port);
-		if (status != UCS_OK)
-		{
-			perror("ERRIMSS_STAR_SERVER");
-			pthread_exit(NULL);
-		}
+		//status = start_server(arguments->ucp_worker, &context, &context.listener, NULL, arguments->port);
+		//if (status != UCS_OK)
+		//{
+		//	perror("ERRIMSS_STAR_SERVER");
+		//	pthread_exit(NULL);
+		//}
 
 		for (;;)
 		{
@@ -1326,7 +1334,7 @@ int srv_worker_helper(p_argv *arguments, char * req)
 
 			// Save the identity of the requesting client.
 			char mode[MODE_SIZE];
-			recv_data(ucp_data_worker, server_ep, req);
+			recv_data(ucp_data_worker, server_ep, req, 0);
 
 			sscanf(req, "%" PRIu32 " %s", &client_id_, mode);
 			char *req_content = strstr(req, mode);

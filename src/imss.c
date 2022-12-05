@@ -463,7 +463,7 @@ uint32_t get_dir(char *requested_uri, char **buffer, char ***items)
 
 	size_t uris_size = 0;
 	char msg[REQUEST_SIZE];
-	if (recv_data(ucp_worker_meta, ep, msg) < 0)
+	if (recv_data(ucp_worker_meta, ep, msg, 0) < 0)
 	{
 		perror("ERRIMSS_GETDIR_RECV");
 		return -1;
@@ -1235,7 +1235,7 @@ int32_t release_dataset(int32_t dataset_id)
 
 		char update_result[RESPONSE_SIZE];
 
-		if (recv_data(ucp_worker_meta, ep, update_result) < 0)
+		if (recv_data(ucp_worker_meta, ep, update_result, 0) < 0)
 		{
 			perror("ERRIMSS_RELDATASET_RECVUPDATERES");
 			return -1;
@@ -1285,7 +1285,7 @@ int32_t delete_dataset(const char *dataset_uri)
 	}
 
 	char result[RESPONSE_SIZE];
-	if (recv_data(ucp_worker_meta, ep, result) < 0)
+	if (recv_data(ucp_worker_meta, ep, result, 0) < 0)
 	{
 		perror("ERRIMSS_RECVDYNAMSTRUCT_RECV");
 		return -1;
@@ -1347,7 +1347,7 @@ int32_t rename_dataset_metadata_dir_dir(char *old_dir, char *rdir_dest)
 	}
 
 	char result[RESPONSE_SIZE];
-	if (recv_data(ucp_worker_meta, ep, result) < 0)
+	if (recv_data(ucp_worker_meta, ep, result, 0) < 0)
 	{
 		perror("ERRIMSS_RECVDYNAMSTRUCT_RECV");
 		return -1;
@@ -1392,7 +1392,7 @@ rename_dataset_metadata(char *old_dataset_uri, char *new_dataset_uri)
 
 
 	char result[RESPONSE_SIZE];
-	if (recv_data(ucp_worker_meta, ep, result) < 0)
+	if (recv_data(ucp_worker_meta, ep, result, 0) < 0)
 	{
 		perror("ERRIMSS_RECVDYNAMSTRUCT_RECV");
 		return -1;
@@ -1537,7 +1537,7 @@ int32_t rename_dataset_srv_worker_dir_dir(char *old_dir, char *rdir_dest,
 		}
 
 		char result[RESPONSE_SIZE];
-		if (recv_data(ucp_worker_data, ep, result) < 0)
+		if (recv_data(ucp_worker_data, ep, result, 0) < 0)
 		{
 			perror("ERRIMSS_RECVDYNAMSTRUCT_RECV");
 			return -1;
@@ -1598,7 +1598,7 @@ int32_t rename_dataset_srv_worker(char *old_dataset_uri, char *new_dataset_uri,
 		}
 
 		char result[RESPONSE_SIZE];
-		if (recv_data(ucp_worker_data, ep, result) < 0)
+		if (recv_data(ucp_worker_data, ep, result, 0) < 0)
 		{
 			perror("ERRIMSS_RECVDYNAMSTRUCT_RECV");
 			return -1;
@@ -1715,7 +1715,7 @@ int32_t readv_multiple(int32_t dataset_id,
 		}
 
 		// Receive data related to the previous read request directly into the buffer.
-		if (recv_data(ucp_worker_data, ep, buffer) < 0)
+		if (recv_data(ucp_worker_data, ep, buffer, 0) < 0)
 		{
 			if (errno != EAGAIN)
 			{
@@ -1843,7 +1843,7 @@ void *  split_readv(void *th_argv)
 		/*long delta_us;
 		  gettimeofday(&start, NULL);*/
 		// Receive data related to the previous read request directly into the buffer.
-		if (recv_data(ucp_worker_data, ep, arguments->buffer) < 0)
+		if (recv_data(ucp_worker_data, ep, arguments->buffer, 0) < 0)
 		{
 			if (errno != EAGAIN)
 			{
@@ -1947,6 +1947,15 @@ return -1;
 }
 */
 
+
+
+int32_t flush_data() {
+	worker_flush(ucp_worker_data);
+
+	return 1;
+
+}
+
 // Method retrieving a data element associated to a certain dataset.
 int32_t get_data(int32_t dataset_id, int32_t data_id, char *buffer)
 {
@@ -1989,10 +1998,10 @@ int32_t get_data(int32_t dataset_id, int32_t data_id, char *buffer)
 	for (int32_t i = 0; i < curr_dataset.repl_factor; i++)
 	{
 		ucp_ep_h ep;
-		t = clock();
+		//t = clock();
 		// Key related to the requested data element.
 		sprintf(key_, "%" PRIu32 " GET 0 %s$%d", curr_imss.conns.id[repl_servers[i]], curr_dataset.uri_, data_id);
-		slog_info("[IMSS][get_data] Request - '%s'", key_);
+		//slog_info("[IMSS][get_data] Request - '%s'", key_);
 		ep = curr_imss.conns.eps[repl_servers[i]];
 
 		if (send_req(ucp_worker_data, ep, local_addr_data, local_addr_len_data, key_) < 0)
@@ -2005,9 +2014,9 @@ int32_t get_data(int32_t dataset_id, int32_t data_id, char *buffer)
 			delta_us = (long) (end.tv_usec - start.tv_usec);
 			printf("[CLIENT] [GET DATA] send petition delta_us=%6.3f",(delta_us/1000.0F));*/
 
-		t = clock() - t;
-		time_taken = ((double)t) / CLOCKS_PER_SEC; // in seconds
-		slog_debug("[IMSS][get_data] send_data %f s", time_taken);
+		//t = clock() - t;
+		//time_taken = ((double)t) / CLOCKS_PER_SEC; // in seconds
+		//slog_debug("[IMSS][get_data] send_data %f s", time_taken);
 
 
 		int size = 0;
@@ -2019,8 +2028,8 @@ int32_t get_data(int32_t dataset_id, int32_t data_id, char *buffer)
 		//	gettimeofday(&start, NULL);
 		// printf("GET_DATA after send petition to read");
 		// Receive data related to the previous read request directly into the buffer.
-		t = clock();
-		if (recv_data(ucp_worker_data, ep, buffer) < 0)
+		//t = clock();
+		if (recv_data(ucp_worker_data, ep, buffer, 0) < 0)
 		{
 			if (errno != EAGAIN)
 			{
@@ -2031,17 +2040,19 @@ int32_t get_data(int32_t dataset_id, int32_t data_id, char *buffer)
 				break;
 		}
 
-		t = clock() - t;
+		//t = clock() - t;
 
-		time_taken = ((double)t) / CLOCKS_PER_SEC; // in seconds
-		slog_debug("[IMSS][get_data] RECV_STREAM %f s", time_taken);
+		//time_taken = ((double)t) / CLOCKS_PER_SEC; // in seconds
+		//slog_debug("[IMSS][get_data] RECV_STREAM %f s", time_taken);
 
 		// Check if the requested key was correctly retrieved.
 		if (strncmp((const char *)buffer, "$ERRIMSS_NO_KEY_AVAIL$", 22))
 		{
-			// slog_fatal("********************");
 			return 0;
 		}
+		else
+			slog_fatal("[IMSS][get_data]ERRIMSS_NO_KEY_AVAIL");
+	
 	}
 
 	return 1;
@@ -2114,7 +2125,7 @@ int32_t get_ndata(int32_t dataset_id,
 		slog_debug("[IMSS] Request get_ndata: client_id '%" PRIu32 "', mode 'GET', key '%s'", curr_imss.conns.id[repl_servers[i]], key_);
 
 		// Receive data related to the previous read request directly into the buffer.
-		if (recv_data(ucp_worker_data, ep, buffer) < 0)
+		if (recv_data(ucp_worker_data, ep, buffer, 0) < 0)
 		{
 			if (errno != EAGAIN)
 			{
@@ -2146,9 +2157,7 @@ int32_t set_data(int32_t dataset_id, int32_t data_id, char *buffer)
 	//size_t (*const send_choose_stream)(ucp_worker_h ucp_worker, ucp_ep_h ep, const char *msg, size_t msg_length) = (IMSS_WRITE_ASYNC == 1) ? send_istream : send_data;
 
 	slog_debug("[IMSS][set_data]");
-	/*	struct timeval start, end;
-		long delta_us;
-		gettimeofday(&start, NULL);*/
+	t = clock();
 
 	// Server containing the corresponding data to be written.
 	if ((n_server = get_data_location(dataset_id, data_id, SET)) == -1)
@@ -2160,7 +2169,7 @@ int32_t set_data(int32_t dataset_id, int32_t data_id, char *buffer)
 	char key_[REQUEST_SIZE];
 	int32_t curr_imss_storages = curr_imss.info.num_storages;
 
-	slog_debug("[IMSS][set_data] get_data_location(dataset_id:%ld, data_id:%ld, SET:%d), n_server:%ld, curr_imss_storages:%ld", dataset_id, data_id, SET, n_server, curr_imss_storages);
+	//slog_debug("[IMSS][set_data] get_data_location(dataset_id:%ld, data_id:%ld, SET:%d), n_server:%ld, curr_imss_storages:%ld", dataset_id, data_id, SET, n_server, curr_imss_storages);
 
 	// Send the data block to every server implementing redundancy.
 	for (int32_t i = 0; i < curr_dataset.repl_factor; i++)
@@ -2183,7 +2192,7 @@ int32_t set_data(int32_t dataset_id, int32_t data_id, char *buffer)
 
 
 		sprintf(key_, "%" PRIu32 " SET %d %s$%d", curr_imss.conns.id[n_server_], size, curr_dataset.uri_, data_id);
-		slog_info("[IMSS][set_data] Request - '%s'", key_);
+		//slog_info("[IMSS][set_data] Request - '%s'", key_);
 		ep = curr_imss.conns.eps[n_server_];
 
 		if (send_req(ucp_worker_data, ep, local_addr_data, local_addr_len_data, key_) < 0)
@@ -2192,11 +2201,10 @@ int32_t set_data(int32_t dataset_id, int32_t data_id, char *buffer)
 			return -1;
 		}
 
-		slog_debug("[IMSS][set_data] send_data(curr_imss.conns.id[%ld]:%ld, key_:%s, REQUEST_SIZE:%d)", n_server_, curr_imss.conns.id[n_server_], key_, REQUEST_SIZE);
+		//slog_debug("[IMSS][set_data] send_data(curr_imss.conns.id[%ld]:%ld, key_:%s, REQUEST_SIZE:%d)", n_server_, curr_imss.conns.id[n_server_], key_, REQUEST_SIZE);
 
 
 
-	t = clock();
 		if (send_data(ucp_worker_data, ep, buffer, size) < 0)
 		{
 			perror("ERRIMSS_SETDATA_SEND");
@@ -2204,20 +2212,20 @@ int32_t set_data(int32_t dataset_id, int32_t data_id, char *buffer)
 		}
 
 
-	t = clock() - t;
 
 		/*	gettimeofday(&end, NULL);
 			delta_us = (long) (end.tv_usec - start.tv_usec);
 			printf("[CLIENT] [SWRITE SEND_DATA] delta_us=%6.3f",(delta_us/1000.0F));*/
 
 		// slog_debug("[IMSS] Request set_data: client_id '%" PRIu32 "', mode 'SET', key '%s'", curr_imss.conns.id[n_server_], key_);
-		slog_debug("[IMSS][set_data] send_data(curr_imss.conns.id[%ld]:%ld, curr_dataset.data_entity_size:%ld)", n_server_, curr_imss.conns.id[n_server_], curr_dataset.data_entity_size);
+		//slog_debug("[IMSS][set_data] send_data(curr_imss.conns.id[%ld]:%ld, curr_dataset.data_entity_size:%ld)", n_server_, curr_imss.conns.id[n_server_], curr_dataset.data_entity_size);
 
 
 	}
+	t = clock() - t;
 	double time_taken = ((double)t) / CLOCKS_PER_SEC; // in seconds
 
-	slog_debug("[IMSS] [SET DATA] sent data %f s", time_taken);
+	slog_info("[IMSS] [SET DATA] sent data %f s", time_taken);
 	return 1;
 }
 

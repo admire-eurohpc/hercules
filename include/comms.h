@@ -127,30 +127,20 @@ struct ucx_context {
 
 int init_worker(ucp_context_h ucp_context, ucp_worker_h *ucp_worker);
 int init_context(ucp_context_h *ucp_context,  ucp_config_t *config, ucp_worker_h *ucp_worker, send_recv_type_t send_recv_type);
-ucs_status_t start_client(ucp_worker_h ucp_worker, const char *address_str, int port, ucp_ep_h *client_ep);
-void set_sock_addr(const char *address_str, struct sockaddr_storage *saddr, int server_port);
 int request_finalize(ucp_worker_h ucp_worker, send_req_t *request, send_req_t *ctx);
-size_t send_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, const char * msg, size_t msg_length);
-size_t send_istream(ucp_worker_h ucp_worker, ucp_ep_h ep, const char * msg, size_t msg_length);
-size_t recv_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, char * msg, size_t msg_length);
 size_t send_req(ucp_worker_h ucp_worker, ucp_ep_h ep, ucp_address_t *addr, size_t addr_len, char * request);
 size_t send_data(ucp_worker_h ucp_worker, ucp_ep_h ep, const char *msg, size_t msg_len);
-size_t recv_data(ucp_worker_h ucp_worker, ucp_ep_h ep, char *msg);
-size_t recv_req(ucp_worker_h ucp_worker, ucp_ep_h ep, char *msg);
+size_t recv_data(ucp_worker_h ucp_worker, ucp_ep_h ep, char *msg, int ucx_mem);
 ucs_status_t request_wait(ucp_worker_h ucp_worker, void *request, send_req_t *ctx);
 void stream_recv_cb(void *request, ucs_status_t status, size_t length, void *user_data);
-void am_recv_cb(void *request, ucs_status_t status, size_t length, void *user_data);
-void send_handler(void *request, ucs_status_t status, void *ctx);
+void send_handler_data(void *request, ucs_status_t status, void *ctx);
+void send_handler_req(void *request, ucs_status_t status, void *ctx);
 void recv_handler(void *request, ucs_status_t status, ucp_tag_recv_info_t *info);
 void send_cb(void *request, ucs_status_t status, void *user_data);
-void isend_cb(void *request, ucs_status_t status, void *user_data);
 void err_cb_client(void *arg, ucp_ep_h ep, ucs_status_t status);
 void err_cb_server(void *arg, ucp_ep_h ep, ucs_status_t status);
 void common_cb(void *user_data, const char *type_str);
 void server_conn_handle_cb(ucp_conn_request_h conn_request, void *arg);
-char* sockaddr_get_ip_str(const struct sockaddr_storage *sock_addr, char *ip_str, size_t max_size);
-char* sockaddr_get_port_str(const struct sockaddr_storage *sock_addr,char *port_str, size_t max_size);
-ucs_status_t start_server(ucp_worker_h ucp_worker, ucx_server_ctx_t *context, ucp_listener_h *listener_p, const char *address_str, int port);
 ucs_status_t server_create_ep(ucp_worker_h data_worker, ucp_conn_request_h conn_request, ucp_ep_h *server_ep);
 void ep_close(ucp_worker_h ucp_worker, ucp_ep_h ep, uint64_t flags);
 ucs_status_t ep_flush(ucp_ep_h ep, ucp_worker_h worker);
@@ -171,11 +161,12 @@ size_t send_stream_addr(ucp_worker_h ucp_worker, ucp_ep_h ep, ucp_address_t *add
 
 void request_init(void *request);
 
-ucs_status_t ucp_am_data_cb(void *arg, const void *header, size_t header_length, void *data, size_t length, const ucp_am_recv_param_t *param);
-
 void flush_cb(void *request, ucs_status_t status);
- void recv_handler(void *request, ucs_status_t status, const ucp_tag_recv_info_t *info, void *user_data);
+void recv_handler(void *request, ucs_status_t status, const ucp_tag_recv_info_t *info, void *user_data);
+
+ucs_status_t ucp_mem_alloc(ucp_context_h ucp_context, size_t length, void **address_p);
 
 
 
+ucs_status_t worker_flush(ucp_worker_h worker);
 #endif

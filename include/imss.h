@@ -500,6 +500,9 @@ RETURNS:	0 - Resources were released successfully.
 	 */
 	int32_t free_dataset(dataset_info *dataset_info_);
 
+
+	int32_t flush_data();
+
 #ifdef __cplusplus
 }
 #endif

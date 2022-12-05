@@ -399,11 +399,19 @@ int close(int fd)
 		return real_close(fd);
 	}
 
+
+	clock_t t;
+	t = clock();
+
 	char *path = (char *)calloc(256, sizeof(char));
 	if (map_fd_search_by_val(map_fd, path, fd) == 1)
 	{
 		slog_debug("[POSIX %d]. Calling 'close'.", rank);
 		imss_close(path);
+		t = clock() -t ;
+		double time_taken = ((double)t) / CLOCKS_PER_SEC; // in seconds
+
+		slog_info("[LD_PRELOAD] close time  total %f s", time_taken);
 	}
 	else
 	{
@@ -455,15 +463,25 @@ int __xstat(int fd, const char *pathname, struct stat *buf)
 		return real_xstat(fd, pathname, buf);
 	}
 
+	clock_t t;
+	t = clock();
+
 	if (!strncmp(pathname, MOUNT_POINT, strlen(MOUNT_POINT)) || !strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT)))
 	{
 		slog_debug("[POSIX %d] Calling '__xstat'.", rank);
+
 
 		char *new_path;
 		new_path = convert_path(pathname, MOUNT_POINT);
 		// int exist = map_fd_search(map_fd, new_path, &ret, &p);
 		imss_refresh(new_path);
 		ret = imss_getattr(new_path, buf);
+		t = clock() -t ;
+		double time_taken = ((double)t) / CLOCKS_PER_SEC; // in seconds
+
+		slog_info("[LD_PRELOAD] _xstat time  total %f s", time_taken);
+
+
 	}
 	else
 	{
