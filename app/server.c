@@ -78,6 +78,7 @@ int32_t main(int32_t argc, char **argv)
 	ucp_am_handler_param_t param;
 	int ret;
 	ucp_config_t *config;
+	ucp_worker_address_attr_t attr;
 
 	uint64_t max_system_ram_allowed;
 	uint64_t max_storage_size; // memory pool size
@@ -164,7 +165,7 @@ int32_t main(int32_t argc, char **argv)
 	num_blocks = max_storage_size / (args.block_size * KB);
 	for (int i = 0; i < num_blocks; ++i)
 	{
-		char *buffer = (char *)malloc(args.block_size * KB);
+		char *buffer = (char * )malloc(args.block_size * KB); 
 		StsQueue.push(mem_pool, buffer);
 	}
 
@@ -237,18 +238,23 @@ int32_t main(int32_t argc, char **argv)
 			sprintf(formated_uri, "%" PRIu32 " GET 0 %s", id, imss_uri);
 
 			status = ucp_worker_get_address(ucp_worker, &req_addr, &req_addr_len);
+			attr.field_mask = UCP_WORKER_ADDRESS_ATTR_FIELD_UID;
+			ucp_worker_address_query(req_addr, &attr);
+			slog_debug("[srv_worker_thread] Server UID %" PRIu64 ".", attr.worker_uid);
+
+
 			// Send the request.
 			if (send_req(ucp_worker, client_ep, req_addr, req_addr_len, formated_uri) < 0)
 			{
 				perror("ERRIMSS_RLSIMSS_SENDADDR");
 				return -1;
 			}
-			
+
 
 			imss_info imss_info_;
 
 			// Receive the associated structure.
-			ret = recv_dynamic_stream(ucp_worker, client_ep, &imss_info_, BUFFER);
+			ret = recv_dynamic_stream(ucp_worker, client_ep, &imss_info_, BUFFER, attr.worker_uid);
 
 			if (ret >= sizeof(imss_info))
 			{
@@ -367,7 +373,7 @@ int32_t main(int32_t argc, char **argv)
 		arguments[i].storage_size = storage_size;
 		arguments[i].ucp_worker = ucp_worker_threads[i];
 		arguments[i].port = args.port;
- 
+
 		// Add the instance URI to the thread arguments.
 		strcpy(arguments[i].my_uri, imss_uri);
 
@@ -479,14 +485,14 @@ int32_t main(int32_t argc, char **argv)
 
 		slog_debug("[SERVER] Creating IMSS_INFO at metadata server. ");
 		// Send the new IMSS metadata structure to the metadata server entity.
-		if (send_dynamic_stream(ucp_worker, client_ep, (char *)&my_imss, IMSS_INFO) == -1)
+		if (send_dynamic_stream(ucp_worker, client_ep, (char *)&my_imss, IMSS_INFO, attr.worker_uid) == -1)
 			return -1;
 
 		for (int32_t i = 0; i < num_servers; i++)
 			free(my_imss.ips[i]);
 		free(my_imss.ips);
 
-        //ucp_ep_close_nb(client_ep, UCP_EP_CLOSE_MODE_FORCE);
+		//ucp_ep_close_nb(client_ep, UCP_EP_CLOSE_MODE_FORCE);
 	}
 
 	// Wait for threads to finish.
