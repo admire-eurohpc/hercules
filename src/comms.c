@@ -138,7 +138,7 @@ err:
 }
 
 
-size_t send_data(ucp_worker_h ucp_worker, ucp_ep_h ep, const char *msg, size_t msg_len){
+size_t send_data(ucp_worker_h ucp_worker, ucp_ep_h ep, const char *msg, size_t msg_len, uint64_t from){
 	ucs_status_t status;
 	struct ucx_context *request;
 	ucp_request_param_t send_param;
@@ -161,7 +161,7 @@ size_t send_data(ucp_worker_h ucp_worker, ucp_ep_h ep, const char *msg, size_t m
 	send_param.user_data    = &ctx;
 
 
-	request = (struct ucx_context *) ucp_tag_send_nbx(ep, ctx.buffer, msg_len, tag_data, &send_param);
+	request = (struct ucx_context *) ucp_tag_send_nbx(ep, ctx.buffer, msg_len, from, &send_param);
 //	status = ucx_wait(ucp_worker, request, "send",  "data");
 
 /*	if  (UCS_PTR_IS_ERR(request)) {
@@ -169,7 +169,6 @@ size_t send_data(ucp_worker_h ucp_worker, ucp_ep_h ep, const char *msg, size_t m
 		return 0;
 	}
 */
-	ucp_worker_fence(ucp_worker);
 	return msg_len;	
 }
 
@@ -211,7 +210,7 @@ size_t send_req(ucp_worker_h ucp_worker, ucp_ep_h ep, ucp_address_t *addr, size_
 
 
 
-size_t recv_data(ucp_worker_h ucp_worker, ucp_ep_h ep, char *msg, int async)
+size_t recv_data(ucp_worker_h ucp_worker, ucp_ep_h ep, char *msg, uint64_t dest, int async)
 {
 	ucp_tag_recv_info_t info_tag;
 	ucp_tag_message_h msg_tag;
@@ -219,33 +218,47 @@ size_t recv_data(ucp_worker_h ucp_worker, ucp_ep_h ep, char *msg, int async)
 	struct ucx_context *request;
 	ucs_status_t status;
 
-	for (;;) {
-		msg_tag = ucp_tag_probe_nb(ucp_worker, tag_data, tag_mask, 0, &info_tag);
-		if (msg_tag != NULL) {
-			break;
-		} else if (ucp_worker_progress(ucp_worker)) {
-			continue;
-		}
-		status = ucp_worker_wait(ucp_worker);
+	async=1;
+	clock_t t;
 
-	}	
+        slog_debug("[srv_worker_thread] Waiting message  as  %" PRIu64 ".", dest)	
+	do {
+		ucp_worker_progress(ucp_worker);
+		msg_tag = ucp_tag_probe_nb(ucp_worker, dest, tag_mask, 0, &info_tag);
+	} while (msg_tag == NULL);
 
+	/*
+	   for (;;) {
+	   msg_tag = ucp_tag_probe_nb(ucp_worker, tag_data, tag_mask, 0, &info_tag);
+	   if (msg_tag != NULL) {
+	   break;
+	   } else if (ucp_worker_progress(ucp_worker)) {
+	   continue;
+	   }
+	   status = ucp_worker_wait(ucp_worker);
+
+	   }	
+	 */
 	recv_param.op_attr_mask = UCP_OP_ATTR_FIELD_DATATYPE |
-				  UCP_OP_ATTR_FIELD_CALLBACK |
-				  UCP_OP_ATTR_FIELD_USER_DATA;
+		UCP_OP_ATTR_FIELD_CALLBACK |
+		UCP_OP_ATTR_FIELD_USER_DATA;
 
 	recv_param.datatype     = ucp_dt_make_contig(1);
 	recv_param.cb.recv      = recv_handler;
 
+	slog_debug("[COMM] Probe tag (%ld bytes).", info_tag.length);
+	//	t = clock();
 	if (async) { 
-		request = (struct ucx_context *)ucp_tag_recv_nbx(ucp_worker, msg, info_tag.length, tag_data, tag_mask , &recv_param);
-		status  = ucx_wait(ucp_worker, request, "receive", "async");
+		request = (struct ucx_context *)ucp_tag_recv_nbx(ucp_worker, msg, info_tag.length, dest, tag_mask , &recv_param);
 
-    } else {
-		request = (struct ucx_context *)ucp_tag_recv_nbx(ucp_worker, recv_buffer, info_tag.length, tag_data, tag_mask , &recv_param);
-		status  = ucx_wait(ucp_worker, request, "receive", "data");
+	} else {
+		request = (struct ucx_context *)ucp_tag_recv_nbx(ucp_worker, recv_buffer, info_tag.length, dest, tag_mask , &recv_param);
 		memcpy (msg, recv_buffer, info_tag.length);
 	}	
+
+	//t = clock() -t;
+	//	double time_taken = ((double)t) / CLOCKS_PER_SEC; // in seconds
+	//              slog_info("[srv_worker_helper] recv_nbx time %f s", time_taken);
 
 
 
@@ -295,7 +308,7 @@ void send_handler_req(void *request, ucs_status_t status, void *ctx)
 {
 	struct ucx_context *context = (struct ucx_context *)request;
 	context->completed = 1;
-	
+
 	send_req_t * data = (send_req_t *)ctx;
 	slog_info("[COMM] send_handler req"); 
 	//ucp_request_free(request);
@@ -303,11 +316,16 @@ void send_handler_req(void *request, ucs_status_t status, void *ctx)
 
 void send_handler_data(void *request, ucs_status_t status, void *ctx)
 {
-        struct ucx_context *context = (struct ucx_context *)request;
-        context->completed = 1;
+	struct ucx_context *context = (struct ucx_context *)request;
+	context->completed = 1;
 
-        slog_info("[COMM] send_handler data");
-    	//ucp_request_free(request);
+	send_req_t * data = (send_req_t *)ctx;
+	//free(data->buffer);
+	//ucp_request_free(request);
+
+
+	slog_info("[COMM] send_handler data");
+	//ucp_request_free(request);
 }
 
 
@@ -317,7 +335,7 @@ void recv_handler(void *request, ucs_status_t status,
 		const ucp_tag_recv_info_t *info, void *user_data)
 {
 	struct ucx_context *context = (struct ucx_context *)request;
-	slog_info("[COMM] recv_handler"); 
+	//	slog_info("[COMM] recv_handler"); 
 	context->completed = 1;
 	//	ucp_request_free(request);
 }
@@ -366,7 +384,7 @@ void common_cb(void *user_data, const char *type_str)
 
 
 void flush_cb(void *request, ucs_status_t status) {
-slog_info("flush");
+	slog_info("flush");
 
 }
 
@@ -449,9 +467,7 @@ ucs_status_t client_create_ep(ucp_worker_h worker, ucp_ep_h *ep, ucp_address_t *
 }
 
 // Method sending a data structure with dynamic memory allocation fields.
-int32_t send_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep,
-		void *data_struct,
-		int32_t data_type)
+int32_t send_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, void *data_struct, int32_t data_type, uint64_t from)
 {
 	// Buffer containing the structures' information.
 	char *info_buffer;
@@ -536,7 +552,7 @@ int32_t send_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep,
 			}
 	}
 
-	if (send_data(ucp_worker, ep, info_buffer, msg_size) < 0)
+	if (send_data(ucp_worker, ep, info_buffer, msg_size, from) < 0)
 	{
 		perror("ERRIMSS_SENDDYNAMSTRUCT");
 		return -1;
@@ -547,15 +563,13 @@ int32_t send_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep,
 }
 
 // Method retrieving a serialized dynamic data structure.
-int32_t recv_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep,
-		void *data_struct,
-		int32_t data_type)
+int32_t recv_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, void *data_struct, int32_t data_type, uint64_t dest)
 {
 	size_t length;
 	char result[BUFFER_SIZE];
 
 	slog_debug("[COMM] recv_dynamic_stream start ");
-	length = recv_data(ucp_worker, ep, result, 0);
+	length = recv_data(ucp_worker, ep, result, dest, 0);
 
 	if ( length == 0)
 	{
@@ -803,9 +817,11 @@ ucs_status_t ucx_wait(ucp_worker_h ucp_worker, struct ucx_context *request, cons
 
 ucs_status_t worker_flush(ucp_worker_h worker)
 {
-   ucp_worker_flush_nb(worker, 0, flush_cb);
-   return UCS_OK;	
+	ucp_worker_fence(worker);
+	ucp_worker_flush_nb(worker, 0, flush_cb);
+	return UCS_OK;	
 
-    
+
 }
+
 

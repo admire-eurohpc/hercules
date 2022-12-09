@@ -109,6 +109,7 @@ do {
                                 msg_tag = ucp_tag_probe_nb(arguments->ucp_worker, tag_req, tag_mask, 1, &info_tag);
                         } while (msg_tag == NULL);
 
+		slog_debug("[srv_worker_thread] Probe tag (%ld bytes).", info_tag.length);
 		msg = (msg_req_t *) malloc(info_tag.length);
 
 		recv_param.op_attr_mask = UCP_OP_ATTR_FIELD_CALLBACK |
@@ -232,7 +233,7 @@ int srv_worker_helper(p_argv *arguments, char * req)
 							if (ret == 0)
 							{
 								// Send the error code block.
-								ret = send_dynamic_stream(arguments->ucp_worker, arguments->server_ep, err_code, STRING);
+								ret = send_dynamic_stream(arguments->ucp_worker, arguments->server_ep, err_code, STRING, arguments->worker_uid);
 								if (ret < 0)
 								{
 									perror("ERRIMSS_WORKER_SENDERR");
@@ -242,7 +243,7 @@ int srv_worker_helper(p_argv *arguments, char * req)
 							else
 							{
 								// Send the requested block.
-								TIMING(ret = send_data(arguments->ucp_worker, arguments->server_ep, address_, block_size_rtvd), "[srv_worker_thread][READ_OP][READ_OP] Send the requested block");
+								TIMING(ret = send_data(arguments->ucp_worker, arguments->server_ep, address_, block_size_rtvd, arguments->worker_uid), "[srv_worker_thread][READ_OP][READ_OP] Send the requested block");
 								if (ret < 0)
 								{
 									perror("ERRIMSS_WORKER_SENDBLOCK");
@@ -275,7 +276,7 @@ int srv_worker_helper(p_argv *arguments, char * req)
 							}
 
 							char release_msg[] = "RENAME\0";
-							TIMING(ret = send_data(arguments->ucp_worker, arguments->server_ep, release_msg, RESPONSE_SIZE), "[srv_worker_thread][READ_OP][RENAME_OP] Send rename");
+							TIMING(ret = send_data(arguments->ucp_worker, arguments->server_ep, release_msg, RESPONSE_SIZE, arguments->worker_uid), "[srv_worker_thread][READ_OP][RENAME_OP] Send rename");
 							if (ret < 0)
 							{
 								perror("ERRIMSS_PUBLISH_RENAMEMSG");
@@ -297,7 +298,7 @@ int srv_worker_helper(p_argv *arguments, char * req)
 							}
 
 							char release_msg[] = "RENAME\0";
-							TIMING(ret = send_data(arguments->ucp_worker, arguments->server_ep, release_msg, RESPONSE_SIZE), "[srv_worker_thread][READ_OP][RENAME_DIR_DIR_OP] Send rename");
+							TIMING(ret = send_data(arguments->ucp_worker, arguments->server_ep, release_msg, RESPONSE_SIZE, arguments->worker_uid), "[srv_worker_thread][READ_OP][RENAME_DIR_DIR_OP] Send rename");
 							if (ret < 0)
 							{
 								perror("ERRIMSS_PUBLISH_RENAMEMSG");
@@ -360,7 +361,7 @@ int srv_worker_helper(p_argv *arguments, char * req)
 									{ // If dont exist
 										// Send the error code block.
 										// std::cout <<"SERVER READV NO EXISTE element:" << element << '';
-										TIMING(ret = send_dynamic_stream(arguments->ucp_worker, arguments->server_ep, err_code, STRING), "[srv_worker_thread][READ_OP][READV] send_dynamic_stream");
+										TIMING(ret = send_dynamic_stream(arguments->ucp_worker, arguments->server_ep, err_code, STRING, arguments->worker_uid), "[srv_worker_thread][READ_OP][READV] send_dynamic_stream");
 										if (ret < 0)
 										{
 											perror("ERRIMSS_WORKER_SENDERR");
@@ -414,7 +415,7 @@ int srv_worker_helper(p_argv *arguments, char * req)
 									}
 									++curr_blk;
 								}
-								TIMING(ret = send_data(arguments->ucp_worker, arguments->server_ep, buf, size), ("[srv_worker_thread][READ_OP][READV] send buf: %s", buf));
+								TIMING(ret = send_data(arguments->ucp_worker, arguments->server_ep, buf, size, arguments->worker_uid), ("[srv_worker_thread][READ_OP][READV] send buf: %s", buf));
 								// Send the requested block.
 								if (ret < 0)
 								{
@@ -451,7 +452,7 @@ int srv_worker_helper(p_argv *arguments, char * req)
 
 								char *msg = (char *)calloc(msg_size, sizeof(char));
 
-								TIMING(ret = recv_data(arguments->ucp_worker, arguments->server_ep, msg, 0), "[srv_worker_thread][READ_OP][SPLIT_READV] recv_data");
+								TIMING(ret = recv_data(arguments->ucp_worker, arguments->server_ep, msg, arguments->worker_uid, 0), "[srv_worker_thread][READ_OP][SPLIT_READV] recv_data");
 
 								// Send the requested block.
 								if (ret < 0)
@@ -496,7 +497,7 @@ int srv_worker_helper(p_argv *arguments, char * req)
 									if (map->get(element, &address_, &block_size_rtvd) == 0)
 									{ // If dont exist
 										// Send the error code block.
-										if (send_dynamic_stream(arguments->ucp_worker, arguments->server_ep, err_code, STRING) < 0)
+										if (send_dynamic_stream(arguments->ucp_worker, arguments->server_ep, err_code, STRING, arguments->worker_uid) < 0)
 										{
 											return -1;
 											pthread_exit(NULL);
@@ -506,7 +507,7 @@ int srv_worker_helper(p_argv *arguments, char * req)
 									memcpy(buf + byte_count, address_, blocksize);
 									byte_count += blocksize;
 								}
-								TIMING(ret = send_data(arguments->ucp_worker, arguments->server_ep, buf, byte_count), ("[srv_worker_thread][READ_OP][READV] send buf: %s", buf));
+								TIMING(ret = send_data(arguments->ucp_worker, arguments->server_ep, buf, byte_count, arguments->worker_uid), ("[srv_worker_thread][READ_OP][READV] send buf: %s", buf));
 								// Send the requested block.
 								if (ret < 0)
 								{
@@ -519,7 +520,7 @@ int srv_worker_helper(p_argv *arguments, char * req)
 					case WHO:
 						{
 							// Provide the uri of this instance.
-							TIMING(ret = send_data(arguments->ucp_worker, arguments->server_ep, arguments->my_uri, strlen(arguments->my_uri)), ("[srv_worker_thread][READ_OP][WHO] send uri: %s", arguments->my_uri));
+							TIMING(ret = send_data(arguments->ucp_worker, arguments->server_ep, arguments->my_uri, strlen(arguments->my_uri), arguments->worker_uid), ("[srv_worker_thread][READ_OP][WHO] send uri: %s", arguments->my_uri));
 							if (ret < 0)
 							{
 								perror("ERRIMSS_WHOREQUEST");
@@ -577,7 +578,7 @@ int srv_worker_helper(p_argv *arguments, char * req)
 					char *buf = (char *)malloc(size);
 
 					// Receive all blocks into the buffer.
-					recv_data(arguments->ucp_worker, arguments->server_ep, buf, 0);
+					recv_data(arguments->ucp_worker, arguments->server_ep, buf, arguments->worker_uid, 0);
 
 					// printf("WRITEV-buffer=%s",buf);
 					int pos = path.find('$');
@@ -712,7 +713,7 @@ int srv_worker_helper(p_argv *arguments, char * req)
 					// Receive all blocks into the buffer.
 					char *buf = (char *)malloc(size);
 					// int size_recv = -1;
-					TIMING(ret = recv_data(arguments->ucp_worker, arguments->server_ep, buf, 0), ("[srv_worker_thread][WRITE_OP] buf: %s", buf));
+					TIMING(ret = recv_data(arguments->ucp_worker, arguments->server_ep, buf, arguments->worker_uid, 0), ("[srv_worker_thread][WRITE_OP] buf: %s", buf));
 					if (ret < 0)
 					{
 						perror("ERRIMSS_WRITE_OP_BUF");
@@ -773,7 +774,8 @@ int srv_worker_helper(p_argv *arguments, char * req)
 						//  Receive the block into the buffer.
 						// if (buffer == NULL)
 						//char *buffer = (char *)malloc(block_size_recv);
-						TIMING(recv_data(arguments->ucp_worker, arguments->server_ep, buffer, 1), "[srv_worker_thread][WRITE_OP] recv_data: Receive the block into the buffer.");
+						clock_t tr;
+						TIMING(recv_data(arguments->ucp_worker, arguments->server_ep, buffer, arguments->worker_uid, 1), "[srv_worker_thread][WRITE_OP] recv_data: Receive the block into the buffer.");
 						struct stat *stats = (struct stat *)buffer;
 						int32_t insert_successful;
 
@@ -797,10 +799,10 @@ int srv_worker_helper(p_argv *arguments, char * req)
 						std::size_t found = key.find("$0");
 						if (found != std::string::npos)
 						{
-							slog_debug("[srv_worker_thread][WRITE_OP] Updating block $0");
+							slog_debug("[srv_worker_thread][WRITE_OP] Updating block $0 (%d)", block_size_rtvd);
 							struct stat *old, *latest;
 							char *buffer = (char *)malloc(block_size_rtvd);
-							TIMING(recv_data(arguments->ucp_worker, arguments->server_ep, buffer, 0), "[srv_worker_thread][WRITE_OP] recv_data Updating block $0");
+							TIMING(recv_data(arguments->ucp_worker, arguments->server_ep, buffer, arguments->worker_uid, 0), "[srv_worker_thread][WRITE_OP] recv_data Updating block $0");
 							old = (struct stat *)address_;
 							latest = (struct stat *)buffer;
 							slog_debug("[srv_worker_thread] File size new %ld old %ld", latest->st_size, old->st_size);
@@ -808,11 +810,11 @@ int srv_worker_helper(p_argv *arguments, char * req)
 							slog_debug("[srv_worker_thread] buffer: %ld", latest->st_size);
 							memcpy(address_, buffer, block_size_rtvd);
 							slog_debug("address_=%x", address_);
-							free(buffer);
+							//free(buffer);
 						}
 						else
 						{
-							TIMING(recv_data(arguments->ucp_worker, arguments->server_ep, address_, 1), ("[srv_worker_thread][WRITE_OP] recv_data Updated non 0 existing block"));
+							TIMING(recv_data(arguments->ucp_worker, arguments->server_ep, address_, arguments->worker_uid, 1), ("[srv_worker_thread][WRITE_OP] recv_data Updated non 0 existing block"));
 							slog_debug("[srv_worker_thread][WRITE_OP] non 0 key.c_str(): %s", key.c_str());
 							// slog_debug("address_=%x", address_);
 						}
@@ -1023,7 +1025,7 @@ int srv_worker_helper(p_argv *arguments, char * req)
 								pthread_mutex_unlock(&tree_mut);
 								if (buffer == NULL)
 								{
-									if (send_dynamic_stream(arguments->ucp_worker, arguments->server_ep, err_code, STRING) < 0)
+									if (send_dynamic_stream(arguments->ucp_worker, arguments->server_ep, err_code, STRING, arguments->worker_uid) < 0)
 									{
 										perror("ERRIMSS_STATWORKER_NODIR");
 										return -1;
@@ -1037,12 +1039,12 @@ int srv_worker_helper(p_argv *arguments, char * req)
 								m.data = buffer;
 								char msg[REQUEST_SIZE];
 								sprintf(msg, "%ld", m.size);
-								if (send_data(arguments->ucp_worker, arguments->server_ep, msg, REQUEST_SIZE) < 0)
+								if (send_data(arguments->ucp_worker, arguments->server_ep, msg, REQUEST_SIZE, arguments->worker_uid) < 0)
 								{
 									perror("ERRIMSS_GETDATA_REQ");
 									return -1;
 								}
-								if (send_dynamic_stream(arguments->ucp_worker, arguments->server_ep, (char *)&m, MSG) < 0)
+								if (send_dynamic_stream(arguments->ucp_worker, arguments->server_ep, (char *)&m, MSG, arguments->worker_uid) < 0)
 								{
 									perror("ERRIMSS_WORKER_SENDBLOCK");
 									return -1;
@@ -1063,7 +1065,7 @@ int srv_worker_helper(p_argv *arguments, char * req)
 								if (err == 0)
 								{
 									// Send the error code block.
-									if (send_dynamic_stream(arguments->ucp_worker, arguments->server_ep, err_code, STRING) < 0)
+									if (send_dynamic_stream(arguments->ucp_worker, arguments->server_ep, err_code, STRING, arguments->worker_uid) < 0)
 									{
 										perror("ERRIMSS_WORKER_SENDERR");
 										return -1;
@@ -1079,7 +1081,7 @@ int srv_worker_helper(p_argv *arguments, char * req)
 									msg_t m;
 									m.data = address_;
 									m.size = block_size_rtvd;
-									err = send_dynamic_stream(arguments->ucp_worker, arguments->server_ep, (char *)&m, MSG);
+									err = send_dynamic_stream(arguments->ucp_worker, arguments->server_ep, (char *)&m, MSG, arguments->worker_uid);
 									if (err < 0)
 									{
 										perror("ERRIMSS_WORKER_SENDBLOCK");
@@ -1103,7 +1105,7 @@ int srv_worker_helper(p_argv *arguments, char * req)
 
 								char release_msg[] = "DELETE\0";
 
-								if (send_data(arguments->ucp_worker, arguments->server_ep, release_msg, RESPONSE_SIZE) < 0)
+								if (send_data(arguments->ucp_worker, arguments->server_ep, release_msg, RESPONSE_SIZE, arguments->worker_uid) < 0)
 								{
 									perror("ERRIMSS_PUBLISH_DELETEMSG");
 									return -1;
@@ -1133,7 +1135,7 @@ int srv_worker_helper(p_argv *arguments, char * req)
 
 								char release_msg[] = "RENAME\0";
 
-								if (send_data(arguments->ucp_worker, arguments->server_ep, release_msg, RESPONSE_SIZE) < 0)
+								if (send_data(arguments->ucp_worker, arguments->server_ep, release_msg, RESPONSE_SIZE, arguments->worker_uid) < 0)
 								{
 									perror("ERRIMSS_PUBLISH_RENAMEMSG");
 									return -1;
@@ -1157,7 +1159,7 @@ int srv_worker_helper(p_argv *arguments, char * req)
 
 								char release_msg[] = "RENAME\0";
 
-								if (send_data(arguments->ucp_worker, arguments->server_ep, release_msg, RESPONSE_SIZE) < 0)
+								if (send_data(arguments->ucp_worker, arguments->server_ep, release_msg, RESPONSE_SIZE, arguments->worker_uid) < 0)
 								{
 									perror("ERRIMSS_PUBLISH_RENAMEMSG");
 									return -1;
@@ -1181,7 +1183,7 @@ int srv_worker_helper(p_argv *arguments, char * req)
 						// Receive the block into the buffer.
 						char *buffer = (char *)malloc(block_size_recv);
 						slog_debug("[STAT WORKER] Recv dynamic buffer size %ld", block_size_recv);
-						recv_dynamic_stream(arguments->ucp_worker, arguments->server_ep, buffer, BUFFER);
+						recv_dynamic_stream(arguments->ucp_worker, arguments->server_ep, buffer, BUFFER, arguments->worker_uid);
 						slog_debug("[STAT WORKER] END Recv dynamic");
 
 						int32_t insert_successful;
@@ -1220,7 +1222,7 @@ int srv_worker_helper(p_argv *arguments, char * req)
 							case LOCAL_DATASET_UPDATE:
 								{
 									char data_ref[REQUEST_SIZE];
-									if (recv_data(arguments->ucp_worker, arguments->server_ep, data_ref, 0) < 0)
+									if (recv_data(arguments->ucp_worker, arguments->server_ep, data_ref, arguments->worker_uid, 0) < 0)
 									{
 										return -1;
 									}
@@ -1245,7 +1247,7 @@ int srv_worker_helper(p_argv *arguments, char * req)
 									// Answer the client with the update.
 									slog_debug("[STAT_WORKER] Updating existing dataset %s.", key.c_str());
 									char answer[] = "UPDATED!\0";
-									if (send_data(arguments->ucp_worker, arguments->server_ep, answer, RESPONSE_SIZE) < 0)
+									if (send_data(arguments->ucp_worker, arguments->server_ep, answer, RESPONSE_SIZE, arguments->worker_uid) < 0)
 									{
 										perror("ERRIMSS_WORKER_DATALOCATANSWER2");
 										return -1;
@@ -1260,7 +1262,7 @@ int srv_worker_helper(p_argv *arguments, char * req)
 									// Clear the corresponding memory region.
 									char *buffer = (char *)malloc(block_size_recv);
 									// Receive the block into the buffer.
-									recv_dynamic_stream(arguments->ucp_worker, arguments->server_ep, buffer, BUFFER);
+									recv_dynamic_stream(arguments->ucp_worker, arguments->server_ep, buffer, BUFFER, arguments->worker_uid);
 									free(buffer);
 									slog_debug("[STAT_WORKER] End Updating existing dataset 2222 %s.", key.c_str());
 									break;
@@ -1334,7 +1336,7 @@ int srv_worker_helper(p_argv *arguments, char * req)
 
 			// Save the identity of the requesting client.
 			char mode[MODE_SIZE];
-			recv_data(ucp_data_worker, server_ep, req, 0);
+			recv_data(ucp_data_worker, server_ep, req, arguments->worker_uid, 0);
 
 			sscanf(req, "%" PRIu32 " %s", &client_id_, mode);
 			char *req_content = strstr(req, mode);
@@ -1370,7 +1372,7 @@ int srv_worker_helper(p_argv *arguments, char * req)
 				sprintf(response_, "%d%c%d", port_, '-', client_id_++);
 
 				// Send communication specifications.
-				if (send_data(ucp_data_worker, server_ep, response_, RESPONSE_SIZE) < 0)
+				if (send_data(ucp_data_worker, server_ep, response_, RESPONSE_SIZE, arguments->worker_uid) < 0)
 				{
 					perror("ERRIMSS_SRVDISP_SENDBLOCK");
 					// ep_flush(server_ep, ucp_data_worker);
@@ -1385,7 +1387,7 @@ int srv_worker_helper(p_argv *arguments, char * req)
 			else if (*((int32_t *)req) == WHO) // MIRAR
 			{
 				// Provide the uri of this instance.
-				if (send_data(ucp_data_worker, server_ep, arguments->my_uri, RESPONSE_SIZE) < 0) // MIRAR
+				if (send_data(ucp_data_worker, server_ep, arguments->my_uri, RESPONSE_SIZE, arguments->worker_uid) < 0) // MIRAR
 				{
 					perror("ERRIMSS_WHOREQUEST");
 					// ep_flush(server_ep, ucp_data_worker);

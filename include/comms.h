@@ -129,8 +129,9 @@ int init_worker(ucp_context_h ucp_context, ucp_worker_h *ucp_worker);
 int init_context(ucp_context_h *ucp_context,  ucp_config_t *config, ucp_worker_h *ucp_worker, send_recv_type_t send_recv_type);
 int request_finalize(ucp_worker_h ucp_worker, send_req_t *request, send_req_t *ctx);
 size_t send_req(ucp_worker_h ucp_worker, ucp_ep_h ep, ucp_address_t *addr, size_t addr_len, char * request);
-size_t send_data(ucp_worker_h ucp_worker, ucp_ep_h ep, const char *msg, size_t msg_len);
-size_t recv_data(ucp_worker_h ucp_worker, ucp_ep_h ep, char *msg, int ucx_mem);
+size_t send_data(ucp_worker_h ucp_worker, ucp_ep_h ep, const char *msg, size_t msg_len, uint64_t from);
+size_t recv_data(ucp_worker_h ucp_worker, ucp_ep_h ep, char *msg,  uint64_t from, int ucx_mem);
+size_t recv_req(ucp_worker_h ucp_worker, ucp_ep_h ep, char *msg);
 ucs_status_t request_wait(ucp_worker_h ucp_worker, void *request, send_req_t *ctx);
 void stream_recv_cb(void *request, ucs_status_t status, size_t length, void *user_data);
 void send_handler_data(void *request, ucs_status_t status, void *ctx);
@@ -148,10 +149,10 @@ ucs_status_t client_create_ep(ucp_worker_h worker, ucp_ep_h *ep, ucp_address_t *
 
 
 //Method sending a data structure with dynamic memory allocation fields.
-int32_t send_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, void * data_struct, int32_t data_type);
+int32_t send_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, void * data_struct, int32_t data_type, uint64_t from);
 
 //Method retrieving a serialized dynamic data structure.
-int32_t recv_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, void * data_struct, int32_t data_type);
+int32_t recv_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, void * data_struct, int32_t data_type, uint64_t dest);
 
 int connect_common(const char *server, uint16_t server_port, sa_family_t af);
 

@@ -59,7 +59,7 @@ extern int32_t IMSS_DEBUG;
 		t = clock();                                              \
 		ret = function_to_call;                                   \
 		t = clock() - t;                                          \
-		time_taken = ((double)t) / (CLOCKS_PER_SEC / 1000);       \
+		time_taken = ((double)t) / (CLOCKS_PER_SEC);       \
 		slog_debug(",%f, %s, %d", time_taken, print_comment, ret); \
 	}
 

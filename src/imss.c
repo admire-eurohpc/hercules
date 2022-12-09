@@ -80,6 +80,9 @@ static size_t local_addr_len_meta;
 static ucp_address_t *local_addr_data;
 static size_t local_addr_len_data;
 
+uint64_t local_meta_uid;
+uint64_t local_data_uid;
+
 ucp_address_t **stat_addr;
 ucp_ep_h *stat_eps;
 
@@ -341,6 +344,10 @@ int32_t stat_init(char *stat_hostfile,
 	char request[REQUEST_SIZE];
 
 	status = ucp_worker_get_address(ucp_worker_meta, &local_addr_meta, &local_addr_len_meta);
+	ucp_worker_address_attr_t attr;
+        attr.field_mask = UCP_WORKER_ADDRESS_ATTR_FIELD_UID;
+        ucp_worker_address_query(local_addr_meta, &attr);
+        local_meta_uid = attr.worker_uid;
 
 	for (int i = 0; i < n_stat_servers; i++)
 	{
@@ -463,7 +470,7 @@ uint32_t get_dir(char *requested_uri, char **buffer, char ***items)
 
 	size_t uris_size = 0;
 	char msg[REQUEST_SIZE];
-	if (recv_data(ucp_worker_meta, ep, msg, 0) < 0)
+	if (recv_data(ucp_worker_meta, ep, msg, local_meta_uid, 0) < 0)
 	{
 		perror("ERRIMSS_GETDIR_RECV");
 		return -1;
@@ -475,7 +482,7 @@ uint32_t get_dir(char *requested_uri, char **buffer, char ***items)
 
 	char elements[uris_size];
 	// Retrieve the set of elements within the requested uri.
-	ret = recv_dynamic_stream(ucp_worker_data, ep, elements, BUFFER);
+	ret = recv_dynamic_stream(ucp_worker_data, ep, elements, BUFFER, local_data_uid);
 	if (ret < 0)
 	{
 		perror("ERRIMSS_GETDIR_RECV");
@@ -632,6 +639,10 @@ int32_t init_imss(char *imss_uri,
 
 	
 	status = ucp_worker_get_address(ucp_worker_data, &local_addr_data, &local_addr_len_data);
+	ucp_worker_address_attr_t attr;
+        attr.field_mask = UCP_WORKER_ADDRESS_ATTR_FIELD_UID;
+        ucp_worker_address_query(local_addr_data, &attr);
+	local_meta_uid = attr.worker_uid;
 
 	// Connect to all servers.
 	for (int i = 0; i < n_servers; i++)
@@ -703,7 +714,7 @@ int32_t init_imss(char *imss_uri,
 	}
 
 	// Send the new IMSS metadata structure to the metadata server entity.
-	if (send_dynamic_stream(ucp_worker_meta, ep, (void *)&new_imss.info, IMSS_INFO) < 0)
+	if (send_dynamic_stream(ucp_worker_meta, ep, (void *)&new_imss.info, IMSS_INFO, local_meta_uid) < 0)
 		return -1;
 
 	// Add the created struture into the underlying IMSS vector.
@@ -773,6 +784,10 @@ int32_t open_imss(char *imss_uri)
 	new_imss.conns.matching_server = -1;
 
 	status = ucp_worker_get_address(ucp_worker_data, &local_addr_data, &local_addr_len_data);
+	ucp_worker_address_attr_t attr;
+        attr.field_mask = UCP_WORKER_ADDRESS_ATTR_FIELD_UID;
+        ucp_worker_address_query(local_addr_data, &attr);
+        local_data_uid = attr.worker_uid;
 
 	// Connect to the requested IMSS.
 	for (int32_t i = 0; i < new_imss.info.num_storages; i++)
@@ -918,7 +933,7 @@ int32_t stat_imss(char *imss_uri, imss_info *imss_info_)
 	}
 
 
-	ret = recv_dynamic_stream(ucp_worker_meta, ep, (char *)imss_info_, IMSS_INFO);
+	ret = recv_dynamic_stream(ucp_worker_meta, ep, (char *)imss_info_, IMSS_INFO, local_meta_uid);
 
 	if (ret < sizeof(imss_info))
 		return 0;
@@ -1050,7 +1065,7 @@ int32_t create_dataset(char *dataset_uri,
 
 	slog_debug("[IMSS] dataset_create: sending dataset_info");
 	// Send the new dataset metadata structure to the metadata server entity.
-	if (send_dynamic_stream(ucp_worker_meta, ep, (void *)&new_dataset, DATASET_INFO) < 0)
+	if (send_dynamic_stream(ucp_worker_meta, ep, (void *)&new_dataset, DATASET_INFO, local_meta_uid) < 0)
 	{
 		perror("ERRIMSS_DATASET_SNDDS");
 		return -1;
@@ -1215,7 +1230,7 @@ int32_t release_dataset(int32_t dataset_id)
 
 		// Send the list of servers storing the data elements.
 		char mode2[] = "SET";
-		if (send_data(ucp_worker_meta, ep, mode2, MODE_SIZE) < 0)
+		if (send_data(ucp_worker_meta, ep, mode2, MODE_SIZE, local_meta_uid) < 0)
 		{
 			perror("ERRIMSS_STAT_HELLO");
 			return -1;
@@ -1227,7 +1242,7 @@ int32_t release_dataset(int32_t dataset_id)
 		//	return -1;
 		//}
 
-		if (send_data(ucp_worker_meta, ep, update_msg, REQUEST_SIZE) < 0)
+		if (send_data(ucp_worker_meta, ep, update_msg, REQUEST_SIZE, local_meta_uid) < 0)
 		{
 			perror("ERRIMSS_RELDATASET_SENDPOSITIONS");
 			return -1;
@@ -1235,7 +1250,7 @@ int32_t release_dataset(int32_t dataset_id)
 
 		char update_result[RESPONSE_SIZE];
 
-		if (recv_data(ucp_worker_meta, ep, update_result, 0) < 0)
+		if (recv_data(ucp_worker_meta, ep, update_result, local_meta_uid, 0) < 0)
 		{
 			perror("ERRIMSS_RELDATASET_RECVUPDATERES");
 			return -1;
@@ -1285,7 +1300,7 @@ int32_t delete_dataset(const char *dataset_uri)
 	}
 
 	char result[RESPONSE_SIZE];
-	if (recv_data(ucp_worker_meta, ep, result, 0) < 0)
+	if (recv_data(ucp_worker_meta, ep, result, local_meta_uid, 0) < 0)
 	{
 		perror("ERRIMSS_RECVDYNAMSTRUCT_RECV");
 		return -1;
@@ -1347,7 +1362,7 @@ int32_t rename_dataset_metadata_dir_dir(char *old_dir, char *rdir_dest)
 	}
 
 	char result[RESPONSE_SIZE];
-	if (recv_data(ucp_worker_meta, ep, result, 0) < 0)
+	if (recv_data(ucp_worker_meta, ep, result, local_meta_uid, 0) < 0)
 	{
 		perror("ERRIMSS_RECVDYNAMSTRUCT_RECV");
 		return -1;
@@ -1392,7 +1407,7 @@ rename_dataset_metadata(char *old_dataset_uri, char *new_dataset_uri)
 
 
 	char result[RESPONSE_SIZE];
-	if (recv_data(ucp_worker_meta, ep, result, 0) < 0)
+	if (recv_data(ucp_worker_meta, ep, result, local_meta_uid, 0) < 0)
 	{
 		perror("ERRIMSS_RECVDYNAMSTRUCT_RECV");
 		return -1;
@@ -1431,7 +1446,7 @@ int32_t stat_dataset(const char *dataset_uri, dataset_info *dataset_info_)
 	}
 
 	// Receive the associated structure.
-	ret = recv_dynamic_stream(ucp_worker_meta, ep, dataset_info_, DATASET_INFO);
+	ret = recv_dynamic_stream(ucp_worker_meta, ep, dataset_info_, DATASET_INFO, local_meta_uid);
 
 	if (ret < sizeof(dataset_info))
 	{
@@ -1537,7 +1552,7 @@ int32_t rename_dataset_srv_worker_dir_dir(char *old_dir, char *rdir_dest,
 		}
 
 		char result[RESPONSE_SIZE];
-		if (recv_data(ucp_worker_data, ep, result, 0) < 0)
+		if (recv_data(ucp_worker_data, ep, result, local_data_uid, 0) < 0)
 		{
 			perror("ERRIMSS_RECVDYNAMSTRUCT_RECV");
 			return -1;
@@ -1598,7 +1613,7 @@ int32_t rename_dataset_srv_worker(char *old_dataset_uri, char *new_dataset_uri,
 		}
 
 		char result[RESPONSE_SIZE];
-		if (recv_data(ucp_worker_data, ep, result, 0) < 0)
+		if (recv_data(ucp_worker_data, ep, result, local_data_uid, 0) < 0)
 		{
 			perror("ERRIMSS_RECVDYNAMSTRUCT_RECV");
 			return -1;
@@ -1647,7 +1662,7 @@ int32_t writev_multiple( const char *buf, int32_t dataset_id, int64_t data_id,
 			return -1;
 		}
 
-		if (send_data(ucp_worker_data, ep, buf, size) < 0)
+		if (send_data(ucp_worker_data, ep, buf, size,  local_data_uid) < 0)
 		{
 			perror("ERRIMSS_SETDATA_SEND");
 			return -1;
@@ -1715,7 +1730,7 @@ int32_t readv_multiple(int32_t dataset_id,
 		}
 
 		// Receive data related to the previous read request directly into the buffer.
-		if (recv_data(ucp_worker_data, ep, buffer, 0) < 0)
+		if (recv_data(ucp_worker_data, ep, buffer, local_data_uid, 0) < 0)
 		{
 			if (errno != EAGAIN)
 			{
@@ -1768,7 +1783,7 @@ void * split_writev(void *th_argv)
 			pthread_exit(NULL);
 		}
 
-		if (send_data(ucp_worker_data, ep, arguments->buffer, arguments->size * arguments->BLKSIZE * KB) < 0)
+		if (send_data(ucp_worker_data, ep, arguments->buffer, arguments->size * arguments->BLKSIZE * KB, local_data_uid) < 0)
 		{
 			perror("ERRIMSS_SETDATA_SEND");
 			pthread_exit(NULL);
@@ -1831,7 +1846,7 @@ void *  split_readv(void *th_argv)
 		}
 
 		// printf("[SPLIT READV] 4-Send_msg");
-		if (send_data(ucp_worker_data, ep, arguments->msg, msg_length) < 0)
+		if (send_data(ucp_worker_data, ep, arguments->msg, msg_length,  local_data_uid) < 0)
 		{
 			perror("ERRIMSS_GETDATA_REQ");
 			pthread_exit(NULL);
@@ -1843,7 +1858,7 @@ void *  split_readv(void *th_argv)
 		/*long delta_us;
 		  gettimeofday(&start, NULL);*/
 		// Receive data related to the previous read request directly into the buffer.
-		if (recv_data(ucp_worker_data, ep, arguments->buffer, 0) < 0)
+		if (recv_data(ucp_worker_data, ep, arguments->buffer, local_data_uid, 0) < 0)
 		{
 			if (errno != EAGAIN)
 			{
@@ -2029,7 +2044,7 @@ int32_t get_data(int32_t dataset_id, int32_t data_id, char *buffer)
 		// printf("GET_DATA after send petition to read");
 		// Receive data related to the previous read request directly into the buffer.
 		//t = clock();
-		if (recv_data(ucp_worker_data, ep, buffer, 0) < 0)
+		if (recv_data(ucp_worker_data, ep, buffer, local_data_uid, 0) < 0)
 		{
 			if (errno != EAGAIN)
 			{
@@ -2116,7 +2131,7 @@ int32_t get_ndata(int32_t dataset_id,
 
 		// Send read request message specifying the block URI.
 		// if (comm_send(curr_imss.conns.eps_[repl_servers[i]], key, KEY, 0) < 0)
-		if (send_data(ucp_worker_data, ep, key_, REQUEST_SIZE) < 0)
+		if (send_data(ucp_worker_data, ep, key_, REQUEST_SIZE,  local_data_uid) < 0)
 		{
 			perror("ERRIMSS_GETDATA_REQ");
 			return -1;
@@ -2125,7 +2140,7 @@ int32_t get_ndata(int32_t dataset_id,
 		slog_debug("[IMSS] Request get_ndata: client_id '%" PRIu32 "', mode 'GET', key '%s'", curr_imss.conns.id[repl_servers[i]], key_);
 
 		// Receive data related to the previous read request directly into the buffer.
-		if (recv_data(ucp_worker_data, ep, buffer, 0) < 0)
+		if (recv_data(ucp_worker_data, ep, buffer, local_data_uid, 0) < 0)
 		{
 			if (errno != EAGAIN)
 			{
@@ -2205,7 +2220,7 @@ int32_t set_data(int32_t dataset_id, int32_t data_id, char *buffer)
 
 
 
-		if (send_data(ucp_worker_data, ep, buffer, size) < 0)
+		if (send_data(ucp_worker_data, ep, buffer, size,  local_data_uid) < 0)
 		{
 			perror("ERRIMSS_SETDATA_SEND");
 			return -1;
@@ -2265,7 +2280,7 @@ set_ndata(int32_t dataset_id,
 		}
 
 		// Send read request message specifying the block data.
-		if (send_data(ucp_worker_data, ep, buffer, size) < 0)
+		if (send_data(ucp_worker_data, ep, buffer, size, local_data_uid) < 0)
 		{
 			perror("ERRIMSS_SETDATA_SEND");
 			return -1;
@@ -2419,7 +2434,7 @@ int32_t get_type(char *uri)
 	char result[RESPONSE_SIZE];
 
 
-	if (recv_dynamic_stream(ucp_worker_meta, ep, result, BUFFER) < 0)
+	if (recv_dynamic_stream(ucp_worker_meta, ep, result, BUFFER, local_meta_uid) < 0)
 	{
 		slog_fatal( "ERRIMSS_GETTYPE_REQ");
 		return -1;
