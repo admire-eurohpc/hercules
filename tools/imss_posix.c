@@ -476,12 +476,14 @@ int __xstat(int fd, const char *pathname, struct stat *buf)
 		// int exist = map_fd_search(map_fd, new_path, &ret, &p);
 		imss_refresh(new_path);
 		ret = imss_getattr(new_path, buf);
+		if (ret < 0) {
+			errno = -ret;
+			ret = -1;
+		}
 		t = clock() -t ;
 		double time_taken = ((double)t) / CLOCKS_PER_SEC; // in seconds
 
 		slog_info("[LD_PRELOAD] _xstat time  total %f s", time_taken);
-
-
 	}
 	else
 	{
@@ -694,7 +696,6 @@ int open(const char *pathname, int flags, ...)
 			slog_debug("[POSIX %d] new_path:%s, exist: %d, create_flag: %d", rank, new_path, exist, create_flag);
 			if (create_flag)
 			{
-				DPRINT("IMSS_CREATE %s\n", new_path);
 				int err_create = imss_create(new_path, mode, &ret_ds);
 				slog_debug("[POSIX %d] imss_create(%s, %d, %ld), err_create: %d", rank, new_path, mode, &ret_ds, err_create);
 				if (err_create == -EEXIST)
@@ -1008,6 +1009,7 @@ int unlinkat(int fd, const char *name, int flag)
 int rename(const char *old, const char *new)
 {
 
+	slog_debug("[POSIX %d]. Calling 'rename'.", rank);
 	real_rename = dlsym(RTLD_NEXT, "rename");
 	int ret;
 	char *workdir = getenv("PWD");
@@ -1017,7 +1019,6 @@ int rename(const char *old, const char *new)
 		return real_rename(old, new);
 	}
 
-	slog_debug("[POSIX %d]. Calling 'rename'.", rank);
 
 	if ((!strncmp(old, MOUNT_POINT, strlen(MOUNT_POINT)) && !strncmp(new, MOUNT_POINT, strlen(MOUNT_POINT))) || !strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT)))
 	{

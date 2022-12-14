@@ -468,21 +468,9 @@ uint32_t get_dir(char *requested_uri, char **buffer, char ***items)
 		return -1;
 	}
 
-	size_t uris_size = 0;
-	char msg[REQUEST_SIZE];
-	if (recv_data(ucp_worker_meta, ep, msg, local_meta_uid, 0) < 0)
-	{
-		perror("ERRIMSS_GETDIR_RECV");
-		return -1;
-	}
-
-	uris_size = atoi(msg);
-
-	
-
-	char elements[uris_size];
+	char elements[4096];
 	// Retrieve the set of elements within the requested uri.
-	ret = recv_dynamic_stream(ucp_worker_data, ep, elements, BUFFER, local_data_uid);
+	ret = recv_dynamic_stream(ucp_worker_meta, ep, elements, BUFFER, local_meta_uid);
 	if (ret < 0)
 	{
 		perror("ERRIMSS_GETDIR_RECV");
@@ -862,7 +850,7 @@ int32_t release_imss(char *imss_uri, uint32_t release_op)
 			char release_msg[REQUEST_SIZE];
 			ucp_ep_h ep;
 
-			ep = curr_imss.conns.eps[i];
+			ep = imss_.conns.eps[i];
 
 			sprintf(release_msg, "%" PRIu32 " GET 2 RELEASE", process_rank);
 

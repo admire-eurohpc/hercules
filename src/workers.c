@@ -97,17 +97,17 @@ void *srv_worker(void *th_argv)
 		ucp_request_param_t  recv_param;
 
 
-                        clock_t t;
-        double time_taken;
-                t = clock();
+		clock_t t;
+		double time_taken;
+		t = clock();
 
- 
-do {
-                                /* Progressing before probe to update the state */
-                                ucp_worker_progress(arguments->ucp_worker);
-                                /* Probing incoming events in non-block mode */
-                                msg_tag = ucp_tag_probe_nb(arguments->ucp_worker, tag_req, tag_mask, 1, &info_tag);
-                        } while (msg_tag == NULL);
+
+		do {
+			/* Progressing before probe to update the state */
+			ucp_worker_progress(arguments->ucp_worker);
+			/* Probing incoming events in non-block mode */
+			msg_tag = ucp_tag_probe_nb(arguments->ucp_worker, tag_req, tag_mask, 1, &info_tag);
+		} while (msg_tag == NULL);
 
 		slog_debug("[srv_worker_thread] Probe tag (%ld bytes).", info_tag.length);
 		msg = (msg_req_t *) malloc(info_tag.length);
@@ -1037,13 +1037,7 @@ int srv_worker_helper(p_argv *arguments, char * req)
 								msg_t m;
 								m.size = numelems_indir * URI_;
 								m.data = buffer;
-								char msg[REQUEST_SIZE];
-								sprintf(msg, "%ld", m.size);
-								if (send_data(arguments->ucp_worker, arguments->server_ep, msg, REQUEST_SIZE, arguments->worker_uid) < 0)
-								{
-									perror("ERRIMSS_GETDATA_REQ");
-									return -1;
-								}
+
 								if (send_dynamic_stream(arguments->ucp_worker, arguments->server_ep, (char *)&m, MSG, arguments->worker_uid) < 0)
 								{
 									perror("ERRIMSS_WORKER_SENDBLOCK");

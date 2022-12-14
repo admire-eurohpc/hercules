@@ -2330,7 +2330,7 @@ int imss_write(const char *path, const char *buf, size_t size, off_t off)
 		// printf("old_rpath=%s, new_rpath=%s\n",old_rpath, new_rpath);
 
 		map_rename(map, old_rpath, new_rpath);
-		map_rename_prefetch(map_prefetch, old_rpath, new_rpath);
+		//TODO   map_rename_prefetch(map_prefetch, old_rpath, new_rpath);
 
 		// RENAME LOCAL_IMSS(GARRAY), SRV_STAT(MAP & TREE)
 		rename_dataset_metadata(old_rpath, new_rpath);
