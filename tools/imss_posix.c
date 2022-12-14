@@ -423,7 +423,7 @@ int close(int fd)
 
 int __lxstat(int fd, const char *pathname, struct stat *buf)
 {
-	int ret;
+	int ret = 0;
 	unsigned long p = 0;
 	char *workdir = getenv("PWD");
 	real__lxstat = dlsym(RTLD_NEXT, "__lxstat");
@@ -442,11 +442,18 @@ int __lxstat(int fd, const char *pathname, struct stat *buf)
 		// int exist = map_fd_search(map_fd, new_path, &ret, &p);
 		imss_refresh(new_path);
 		ret = imss_getattr(new_path, buf);
+		errno = 0;
+		if (ret < 0) {
+            errno = -ret;
+            ret = -1;
+        }
 	}
 	else
 	{
 		ret = real__lxstat(fd, pathname, buf);
 	}
+
+	slog_debug("[POSIX %d]. End '__lxstat'  %d %d.", rank, ret, errno);
 
 	return ret;
 }
@@ -458,13 +465,15 @@ int __xstat(int fd, const char *pathname, struct stat *buf)
 	char *workdir = getenv("PWD");
 	real_xstat = dlsym(RTLD_NEXT, "__xstat");
 
+	errno = 0;
+
 	if (!init)
 	{
 		return real_xstat(fd, pathname, buf);
 	}
 
-	clock_t t;
-	t = clock();
+	//clock_t t;
+	//t = clock();
 
 	if (!strncmp(pathname, MOUNT_POINT, strlen(MOUNT_POINT)) || !strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT)))
 	{
@@ -480,10 +489,11 @@ int __xstat(int fd, const char *pathname, struct stat *buf)
 			errno = -ret;
 			ret = -1;
 		}
-		t = clock() -t ;
-		double time_taken = ((double)t) / CLOCKS_PER_SEC; // in seconds
+		//t = clock() -t ;
+		//double time_taken = ((double)t) / CLOCKS_PER_SEC; // in seconds
 
-		slog_info("[LD_PRELOAD] _xstat time  total %f s", time_taken);
+		//slog_info("[LD_PRELOAD] _xstat time  total %f s", time_taken);
+		slog_debug("[POSIX %d] End '__xstat'   %d %d.", rank, ret, errno);
 	}
 	else
 	{
@@ -574,10 +584,10 @@ int __open_2(const char *pathname, int flags, ...)
 		int exist = map_fd_search(map_fd, new_path, &ret, &p);
 		if (exist == -1)
 		{
-			ret = real__open_2("/dev/null", flags); // Get a file descriptor
+			ret = real__open_2("/dev/null", 0); // Get a file descriptor
 			map_fd_put(map_fd, new_path, ret, p);
 			int create_flag = (flags & O_CREAT);
-			if (create_flag)
+			if (create_flag == O_CREAT)
 			{
 				int err_create = imss_create(new_path, mode, &ret_ds);
 				if (err_create == -EEXIST)
@@ -632,10 +642,10 @@ int open64(const char *pathname, int flags, ...)
 		int exist = map_fd_search(map_fd, new_path, &ret, &p);
 		if (exist == -1)
 		{
-			ret = real_open64("/dev/null", flags); // Get a file descriptor
+			ret = real_open64("/dev/null", 0); // Get a file descriptor
 			map_fd_put(map_fd, new_path, ret, p);
 			int create_flag = (flags & O_CREAT);
-			if (create_flag)
+			if (create_flag == O_CREAT)
 			{
 				int err_create = imss_create(new_path, mode, &ret_ds);
 				if (err_create == -EEXIST)
@@ -659,7 +669,7 @@ int open64(const char *pathname, int flags, ...)
 int open(const char *pathname, int flags, ...)
 {
 	real_open = dlsym(RTLD_NEXT, "open");
-	int ret;
+	int ret = 0;
 	uint64_t ret_ds;
 	unsigned long p = 0;
 	va_list valist;
@@ -681,7 +691,7 @@ int open(const char *pathname, int flags, ...)
 
 	if (!strncmp(pathname, MOUNT_POINT, strlen(MOUNT_POINT)) || !strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT)))
 	{
-		slog_debug("[POSIX %d]. Calling 'open'.", rank);
+		slog_debug("[POSIX %d]. Calling 'open' flags %d.", rank, flags);
 
 		char *new_path;
 		new_path = convert_path(pathname, MOUNT_POINT);
@@ -689,12 +699,12 @@ int open(const char *pathname, int flags, ...)
 		int exist = map_fd_search(map_fd, new_path, &ret, &p);
 		if (exist == -1) // if the "new_path" was not find:
 		{
-			ret = real_open("/dev/null", flags); // Get a file descriptor
+			ret = real_open("/dev/null", 0); // Get a file descriptor
 			// stores the file descriptor "ret" into the map "map_fd".
 			map_fd_put(map_fd, new_path, ret, p);
 			int create_flag = (flags & O_CREAT);
 			slog_debug("[POSIX %d] new_path:%s, exist: %d, create_flag: %d", rank, new_path, exist, create_flag);
-			if (create_flag)
+			if (create_flag == O_CREAT)
 			{
 				int err_create = imss_create(new_path, mode, &ret_ds);
 				slog_debug("[POSIX %d] imss_create(%s, %d, %ld), err_create: %d", rank, new_path, mode, &ret_ds, err_create);
@@ -711,7 +721,7 @@ int open(const char *pathname, int flags, ...)
 				imss_open(new_path, &ret_ds);
 			}
 		}
-		slog_debug("[POSIX %d] Ending 'open'", rank);
+		slog_debug("[POSIX %d] Ending 'open' %d", rank, ret);
 	}
 	else
 	{
