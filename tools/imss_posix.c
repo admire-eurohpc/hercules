@@ -858,6 +858,8 @@ ssize_t read(int fd, void *buf, size_t size)
 		// printf("CUSTOM read worked! path=%s fd=%d, size=%ld\n",path, fd, size);
 		map_fd_search(map_fd, path, &fd, &p);
 		ret = imss_read(path, buf, size, p);
+		slog_debug("[POSIX %d]. End 'read'  %d.", rank, ret);
+		if (ret < size) ret = 0;
 	}
 	else
 	{
