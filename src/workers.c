@@ -781,6 +781,7 @@ int srv_worker_helper(p_argv *arguments, char * req)
 
 						// Include the new record in the tracking structure.
 						insert_successful = map->put(key, buffer, block_size_recv);
+						// fprintf(stderr, "-- %s\n", buffer);
 
 						// Include the new record in the tracking structure.
 						if (insert_successful != 0)
@@ -796,6 +797,7 @@ int srv_worker_helper(p_argv *arguments, char * req)
 					else
 					{
 						// Receive the block into the buffer.
+						fprintf(stderr, "---- %s\n", address_);
 						std::size_t found = key.find("$0");
 						if (found != std::string::npos)
 						{
