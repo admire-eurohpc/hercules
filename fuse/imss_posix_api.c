@@ -400,6 +400,7 @@ int imss_open(const char *path, uint64_t *fh)
 
 int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 {
+	// fprintf(stderr, "calling imss_sread\n");
 	clock_t t, tm, tmm;
 	t = clock();
 
