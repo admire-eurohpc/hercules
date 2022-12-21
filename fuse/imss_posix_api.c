@@ -292,6 +292,9 @@ int imss_readdir(const char *path, void *buf, posix_fill_dir_t filler, off_t off
 			return -ENOENT;
 		}
 	}
+
+	flush_data();
+
 	// Fill buffer
 	// TODO: Check if subdirectory
 	// printf("[FUSE] imss_readdir %s has=%d\n",path, n_ent);
@@ -520,11 +523,8 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 		//}
 		++curr_blk;
 	}
-	/*	gettimeofday(&end1, NULL);
-		delta_us1 = (long) (end1.tv_usec - start1.tv_usec);
-		printf("[CLIENT] [SREAD_END] delta_us=%6.3f\n",(delta_us1/1000.0F));*/
-
-
+	
+	flush_data();
 
 	t = clock() - t;
         double time_taken = ((double)t) / CLOCKS_PER_SEC; // in seconds
@@ -739,6 +739,9 @@ int imss_vread_prefetch(const char *path, char *buf, size_t size, off_t offset)
 		++curr_blk;
 	}
 
+
+	flush_data();
+
 	// PREFETCH
 	pthread_mutex_lock(&lock);
 	prefetch_ds = ds;
@@ -895,6 +898,9 @@ int imss_vread_no_prefetch(const char *path, char *buf, size_t size, off_t offse
 		}
 		++curr_blk;
 	}
+
+	flush_data();
+
 	free(rpath);
 	return byte_count;
 }
