@@ -5,7 +5,7 @@
 #include <stdint.h>
 #include <dlfcn.h>
 #include <errno.h>
-#include <stdlib.h>
+// #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
 #include <sys/types.h>
@@ -15,7 +15,8 @@
 #include <netinet/in.h>
 #include <sys/stat.h>
 #include <sys/statvfs.h>
-#include <string.h>
+#include <sys/vfs.h> // statfs
+// #include <limits.h>	 // realpath
 #include "imss.h"
 #include <imss_posix_api.h>
 #include <stdarg.h>
@@ -51,7 +52,7 @@ uint64_t IMSS_BUFFSIZE = 2;	  // In GB
 int32_t REPL_FACTOR = 1;	  // Default none
 int32_t IMSS_DEBUG_FILE = 0;
 int32_t IMSS_DEBUG_SCREEN = 1;
-int     IMSS_DEBUG_LEVEL = SLOG_FATAL;
+int IMSS_DEBUG_LEVEL = SLOG_FATAL;
 
 uint16_t PREFETCH = 6;
 
@@ -71,6 +72,7 @@ int32_t prefetch_offset = 0;
 
 pthread_cond_t cond_prefetch;
 pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t lock2 = PTHREAD_MUTEX_INITIALIZER;
 
 uint64_t IMSS_DATA_BSIZE;
 
@@ -90,11 +92,10 @@ char log_path[1000];
 void getConfiguration();
 static off_t (*real_lseek)(int fd, off_t offset, int whence) = NULL;
 static int (*real__lxstat)(int fd, const char *pathname, struct stat *buf) = NULL;
+static int (*real__lxstat64)(int ver, const char *pathname, struct stat64 *buf) = NULL;
+static int (*real_lstat)(const char *file_name, struct stat *buf) = NULL;
 static int (*real_xstat)(int fd, const char *path, struct stat *buf) = NULL;
 static int (*real_stat)(const char *pathname, struct stat *buf) = NULL;
-static int (*real__lxstat64)(int ver, const char * path, struct stat64 * stat_buf) = NULL;
-static int (*real_xstat64)(int ver, const char * path, struct stat64 * stat_buf) = NULL;
-static int (*real_stat64)(const char *__restrict__ pathname, struct stat64 *__restrict__ info) = NULL;
 static int (*real_close)(int fd) = NULL;
 static int (*real_puts)(const char *str) = NULL;
 static int (*real__open_2)(const char *pathname, int flags, ...) = NULL;
@@ -117,6 +118,8 @@ static DIR *(*real_opendir)(const char *name) = NULL;
 static struct dirent *(*real_readdir)(DIR *dirp) = NULL;
 static int (*real_closedir)(DIR *dirp) = NULL;
 static int (*real_statvfs)(const char *restrict path, struct statvfs *restrict buf) = NULL;
+static int (*real_statfs)(const char *path, struct statfs *buf) = NULL;
+static char *(*real_realpath)(const char *restrict path, char *restrict resolved_path) = NULL;
 
 uint32_t MurmurOAAT32(const char *key)
 {
@@ -212,7 +215,7 @@ imss_posix_init(void)
 		if (hercules_init(0, STORAGE_SIZE, IMSS_SRV_PORT, 1, METADATA_PORT, META_BUFFSIZE, METADATA_FILE) == -1)
 		{
 			// In case of error notify and exit
-			slog_fatal( "[IMSS-FUSE]	Hercules init failed, cannot deploy IMSS.\n");
+			slog_fatal("[IMSS-FUSE]	Hercules init failed, cannot deploy IMSS.\n");
 		}
 	}
 
@@ -226,16 +229,26 @@ imss_posix_init(void)
 	}
 	sprintf(hostname, "%s:%d", hostname, getpid());
 
-    if (getenv("IMSS_DEBUG") != NULL)
+	if (getenv("IMSS_DEBUG") != NULL)
 	{
 		if (strstr(getenv("IMSS_DEBUG"), "file"))
 			IMSS_DEBUG_FILE = 1;
-		if (strstr(getenv("IMSS_DEBUG"), "stdout"))
-            IMSS_DEBUG_SCREEN = 1;
-		if (strstr(getenv("IMSS_DEBUG"), "debug"))
+		else if (strstr(getenv("IMSS_DEBUG"), "stdout"))
+			IMSS_DEBUG_SCREEN = 1;
+		else if (strstr(getenv("IMSS_DEBUG"), "debug"))
 			IMSS_DEBUG_LEVEL = SLOG_DEBUG;
-        if (strstr(getenv("IMSS_DEBUG"), "all")) 
+		else if (strstr(getenv("IMSS_DEBUG"), "live"))
 			IMSS_DEBUG_LEVEL = SLOG_LIVE;
+		else if (strstr(getenv("IMSS_DEBUG"), "all"))
+		{
+			IMSS_DEBUG_FILE = 1;
+			IMSS_DEBUG_SCREEN = 1;
+			IMSS_DEBUG_LEVEL = SLOG_LIVE;
+		}
+		else if (strstr(getenv("IMSS_DEBUG"), "none"))
+			unsetenv("IMSS_DEBUG");
+		else
+			IMSS_DEBUG_LEVEL = getLevel(getenv("IMSS_DEBUG"));
 	}
 
 	rank = MurmurOAAT32(hostname);
@@ -244,10 +257,9 @@ imss_posix_init(void)
 	time_t t = time(NULL);
 	struct tm tm = *localtime(&t);
 	sprintf(log_path, "./client.%02d-%02d-%02d.%d", tm.tm_hour, tm.tm_min, tm.tm_sec, rank);
-	sprintf(log_path, "./client.%02d-%02d-%02d.%d", tm.tm_hour, tm.tm_min, tm.tm_sec, rank);
+	//	sprintf(log_path, "./client.%02d-%02d-%02d.%d", tm.tm_hour, tm.tm_min, tm.tm_sec, rank);
 	slog_init(log_path, IMSS_DEBUG_LEVEL, IMSS_DEBUG_FILE, IMSS_DEBUG_SCREEN, 1, 1, 1);
 	slog_info(",Time(msec), Comment, RetCode");
-
 
 	slog_debug(" -- IMSS_MOUNT_POINT: %s", MOUNT_POINT);
 	slog_debug(" -- IMSS_HOSTFILE: %s", IMSS_HOSTFILE);
@@ -279,7 +291,7 @@ imss_posix_init(void)
 		// Initialize the IMSS servers
 		if (init_imss(IMSS_ROOT, IMSS_HOSTFILE, META_HOSTFILE, N_SERVERS, IMSS_SRV_PORT, IMSS_BUFFSIZE, deployment, "/home/hcristobal/imss/build/server", METADATA_PORT) < 0)
 		{
-			slog_fatal( "[IMSS-FUSE]	IMSS init failed, cannot create servers.\n");
+			slog_fatal("[IMSS-FUSE]	IMSS init failed, cannot create servers.\n");
 		}
 	}
 
@@ -299,6 +311,8 @@ imss_posix_init(void)
 			pthread_exit(NULL);
 		}
 	}
+
+	//	sleep(10);
 
 	init = 1;
 }
@@ -402,16 +416,15 @@ int close(int fd)
 		return real_close(fd);
 	}
 
-
 	clock_t t;
 	t = clock();
 
 	char *path = (char *)calloc(256, sizeof(char));
 	if (map_fd_search_by_val(map_fd, path, fd) == 1)
 	{
-		slog_debug("[POSIX %d]. Calling 'close'.", rank);
+		slog_debug("[POSIX %d]. Calling 'close' %s.", rank, path);
 		imss_close(path);
-		t = clock() -t ;
+		t = clock() - t;
 		double time_taken = ((double)t) / CLOCKS_PER_SEC; // in seconds
 
 		slog_info("[LD_PRELOAD] close time  total %f s", time_taken);
@@ -446,17 +459,54 @@ int __lxstat(int fd, const char *pathname, struct stat *buf)
 		imss_refresh(new_path);
 		ret = imss_getattr(new_path, buf);
 		errno = 0;
-		if (ret < 0) {
-            errno = -ret;
-            ret = -1;
-        }
+		if (ret < 0)
+		{
+			errno = -ret;
+			ret = -1;
+		}
+		slog_debug("[POSIX %d]. End '__lxstat'  %d %d.", rank, ret, errno);
 	}
 	else
 	{
 		ret = real__lxstat(fd, pathname, buf);
 	}
 
-	slog_debug("[POSIX %d]. End '__lxstat'  %d %d.", rank, ret, errno);
+	return ret;
+}
+
+int __lxstat64(int fd, const char *pathname, struct stat64 *buf)
+{
+	int ret = 0;
+	unsigned long p = 0;
+	char *workdir = getenv("PWD");
+	real__lxstat64 = dlsym(RTLD_NEXT, "__lxstat64");
+
+	if (!init)
+	{
+		return real__lxstat64(fd, pathname, buf);
+	}
+	if (!strncmp(pathname, MOUNT_POINT, strlen(MOUNT_POINT)) || !strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT)))
+	{
+
+		slog_debug("[POSIX %d]. Calling '__lxstat'.", rank);
+
+		char *new_path;
+		new_path = convert_path(pathname, MOUNT_POINT);
+		// int exist = map_fd_search(map_fd, new_path, &ret, &p);
+		imss_refresh(new_path);
+		ret = imss_getattr(new_path, buf);
+		errno = 0;
+		if (ret < 0)
+		{
+			errno = -ret;
+			ret = -1;
+		}
+		slog_debug("[POSIX %d]. End '__lxstat'  %d %d.", rank, ret, errno);
+	}
+	else
+	{
+		ret = real__lxstat64(fd, pathname, buf);
+	}
 
 	return ret;
 }
@@ -475,33 +525,62 @@ int __xstat(int fd, const char *pathname, struct stat *buf)
 		return real_xstat(fd, pathname, buf);
 	}
 
-	//clock_t t;
-	//t = clock();
+	// clock_t t;
+	// t = clock();
 
 	if (!strncmp(pathname, MOUNT_POINT, strlen(MOUNT_POINT)) || !strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT)))
 	{
 		slog_debug("[POSIX %d] Calling '__xstat'.", rank);
-
 
 		char *new_path;
 		new_path = convert_path(pathname, MOUNT_POINT);
 		// int exist = map_fd_search(map_fd, new_path, &ret, &p);
 		imss_refresh(new_path);
 		ret = imss_getattr(new_path, buf);
-		if (ret < 0) {
+		if (ret < 0)
+		{
 			errno = -ret;
 			ret = -1;
 		}
-		//t = clock() -t ;
-		//double time_taken = ((double)t) / CLOCKS_PER_SEC; // in seconds
+		// t = clock() -t ;
+		// double time_taken = ((double)t) / CLOCKS_PER_SEC; // in seconds
 
-		//slog_info("[LD_PRELOAD] _xstat time  total %f s", time_taken);
+		// slog_info("[LD_PRELOAD] _xstat time  total %f s", time_taken);
 		slog_debug("[POSIX %d] End '__xstat'   %d %d.", rank, ret, errno);
 	}
 	else
 	{
 		ret = real_xstat(fd, pathname, buf);
 	}
+	return ret;
+}
+
+int lstat(const char *pathname, struct stat *buf)
+{
+	int ret;
+	unsigned long p = 0;
+	char *workdir = getenv("PWD");
+	fprintf(stderr,"[POSIX %d]. Calling 'lstat'.\n", rank);
+	real_lstat = dlsym(RTLD_NEXT, "lstat");
+
+	if (!init)
+	{
+		return real_lstat(pathname, buf);
+	}
+
+	if (!strncmp(pathname, MOUNT_POINT, strlen(MOUNT_POINT)) || !strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT)))
+	{
+		char *new_path;
+		new_path = convert_path(pathname, MOUNT_POINT);
+		// int exist = map_fd_search(map_fd, new_path, &ret, &p);
+		imss_refresh(new_path);
+		ret = imss_getattr(new_path, buf);
+	}
+	else
+	{
+		ret = real_lstat(pathname, buf);
+	}
+
 	return ret;
 }
 
@@ -554,35 +633,99 @@ int statvfs(const char *restrict path, struct statvfs *restrict buf)
 	}
 }
 
+int statfs(const char *restrict path, struct statfs *restrict buf)
+{
+	fprintf(stderr, "[POSIX %d]. Calling 'statfs', path=%s.\n", rank, path);
+	real_statfs = dlsym(RTLD_NEXT, "statfs");
+	if (real_statfs)
+	{
+		fprintf(stderr, "dlsym works\n");
+	}
+
+	char *workdir = getenv("PWD");
+	slog_debug("[POSIX %d]. Calling 'statfs', path=%s.", rank, path);
+	int ret = 0;
+
+	if (!strncmp(path, MOUNT_POINT, strlen(MOUNT_POINT)) || !strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT)))
+	{
+		// fprintf(stderr, "[POSIX %d]. 'statfs', buf->f_type=%ld, buf->f_bsize=%ld.\n", rank, buf->f_type,  buf->f_bsize);
+		// int ret = real_statfs(path, buf);
+		buf->f_bsize = IMSS_BLKSIZE * KB;
+		buf->f_namelen = URI_;
+		// fprintf(stderr, "[POSIX %d]. Calling IMSS 'statfs', ret=%d.\n", rank, ret);
+		// return ret;
+		// fprintf(stderr, "[POSIX %d]. 'statfs', buf->f_type=%ld, buf->f_bsize=%ld.\n", rank, buf->f_type,  buf->f_bsize);
+		// buf->f_type =
+		// buf->f_bsize = IMSS_BLKSIZE * KB;
+		// buf->f_namelen = URI_;
+		// return 0;
+	}
+	else
+	{
+		ret = real_statfs(path, buf);
+	}
+	fprintf(stderr, "[POSIX %d]. Exit 'statfs', path=%s.\n", rank, path);
+	return ret;
+}
+
+char *realpath(const char* path, char* resolved_path)
+{
+	fprintf(stderr, "[POSIX %d]. Calling 'realpath', path=%s.\n", rank, path);
+	real_realpath = dlsym(RTLD_NEXT, "realpath");
+	if (real_realpath)
+	{
+		fprintf(stderr, "dlsym works\n");
+	}
+
+	char *workdir = getenv("PWD");
+	slog_debug("[POSIX %d]. Calling 'realpath', path=%s.", rank, path);
+
+	if (!strncmp(path, MOUNT_POINT, strlen(MOUNT_POINT)) || !strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT)))
+	{
+		// buf->f_bsize = IMSS_BLKSIZE * KB;
+		// buf->f_namelen = URI_;
+		// return 0;
+		return real_realpath(path, resolved_path);
+	}
+	else
+	{
+		return real_realpath(path, resolved_path);
+	}
+}
+
 int __open_2(const char *pathname, int flags, ...)
 {
 	real__open_2 = dlsym(RTLD_NEXT, "__open_2");
 	int ret;
 	uint64_t ret_ds;
 	unsigned long p = 0;
-	va_list valist;
-	va_start(valist, flags);
+
+	int mode = 0;
+
+	if (flags & O_CREAT)
+	{
+		va_list ap;
+		va_start(ap, flags);
+		mode = va_arg(ap, unsigned);
+		va_end(ap);
+	}
 
 	if (!init)
 	{
-		return real__open_2(pathname, flags);
+		if (!mode)
+			return real__open_2(pathname, flags);
+		else
+			return real__open_2(pathname, flags, mode);
 	}
 
-	mode_t mode;
-	for (int i = 0; i < 1; i++)
-	{
-		mode = va_arg(valist, mode_t);
-	}
-
-	va_end(valist);
 	char *workdir = getenv("PWD");
 
 	if (!strncmp(pathname, MOUNT_POINT, strlen(MOUNT_POINT)) || !strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT)))
 	{
-		slog_debug("[POSIX %d]. Calling '__open_2'.", rank);
 
 		char *new_path;
 		new_path = convert_path(pathname, MOUNT_POINT);
+		slog_debug("[POSIX %d]. Calling '__open_2': %s.", rank, new_path);
 
 		int exist = map_fd_search(map_fd, new_path, &ret, &p);
 		if (exist == -1)
@@ -592,6 +735,7 @@ int __open_2(const char *pathname, int flags, ...)
 			int create_flag = (flags & O_CREAT);
 			if (create_flag == O_CREAT)
 			{
+				slog_debug("[POSIX %d]. O_CREAT", rank);
 				int err_create = imss_create(new_path, mode, &ret_ds);
 				if (err_create == -EEXIST)
 				{
@@ -600,14 +744,19 @@ int __open_2(const char *pathname, int flags, ...)
 			}
 			else
 			{
+				slog_debug("[POSIX %d]. Not O_CREAT", rank);
 				imss_open(new_path, &ret_ds);
 			}
 			// map_fd_search(map_fd, new_path, &ret, &p);
 		}
+		slog_debug("[POSIX %d]. Ending '__open_2'.", rank);
 	}
 	else
 	{
-		ret = real__open_2(pathname, flags);
+		if (!mode)
+			ret = real__open_2(pathname, flags);
+		else
+			ret = real__open_2(pathname, flags, mode);
 	}
 	return ret;
 }
@@ -618,21 +767,25 @@ int open64(const char *pathname, int flags, ...)
 	int ret;
 	uint64_t ret_ds;
 	unsigned long p = 0;
-	va_list valist;
-	va_start(valist, flags);
+
+	int mode = 0;
+
+	if (flags & O_CREAT)
+	{
+		va_list ap;
+		va_start(ap, flags);
+		mode = va_arg(ap, unsigned);
+		va_end(ap);
+	}
 
 	if (!init)
 	{
-		return real_open64(pathname, flags);
+		if (!mode)
+			return real_open64(pathname, flags);
+		else
+			return real_open64(pathname, flags, mode);
 	}
 
-	mode_t mode;
-	for (int i = 0; i < 1; i++)
-	{
-		mode = va_arg(valist, mode_t);
-	}
-
-	va_end(valist);
 	char *workdir = getenv("PWD");
 
 	if (!strncmp(pathname, MOUNT_POINT, strlen(MOUNT_POINT)) || !strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT)))
@@ -664,7 +817,10 @@ int open64(const char *pathname, int flags, ...)
 	}
 	else
 	{
-		ret = real_open64(pathname, flags);
+		if (!mode)
+			ret = real_open64(pathname, flags);
+		else
+			ret = real_open64(pathname, flags, mode);
 	}
 	return ret;
 }
@@ -675,26 +831,31 @@ int open(const char *pathname, int flags, ...)
 	int ret = 0;
 	uint64_t ret_ds;
 	unsigned long p = 0;
-	va_list valist;
-	va_start(valist, flags);
+
+	int mode = 0;
+
+	if (flags & O_CREAT)
+	{
+		va_list ap;
+		va_start(ap, flags);
+		mode = va_arg(ap, unsigned);
+		va_end(ap);
+	}
 
 	if (!init)
 	{
-		return real_open(pathname, flags);
+		if (!mode)
+			return real_open(pathname, flags);
+		else
+			return real_open(pathname, flags, mode);
 	}
-
-	mode_t mode;
-	for (int i = 0; i < 1; i++)
-	{
-		mode = va_arg(valist, mode_t);
-	}
-
-	va_end(valist);
 	char *workdir = getenv("PWD");
 
 	if (!strncmp(pathname, MOUNT_POINT, strlen(MOUNT_POINT)) || !strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT)))
 	{
-		slog_debug("[POSIX %d]. Calling 'open' flags %d.", rank, flags);
+		slog_debug("[POSIX %d]. Calling 'open' flags %d, mode=%d.", rank, flags, mode);
+		// pthread_mutex_lock(&lock2);
+		// slog_debug("Loked by %ld", rank);
 
 		char *new_path;
 		new_path = convert_path(pathname, MOUNT_POINT);
@@ -704,6 +865,7 @@ int open(const char *pathname, int flags, ...)
 		{
 			ret = real_open("/dev/null", 0); // Get a file descriptor
 			// stores the file descriptor "ret" into the map "map_fd".
+			slog_debug("Map add=%x", &map_fd);
 			map_fd_put(map_fd, new_path, ret, p);
 			int create_flag = (flags & O_CREAT);
 			slog_debug("[POSIX %d] new_path:%s, exist: %d, create_flag: %d", rank, new_path, exist, create_flag);
@@ -716,7 +878,7 @@ int open(const char *pathname, int flags, ...)
 					slog_debug("[POSIX %d] dataset already exists.", rank);
 					slog_debug("[POSIX %d] 1 - imss_open(%s, %ld)", rank, new_path, &ret_ds);
 					imss_open(new_path, &ret_ds);
-				} 
+				}
 			}
 			else
 			{
@@ -724,11 +886,15 @@ int open(const char *pathname, int flags, ...)
 				imss_open(new_path, &ret_ds);
 			}
 		}
+		// pthread_mutex_unlock(&lock2);
 		slog_debug("[POSIX %d] Ending 'open' %d", rank, ret);
 	}
 	else
 	{
-		ret = real_open(pathname, flags);
+		if (!mode)
+			ret = real_open(pathname, flags);
+		else
+			ret = real_open(pathname, flags, mode);
 	}
 	return ret;
 }
@@ -776,27 +942,33 @@ off_t lseek(int fd, off_t offset, int whence)
 	{
 		slog_debug("[POSIX %d]. Calling 'lseek'.", rank);
 
+		slog_info("[POSIX %d]. whence=%d, offset=%ld", rank, whence, offset);
 		if (whence == SEEK_SET)
 		{
-			// printf("SEEK_SET=%ld\n",offset);
+			slog_debug("SEEK_SET=%ld", offset);
 			ret = offset;
 			map_fd_update_value(map_fd, path, fd, ret);
 		}
 		else if (whence == SEEK_CUR)
 		{
-			// printf("SEEK_CUR=%ld\n",offset);
+			slog_debug("SEEK_CUR=%ld", offset);
 			map_fd_search(map_fd, path, &fd, &p);
 			ret = p + offset;
 			map_fd_update_value(map_fd, path, fd, ret);
 		}
 		else if (whence == SEEK_END)
 		{
-			// printf("SEEK_END=%ld\n",offset);
+			slog_debug("SEEK_END=%ld", offset);
 			struct stat ds_stat_n;
 			imss_getattr(path, &ds_stat_n);
 			ret = offset + ds_stat_n.st_size;
 			map_fd_update_value(map_fd, path, fd, ret);
 		}
+		else
+		{
+		}
+
+		slog_debug("[POSIX %d]. Ending 'lseek', ret=%ld", rank, ret);
 	}
 	else
 	{
@@ -861,12 +1033,9 @@ ssize_t read(int fd, void *buf, size_t size)
 		// printf("CUSTOM read worked! path=%s fd=%d, size=%ld\n",path, fd, size);
 		map_fd_search(map_fd, path, &fd, &p);
 		ret = imss_read(path, buf, size, p);
-		// fprintf(stderr, "read buf = %s\n", (char*) buf);
-		slog_debug("[POSIX %d]. End 'read'  %d.", rank, ret);
-		p += ret;
-		map_fd_update_value(map_fd, path, fd, p);
-
-		// if (ret < size) ret = 0;
+		slog_debug("[POSIX %d]. End 'read'  %ld.", rank, ret);
+		if (ret < size)
+			ret = 0;
 	}
 	else
 	{
@@ -887,23 +1056,25 @@ int unlink(const char *name)
 		return real_unlink(name);
 	}
 
-	slog_debug("[POSIX %d]. Calling 'unlink'.", rank);
-
 	if (!strncmp(name, MOUNT_POINT, strlen(MOUNT_POINT)) || !strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT)))
 	{
+		slog_debug("[POSIX %d]. Calling 'unlink' op 1, name=%s.", rank, name);
 		char *new_path;
 
 		new_path = convert_path(name, MOUNT_POINT);
 		int32_t type = get_type(new_path);
+		slog_debug("[POSIX %d]. Calling 'unlink' type %ld, name=%s.", rank, type, name);
 		if (type == 0)
 		{
 			strcat(new_path, "/");
 			type = get_type(new_path);
-
+			slog_debug("[POSIX %d]. Calling 'unlink' type %ld, name=%s.", rank, type, name);
 			if (type == 2)
 			{
 				ret = imss_rmdir(new_path);
 			}
+
+			ret = imss_unlink(new_path);
 		}
 		else
 		{
@@ -912,6 +1083,7 @@ int unlink(const char *name)
 	}
 	else if (!strncmp(name, "imss://", strlen("imss://")))
 	{
+		slog_debug("[POSIX %d]. Calling 'unlink' op 2, name=%s.", rank, name);
 		char *path = (char *)calloc(256, sizeof(char));
 		strcpy(path, name);
 		int32_t type = get_type(path);
@@ -934,7 +1106,9 @@ int unlink(const char *name)
 	else
 	{
 		ret = real_unlink(name);
+		// slog_debug("[POSIX %d]. Real 'unlink', name=%s.", rank, name);
 	}
+	// slog_debug("[POSIX %d]. End 'unlink', name=%s.", rank, name);
 	return ret;
 }
 
@@ -950,10 +1124,9 @@ int rmdir(const char *path)
 		return real_rmdir(path);
 	}
 
-	slog_debug("[POSIX %d]. Calling 'rmdir'.", rank);
-
 	if (!strncmp(path, MOUNT_POINT, strlen(MOUNT_POINT)) || !strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT)))
 	{
+		slog_debug("[POSIX %d]. Calling 'rmdir'.", rank);
 		char *new_path;
 		new_path = convert_path(path, MOUNT_POINT);
 		ret = imss_rmdir(new_path);
@@ -964,7 +1137,6 @@ int rmdir(const char *path)
 	}
 	else if (!strncmp(path, "imss://", strlen("imss://")))
 	{
-		slog_debug("[IMSS %d]. Calling 'imss_rmdir'.", rank)
 		ret = imss_rmdir(path);
 	}
 	else
@@ -985,10 +1157,9 @@ int unlinkat(int fd, const char *name, int flag)
 		return real_unlinkat(fd, name, flag);
 	}
 
-	slog_debug("[POSIX %d]. Calling 'unlinkat'.", rank);
-
 	if (!strncmp(name, MOUNT_POINT, strlen(MOUNT_POINT)) || !strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT)))
 	{
+		slog_debug("[POSIX %d]. Calling 'unlinkat'.", rank);
 		char *new_path;
 		new_path = convert_path(name, MOUNT_POINT);
 		int n_ent = 0;
@@ -1029,7 +1200,6 @@ int unlinkat(int fd, const char *name, int flag)
 int rename(const char *old, const char *new)
 {
 
-	slog_debug("[POSIX %d]. Calling 'rename'.", rank);
 	real_rename = dlsym(RTLD_NEXT, "rename");
 	int ret;
 	char *workdir = getenv("PWD");
@@ -1039,9 +1209,9 @@ int rename(const char *old, const char *new)
 		return real_rename(old, new);
 	}
 
-
 	if ((!strncmp(old, MOUNT_POINT, strlen(MOUNT_POINT)) && !strncmp(new, MOUNT_POINT, strlen(MOUNT_POINT))) || !strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT)))
 	{
+		slog_debug("[POSIX %d]. Calling 'rename'.", rank);
 		char *old_path;
 		old_path = convert_path(old, MOUNT_POINT);
 		char *new_path;
@@ -1066,10 +1236,9 @@ int fchmodat(int dirfd, const char *pathname, mode_t mode, int flags)
 		return real_fchmodat(dirfd, pathname, mode, flags);
 	}
 
-	slog_debug("[POSIX %d]. Calling 'fchmodat'.", rank);
-
 	if (!strncmp(pathname, MOUNT_POINT, strlen(MOUNT_POINT)) || !strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT)))
 	{
+		slog_debug("[POSIX %d]. Calling 'fchmodat'.", rank);
 		char *new_path;
 		new_path = convert_path(pathname, MOUNT_POINT);
 		ret = imss_chmod(new_path, mode);
@@ -1093,10 +1262,9 @@ int fchownat(int dirfd, const char *pathname, uid_t owner, gid_t group, int flag
 		return real_fchownat(dirfd, pathname, owner, group, flags);
 	}
 
-	slog_debug("[POSIX %d]. Calling 'fchownat'.", rank);
-
 	if (!strncmp(pathname, MOUNT_POINT, strlen(MOUNT_POINT)) || !strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT)))
 	{
+		slog_debug("[POSIX %d]. Calling 'fchownat'.", rank);
 		char *new_path;
 		new_path = convert_path(pathname, MOUNT_POINT);
 		ret = imss_chown(new_path, owner, group);
@@ -1123,10 +1291,9 @@ DIR *opendir(const char *name)
 		return real_opendir(name);
 	}
 
-	slog_debug("[POSIX %d]. Calling 'open'.", rank);
-
 	if (!strncmp(name, MOUNT_POINT, strlen(MOUNT_POINT)) || !strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT)))
 	{
+		slog_debug("[POSIX %d]. Calling 'opendir'.", rank);
 		char *new_path;
 		new_path = convert_path(name, MOUNT_POINT);
 		int a = 1;
@@ -1170,12 +1337,11 @@ struct dirent *readdir(DIR *dirp)
 		return real_readdir(dirp);
 	}
 
-	slog_debug("[POSIX %d]. Calling 'readir'.", rank);
-
 	struct dirent *entry = (struct dirent *)malloc(sizeof(struct dirent));
 	char *path = calloc(256, sizeof(char));
 	if (map_fd_search_by_val(map_fd, path, dirfd(dirp)) == 1)
 	{
+		slog_debug("[POSIX %d]. Calling 'readir'.", rank);
 		char buf[KB * KB] = {0};
 		char *token;
 		// slog_fatal("CUSTOM IMSS_READDIR\n");
@@ -1272,81 +1438,11 @@ int closedir(DIR *dirp)
 		return real_closedir(dirp);
 	}
 
-	slog_debug("[POSIX %d]. Calling 'closedir'.", rank);
+	// slog_debug("[POSIX %d]. Calling 'closedir'.", rank);
 
 	map_fd_search_by_val_close(map_fd, dirfd(dirp));
 	// printf("closedir worked! fd=%d\n",dirfd(dirp));
 	int ret = real_closedir(dirp);
 
 	return ret;
-}
-
-
-int __lxstat64(int ver, const char * path, struct stat64 * stat_buf)
-{
-	int ret = 0;
-	unsigned long p = 0;
-	char *workdir = getenv("PWD");
-	real__lxstat64 = dlsym(RTLD_NEXT, "__lxstat64");
-
-	fprintf(stderr, "HOLA __lxstat64\n");
-	if (!init)
-	{
-		return real__lxstat64(ver, path, stat_buf);
-	}
-}
-
-
-int __xstat64(int ver, const char * path, struct stat64 * stat_buf)
-{
-	int ret = 0;
-	unsigned long p = 0;
-	char *workdir = getenv("PWD");
-	real_xstat64 = dlsym(RTLD_NEXT, "__xstat64");
-
-	fprintf(stderr, "HOLA __xstat64\n");
-	if (!init)
-	{
-		return real_xstat64(ver, path, stat_buf);
-	}
-	if (!strncmp(path, MOUNT_POINT, strlen(MOUNT_POINT)) || !strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT)))
-	{
-
-		slog_debug("[POSIX %d]. Calling '__lxstat'.", rank);
-
-		char *new_path;
-		new_path = convert_path(path, MOUNT_POINT);
-		// int exist = map_fd_search(map_fd, new_path, &ret, &p);
-		imss_refresh(new_path);
-		ret = imss_getattr(new_path, stat_buf);
-		errno = 0;
-		if (ret < 0) {
-            errno = -ret;
-            ret = -1;
-        }
-	}
-	else
-	{
-		ret = real_xstat64(ver, path, stat_buf);
-	}
-
-	slog_debug("[POSIX %d]. End '__xstat64'  %d %d.", rank, ret, errno);
-
-	return ret;
-
-}
-
-
-int stat64(const char *pathname, struct stat64 *info)
-{
-	int ret = 0;
-	unsigned long p = 0;
-	char *workdir = getenv("PWD");
-	real_stat64 = dlsym(RTLD_NEXT, "stat64");
-
-	fprintf(stderr, "HOLA stat64\n");
-	if (!init)
-	{
-		return real_stat64(pathname, info);
-	}
 }

@@ -725,12 +725,12 @@ int32_t open_imss(char *imss_uri)
 		IMSS_DEBUG = 1;
 	}
 
-	if (IMSS_DEBUG)
-	{
-		//		status = ucp_config_read(NULL, NULL, &config);
-		//		ucp_config_print(config, stderr, NULL, UCS_CONFIG_PRINT_CONFIG);
-		//		ucp_config_release(config);
-	}
+	// if (IMSS_DEBUG)
+	// {
+	// 	//		status = ucp_config_read(NULL, NULL, &config);
+	// 	//		ucp_config_print(config, stderr, NULL, UCS_CONFIG_PRINT_CONFIG);
+	// 	//		ucp_config_release(config);
+	// }
 
 	int32_t not_initialized = 0;
 
@@ -923,6 +923,7 @@ int32_t stat_imss(char *imss_uri, imss_info *imss_info_)
 
 	ret = recv_dynamic_stream(ucp_worker_meta, ep, (char *)imss_info_, IMSS_INFO, local_meta_uid);
 
+        slog_debug("[IMSS][stat_imss] End");
 	if (ret < sizeof(imss_info))
 		return 0;
 	return 1;
@@ -959,9 +960,10 @@ int32_t create_dataset(char *dataset_uri,
 		int32_t repl_factor)
 {
 	int err = 0;
+	int ret = 0;
 	ucp_ep_h ep;
 
-	slog_debug("[IMSS] dataset_create: starting.");
+	slog_debug("[IMSS][create_dataset] dataset_create: starting.");
 
 	curr_imss = g_array_index(imssd, imss, curr_dataset.imss_d);
 
@@ -978,14 +980,14 @@ int32_t create_dataset(char *dataset_uri,
 
 	int32_t associated_imss_indx;
 	// Check if the IMSS storing the dataset exists within the clients session.
-	// slog_debug("[TEST] Before imss_check  %s ", dataset_uri);
+	slog_debug("[IMSS][create_dataset] Before imss_check  %s ", dataset_uri);
 	if ((associated_imss_indx = imss_check(dataset_uri)) == -1)
 	{
 		slog_debug("[IMSS] create_dataset: ERRIMSS_OPENDATA_IMSSNOTFOUND");
 		return -ENOENT;
 	}
 
-	// slog_debug("[TEST] After imss_check  ");
+	slog_debug("[IMSS][create_dataset] After imss_check, associated_imss_indx=%ld", associated_imss_indx);
 	imss associated_imss;
 	associated_imss = g_array_index(imssd, imss, associated_imss_indx);
 
@@ -1036,6 +1038,8 @@ int32_t create_dataset(char *dataset_uri,
 	else
 		new_dataset.type = 'D';
 
+	slog_debug("[IMSS][create_dataset] new_dataset.type=%c", new_dataset.type);
+
 	// Discover the metadata server that handle the new dataset.
 	uint32_t m_srv = discover_stat_srv(new_dataset.uri_);
 
@@ -1051,7 +1055,7 @@ int32_t create_dataset(char *dataset_uri,
 		return -1;
 	}
 
-	slog_debug("[IMSS] dataset_create: sending dataset_info");
+	slog_debug("[IMSS][create_dataset] dataset_create: sending dataset_info");
 	// Send the new dataset metadata structure to the metadata server entity.
 	if (send_dynamic_stream(ucp_worker_meta, ep, (void *)&new_dataset, DATASET_INFO, local_meta_uid) < 0)
 	{
@@ -1083,7 +1087,7 @@ int32_t create_dataset(char *dataset_uri,
 
 	// Add the created struture into the underlying IMSSs.
 	err = GInsert(&datasetd_pos, &datasetd_max_size, (char *)&new_dataset, datasetd, free_datasetd);
-	slog_debug("[IMSS] dataset_create: GIsinser %d", err);
+	slog_debug("[IMSS] dataset_create: GIsinsert %d", err);
 	return err;
 }
 
@@ -1413,6 +1417,7 @@ int32_t stat_dataset(const char *dataset_uri, dataset_info *dataset_info_)
 	for (int32_t i = 0; i < datasetd->len; i++)
 	{
 		*dataset_info_ = g_array_index(datasetd, dataset_info, i);
+		slog_debug("[IMSS][create_dataset][stat_dataset] dataset_info_->uri_=%s", dataset_info_->uri_);
 		if (!strcmp(dataset_uri, dataset_info_->uri_))
 			return 2;
 	}
@@ -1439,6 +1444,8 @@ int32_t stat_dataset(const char *dataset_uri, dataset_info *dataset_info_)
 	if (ret < sizeof(dataset_info))
 	{
 		slog_debug("[IMSS] stat_dataset: dataset does not exist.");
+		// fprintf(stderr,"[IMSS] stat_dataset: dataset does not exist.\n");
+		// exit(0);
 		return 0;
 	}
 	return 1;
@@ -1464,6 +1471,7 @@ int32_t get_data_location(int32_t dataset_id,
 		int32_t op_type)
 {
 	// If the current dataset policy was not established yet.
+	slog_debug("[get_data_location] current_dataset=%ld, dataset_id=%ld", current_dataset, dataset_id);
 	if (current_dataset != dataset_id)
 	{
 		// Retrieve the corresponding dataset_info structure and the associated IMSS.
@@ -1481,6 +1489,7 @@ int32_t get_data_location(int32_t dataset_id,
 
 	int32_t server;
 	// Search for the server that is supposed to have the specified data element.
+	slog_debug("[get_data_location] curr_dataset.uri_=%s", curr_dataset.uri_);
 	if ((server = find_server(curr_imss.info.num_storages, data_id, curr_dataset.uri_, op_type)) < 0)
 	{
 		slog_fatal( "ERRIMSS_FIND_SERVER");
@@ -1954,9 +1963,7 @@ return -1;
 
 int32_t flush_data() {
 	worker_flush(ucp_worker_data);
-
 	return 1;
-
 }
 
 // Method retrieving a data element associated to a certain dataset.
@@ -1977,6 +1984,7 @@ int32_t get_data(int32_t dataset_id, int32_t data_id, char *buffer)
 	int32_t curr_imss_storages = curr_imss.info.num_storages;
 
 	// Retrieve the corresponding connections to the previous servers.
+	slog_debug("curr_dataset.repl_factor=%d", curr_dataset.repl_factor);
 	for (int32_t i = 0; i < curr_dataset.repl_factor; i++)
 	{
 		// Server storing the current data block.
@@ -2032,7 +2040,9 @@ int32_t get_data(int32_t dataset_id, int32_t data_id, char *buffer)
 		// printf("GET_DATA after send petition to read");
 		// Receive data related to the previous read request directly into the buffer.
 		//t = clock();
-		if (recv_data(ucp_worker_data, ep, buffer, local_data_uid, 0) < 0)
+		size_t length = 0;
+		length = recv_data(ucp_worker_data, ep, buffer, local_data_uid, 0);
+		if (length < 0)
 		{
 			if (errno != EAGAIN)
 			{
@@ -2043,6 +2053,8 @@ int32_t get_data(int32_t dataset_id, int32_t data_id, char *buffer)
 				break;
 		}
 
+		// fprintf(stderr,"buffer en recv_data=%s\n", buffer);
+
 		//t = clock() - t;
 
 		//time_taken = ((double)t) / CLOCKS_PER_SEC; // in seconds
@@ -2051,10 +2063,11 @@ int32_t get_data(int32_t dataset_id, int32_t data_id, char *buffer)
 		// Check if the requested key was correctly retrieved.
 		if (strncmp((const char *)buffer, "$ERRIMSS_NO_KEY_AVAIL$", 22))
 		{
-			return 0;
+			return (int32_t)length;
 		}
-		else
-			slog_fatal("[IMSS][get_data]ERRIMSS_NO_KEY_AVAIL");
+		else {
+			slog_debug("[IMSS][get_data]ERRIMSS_NO_KEY_AVAIL");
+		}
 	
 	}
 

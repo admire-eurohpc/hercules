@@ -32,6 +32,8 @@ extern "C" {
 		if (search != m->end()) {
 			search->second.first = v;
 			search->second.second = p;
+		} else {
+			fprintf(stderr,"Map not updated\n");
 		}
 	}
 
@@ -54,7 +56,7 @@ extern "C" {
 			*p = search->second.second; 
 			return 1;
 		} else {
-			// nothing to do.	
+			// nothing to do.
 			return -1;
 		}
 	}

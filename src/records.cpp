@@ -62,14 +62,14 @@ int32_t map_records::put(std::string key, char * address, uint64_t length)
 int32_t map_records::get(std::string key, char ** add_, uint64_t * size_)
 {
 
-	//printf("GET KEY=%s\n",key.c_str());
+	// fprintf(stderr, "GET KEY=%s\n",key.c_str());
 	//Map iterator that will be searching for the key.
 	std::map <std::string, std::pair<char *, uint64_t>>::iterator it;
 	//Block the access to the map structure.
 	std::unique_lock<std::mutex> lock(*mut);
 
-	//struct utsname detect;
-	//uname(&detect);
+	// struct utsname detect;
+	// uname(&detect);
 
 	if (buffer.empty())
 		return 0;
@@ -78,11 +78,14 @@ int32_t map_records::get(std::string key, char ** add_, uint64_t * size_)
 	it = buffer.find(key);
 	//Check if the value did exist within the map.
 	if(it == buffer.end()){
-		//printf("Nodename-%s NO EXIST=%s\n",detect.nodename, key.c_str());
+		// fprintf(stderr,"Nodename-%s NO EXIST=%s\n",detect.nodename, key.c_str());
+		// fprintf(stderr,"NO EXIST=%s\n", key.c_str());
 		return 0;
 	}
 
-	//printf("Nodename    - %s	GET-%s \n", detect.nodename, key.c_str());
+	// fprintf(stderr,"GET-%s \n", key.c_str());
+	// fprintf(stderr,"Nodename    - %s	GET-%s \n", detect.nodename, key.c_str());
+
 	//Assign the values obtained to the provided references.
 	//std::cout <<"Exist " << key << '\n';
 	*(add_) = it->second.first;

@@ -129,6 +129,7 @@ typedef struct {
     short pretty;
     short filestamp;
     short td_safe;
+    short exclusive;
 } SlogFlags;
 
 
@@ -202,6 +203,16 @@ void slog(int flag, const char *msg, ...);
  */
 void slog_init(const char* fname, int lvl, int writeFile, int debugConsole, int debugColor, int filestamp, int t_safe);
 
+/*
+ * FUNCTION: getLevel.
+ * DESCRIPTION: Function to get slog level when it comes as string from args.
+ * PARAMS: (str) slog level name.
+ * 
+ * 
+ *    
+ * RETURN: slog level as integer.
+ */
+int getLevel(char *str);
 
 /* If include header in CPP code. */
 #ifdef __cplusplus

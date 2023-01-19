@@ -144,7 +144,7 @@ size_t send_data(ucp_worker_h ucp_worker, ucp_ep_h ep, const char *msg, size_t m
 	ucp_request_param_t send_param;
 	send_req_t ctx;
     
-	char req[2048];
+	// char req[2048];
 
 	ctx.buffer = (char*)msg;
 	//ctx.buffer = (char *)malloc(msg_len);
@@ -221,7 +221,7 @@ size_t recv_data(ucp_worker_h ucp_worker, ucp_ep_h ep, char *msg, uint64_t dest,
 	async=1;
 	clock_t t;
 
-        slog_debug("[srv_worker_thread] Waiting message  as  %" PRIu64 ".", dest)	
+        slog_debug("[COMM] Waiting message  as  %" PRIu64 ".", dest)	
 	do {
 		ucp_worker_progress(ucp_worker);
 		msg_tag = ucp_tag_probe_nb(ucp_worker, dest, tag_mask, 0, &info_tag);
@@ -256,8 +256,10 @@ size_t recv_data(ucp_worker_h ucp_worker, ucp_ep_h ep, char *msg, uint64_t dest,
 		memcpy (msg, recv_buffer, info_tag.length);
 	}	
 
+	// sleep(1);
 	status = ucx_wait(ucp_worker, request, "recv",  "data");
-	// fprintf(stderr, "--- %s\n", msg);
+	slog_debug("[COMM] status=%s.", ucs_status_string(status));
+	// slog_debug("--- %s\n", msg);
 
 	//t = clock() -t;
 	//	double time_taken = ((double)t) / CLOCKS_PER_SEC; // in seconds
@@ -266,6 +268,7 @@ size_t recv_data(ucp_worker_h ucp_worker, ucp_ep_h ep, char *msg, uint64_t dest,
 
 
 	slog_debug("[COMM] Recv tag (%ld bytes).", info_tag.length);
+	// fprintf(stderr, "[COMM] Recv tag (%ld bytes).\n", info_tag.length);
 	return info_tag.length;
 }
 
@@ -822,9 +825,7 @@ ucs_status_t worker_flush(ucp_worker_h worker)
 {
 	ucp_worker_fence(worker);
 	ucp_worker_flush_nb(worker, 0, flush_cb);
-	return UCS_OK;	
-
-
+	return UCS_OK;
 }
 
 

@@ -350,6 +350,7 @@ int imss_readdir(const char *path, void *buf, posix_fill_dir_t filler, off_t off
 int imss_open(const char *path, uint64_t *fh)
 {
 	// printf("imss_open=%s\n",path);
+	int ret;
 	// TODO -> Access control
 	// DEBUG
 	char *imss_path = (char *)calloc(MAX_PATH, sizeof(char));
@@ -371,7 +372,8 @@ int imss_open(const char *path, uint64_t *fh)
 
 		file_desc = open_dataset(imss_path);
 		aux = (char *)malloc(IMSS_DATA_BSIZE);
-		get_data(file_desc, 0, (char *)aux);
+		ret = get_data(file_desc, 0, (char *)aux);
+		slog_debug("[imss_open] ret=%ld", ret);
 		memcpy(&stats, aux, sizeof(struct stat));
 		pthread_mutex_lock(&lock_file);
 		map_put(map, imss_path, file_desc, stats, aux);
@@ -400,7 +402,10 @@ int imss_open(const char *path, uint64_t *fh)
 
 int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 {
+	// TODO: [read]
 	// fprintf(stderr, "calling imss_sread\n");
+	int ret;
+	int32_t length;
 	clock_t t, tm, tmm;
 	t = clock();
 
@@ -421,6 +426,7 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 	size_t to_read = 0;
 
 	// printf("[CLIENT] [SREAD] start block=%ld, end_block=%ld\n",curr_blk, end_blk);
+
 	// Needed variables
 	size_t byte_count = 0;
 	int64_t rbytes;
@@ -429,8 +435,11 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 	struct stat stats;
 	char *aux;
 
+	// slog_live("rpath=%s", rpath);
 	fd_lookup(rpath, &fd, &stats, &aux);
-	// printf("stats_size=%ld\n",stats.st_size);
+	// slog_live("stats_size=%ld", stats.st_size);
+	slog_warn("[imss_read] size %ld, first %ld, start_offset %ld, end_blk %ld, end_offset %ld, curr_blk %ld, offset=%ld, IMSS_DATA_BSIZE=%ld, stats.st_size=%ld", size, first, start_offset, end_blk, end_offset, curr_blk, offset, IMSS_DATA_BSIZE, stats.st_size);
+
 	if (stats.st_size < size)
 	{
 		end_blk = ceil((double)(offset + stats.st_size) / IMSS_DATA_BSIZE);
@@ -453,16 +462,36 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 	tm = clock() - tm;
 	tmm += tm;
 
+	// slog_live("size=%ld\n", size);
+
+	if (size == IMSS_DATA_BSIZE)
+	{
+		slog_warn("[imss_read] Reads over buf, size %ld == %ld IMSS_DATA_BSIZE", size, IMSS_DATA_BSIZE);
+		length  = get_data(ds, curr_blk, (char *)buf);
+		// fprintf(stderr, "[imss_read] Get data length=%d\n", length);
+		free(rpath);
+		return length;
+	}
+
 	/*	struct timeval start1, end1;
 		long delta_us1;
 		gettimeofday(&start1, NULL);*/
 	while (curr_blk <= end_blk)
 	{
 		// if( err != -1){
-		// First block case
-		if (first == 0)
+
+		if (first == 0) // First block case
 		{
-			get_data(ds, curr_blk, (char *)aux);
+			length = get_data(ds, curr_blk, (char *)aux);
+			// fprintf(stderr, "Get data length=%d\n", length);
+
+			// if(aux!=NULL){
+			// 	fprintf(stderr,"* * * ret=%d, \taux=%s\n", ret, aux);
+			// }
+
+			// sleep(5); // are the petition still pending to be served?
+			// slog_live("[imss_read] curr_blk=%ld, aux=%s", curr_blk, aux);
+			slog_warn("[imss_read] curr_blk=%ld/%ld, aux_size=%ld", curr_blk, end_blk, strlen(aux));
 			if (size < (stats.st_size - start_offset) && size < IMSS_DATA_BSIZE)
 			{
 				to_read = size;
@@ -481,25 +510,27 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 					to_read = IMSS_DATA_BSIZE - start_offset;
 				}
 			}
+			fprintf(stderr,"[imss_read] First block case, to_read=%ld, fd=%d, ds=%d, strlen(aux+start_offset_size)=%ld\n", to_read, fd, ds, strlen(aux + start_offset));
 			memcpy(buf, aux + start_offset, to_read);
+			// fprintf(stderr,"[imss_read] buf=%s\n", buf);
+			slog_warn("[imss_read] buf=%s\n", buf);
+
 			byte_count += to_read;
 			++first;
 			// Check if offset is bigger than filled, return 0 because is EOF case
-			// printf("start_offset=%ld, to_read=%ld, stats.st_size=%ld\n",start_offset,to_read,stats.st_size);
+			slog_warn("[imss_read] start_offset=%ld, to_read=%ld, stats.st_size=%ld, start_offset + to_read=%ld", start_offset, to_read, stats.st_size, start_offset + to_read);
 			if (start_offset + to_read > stats.st_size)
 			{
 				return 0;
 			}
-			// Middle block case
 		}
-		else if (curr_blk != end_blk)
+		else if (curr_blk != end_blk) // Middle block case
 		{
 			get_data(ds, curr_blk, buf + byte_count);
 			// memcpy(buf + byte_count, aux, IMSS_DATA_BSIZE);
 			byte_count += IMSS_DATA_BSIZE;
-			// End block case
 		}
-		else
+		else // End block case
 		{
 			get_data(ds, curr_blk, (char *)aux);
 			// Read the minimum between end_offset and filled (read_ = min(end_offset, filled))
@@ -529,7 +560,7 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 	double time_taken = ((double)t) / CLOCKS_PER_SEC; // in seconds
 	double time_mem = ((double)tmm) / CLOCKS_PER_SEC; // in seconds
 
-	slog_info("[API] imss_read time  total %f mem %f  s", time_taken, time_mem);
+	slog_info("[API] imss_read time  total %f mem %f  s, byte_count=%ld", time_taken, time_mem, byte_count);
 
 	free(rpath);
 	return byte_count;
@@ -775,6 +806,8 @@ int imss_vread_no_prefetch(const char *path, char *buf, size_t size, off_t offse
 	// Needed variables
 	size_t byte_count = 0;
 	int64_t rbytes;
+
+	slog_live("[imss_read] size %ld, start_blk %ld, start_offset %ld, end_blk %ld, end_offset %ld, curr_blk %ld", size, first, start_offset, end_blk, end_offset, curr_blk);
 
 	char *rpath = (char *)calloc(MAX_PATH, sizeof(char));
 	get_iuri(path, rpath);
@@ -1097,9 +1130,10 @@ int imss_vread_2x(const char *path, char *buf, size_t size, off_t offset)
 int imss_read(const char *path, char *buf, size_t size, off_t offset)
 {
 	int ret;
-
+	// BEST_PERFORMANCE_READ (default 0)
 	if (BEST_PERFORMANCE_READ == 0)
 	{
+		// MULTIPLE_READ (default 0)
 		if (MULTIPLE_READ == 1)
 		{
 			ret = imss_vread_prefetch(path, buf, size, offset);
@@ -1141,6 +1175,7 @@ int imss_read(const char *path, char *buf, size_t size, off_t offset)
 
 int imss_write(const char *path, const char *buf, size_t size, off_t off)
 {
+	slog_live("-----------------------------------------");
 	int ret;
 	clock_t t, tm, tmm;
 
@@ -1165,8 +1200,6 @@ int imss_write(const char *path, const char *buf, size_t size, off_t off)
 	end_offset = (off + size) % IMSS_DATA_BSIZE;
 	curr_blk = start_blk;
 
-	slog_live("[imss_write] size %ld, start_blk %ld, start_offset %ld, end_blk %ld, end_offset %ld, curr_blk %ld", size, start_blk, start_offset, end_blk, end_offset, curr_blk);
-
 	// Needed variables
 	size_t byte_count = 0;
 	int first = 0;
@@ -1187,6 +1220,65 @@ int imss_write(const char *path, const char *buf, size_t size, off_t off)
 		ds = fd;
 	else if (fd == -2)
 		return -ENOENT;
+
+	slog_live("[imss_write] size=%ld, IMSS_DATA_BSIZE=%ld, stats.st_size=%ld, start_blk=%ld, start_offset=%ld, end_offset=%ld, end_blk=%ld, curr_blk=%ld, fd=%ld, off=%ld", size, IMSS_DATA_BSIZE, stats.st_size, start_blk, start_offset, end_offset, end_blk, curr_blk, fd, off);
+
+	if (size == IMSS_DATA_BSIZE)
+	{
+		set_data(ds, curr_blk, buf);
+		// Update header count if the file has become bigger
+		if (size + off > stats.st_size)
+		{
+			// if(size + off != stats.st_size){
+			stats.st_size = size + off;
+			stats.st_blocks = curr_blk - 1;
+			map_update(map, rpath, ds, stats);
+		}
+		free(rpath);
+		// slog_live("buf=%s", buf);
+		fd_lookup(rpath, &fd, &stats, &aux);
+		slog_live("[imss_write] Writes in buf, size=%ld, IMSS_DATA_BSIZE=%ld, stats.st_size=%ld", size, IMSS_DATA_BSIZE, stats.st_size);
+		return size;
+	}
+
+	if (size < IMSS_DATA_BSIZE)
+	{
+		slog_live("[imss_write] size < IMSS_DATA_BSIZE");
+		// Get previous block
+		if (get_data(ds, curr_blk, (char *)aux) < 0)
+		{
+			fprintf(stderr, "[IMSS-FUSE]	Error reading from imss.\n");
+			error_print = -ENOENT;
+			pthread_mutex_unlock(&lock);
+			free(rpath);
+			return -ENOENT;
+		}
+		// Bytes to write are the minimum between the size parameter and the remaining space in the block (BLOCKSIZE-start_offset)
+		to_copy = (size < IMSS_DATA_BSIZE - start_offset) ? size : IMSS_DATA_BSIZE - start_offset;
+		slog_live("[imss_write] to_copy=%ld, byte_count=%ld", to_copy, byte_count);
+		memcpy(aux + start_offset, buf + byte_count, to_copy);
+
+		slog_live("[imss_write](otherwise) writting %ld bytes", strlen(aux));
+		if (set_data(ds, curr_blk, aux) < 0)
+		{
+			fprintf(stderr, "[IMSS-FUSE]	Error writing to imss.\n");
+			error_print = -ENOENT;
+			return -ENOENT;
+		}
+		// Update header count if the file has become bigger
+		if (size + off > stats.st_size)
+		{
+			// if(size + off != stats.st_size){
+			stats.st_size = size + off;
+			stats.st_blocks = curr_blk - 1;
+			map_update(map, rpath, ds, stats);
+		}
+		free(rpath);
+		// slog_live("buf=%s", buf);
+		fd_lookup(rpath, &fd, &stats, &aux);
+		slog_live("[imss_write] Writes in buf, size=%ld, IMSS_DATA_BSIZE=%ld, stats.st_size=%ld", size, IMSS_DATA_BSIZE, stats.st_size);
+		return to_copy;
+	}
 
 	if (MULTIPLE_WRITE == 1)
 	{
@@ -1214,44 +1306,73 @@ int imss_write(const char *path, const char *buf, size_t size, off_t off)
 	{
 		middle = 0;
 		// First fragmented block
-		if (first == 0 && start_offset && stats.st_size != 0)
-		{
-			slog_live("[imss_write] first block %ld fragmented", curr_blk);
-			// Get previous block
-			if (get_data(ds, curr_blk, (char *)aux) < 0)
-			{
-				fprintf(stderr, "[IMSS-FUSE]	Error reading from imss.\n");
-				error_print = -ENOENT;
-				pthread_mutex_unlock(&lock);
-				free(rpath);
-				return -ENOENT;
-			}
-			// Bytes to write are the minimum between the size parameter and the remaining space in the block (BLOCKSIZE-start_offset)
-			to_copy = (size < IMSS_DATA_BSIZE - start_offset) ? size : IMSS_DATA_BSIZE - start_offset;
+		slog_live("[imss_write] first=%ld, start_offset=%ld, stats.st_size=%ld", first, start_offset, stats.st_size);
+		// if (first == 0 && !start_offset) {
 
-			memcpy(aux + start_offset, buf + byte_count, to_copy);
+		// }
+		if (first == 0 && start_offset) // CHECK!!
+		{
+			slog_live("[imss_write] first block %ld fragmented, start_offset=%ld", curr_blk, start_offset);
+			if (stats.st_size != 0)
+			{
+				// Get previous block
+				if (get_data(ds, curr_blk, (char *)aux) < 0)
+				{
+					fprintf(stderr, "[IMSS-FUSE]	Error reading from imss.\n");
+					error_print = -ENOENT;
+					pthread_mutex_unlock(&lock);
+					free(rpath);
+					return -ENOENT;
+				}
+				// Bytes to write are the minimum between the size parameter and the remaining space in the block (BLOCKSIZE-start_offset)
+				to_copy = (size < IMSS_DATA_BSIZE - start_offset) ? size : IMSS_DATA_BSIZE - start_offset;
+				slog_live("[imss_write] to_copy=%ld, byte_count=%ld", to_copy, byte_count);
+				memcpy(aux + start_offset, buf + byte_count, to_copy);
+			}
+			else // otherwise first block of the file. No get data needed.
+			{
+				memset(aux, 0, IMSS_DATA_BSIZE);
+				// Bytes to write are the minimum between the size parameter and the remaining space in the block (BLOCKSIZE-start_offset)
+				to_copy = (size < IMSS_DATA_BSIZE - start_offset) ? size : IMSS_DATA_BSIZE - start_offset;
+				slog_live("[imss_write] to_copy=%ld, byte_count=%ld", to_copy, byte_count);
+
+				memcpy(aux + start_offset, buf, to_copy);
+			}
 		}
 		// Last Block
 		else if (curr_blk == end_blk)
 		{
-			slog_live("[imss_write] last block %ld", curr_blk);
-			// when we have only 1 block to be written, then this will be the 'Last Block', 
-			// so the value of 'to_copy' is equal of the difference between the 'end_offset' 
+			slog_live("[imss_write] last block %ld/%ld", curr_blk, end_blk);
+			// when we have only 1 block to be written, then this will be the 'Last Block',
+			// so the value of 'to_copy' is equal of the difference between the 'end_offset'
 			// (final position of the file) and 'start_offset' (start position of the file).
-			if (start_offset > 0 && end_offset > start_offset) { 
-				to_copy = end_offset-start_offset;
-			}
-			else if (end_offset != 0) // CHECK!
-			{
-				to_copy = end_offset;
-			}
-			else
-			{
-				to_copy = IMSS_DATA_BSIZE;
-			}
+			// if (start_offset > 0 && end_offset > start_offset)
+			// if (start_offset > 0 && end_offset == 0)
+			// {
+			to_copy = size - byte_count;
+			// to_copy = IMSS_DATA_BSIZE - start_offset;
+			// }
+			// if (start_offset > 0 && end_offset > 0)
+			// {
+			// 	to_copy = end_offset - start_offset;
+			// }
+			// if (start_offset == 0 && end_offset > 0)
+			// {
+			// 	to_copy = end_offset;
+			// }
+
+			// else
+			// if (end_offset != 0) // CHECK!
+			// {
+			// 	to_copy = end_offset;
+			// }
+			// else
+			// {
+			// 	to_copy = IMSS_DATA_BSIZE;
+			// }
 
 			// Only if last block has contents
-			slog_live("curr_blk=%d, stats.st_blocks=%ld, start_offset=%d", curr_blk, stats.st_blocks, start_offset);
+			slog_live("[imss_write] curr_blk=%ld/%ld, stats.st_blocks=%ld, start_offset=%d, to_copy=%ld, byte_count=%ld", curr_blk, end_blk, stats.st_blocks, start_offset, to_copy, byte_count);
 			if (curr_blk <= stats.st_blocks && start_offset)
 			{
 				pthread_mutex_lock(&lock);
@@ -1267,7 +1388,10 @@ int imss_write(const char *path, const char *buf, size_t size, off_t off)
 			}
 			else
 			{
+				/************/
 				memset(aux, 0, IMSS_DATA_BSIZE);
+				// memset(aux, 0, to_copy);
+				/************/
 			}
 			if (byte_count == size)
 			{
@@ -1278,7 +1402,7 @@ int imss_write(const char *path, const char *buf, size_t size, off_t off)
 		// middle block
 		else
 		{
-			// slog_live("[imss_write] middle block %ld", curr_blk);
+			slog_live("[imss_write] middle block %ld", curr_blk);
 			to_copy = IMSS_DATA_BSIZE;
 			middle = 1;
 
@@ -1286,11 +1410,12 @@ int imss_write(const char *path, const char *buf, size_t size, off_t off)
 		}
 
 		// Write and update variables
-		// slog_live("[imss_write] set_data, block %ld", curr_blk);
+		slog_live("[imss_write] set_data, block %ld/%ld", curr_blk, end_blk);
 
 		if (middle)
 		{
 			char *aux_middle = (char *)buf + byte_count;
+			slog_live("[imss_write](middle) writting %ld bytes", strlen(aux_middle));
 			if (set_data(ds, curr_blk, aux_middle) < 0)
 			{
 				fprintf(stderr, "[IMSS-FUSE]    Error writing to imss.\n");
@@ -1300,6 +1425,7 @@ int imss_write(const char *path, const char *buf, size_t size, off_t off)
 		}
 		else
 		{
+			slog_live("[imss_write](otherwise) writting %ld bytes", strlen(aux));
 			if (set_data(ds, curr_blk, aux) < 0)
 			{
 				fprintf(stderr, "[IMSS-FUSE]	Error writing to imss.\n");
@@ -1327,7 +1453,7 @@ int imss_write(const char *path, const char *buf, size_t size, off_t off)
 	double time_taken = ((double)t) / CLOCKS_PER_SEC; // in seconds
 	double time_mem = ((double)tmm) / CLOCKS_PER_SEC; // in seconds
 
-	slog_info(">>>>>>> [API] imss_write time  total %f mem %f  s, total bytes = %ld, IMSS_DATA_BSIZE = %ld <<<<<<<<<", time_taken, time_mem, byte_count, IMSS_DATA_BSIZE);
+	slog_live(">>>>>>> [API] imss_write time  total %f mem %f  s, total bytes = %ld, IMSS_DATA_BSIZE = %ld <<<<<<<<<", time_taken, time_mem, byte_count, IMSS_DATA_BSIZE);
 
 	return byte_count;
 }

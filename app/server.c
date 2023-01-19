@@ -44,13 +44,12 @@ void *map_ep;		   // map_ep used for async write; server doesn't use it
 int32_t is_client = 0; // also used for async write
 
 int32_t IMSS_DEBUG_FILE = 0;
-int32_t IMSS_DEBUG_SCREEN = 1;
-int     IMSS_DEBUG_LEVEL = SLOG_FATAL;
+int32_t IMSS_DEBUG_SCREEN = 0;
+int IMSS_DEBUG_LEVEL = SLOG_FATAL;
 
-int 	IMSS_THREAD_POOL = 1;
+int IMSS_THREAD_POOL = 1;
 
 #define RAM_STORAGE_USE_PCT 0.75f // percentage of free system RAM to be used for storage
-
 
 int32_t main(int32_t argc, char **argv)
 {
@@ -84,7 +83,6 @@ int32_t main(int32_t argc, char **argv)
 	uint64_t max_storage_size; // memory pool size
 	uint32_t num_blocks;
 
-
 	/***************************************************************/
 	/******************** PARSE INPUT ARGUMENTS ********************/
 	/***************************************************************/
@@ -94,19 +92,26 @@ int32_t main(int32_t argc, char **argv)
 	{
 		if (strstr(getenv("IMSS_DEBUG"), "file"))
 			IMSS_DEBUG_FILE = 1;
-		if (strstr(getenv("IMSS_DEBUG"), "stdout"))
-            IMSS_DEBUG_SCREEN = 1;
-		if (strstr(getenv("IMSS_DEBUG"), "debug"))
+		else if (strstr(getenv("IMSS_DEBUG"), "stdout"))
+			IMSS_DEBUG_SCREEN = 1;
+		else if (strstr(getenv("IMSS_DEBUG"), "debug"))
 			IMSS_DEBUG_LEVEL = SLOG_DEBUG;
-        if (strstr(getenv("IMSS_DEBUG"), "all")) 
+		else if (strstr(getenv("IMSS_DEBUG"), "live"))
 			IMSS_DEBUG_LEVEL = SLOG_LIVE;
+		else if (strstr(getenv("IMSS_DEBUG"), "all"))
+		{
+			IMSS_DEBUG_FILE = 1;
+			IMSS_DEBUG_SCREEN = 1;
+			IMSS_DEBUG_LEVEL = SLOG_LIVE;
+		}
+		else if (strstr(getenv("IMSS_DEBUG"), "none"))
+			unsetenv("IMSS_DEBUG");
 	}
 
 	if (getenv("IMSS_THREAD_POOL") != NULL)
 	{
 		IMSS_THREAD_POOL = atoi(getenv("IMSS_THREAD_POOL"));
 	}
-	
 
 	// get arguments.
 	parse_args(argc, argv, &args);
@@ -116,6 +121,7 @@ int32_t main(int32_t argc, char **argv)
 	char log_path[1000];
 	sprintf(log_path, "./%c-server.%02d-%02d-%02d", args.type, tm.tm_hour, tm.tm_min, tm.tm_sec);
 	slog_init(log_path, IMSS_DEBUG_LEVEL, IMSS_DEBUG_FILE, IMSS_DEBUG_SCREEN, 1, 1, 1);
+	slog_info("IMSS DEBUG FILE AT %s", log_path);
 	slog_info(",Time(msec), Comment, RetCode");
 
 	slog_debug("[SERVER] Starting server.");
@@ -123,7 +129,7 @@ int32_t main(int32_t argc, char **argv)
 	if (args.type == TYPE_DATA_SERVER)
 	{
 		slog_debug("imss_uri = %s stat-host = %s stat-port = %" PRId64 " num-servers = %" PRId64 " deploy-hostfile = %s block-size = %" PRIu64 " storage-size = %" PRIu64 "",
-			   args.imss_uri, args.stat_host, args.stat_port, args.num_servers, args.deploy_hostfile, args.block_size, args.storage_size);
+				   args.imss_uri, args.stat_host, args.stat_port, args.num_servers, args.deploy_hostfile, args.block_size, args.storage_size);
 	}
 	else
 	{
@@ -165,7 +171,7 @@ int32_t main(int32_t argc, char **argv)
 	num_blocks = max_storage_size / (args.block_size * KB);
 	for (int i = 0; i < num_blocks; ++i)
 	{
-		char *buffer = (char * )malloc(args.block_size * KB); 
+		char *buffer = (char *)calloc(args.block_size * KB, sizeof(char));
 		StsQueue.push(mem_pool, buffer);
 	}
 
@@ -194,13 +200,13 @@ int32_t main(int32_t argc, char **argv)
 		int32_t imss_exists = 0;
 
 		// Check if the provided URI has been already reserved by any other instance.
+		slog_info("args.id=%d", args.id);
 		if (!args.id)
 		{
 			ucs_status_t status;
 			int oob_sock;
 			int ret = 0;
 			ucs_status_t ep_status = UCS_OK;
-			
 
 			uint32_t id = args.id;
 
@@ -242,14 +248,12 @@ int32_t main(int32_t argc, char **argv)
 			ucp_worker_address_query(req_addr, &attr);
 			slog_debug("[srv_worker_thread] Server UID %" PRIu64 ".", attr.worker_uid);
 
-
 			// Send the request.
 			if (send_req(ucp_worker, client_ep, req_addr, req_addr_len, formated_uri) < 0)
 			{
 				perror("ERRIMSS_RLSIMSS_SENDADDR");
 				return -1;
 			}
-
 
 			imss_info imss_info_;
 
@@ -263,7 +267,6 @@ int32_t main(int32_t argc, char **argv)
 					free(imss_info_.ips[i]);
 				free(imss_info_.ips);
 			}
-
 		}
 
 		if (imss_exists)
@@ -349,6 +352,7 @@ int32_t main(int32_t argc, char **argv)
 
 	// Buffer segment size assigned to each thread.
 	buffer_segment = data_reserved / IMSS_THREAD_POOL;
+	slog_info("buffer_segment=%ld", buffer_segment);
 
 	// Initialize pool of threads.
 	pthread_t threads[(IMSS_THREAD_POOL + 1)];
@@ -475,7 +479,7 @@ int32_t main(int32_t argc, char **argv)
 		// Send the created structure to the metadata server.
 		sprintf(key_plus_size, "%" PRIu32 " SET %lu %s", id, (sizeof(imss_info) + my_imss.num_storages * LINE_LENGTH), my_imss.uri_);
 
-		//status = ucp_ep_create(ucp_worker, &ep_params, &client_ep);
+		// status = ucp_ep_create(ucp_worker, &ep_params, &client_ep);
 
 		if (send_req(ucp_worker, client_ep, req_addr, req_addr_len, key_plus_size) < 0)
 		{
@@ -492,12 +496,22 @@ int32_t main(int32_t argc, char **argv)
 			free(my_imss.ips[i]);
 		free(my_imss.ips);
 
-		//ucp_ep_close_nb(client_ep, UCP_EP_CLOSE_MODE_FORCE);
+		// ucp_ep_close_nb(client_ep, UCP_EP_CLOSE_MODE_FORCE);
 	}
 
 	// Wait for threads to finish.
 	for (int32_t i = 0; i < (IMSS_THREAD_POOL + 1); i++)
 	{
+		// fprintf(stderr, "Server init\n");
+
+		// setenv("IMSS_INIT_SERVER", "1", 1);
+		// char command[100];
+		// strcpy(command,"export IMSS_INIT_SERVER=1");
+		// int ret = system(command);
+		// fprintf(stderr,"system status=%d\n", ret);
+		// putenv("IMSS_INIT_SERVER=1");
+		printf("IMSS_INIT_SERVER=1\n");
+		fflush(stdout);
 		if (pthread_join(threads[i], NULL) != 0)
 		{
 			perror("ERRIMSS_SRVTH_JOIN");
