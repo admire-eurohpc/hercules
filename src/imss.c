@@ -852,7 +852,7 @@ int32_t release_imss(char *imss_uri, uint32_t release_op)
 
 			ep = imss_.conns.eps[i];
 
-			sprintf(release_msg, "%" PRIu32 " GET 2 RELEASE", process_rank);
+			sprintf(release_msg, "GET 2 0 RELEASE");
 
 			if (send_req(ucp_worker_data, ep, local_addr_data, local_addr_len_data, release_msg) < 0)
 			{
@@ -1540,7 +1540,7 @@ int32_t rename_dataset_srv_worker_dir_dir(char *old_dir, char *rdir_dest,
 	{
 		ucp_ep_h ep = curr_imss.conns.eps[i];
 
-		sprintf(key_, "%" PRIu32 " GET 6 %s %s", curr_imss.conns.id[i], old_dir, rdir_dest);
+		sprintf(key_, "GET 6 0 %s %s", old_dir, rdir_dest);
 		// if (comm_send(curr_imss.conns.eps_[repl_servers[i]], key, key_length, 0) != key_length)		
 		if (send_req(ucp_worker_data, ep, local_addr_data, local_addr_len_data, key_) < 0)
 		{
@@ -1601,7 +1601,7 @@ int32_t rename_dataset_srv_worker(char *old_dataset_uri, char *new_dataset_uri,
 		ucp_ep_h ep = curr_imss.conns.eps[repl_servers[i]];
 
 		// Key related to the requested data element.
-		sprintf(key_, "%" PRIu32 " GET 5 %s %s", curr_imss.conns.id[i], old_dataset_uri, new_dataset_uri);
+		sprintf(key_, "GET 5 0 %s %s", old_dataset_uri, new_dataset_uri);
 		// printf("BLOCK %d ASKED TO %d SERVER with key: %s (%d)", data_id, repl_servers[i], key, key_length);
 		if (send_req(ucp_worker_data, ep, local_addr_data, local_addr_len_data, key_) < 0)
 		{
@@ -1651,7 +1651,7 @@ int32_t writev_multiple( const char *buf, int32_t dataset_id, int64_t data_id,
 		ucp_ep_h ep = curr_imss.conns.eps[n_server_];
 
 		// printf("BLOCK %ld SENT TO %d SERVER with key: %s (%d)", data_id, n_server_, key, key_length);
-		sprintf(key_, "%" PRIu32 " SET %d %s$%ld %ld %ld %ld %ld %ld %ld", curr_imss.conns.id[i], curr_dataset.data_entity_size, curr_dataset.uri_, data_id, data_id, end_blk, start_offset, end_offset, IMSS_DATA_BSIZE, size);
+		sprintf(key_, " SET %d 0 %s$%ld %ld %ld %ld %ld %ld %ld", curr_dataset.data_entity_size, curr_dataset.uri_, data_id, data_id, end_blk, start_offset, end_offset, IMSS_DATA_BSIZE, size);
 
 		if (send_req(ucp_worker_data, ep, local_addr_data, local_addr_len_data, key_) < 0)
 		{
@@ -1718,7 +1718,7 @@ int32_t readv_multiple(int32_t dataset_id,
 
 		// printf("BLOCK %d ASKED TO %d SERVER with key: %s (%d)", curr_block, repl_servers[i], key, key_length);
 		// Send read request message specifying the block URI.
-		sprintf(key_, "%" PRIu32 " GET 8 %s$%d %d %ld %ld %ld", curr_imss.conns.id[repl_servers[i]], curr_dataset.uri_, curr_block, end_block, BLOCKSIZE, start_offset, size);
+		sprintf(key_, "GET 8 0 %s$%d %d %ld %ld %ld", curr_dataset.uri_, curr_block, end_block, BLOCKSIZE, start_offset, size);
 
 		if (send_req(ucp_worker_data, ep, local_addr_data, local_addr_len_data, key_) < 0)
 		{
@@ -1769,7 +1769,7 @@ void * split_writev(void *th_argv)
 		ep = curr_imss.conns.eps[n_server_];
 
 		// Key related to the requested data element.
-		sprintf(key_, "%" PRIu32 " SET %d [OP]=2 %s %ld %ld %d %s", curr_imss.conns.id[n_server_], curr_dataset.data_entity_size,
+		sprintf(key_, "SET %d 0 [OP]=2 %s %ld %ld %d %s", curr_dataset.data_entity_size,
 				arguments->path, arguments->BLKSIZE, arguments->start_offset,
 				arguments->stats_size, arguments->msg);
 
@@ -1830,7 +1830,7 @@ void *  split_readv(void *th_argv)
 		// Send read request message specifying the block URI.
 		// if (comm_send(curr_imss.conns.eps_[repl_servers[i]], key, KEY, 0) < 0)
 		// printf("[SPLIT READV] 1-send_data");
-		sprintf(key_, "%" PRIu32 " GET 9 %s %ld %ld %d %d", curr_imss.conns.id[repl_servers[i]],
+		sprintf(key_, "GET 9 0 %s %ld %ld %d %d",
 				arguments->path, arguments->BLKSIZE, arguments->start_offset,
 				arguments->stats_size, msg_length);
 
@@ -2011,7 +2011,7 @@ int32_t get_data(int32_t dataset_id, int32_t data_id, char *buffer)
 		ucp_ep_h ep;
 		//t = clock();
 		// Key related to the requested data element.
-		sprintf(key_, "%" PRIu32 " GET 0 %s$%d", curr_imss.conns.id[repl_servers[i]], curr_dataset.uri_, data_id);
+		sprintf(key_, "GET 0 0 %s$%d", curr_dataset.uri_, data_id);
 		//slog_info("[IMSS][get_data] Request - '%s'", key_);
 		ep = curr_imss.conns.eps[repl_servers[i]];
 
@@ -2120,7 +2120,7 @@ int32_t get_ndata(int32_t dataset_id,
 		ep = curr_imss.conns.eps[repl_servers[i]];
 
 		// Key related to the requested data element.
-		sprintf(key_, "%" PRIu32 " GET 0 %s$%d", curr_imss.conns.id[repl_servers[i]], curr_dataset.uri_, data_id);
+		sprintf(key_, "GET 0 0 %s$%d", curr_dataset.uri_, data_id);
 
 		// printf("BLOCK %d ASKED TO %d SERVER with key: %s (%d)", data_id, repl_servers[i], key, key_length);
 		if (send_req(ucp_worker_data, ep, local_addr_data, local_addr_len_data, key_) < 0)
@@ -2166,7 +2166,7 @@ int32_t get_ndata(int32_t dataset_id,
 }
 
 // Method storing a specific data element.
-int32_t set_data(int32_t dataset_id, int32_t data_id, char *buffer)
+int32_t set_data(int32_t dataset_id, int32_t data_id, char *buffer, size_t size, off_t offset)
 {
 	int32_t n_server;
 	clock_t t;
@@ -2197,17 +2197,13 @@ int32_t set_data(int32_t dataset_id, int32_t data_id, char *buffer)
 		// printf("BLOCK %d SENT TO %d SERVER with key: %s (%d)", data_id, n_server_, key, key_length);
 
 		//	gettimeofday(&start, NULL);
-		// Send read request message specifying the block URI.
-		// Key related to the requested data element.
-		int size = 0;
-		if (data_id)
-			size = curr_dataset.data_entity_size;
-		else
+
+		if (data_id == 0)
 			size = sizeof(struct stat);
+		else if (size == 0)
+			size = curr_dataset.data_entity_size;
 
-
-
-		sprintf(key_, "%" PRIu32 " SET %d %s$%d", curr_imss.conns.id[n_server_], size, curr_dataset.uri_, data_id);
+		sprintf(key_, "SET %lu %ld %s$%d", size, offset, curr_dataset.uri_, data_id);
 		//slog_info("[IMSS][set_data] Request - '%s'", key_);
 		ep = curr_imss.conns.eps[n_server_];
 
@@ -2221,7 +2217,7 @@ int32_t set_data(int32_t dataset_id, int32_t data_id, char *buffer)
 
 
 
-		if (send_data(ucp_worker_data, ep, buffer, size,  local_data_uid) < 0)
+		if (send_data(ucp_worker_data, ep, buffer, size, local_data_uid) < 0)
 		{
 			perror("ERRIMSS_SETDATA_SEND");
 			return -1;
@@ -2270,7 +2266,7 @@ set_ndata(int32_t dataset_id,
 
 		// printf("BLOCK %d SENT TO %d SERVER with key: %s (%d)", data_id, n_server_, key, key_length);
 		// Key related to the requested data element.
-		sprintf(key_, "%" PRIu32 " SET %d %s$%d", curr_imss.conns.id[n_server_], size, curr_dataset.uri_, data_id);
+		sprintf(key_, "SET %d 0 %s$%d", size, curr_dataset.uri_, data_id);
 
 		ep = curr_imss.conns.eps[n_server_];
 

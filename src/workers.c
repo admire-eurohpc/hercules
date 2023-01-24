@@ -133,7 +133,6 @@ void *srv_worker(void *th_argv)
 		ucp_worker_address_query(peer_addr, &attr);
 		slog_debug("[srv_worker_thread] Receiving request from %" PRIu64 ".", attr.worker_uid);
 
-		// TODO
 		//  look for this peer_addr in the map and get the ep
 		ret = map_server_eps_search(map_server_eps, attr.worker_uid, &ep);
 		// create ep if it's not in the map
@@ -182,7 +181,6 @@ int srv_worker_helper(p_argv *arguments, char *req)
 	// Code to be sent if the requested to-be-read key does not exist.
 	char err_code[] = "$ERRIMSS_NO_KEY_AVAIL$";
 
-	uint32_t client_id = 0;
 	char mode[MODE_SIZE];
 
 	slog_debug("[srv_worker_thread] Waiting for new request.");
@@ -192,26 +190,19 @@ int srv_worker_helper(p_argv *arguments, char *req)
 
 	// slog_info("********** %d",ret);
 
-	sscanf(req, "%" PRIu32 " %s", &client_id, mode);
+	// Elements conforming the request.
+    uint32_t block_size_recv, block_offset;
+    char uri_[URI_];
 
-	char *req_content = strstr(req, mode);
-	req_content += 4;
+    sscanf(req, "%s %" PRIu32 " %" PRIu32  " %s", mode, &block_size_recv, &block_offset, uri_);
 
 	if (!strcmp(mode, "GET"))
 		more = GET_OP;
 	else
 		more = SET_OP;
 
-	slog_debug("[srv_worker_thread] Request - client_id '%" PRIu32 "', mode '%s', req '%s', more %ld", client_id, mode, req_content, more);
-
-	char number[16];
-	sscanf(req_content, "%s", number);
-	int32_t number_length = (int32_t)strlen(number);
-
-	// Elements conforming the request.
-	char *uri_ = req_content + number_length + 1;
-	// fprintf(stderr,"Server Uri=%s\n", uri_);
-	uint64_t block_size_recv = (uint64_t)atoi(number);
+	slog_debug("[srv_worker_thread] Request - mode '%s', block_size_recv '%" PRIu32 "', block_offset '%" PRIu32 "', uri_ '%s', more %ld",
+	           mode, block_size_recv, block_offset, uri_, more);
 
 	// Create an std::string in order to be managed by the map structure.
 	std::string key;
@@ -797,6 +788,7 @@ int srv_worker_helper(p_argv *arguments, char *req)
 				tr = clock();
 				// fprintf(stderr,"[srv_worker_thread][WRITE_OP] ****[PUT]********* key=%s\n",  key.c_str());
 				slog_debug("[srv_worker_thread][WRITE_OP] ****[PUT, block_size_recv=%ld, stats->st_size=%ld]********* key=%s", block_size_recv,stats->st_size, key.c_str());
+				//TODO: should this be block_size_recv or a different size? block_size_recv might not be the full block size
 				insert_successful = map->put(key, buffer, block_size_recv);
 				slog_debug("[srv_worker_thread][WRITE_OP] insert_successful %d key=%s",  insert_successful, key.c_str());
 				// map->get(key, &address_, &block_size_rtvd);
@@ -831,7 +823,10 @@ int srv_worker_helper(p_argv *arguments, char *req)
 				{
 					slog_debug("[srv_worker_thread][WRITE_OP] Updating block $0 (%d)", block_size_rtvd);
 					struct stat *old, *latest;
-					char *buffer = (char *)malloc(block_size_rtvd);
+
+					//TODO: make sure this works
+					char *buffer = (char *)malloc(block_size_recv);
+
 					// TIMING(recv_data(arguments->ucp_worker, arguments->server_ep, buffer, arguments->worker_uid, 0), "[srv_worker_thread][WRITE_OP] recv_data Updating block $0");
 					recv_data(arguments->ucp_worker, arguments->server_ep, buffer, arguments->worker_uid, 0);
 					old = (struct stat *)address_;
@@ -839,7 +834,11 @@ int srv_worker_helper(p_argv *arguments, char *req)
 					slog_debug("[srv_worker_thread] File size new %ld old %ld", latest->st_size, old->st_size);
 					latest->st_size = std::max(latest->st_size, old->st_size);
 					slog_debug("[srv_worker_thread] buffer: %ld", latest->st_size);
-					memcpy(address_, buffer, block_size_rtvd);
+
+					//TODO: make sure this works
+					memcpy(address_ + block_offset, buffer, block_size_recv);
+					//TODO: should we update this block's size in the map?
+
 					slog_debug("address_=%x", address_);
 					// free(buffer);
 				}
@@ -944,7 +943,6 @@ void *stat_worker(void *th_argv)
 		ucp_worker_address_query(peer_addr, &attr);
 		slog_debug("[stat_worker_thread] Receiving request from %" PRIu64 ".", attr.worker_uid);
 
-		// TODO
 		//  look for this peer_addr in the map and get the ep
 		ret = map_server_eps_search(map_server_eps, attr.worker_uid, &ep);
 		// create ep if it's not in the map

@@ -411,11 +411,13 @@ RETURNS:	 0 - The requested block was successfully retrieved.
 RECEIVES:	dataset_id - Number identifying the concerned dataset among the client's session.
 data_id    - Data block number identifying the data block to be stored.
 buffer     - Buffer containing the data block information.
+size       - Number of bytes to store.
+offset     - Offset within the block.
 
 RETURNS:	 0 - The requested block was successfully stored.
 -1 - In case of error.
 	 */
-	int32_t set_data(int32_t dataset_id, int32_t data_id, char *buffer);
+	int32_t set_data(int32_t dataset_id, int32_t data_id, char *buffer, size_t size, off_t offset);
 
 	/* Method retrieving the location of a specific data object.
 
