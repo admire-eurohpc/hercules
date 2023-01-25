@@ -229,36 +229,14 @@ imss_posix_init(void)
 	}
 	sprintf(hostname, "%s:%d", hostname, getpid());
 
-	if (getenv("IMSS_DEBUG") != NULL)
-	{
-		if (strstr(getenv("IMSS_DEBUG"), "file"))
-			IMSS_DEBUG_FILE = 1;
-		else if (strstr(getenv("IMSS_DEBUG"), "stdout"))
-			IMSS_DEBUG_SCREEN = 1;
-		else if (strstr(getenv("IMSS_DEBUG"), "debug"))
-			IMSS_DEBUG_LEVEL = SLOG_DEBUG;
-		else if (strstr(getenv("IMSS_DEBUG"), "live"))
-			IMSS_DEBUG_LEVEL = SLOG_LIVE;
-		else if (strstr(getenv("IMSS_DEBUG"), "all"))
-		{
-			IMSS_DEBUG_FILE = 1;
-			IMSS_DEBUG_SCREEN = 1;
-			IMSS_DEBUG_LEVEL = SLOG_LIVE;
-		}
-		else if (strstr(getenv("IMSS_DEBUG"), "none"))
-			unsetenv("IMSS_DEBUG");
-		else
-			IMSS_DEBUG_LEVEL = getLevel(getenv("IMSS_DEBUG"));
-	}
-
 	rank = MurmurOAAT32(hostname);
 
 	// log init.
 	time_t t = time(NULL);
 	struct tm tm = *localtime(&t);
-	sprintf(log_path, "./client.%02d-%02d-%02d.%d", tm.tm_hour, tm.tm_min, tm.tm_sec, rank);
+	sprintf(log_path, "./client.%02d-%02d", tm.tm_hour, tm.tm_min);
 	//	sprintf(log_path, "./client.%02d-%02d-%02d.%d", tm.tm_hour, tm.tm_min, tm.tm_sec, rank);
-	slog_init(log_path, IMSS_DEBUG_LEVEL, IMSS_DEBUG_FILE, IMSS_DEBUG_SCREEN, 1, 1, 1);
+	slog_init(log_path, IMSS_DEBUG_LEVEL, IMSS_DEBUG_FILE, IMSS_DEBUG_SCREEN, 1, 1, 1, rank);
 	slog_info(",Time(msec), Comment, RetCode");
 
 	slog_debug(" -- IMSS_MOUNT_POINT: %s", MOUNT_POINT);
@@ -385,6 +363,32 @@ void getConfiguration()
 	{
 		deployment = atoi(getenv("IMSS_DEPLOYMENT"));
 	}
+
+	if (getenv("IMSS_DEBUG") != NULL)
+	{
+		if (strstr(getenv("IMSS_DEBUG"), "file"))
+		{
+			IMSS_DEBUG_FILE = 1;
+			IMSS_DEBUG_SCREEN = 0;
+			IMSS_DEBUG_LEVEL = SLOG_LIVE;
+		}
+		else if (strstr(getenv("IMSS_DEBUG"), "stdout"))
+			IMSS_DEBUG_SCREEN = 1;
+		else if (strstr(getenv("IMSS_DEBUG"), "debug"))
+			IMSS_DEBUG_LEVEL = SLOG_DEBUG;
+		else if (strstr(getenv("IMSS_DEBUG"), "live"))
+			IMSS_DEBUG_LEVEL = SLOG_LIVE;
+		else if (strstr(getenv("IMSS_DEBUG"), "all"))
+		{
+			IMSS_DEBUG_FILE = 1;			
+			IMSS_DEBUG_LEVEL = SLOG_LIVE;
+		}
+		else if (strstr(getenv("IMSS_DEBUG"), "none"))
+			unsetenv("IMSS_DEBUG");
+		else
+			IMSS_DEBUG_LEVEL = getLevel(getenv("IMSS_DEBUG"));
+	}
+
 }
 
 void __attribute__((destructor)) run_me_last()

@@ -91,7 +91,11 @@ int32_t main(int32_t argc, char **argv)
 	if (getenv("IMSS_DEBUG") != NULL)
 	{
 		if (strstr(getenv("IMSS_DEBUG"), "file"))
+		{
 			IMSS_DEBUG_FILE = 1;
+			IMSS_DEBUG_SCREEN = 0;
+			IMSS_DEBUG_LEVEL = SLOG_LIVE;
+		}
 		else if (strstr(getenv("IMSS_DEBUG"), "stdout"))
 			IMSS_DEBUG_SCREEN = 1;
 		else if (strstr(getenv("IMSS_DEBUG"), "debug"))
@@ -100,12 +104,13 @@ int32_t main(int32_t argc, char **argv)
 			IMSS_DEBUG_LEVEL = SLOG_LIVE;
 		else if (strstr(getenv("IMSS_DEBUG"), "all"))
 		{
-			IMSS_DEBUG_FILE = 1;
-			IMSS_DEBUG_SCREEN = 1;
+			IMSS_DEBUG_FILE = 1;			
 			IMSS_DEBUG_LEVEL = SLOG_LIVE;
 		}
 		else if (strstr(getenv("IMSS_DEBUG"), "none"))
 			unsetenv("IMSS_DEBUG");
+		else
+			IMSS_DEBUG_LEVEL = getLevel(getenv("IMSS_DEBUG"));
 	}
 
 	if (getenv("IMSS_THREAD_POOL") != NULL)
@@ -120,7 +125,7 @@ int32_t main(int32_t argc, char **argv)
 	struct tm tm = *localtime(&t);
 	char log_path[1000];
 	sprintf(log_path, "./%c-server.%02d-%02d-%02d", args.type, tm.tm_hour, tm.tm_min, tm.tm_sec);
-	slog_init(log_path, IMSS_DEBUG_LEVEL, IMSS_DEBUG_FILE, IMSS_DEBUG_SCREEN, 1, 1, 1);
+	slog_init(log_path, IMSS_DEBUG_LEVEL, IMSS_DEBUG_FILE, IMSS_DEBUG_SCREEN, 1, 1, 1, -1);
 	slog_info("IMSS DEBUG FILE AT %s", log_path);
 	slog_info(",Time(msec), Comment, RetCode");
 
