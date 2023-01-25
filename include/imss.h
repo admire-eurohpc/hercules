@@ -405,7 +405,7 @@ RETURNS:	 0 - The requested block was successfully retrieved.
 	 */
 	int32_t get_data(int32_t dataset_id, int32_t data_id, char *buffer);
 
-	int32_t get_ndata(int32_t dataset_id, int32_t data_id, char *buffer, int64_t *len);
+	int32_t get_ndata(int32_t dataset_id, int32_t data_id, char *buffer, size_t len, off_t offset);
 	/* Method storing a specific data element.
 
 RECEIVES:	dataset_id - Number identifying the concerned dataset among the client's session.

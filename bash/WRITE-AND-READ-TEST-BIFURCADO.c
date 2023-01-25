@@ -83,7 +83,7 @@ int main(int argc, char **argv)
 
         // CREATE THE FILE.
         // fd = creat(file_path, 0666);
-        // //sleep(1 * rank);
+        sleep(1 * rank);
         fd = open(file_path, O_CREAT, 0666);
         if (fd == -1)
         {

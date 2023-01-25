@@ -59,7 +59,7 @@ wait_for_server() {
 	echo "[$1 server is running]"
 }
 
-rm ./m-server-2023-01-24.log d-server-2023-01-24.log client-2023-01-24.log
+rm ./m-server-2023-01-25.log d-server-2023-01-25.log client-2023-01-25.log
 
 #set -x
 ### setup

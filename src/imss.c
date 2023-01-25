@@ -2075,29 +2075,29 @@ int32_t get_data(int32_t dataset_id, int32_t data_id, char *buffer)
 }
 
 // Method retrieving a data element associated to a certain dataset.
-int32_t get_ndata(int32_t dataset_id,
-		int32_t data_id,
-		char *buffer,
-		int64_t *len)
+int32_t get_ndata(int32_t dataset_id, int32_t data_id, char *buffer, size_t len, off_t offset)
 {
+	slog_debug("[IMSS][get_data]");
+	// slog_fatal("Caller name: %pS", __builtin_return_address(0));
 	int32_t n_server;
 
-	*len = 0;
 	// Server containing the corresponding data to be retrieved.
 	if ((n_server = get_data_location(dataset_id, data_id, GET)) == -1)
-
+	{
 		return -1;
+	}
 
 	// Servers that the data block is going to be requested to.
 	int32_t repl_servers[curr_dataset.repl_factor];
 	int32_t curr_imss_storages = curr_imss.info.num_storages;
 
 	// Retrieve the corresponding connections to the previous servers.
+	slog_debug("curr_dataset.repl_factor=%d", curr_dataset.repl_factor);
 	for (int32_t i = 0; i < curr_dataset.repl_factor; i++)
 	{
 		// Server storing the current data block.
 		uint32_t n_server_ = (n_server + i * (curr_imss_storages / curr_dataset.repl_factor)) % curr_imss_storages;
-
+		// printf("Server storing is=%d",n_server_);
 		repl_servers[i] = n_server_;
 
 		// Check if the current connection is the local one (if there is).
@@ -2111,37 +2111,47 @@ int32_t get_ndata(int32_t dataset_id,
 	}
 
 	char key_[REQUEST_SIZE];
-
+	clock_t t;
+	double time_taken;
 	// Request the concerned block to the involved servers.
 	for (int32_t i = 0; i < curr_dataset.repl_factor; i++)
 	{
 		ucp_ep_h ep;
-
+		//t = clock();
+		// Key related to the requested data element.
+		// sprintf(key_, "GET 0 0 %s$%d", curr_dataset.uri_, data_id);
+		sprintf(key_, "GET %lu %ld %s$%d", 0l, offset, curr_dataset.uri_, data_id);
+		slog_info("[IMSS][get_data] Request - '%s'", key_);
 		ep = curr_imss.conns.eps[repl_servers[i]];
 
-		// Key related to the requested data element.
-		sprintf(key_, "GET 0 0 %s$%d", curr_dataset.uri_, data_id);
-
-		// printf("BLOCK %d ASKED TO %d SERVER with key: %s (%d)", data_id, repl_servers[i], key, key_length);
 		if (send_req(ucp_worker_data, ep, local_addr_data, local_addr_len_data, key_) < 0)
 		{
 			perror("ERRIMSS_RLSIMSS_SENDADDR");
 			return -1;
 		}
 
+		/*	gettimeofday(&end, NULL);
+			delta_us = (long) (end.tv_usec - start.tv_usec);
+			printf("[CLIENT] [GET DATA] send petition delta_us=%6.3f",(delta_us/1000.0F));*/
 
-		// Send read request message specifying the block URI.
-		// if (comm_send(curr_imss.conns.eps_[repl_servers[i]], key, KEY, 0) < 0)
-		if (send_data(ucp_worker_data, ep, key_, REQUEST_SIZE,  local_data_uid) < 0)
-		{
-			perror("ERRIMSS_GETDATA_REQ");
-			return -1;
-		}
+		//t = clock() - t;
+		//time_taken = ((double)t) / CLOCKS_PER_SEC; // in seconds
+		//slog_debug("[IMSS][get_data] send_data %f s", time_taken);
 
-		slog_debug("[IMSS] Request get_ndata: client_id '%" PRIu32 "', mode 'GET', key '%s'", curr_imss.conns.id[repl_servers[i]], key_);
 
+		int size = 0;
+		if (data_id)
+			size = curr_dataset.data_entity_size;
+		else
+			size = sizeof(struct stat);
+
+		//	gettimeofday(&start, NULL);
+		// printf("GET_DATA after send petition to read");
 		// Receive data related to the previous read request directly into the buffer.
-		if (recv_data(ucp_worker_data, ep, buffer, local_data_uid, 0) < 0)
+		//t = clock();
+		size_t length = 0;
+		length = recv_data(ucp_worker_data, ep, buffer, local_data_uid, 0);
+		if (length < 0)
 		{
 			if (errno != EAGAIN)
 			{
@@ -2152,17 +2162,25 @@ int32_t get_ndata(int32_t dataset_id,
 				break;
 		}
 
+		// fprintf(stderr,"buffer en recv_data=%s\n", buffer);
+
+		//t = clock() - t;
+
+		//time_taken = ((double)t) / CLOCKS_PER_SEC; // in seconds
+		//slog_debug("[IMSS][get_data] RECV_STREAM %f s", time_taken);
+
 		// Check if the requested key was correctly retrieved.
-		if (!strncmp((const char *)buffer, "$ERRIMSS_NO_KEY_AVAIL$", 22))
-			continue;
-
-		*len = curr_dataset.data_entity_size;
-
-		return 0;
+		if (strncmp((const char *)buffer, "$ERRIMSS_NO_KEY_AVAIL$", 22))
+		{
+			return (int32_t)length;
+		}
+		else {
+			slog_debug("[IMSS][get_data]ERRIMSS_NO_KEY_AVAIL");
+		}
+	
 	}
 
-	slog_fatal( "ERRIMSS_GETDATA_UNAVAIL");
-	return -1;
+	return 1;
 }
 
 // Method storing a specific data element.
@@ -2215,16 +2233,11 @@ int32_t set_data(int32_t dataset_id, int32_t data_id, char *buffer, size_t size,
 
 		//slog_debug("[IMSS][set_data] send_data(curr_imss.conns.id[%ld]:%ld, key_:%s, REQUEST_SIZE:%d)", n_server_, curr_imss.conns.id[n_server_], key_, REQUEST_SIZE);
 
-
-
 		if (send_data(ucp_worker_data, ep, buffer, size, local_data_uid) < 0)
 		{
 			perror("ERRIMSS_SETDATA_SEND");
 			return -1;
 		}
-
-
-
 		/*	gettimeofday(&end, NULL);
 			delta_us = (long) (end.tv_usec - start.tv_usec);
 			printf("[CLIENT] [SWRITE SEND_DATA] delta_us=%6.3f",(delta_us/1000.0F));*/

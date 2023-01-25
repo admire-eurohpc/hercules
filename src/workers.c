@@ -237,7 +237,9 @@ int srv_worker_helper(p_argv *arguments, char *req)
 			else
 			{
 				// Send the requested block.
-				TIMING(ret = send_data(arguments->ucp_worker, arguments->server_ep, address_, block_size_rtvd, arguments->worker_uid), "[srv_worker_thread][READ_OP][READ_OP] Send the requested block");
+				// TIMING(ret = send_data(arguments->ucp_worker, arguments->server_ep, address_, block_size_rtvd, arguments->worker_uid), "[srv_worker_thread][READ_OP][READ_OP] Send the requested block");
+				slog_debug("[srv_worker_thread][READ_OP][READ_OP] Send the requested block");
+				ret = send_data(arguments->ucp_worker, arguments->server_ep, address_+block_offset, block_size_rtvd, arguments->worker_uid);
 				// fprintf(stderr,"\tblock_size_rtvd=%ld, address_=%s\n", block_size_rtvd, address_);
 				if (ret < 0)
 				{
@@ -763,7 +765,6 @@ int srv_worker_helper(p_argv *arguments, char *req)
 			// search for the block to know if it was previously stored.
 			int ret = map->get(key, &address_, &block_size_rtvd);
 
-
 			// if the block was not already stored:
 			if (ret == 0)
 			{
@@ -779,7 +780,8 @@ int srv_worker_helper(p_argv *arguments, char *req)
 				// if (buffer == NULL)
 				// char *buffer = (char *)malloc(block_size_recv);
 				clock_t tr;
-				TIMING(recv_data(arguments->ucp_worker, arguments->server_ep, buffer, arguments->worker_uid, 1), "[srv_worker_thread][WRITE_OP] recv_data: Receive the block into the buffer.");
+				// TIMING(recv_data(arguments->ucp_worker, arguments->server_ep, buffer, arguments->worker_uid, 1), "[srv_worker_thread][WRITE_OP] recv_data: Receive the block into the buffer.");
+				recv_data(arguments->ucp_worker, arguments->server_ep, buffer+block_offset, arguments->worker_uid, 1);
 				// sleep(5);
 				struct stat *stats = (struct stat *)buffer;
 				int32_t insert_successful;
@@ -836,7 +838,7 @@ int srv_worker_helper(p_argv *arguments, char *req)
 					slog_debug("[srv_worker_thread] buffer: %ld", latest->st_size);
 
 					//TODO: make sure this works
-					memcpy(address_ + block_offset, buffer, block_size_recv);
+					memcpy(address_+block_offset, buffer, block_size_recv);
 					//TODO: should we update this block's size in the map?
 
 					slog_debug("address_=%x", address_);
@@ -844,9 +846,10 @@ int srv_worker_helper(p_argv *arguments, char *req)
 				}
 				else
 				{
-					TIMING(recv_data(arguments->ucp_worker, arguments->server_ep, address_, arguments->worker_uid, 1), ("[srv_worker_thread][WRITE_OP] recv_data Updated non 0 existing block"));
-					slog_debug("[srv_worker_thread][WRITE_OP] non 0 key.c_str(): %s", key.c_str());
-					// slog_debug("address_=%x", address_);
+					// TIMING(recv_data(arguments->ucp_worker, arguments->server_ep, address_, arguments->worker_uid, 1), ("[srv_worker_thread][WRITE_OP] recv_data Updated non 0 existing block"));
+					recv_data(arguments->ucp_worker, arguments->server_ep, address_+block_offset, arguments->worker_uid, 1);
+					slog_debug("[srv_worker_thread][WRITE_OP] Updated non 0 existing block, key.c_str(): %s", key.c_str());
+					// slog_debug("address_=%x", address_);	
 				}
 			}
 			break;

@@ -402,7 +402,7 @@ int imss_open(const char *path, uint64_t *fh)
 
 int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 {
-	// TODO: [read]
+	// TODO:[read]
 	// fprintf(stderr, "calling imss_sread\n");
 	int ret;
 	int32_t length;
@@ -482,7 +482,7 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 
 		if (first == 0) // First block case
 		{
-			length = get_data(ds, curr_blk, (char *)aux);
+			get_ndata(ds, curr_blk, (char *)aux, size, start_offset);
 			// fprintf(stderr, "Get data length=%d\n", length);
 
 			// if(aux!=NULL){
@@ -491,7 +491,7 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 
 			// sleep(5); // are the petition still pending to be served?
 			// slog_live("[imss_read] curr_blk=%ld, aux=%s", curr_blk, aux);
-			slog_warn("[imss_read] curr_blk=%ld/%ld, aux_size=%ld", curr_blk, end_blk, strlen(aux));
+			// slog_warn("[imss_read] curr_blk=%ld/%ld, aux_size=%ld", curr_blk, end_blk, strlen(aux));
 			if (size < (stats.st_size - start_offset) && size < IMSS_DATA_BSIZE)
 			{
 				to_read = size;
@@ -510,8 +510,8 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 					to_read = IMSS_DATA_BSIZE - start_offset;
 				}
 			}
-			fprintf(stderr,"[imss_read] First block case, to_read=%ld, fd=%d, ds=%d, strlen(aux+start_offset_size)=%ld\n", to_read, fd, ds, strlen(aux + start_offset));
-			memcpy(buf, aux + start_offset, to_read);
+			fprintf(stderr,"[imss_read] First block case, to_read=%ld, fd=%d, ds=%d, strlen(aux)=%ld\n", to_read, fd, ds, strlen(aux));
+			memcpy(buf, aux, to_read);
 			// fprintf(stderr,"[imss_read] buf=%s\n", buf);
 			slog_warn("[imss_read] buf=%s\n", buf);
 

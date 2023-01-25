@@ -124,7 +124,8 @@ int32_t main(int32_t argc, char **argv)
 	time_t t = time(NULL);
 	struct tm tm = *localtime(&t);
 	char log_path[1000];
-	sprintf(log_path, "./%c-server.%02d-%02d-%02d", args.type, tm.tm_hour, tm.tm_min, tm.tm_sec);
+	// sprintf(log_path, "./%c-server.%02d-%02d-%02d", args.type, tm.tm_hour, tm.tm_min, tm.tm_sec);
+	sprintf(log_path, "./%c-server", args.type);
 	slog_init(log_path, IMSS_DEBUG_LEVEL, IMSS_DEBUG_FILE, IMSS_DEBUG_SCREEN, 1, 1, 1, -1);
 	slog_info("IMSS DEBUG FILE AT %s", log_path);
 	slog_info(",Time(msec), Comment, RetCode");

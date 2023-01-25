@@ -234,7 +234,8 @@ imss_posix_init(void)
 	// log init.
 	time_t t = time(NULL);
 	struct tm tm = *localtime(&t);
-	sprintf(log_path, "./client.%02d-%02d", tm.tm_hour, tm.tm_min);
+	// sprintf(log_path, "./client.%02d-%02d", tm.tm_hour, tm.tm_min);
+	sprintf(log_path, "./client");
 	//	sprintf(log_path, "./client.%02d-%02d-%02d.%d", tm.tm_hour, tm.tm_min, tm.tm_sec, rank);
 	slog_init(log_path, IMSS_DEBUG_LEVEL, IMSS_DEBUG_FILE, IMSS_DEBUG_SCREEN, 1, 1, 1, rank);
 	slog_info(",Time(msec), Comment, RetCode");
