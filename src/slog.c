@@ -233,6 +233,7 @@ void slog(int flag, const char *msg, ...)
 
     SlogDate mdate;
     char string[MAXMSG];
+    char in_string[MAXMSG];
     char prints[MAXMSG];
     char color[32], alarm[32];
     char *output;
@@ -240,6 +241,7 @@ void slog(int flag, const char *msg, ...)
     slog_get_date(&mdate);
     /* Place zero-valued bytes. */
     bzero(string, sizeof(string));
+    bzero(in_string, sizeof(in_string));
     bzero(prints, sizeof(prints));
     bzero(color, sizeof(color));
     bzero(alarm, sizeof(alarm));
@@ -247,8 +249,11 @@ void slog(int flag, const char *msg, ...)
     /* Read args. */
     va_list args;
     va_start(args, msg);
-    vsprintf(string, msg, args);
+    vsprintf(in_string, msg, args);
     va_end(args);
+
+    // if(slg.rank!=-1)
+    sprintf(string, "[%d]\t>\t%s", slg.rank, in_string);
 
     /* Check logging levels. */
     if (flag >= slg.level || flag >= slg.file_level)
@@ -317,8 +322,7 @@ void slog(int flag, const char *msg, ...)
                 {
                     sprintf(prints, "[%s] %s", strclr(color, alarm), string);
                 }
-
-                output = slog_get(&mdate, (char *)"%s\n", prints);
+                // output = slog_get(&mdate, (char *)"%s\n", prints);
             }
             else
             {
@@ -326,9 +330,8 @@ void slog(int flag, const char *msg, ...)
                 {
                     sprintf(prints, "[%s] %s", alarm, string);
                 }
-
-                output = slog_get(&mdate, (char *)"%s\n", prints);
             }
+            output = slog_get(&mdate, (char *)"%s\n", prints);
 
             /* Add log line to file. */
             slog_to_file(output, slg.fname, &mdate);
@@ -348,7 +351,7 @@ void slog(int flag, const char *msg, ...)
     }
 }
 
-void slog_init(const char *fname, int lvl, int writeFile, int debugConsole, int debugColor, int filestamp, int t_safe)
+void slog_init(const char *fname, int lvl, int writeFile, int debugConsole, int debugColor, int filestamp, int t_safe, unsigned int rank)
 {
     // int status = 0;
 
@@ -362,6 +365,7 @@ void slog_init(const char *fname, int lvl, int writeFile, int debugConsole, int 
     slg.td_safe = t_safe;
     slg.fname = fname;
     slg.exclusive = 1; /* If 1 will exclude other levels different to the chose one */
+    slg.rank = rank;   /* Identifier used when multiple process are writing over the same file */
 
     /* Init mutex sync. */
     if (t_safe)
@@ -393,36 +397,38 @@ void slog_init(const char *fname, int lvl, int writeFile, int debugConsole, int 
     //     slog(0, SLOG_INFO, "Initializing logger values without config");
     // }
     // else
-    // { 
+    // {
     //     slog(0, SLOG_INFO, "Loading logger config from: %s", conf);
     // }
 }
 
-int getLevel(char *str) {
-    //int str_as_num = atoi(str);
+int getLevel(char *str)
+{
+    // int str_as_num = atoi(str);
     int ret = -1;
 
-    if(!strcmp(str, "SLOG_NONE"))
+    if (!strcmp(str, "SLOG_NONE"))
         ret = SLOG_NONE;
-    if(!strcmp(str, "SLOG_LIVE"))
+    if (!strcmp(str, "SLOG_LIVE"))
         ret = SLOG_LIVE;
-    if(!strcmp(str, "SLOG_DEBUG"))
+    if (!strcmp(str, "SLOG_DEBUG"))
         ret = SLOG_DEBUG;
-    if(!strcmp(str, "SLOG_WARN"))
+    if (!strcmp(str, "SLOG_WARN"))
         ret = SLOG_WARN;
-    if(!strcmp(str, "SLOG_INFO"))
+    if (!strcmp(str, "SLOG_INFO"))
         ret = SLOG_INFO;
-    if(!strcmp(str, "SLOG_ERROR"))
+    if (!strcmp(str, "SLOG_ERROR"))
         ret = SLOG_ERROR;
-    if(!strcmp(str, "SLOG_FATAL"))
+    if (!strcmp(str, "SLOG_FATAL"))
         ret = SLOG_FATAL;
-    if(!strcmp(str, "SLOG_PANIC"))
+    if (!strcmp(str, "SLOG_PANIC"))
         ret = SLOG_PANIC;
 
-    if(ret == -1) {
-        fprintf(stderr,"Invalid option, setting SLOG_PANIC as default");
+    if (ret == -1)
+    {
+        fprintf(stderr, "Invalid option, setting SLOG_PANIC as default");
         ret = SLOG_PANIC;
     }
-    
+
     return ret;
 }

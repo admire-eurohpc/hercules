@@ -130,6 +130,7 @@ typedef struct {
     short filestamp;
     short td_safe;
     short exclusive;
+    unsigned int rank;
 } SlogFlags;
 
 
@@ -201,7 +202,7 @@ void slog(int flag, const char *msg, ...);
  *         (t_safe) thread safety flag (1 enabled, 0 disabled).
  * RETURN: (void)
  */
-void slog_init(const char* fname, int lvl, int writeFile, int debugConsole, int debugColor, int filestamp, int t_safe);
+void slog_init(const char* fname, int lvl, int writeFile, int debugConsole, int debugColor, int filestamp, int t_safe, unsigned int rank);
 
 /*
  * FUNCTION: getLevel.
