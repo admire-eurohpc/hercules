@@ -464,10 +464,11 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 
 	// slog_live("size=%ld\n", size);
 
-	if (size == IMSS_DATA_BSIZE)
+	if (size <= IMSS_DATA_BSIZE)
 	{
 		slog_warn("[imss_read] Reads over buf, size %ld == %ld IMSS_DATA_BSIZE", size, IMSS_DATA_BSIZE);
-		length  = get_data(ds, curr_blk, (char *)buf);
+		// length  = get_data(ds, curr_blk, (char *)buf);
+		length = get_ndata(ds, curr_blk, (char *)buf, size, start_offset);
 		// fprintf(stderr, "[imss_read] Get data length=%d\n", length);
 		free(rpath);
 		return length;
@@ -510,10 +511,10 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 					to_read = IMSS_DATA_BSIZE - start_offset;
 				}
 			}
-			fprintf(stderr,"[imss_read] First block case, to_read=%ld, fd=%d, ds=%d, strlen(aux)=%ld\n", to_read, fd, ds, strlen(aux));
+			slog_warn("[imss_read] First block case, to_read=%ld, fd=%d, ds=%d, strlen(aux)=%ld\n", to_read, fd, ds, strlen(aux));
 			memcpy(buf, aux, to_read);
 			// fprintf(stderr,"[imss_read] buf=%s\n", buf);
-			slog_warn("[imss_read] buf=%s\n", buf);
+			// slog_warn("[imss_read] buf=%s\n", buf);
 
 			byte_count += to_read;
 			++first;
@@ -560,7 +561,7 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 	double time_taken = ((double)t) / CLOCKS_PER_SEC; // in seconds
 	double time_mem = ((double)tmm) / CLOCKS_PER_SEC; // in seconds
 
-	slog_info("[API] imss_read time  total %f mem %f  s, byte_count=%ld", time_taken, time_mem, byte_count);
+	slog_warn("[API] imss_read time  total %f mem %f  s, byte_count=%ld", time_taken, time_mem, byte_count);
 
 	free(rpath);
 	return byte_count;

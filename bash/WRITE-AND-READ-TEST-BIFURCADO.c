@@ -161,7 +161,7 @@ int main(int argc, char **argv)
                 exit(1);
             }
             // fprintf(stderr, "real_read_size=%ld\n", real_read_size);
-            sprintf(_stdout, "%s, real_read_size=%ld", _stdout, real_read_size);
+            sprintf(_stdout, "%s, real_read_size=%ld\n", _stdout, real_read_size);
 
             // else
             // {
@@ -201,8 +201,8 @@ int main(int argc, char **argv)
             // fprintf(stderr, "buffer_w=%s\n", buffer_w);
             // fprintf(stderr, "buffer_r=%s\n", buffer_r);
         }
-        fprintf(stderr, "buffer_w=%s\n", buffer_w+buffer_size-1024);
-        fprintf(stderr, "buffer_r=%s\n", buffer_r+buffer_size-1024);
+        // fprintf(stderr, "buffer_w=%s\n", buffer_w+buffer_size-1024);
+        // fprintf(stderr, "buffer_r=%s\n", buffer_r+buffer_size-1024);
 
         t = clock() - t;
         time_taken = ((double)t) / (CLOCKS_PER_SEC / 1000);

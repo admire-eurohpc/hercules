@@ -136,7 +136,8 @@ ucs_status_t request_wait(ucp_worker_h ucp_worker, void *request, send_req_t *ct
 void stream_recv_cb(void *request, ucs_status_t status, size_t length, void *user_data);
 void send_handler_data(void *request, ucs_status_t status, void *ctx);
 void send_handler_req(void *request, ucs_status_t status, void *ctx);
-void recv_handler(void *request, ucs_status_t status, ucp_tag_recv_info_t *info);
+// void recv_handler(void *request, ucs_status_t status, ucp_tag_recv_info_t *info);
+void recv_handler(void *request, ucs_status_t status, const ucp_tag_recv_info_t *info, void *user_data);
 void send_cb(void *request, ucs_status_t status, void *user_data);
 void err_cb_client(void *arg, ucp_ep_h ep, ucs_status_t status);
 void err_cb_server(void *arg, ucp_ep_h ep, ucs_status_t status);
@@ -163,7 +164,6 @@ size_t send_stream_addr(ucp_worker_h ucp_worker, ucp_ep_h ep, ucp_address_t *add
 void request_init(void *request);
 
 void flush_cb(void *request, ucs_status_t status);
-void recv_handler(void *request, ucs_status_t status, const ucp_tag_recv_info_t *info, void *user_data);
 
 ucs_status_t ucp_mem_alloc(ucp_context_h ucp_context, size_t length, void **address_p);
 

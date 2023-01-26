@@ -16,6 +16,10 @@
 #ifndef H_IMSS_POSIX_API
 #define H_IMSS_POSIX_API
 
+#ifndef __USE_FILE_OFFSET64
+#define __USE_FILE_OFFSET64
+#endif
+
 typedef int (*posix_fill_dir_t) (void *buf, const char *name,
 				const struct stat *stbuf, off_t off);
 
@@ -26,6 +30,7 @@ int imss_truncate(const char * path, off_t offset);
 int imss_access(const char *path, int permission);
 int imss_refresh(const char *path);
 int imss_getattr(const char *path, struct stat *stbuf);
+
 
 int imss_readdir(const char *path, void *buf, posix_fill_dir_t filler, off_t offset);
 int imss_open(const char *path, uint64_t *fh);
