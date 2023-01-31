@@ -258,7 +258,7 @@ size_t recv_data(ucp_worker_h ucp_worker, ucp_ep_h ep, char *msg, uint64_t dest,
 
 	// sleep(1);
 	status = ucx_wait(ucp_worker, request, "recv",  "data");
-	slog_debug("[COMM] status=%s.", ucs_status_string(status));
+	// slog_debug("[COMM] status=%s.", ucs_status_string(status));
 	// slog_debug("--- %s\n", msg);
 
 	//t = clock() -t;

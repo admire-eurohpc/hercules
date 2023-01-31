@@ -59,7 +59,9 @@ wait_for_server() {
 	echo "[$1 server is running]"
 }
 
-rm ./m-server-2023-01-25.log d-server-2023-01-25.log client-2023-01-25.log
+
+date="2023-01-31"
+rm ./m-server-$date.log d-server-$date.log client-$date.log
 
 #set -x
 ### setup
@@ -124,7 +126,7 @@ do
 	if [ $IMSS_INIT == 'y' ]
 	then
 	echo "[Running under IMSS]"
-	mpiexec.mpich -l -n $NUM_CLIENT -f ./client_hostfile \
+	mpiexec.mpich -n $NUM_CLIENT -f ./client_hostfile \
 		-env LD_PRELOAD $IMSS_PATH/tools/libimss_posix.so \
 		-env IMSS_MOUNT_POINT /mnt/imss \
 		-env IMSS_HOSTFILE $PWD/data_hostfile \
@@ -163,7 +165,7 @@ do
 	else
 	echo "[Running under UNIX]"
 	mpiexec.mpich -l -n $NUM_CLIENT \
-		./exe_WRITE-TEST-BIFURCADO ./$FILE_NAME 1 1 1
+		./exe_WRITE-AND-READ-TEST-BIFURCADO ./$FILE_NAME $FILE_SIZE
 	kill_servers 1
 	fi
 done 

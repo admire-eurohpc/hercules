@@ -25,12 +25,12 @@ int main(int argc, char **argv)
     MPI_Init(&argc, &argv);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &mpi_size);
-    // fprintf(stderr, "Process  %d of %d is alive\n", rank, amount);
+    fprintf(stderr, "Process  %d of %d is alive\n", rank, mpi_size);
 
     // to measure time.
     clock_t t;
     double time_taken;
-    // int ret = -1;
+    int ret = -1;
 
     char file_path[100];
     int fd;
@@ -42,6 +42,7 @@ int main(int argc, char **argv)
 
     // size_t buffer_size = file_size / mpi_size;
     // size_t buffer_size = file_size;
+    size_t offset = 1024;
     size_t buffer_size = atoi(argv[2]) * 1024;
     // fprintf(stderr, "buffer_size=%ld\n", buffer_size);
     char *buffer_w = NULL, *buffer_r = NULL;
@@ -56,7 +57,7 @@ int main(int argc, char **argv)
         fprintf(stderr, "file_path %s\n", file_path);
     // if (rank == 0)
     //     fprintf(stderr, "[OPERATION],[TIME(ms)]\n");
-    long start_position = rank * buffer_size;
+    long start_position = rank * buffer_size + offset;
     // for (h = 1; h <= n_of_tests; h++)
     sprintf(_stdout, "buffer_size=%ld, start_position=%ld", buffer_size, start_position);
 
@@ -69,7 +70,7 @@ int main(int argc, char **argv)
         // fprintf(stderr, "- - -[Test %ld] c:%c %ld - - -\n", h, c, h / n_of_tests);
 
         // allocate memory.
-        buffer_w = (char *)malloc(buffer_size * sizeof(char)+1);
+        buffer_w = (char *)malloc(buffer_size * sizeof(char) + 1);
         // fill the buffer.
         for (b_i = 0; b_i < buffer_size; b_i++)
         {
@@ -83,7 +84,7 @@ int main(int argc, char **argv)
 
         // CREATE THE FILE.
         // fd = creat(file_path, 0666);
-        sleep(1 * rank);
+        // sleep(1 * rank);
         fd = open(file_path, O_CREAT, 0666);
         if (fd == -1)
         {
@@ -110,7 +111,7 @@ int main(int argc, char **argv)
         {
             // WRITE BLOCK.
             // fprintf(stderr, "start_position=%ld\n", start_position);
-            lseek(fd, start_position, SEEK_SET);
+            ret = lseek(fd, start_position, SEEK_SET);
             // real_write_size = write(fd, buffer_w + start_position, buffer_size);
             // //sleep(rank * 5);
             real_write_size = write(fd, buffer_w, buffer_size);
@@ -129,10 +130,10 @@ int main(int argc, char **argv)
             sprintf(_stdout, "%s, real_write_size=%ld", _stdout, real_write_size);
         }
         ////sleep(2);
-         // close file.
+        // close file.
         close(fd);
 
-        //sleep(2);
+        // sleep(2);
 
         // OPEN FILE TO READ
         fd = open(file_path, O_RDONLY, 0666);
@@ -145,47 +146,48 @@ int main(int argc, char **argv)
         // //sleep(10);
 
         // allocate memory.
-        buffer_r = (char *)malloc(buffer_size * sizeof(char)+1);
+        buffer_r = (char *)malloc(buffer_size * sizeof(char) + 1);
         buffer_r[buffer_size] = '\0';
+
+        fprintf(stderr, "buffer_r address=%p\n", buffer_r);
 
         // read file.
         {
             // READ BLOCK.
             lseek(fd, start_position, SEEK_SET);
+            fprintf(stderr, "[CLIENT] %s\n", _stdout);
             real_read_size = read(fd, buffer_r, buffer_size);
             if (real_read_size != buffer_size)
             {
+                fprintf(stderr, "[CLIENT] %s\n", _stdout);
                 char error[500];
                 sprintf(error, "[Test %ld] error read, readed size: %ld/%ld\n", h, real_read_size, buffer_size);
                 perror(error);
                 exit(1);
             }
             // fprintf(stderr, "real_read_size=%ld\n", real_read_size);
-            sprintf(_stdout, "%s, real_read_size=%ld\n", _stdout, real_read_size);
-
-            // else
-            // {
-            //     fprintf(stderr, "[Test %ld] Ok! readed size: %d: %s\n", h, real_read_size, buffer);
-            //     fprintf(stderr, "[READ] i=%ld/%ld\n", i + file_size, buffer_size);
-            // }
+            sprintf(_stdout, "%s, real_read_size=%ld", _stdout, real_read_size);
         }
 
         // close file.
         close(fd);
 
-        //sleep(2);
-
-        int result = 0;//strcmp(buffer_w, buffer_r);
-
+        int result = 0; // strcmp(buffer_w, buffer_r);
+        size_t count_differences = 0;
 
         for (size_t i = 0; i < buffer_size; i++)
         {
             if (buffer_w[i] != buffer_r[i])
             {
+                // fprintf(stderr, "\x1B[31m[%c] != [%c] pos=%ld\033[0m\n", buffer_w[i], buffer_r[i], i);
                 result = 1;
-            }  
+                count_differences++;
+                // break;
+            } else {
+                // fprintf(stderr, "[%c] == [%c] pos=%ld\n", buffer_w[i], buffer_r[i], i);
+            }
         }
-        
+        sprintf(_stdout, "%s, count_differences=%ld\n", _stdout, count_differences);
         // sprintf(_stdout, "%s, size of buffer_r %ld", _stdout, strlen(buffer_r));
         // fprintf(stderr, "strcmp = %d\n", result);
         if (result)

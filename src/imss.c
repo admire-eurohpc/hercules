@@ -1471,7 +1471,7 @@ int32_t get_data_location(int32_t dataset_id,
 		int32_t op_type)
 {
 	// If the current dataset policy was not established yet.
-	slog_debug("[get_data_location] current_dataset=%ld, dataset_id=%ld", current_dataset, dataset_id);
+	// slog_debug("[get_data_location] current_dataset=%ld, dataset_id=%ld", current_dataset, dataset_id);
 	if (current_dataset != dataset_id)
 	{
 		// Retrieve the corresponding dataset_info structure and the associated IMSS.
@@ -1489,7 +1489,7 @@ int32_t get_data_location(int32_t dataset_id,
 
 	int32_t server;
 	// Search for the server that is supposed to have the specified data element.
-	slog_debug("[get_data_location] curr_dataset.uri_=%s", curr_dataset.uri_);
+	// slog_debug("[get_data_location] curr_dataset.uri_=%s", curr_dataset.uri_);
 	if ((server = find_server(curr_imss.info.num_storages, data_id, curr_dataset.uri_, op_type)) < 0)
 	{
 		slog_fatal( "ERRIMSS_FIND_SERVER");
@@ -2077,7 +2077,7 @@ int32_t get_data(int32_t dataset_id, int32_t data_id, char *buffer)
 // Method retrieving a data element associated to a certain dataset.
 int32_t get_ndata(int32_t dataset_id, int32_t data_id, char *buffer, size_t len, off_t offset)
 {
-	slog_debug("[IMSS][get_data]");
+	// slog_debug("[IMSS][get_data]");
 	// slog_fatal("Caller name: %pS", __builtin_return_address(0));
 	int32_t n_server;
 
@@ -2092,7 +2092,7 @@ int32_t get_ndata(int32_t dataset_id, int32_t data_id, char *buffer, size_t len,
 	int32_t curr_imss_storages = curr_imss.info.num_storages;
 
 	// Retrieve the corresponding connections to the previous servers.
-	slog_debug("curr_dataset.repl_factor=%d", curr_dataset.repl_factor);
+	// slog_debug("curr_dataset.repl_factor=%d", curr_dataset.repl_factor);
 	for (int32_t i = 0; i < curr_dataset.repl_factor; i++)
 	{
 		// Server storing the current data block.
@@ -2190,7 +2190,7 @@ int32_t set_data(int32_t dataset_id, int32_t data_id, char *buffer, size_t size,
 	clock_t t;
 	//size_t (*const send_choose_stream)(ucp_worker_h ucp_worker, ucp_ep_h ep, const char *msg, size_t msg_length) = (IMSS_WRITE_ASYNC == 1) ? send_istream : send_data;
 
-	slog_debug("[IMSS][set_data]");
+	// slog_debug("[IMSS][set_data]");
 	t = clock();
 
 	// Server containing the corresponding data to be written.
@@ -2222,7 +2222,7 @@ int32_t set_data(int32_t dataset_id, int32_t data_id, char *buffer, size_t size,
 			size = curr_dataset.data_entity_size;
 
 		sprintf(key_, "SET %lu %ld %s$%d", size, offset, curr_dataset.uri_, data_id);
-		//slog_info("[IMSS][set_data] Request - '%s'", key_);
+		slog_info("[IMSS][set_data] Request - '%s'", key_);
 		ep = curr_imss.conns.eps[n_server_];
 
 		if (send_req(ucp_worker_data, ep, local_addr_data, local_addr_len_data, key_) < 0)
@@ -2250,7 +2250,7 @@ int32_t set_data(int32_t dataset_id, int32_t data_id, char *buffer, size_t size,
 	t = clock() - t;
 	double time_taken = ((double)t) / CLOCKS_PER_SEC; // in seconds
 
-	slog_info("[IMSS] [SET DATA] sent data %f s", time_taken);
+	// slog_info("[IMSS] [SET DATA] sent data %f s", time_taken);
 	return 1;
 }
 
@@ -2279,7 +2279,7 @@ set_ndata(int32_t dataset_id,
 
 		// printf("BLOCK %d SENT TO %d SERVER with key: %s (%d)", data_id, n_server_, key, key_length);
 		// Key related to the requested data element.
-		sprintf(key_, "SET %d 0 %s$%d", size, curr_dataset.uri_, data_id);
+		sprintf(key_, "SET 0 %d %s$%d", size, curr_dataset.uri_, data_id);
 
 		ep = curr_imss.conns.eps[n_server_];
 

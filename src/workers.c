@@ -38,6 +38,8 @@ pthread_mutex_t buff_size_mut;
 pthread_cond_t buff_size_cond;
 int32_t copied;
 
+uint64_t BLOCK_SIZE;   // In KB
+
 StsHeader *mem_pool;
 
 // URI of the attached deployment.
@@ -83,6 +85,8 @@ void *srv_worker(void *th_argv)
 	ep_params.err_handler.arg = NULL;
 
 	map_server_eps = map_server_eps_create();
+
+	BLOCK_SIZE = arguments->blocksize*1024;
 
 	for (;;)
 	{
@@ -238,7 +242,7 @@ int srv_worker_helper(p_argv *arguments, char *req)
 			{
 				// Send the requested block.
 				// TIMING(ret = send_data(arguments->ucp_worker, arguments->server_ep, address_, block_size_rtvd, arguments->worker_uid), "[srv_worker_thread][READ_OP][READ_OP] Send the requested block");
-				slog_debug("[srv_worker_thread][READ_OP][READ_OP] Send the requested block");
+				slog_debug("[srv_worker_thread][READ_OP][READ_OP] Send the requested block with key=%s, block_offset=%ld, block_size_rtvd=%ld", key.c_str(), block_offset, block_size_rtvd);
 				ret = send_data(arguments->ucp_worker, arguments->server_ep, address_+block_offset, block_size_rtvd, arguments->worker_uid);
 				// fprintf(stderr,"\tblock_size_rtvd=%ld, address_=%s\n", block_size_rtvd, address_);
 				if (ret < 0)
@@ -761,7 +765,7 @@ int srv_worker_helper(p_argv *arguments, char *req)
 		}
 		else
 		{
-			slog_debug("[srv_worker_thread][WRITE_OP] WRITE NORMAL CASE. Size %ld", block_size_recv);
+			slog_debug("[srv_worker_thread][WRITE_OP] WRITE NORMAL CASE. Size %ld, offset=%ld", block_size_recv, block_offset);
 			// search for the block to know if it was previously stored.
 			int ret = map->get(key, &address_, &block_size_rtvd);
 
@@ -791,7 +795,9 @@ int srv_worker_helper(p_argv *arguments, char *req)
 				// fprintf(stderr,"[srv_worker_thread][WRITE_OP] ****[PUT]********* key=%s\n",  key.c_str());
 				slog_debug("[srv_worker_thread][WRITE_OP] ****[PUT, block_size_recv=%ld, stats->st_size=%ld]********* key=%s", block_size_recv,stats->st_size, key.c_str());
 				//TODO: should this be block_size_recv or a different size? block_size_recv might not be the full block size
-				insert_successful = map->put(key, buffer, block_size_recv);
+				//insert_successful = map->put(key, buffer, block_size_recv);
+				fprintf(stderr, "BLOCK_SIZE=%ld", BLOCK_SIZE);
+				insert_successful = map->put(key, buffer, BLOCK_SIZE);
 				slog_debug("[srv_worker_thread][WRITE_OP] insert_successful %d key=%s",  insert_successful, key.c_str());
 				// map->get(key, &address_, &block_size_rtvd);
 				// fprintf(stderr,"****[PUT2]********* key=%s\n",  key.c_str());
@@ -841,14 +847,14 @@ int srv_worker_helper(p_argv *arguments, char *req)
 					memcpy(address_+block_offset, buffer, block_size_recv);
 					//TODO: should we update this block's size in the map?
 
-					slog_debug("address_=%x", address_);
+					// slog_debug("address_=%x", address_);
 					// free(buffer);
 				}
 				else
 				{
 					// TIMING(recv_data(arguments->ucp_worker, arguments->server_ep, address_, arguments->worker_uid, 1), ("[srv_worker_thread][WRITE_OP] recv_data Updated non 0 existing block"));
-					recv_data(arguments->ucp_worker, arguments->server_ep, address_+block_offset, arguments->worker_uid, 1);
 					slog_debug("[srv_worker_thread][WRITE_OP] Updated non 0 existing block, key.c_str(): %s", key.c_str());
+					recv_data(arguments->ucp_worker, arguments->server_ep, address_+block_offset, arguments->worker_uid, 1);
 					// slog_debug("address_=%x", address_);	
 				}
 			}
@@ -1393,8 +1399,7 @@ void *srv_attached_dispatcher(void *th_argv)
 
 			// Send communication specifications.
 			if (send_data(ucp_data_worker, server_ep, response_, RESPONSE_SIZE, arguments->worker_uid) < 0)
-			{
-				perror("ERRIMSS_SRVDISP_SENDBLOCK");
+			{				perror("ERRIMSS_SRVDISP_SENDBLOCK");
 				// ep_flush(server_ep, ucp_data_worker);
 				ep_close(ucp_data_worker, server_ep, UCP_EP_CLOSE_MODE_FLUSH);
 				pthread_exit(NULL);
