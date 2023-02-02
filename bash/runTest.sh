@@ -41,26 +41,29 @@ kill_servers() {
 }
 
 wait_for_server() {
-	IMSS_INIT_SERVER=0
 	NUM_SERVERS=$2
-	until [[ $IMSS_INIT_SERVER -eq $NUM_SERVERS ]]
+	for ((i=0;i<$NUM_SERVERS;i++));
 	do
-		IMSS_INIT_SERVER=`cat server.log | grep "IMSS_INIT_SERVER" | cut -c 18-`
-		#echo -n "."
-		#echo "The value of IMSS_INIT_SERVER is="$IMSS_INIT_SERVER
-		#if [[ $IMSS_INIT_SERVER == '' ]]
-		#then
-		#	IMSS_INIT_SERVER=0
-		#fi
-	#	kill_servers
-		sleep 1
+		IMSS_INIT_SERVER=0
+		until [[ $IMSS_INIT_SERVER -eq 1 ]]
+		do
+			IMSS_INIT_SERVER=`cat server$i.log | grep "IMSS_INIT_SERVER" | cut -c 18-`
+			#echo -n "."
+			echo "The value of IMSS_INIT_SERVER in server$i.log is="$IMSS_INIT_SERVER
+			#if [[ $IMSS_INIT_SERVER == '' ]]
+			#then
+			#	IMSS_INIT_SERVER=0
+			#fi
+		#	kill_servers
+			sleep 1
+		done
 	done
 	rm server.log
 	echo "[$1 server is running]"
 }
 
 
-date="2023-01-31"
+date="2023-02-02"
 rm ./m-server-$date.log d-server-$date.log client-$date.log
 
 #set -x
@@ -100,14 +103,23 @@ do
 	kill_servers 0
 
 	### Init metadata server.
-	$IMSS_PATH/server m --server-id=0 --stat-logfile=./metadata --port=$META_PORT --bufsize=0 1> server.log &
+	for ((i=0;i<$NUM_DATA;i++));
+	do
+		$IMSS_PATH/server m --server-id=$i --stat-logfile=./metadata --port=$META_PORT --bufsize=0 1> "server$i.log" &
+	done
 	### Wait for metadata server.
 	wait_for_server Metadata $NUM_METADATA
 
 	### Init data server.
 	#set -x
 	META_NODE=$(head -n 1 meta_hostfile)
-	$IMSS_PATH/server d --server-id=0 --imss-uri=imss:// --port=$DATA_PORT --bufsize=0 --stat-host=$META_NODE --stat-port=$META_PORT --num-servers=$NUM_DATA --deploy-hostfile=./data_hostfile --block-size=$BLOCK_SIZE --storage-size=$STORAGE_SIZE 1> server.log &
+
+	for ((i=0;i<$NUM_DATA;i++));
+	do
+	DATA_PORT=`expr $DATA_PORT + $i`
+	echo $DATA_PORT
+	$IMSS_PATH/server d --server-id=$i --imss-uri=imss:// --port=$DATA_PORT --bufsize=0 --stat-host=$META_NODE --stat-port=$META_PORT --num-servers=$NUM_DATA --deploy-hostfile=./data_hostfile --block-size=$BLOCK_SIZE --storage-size=$STORAGE_SIZE 1> "server$i.log" &
+	done
 	### Wait for data server
 	wait_for_server Data $NUM_DATA
 #	sleep 10
@@ -119,6 +131,7 @@ do
 	#COMMAND2="$IOR_PATH/ior -o /mnt/imss/$FILE_NAME -t ${FILE_SIZE}kb -b ${FILE_SIZE}kb -s 1 -i 1 -WR -F"
 	#COMMAND="$IOR_PATH/ior -o /mnt/imss/$FILE_NAME -t ${FILE_SIZE}m -b ${FILE_SIZE}m -s 1 -i 1 -k -WR -F"
 	COMMAND="./exe_WRITE-AND-READ-TEST-BIFURCADO /mnt/imss/$FILE_NAME $FILE_SIZE"
+	# COMMAND="$IOR_PATH/ior -o /mnt/imss/data.out -t ${FILE_SIZE}m -b ${FILE_SIZE}m -s 1 -i 10"
 
 #	echo $BLOCK_SIZE
 

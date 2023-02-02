@@ -2075,7 +2075,7 @@ int32_t get_data(int32_t dataset_id, int32_t data_id, char *buffer)
 }
 
 // Method retrieving a data element associated to a certain dataset.
-int32_t get_ndata(int32_t dataset_id, int32_t data_id, char *buffer, size_t len, off_t offset)
+int32_t get_ndata(int32_t dataset_id, int32_t data_id, char *buffer, size_t to_read, off_t offset)
 {
 	// slog_debug("[IMSS][get_data]");
 	// slog_fatal("Caller name: %pS", __builtin_return_address(0));
@@ -2120,7 +2120,7 @@ int32_t get_ndata(int32_t dataset_id, int32_t data_id, char *buffer, size_t len,
 		//t = clock();
 		// Key related to the requested data element.
 		// sprintf(key_, "GET 0 0 %s$%d", curr_dataset.uri_, data_id);
-		sprintf(key_, "GET %lu %ld %s$%d", 0l, offset, curr_dataset.uri_, data_id);
+		sprintf(key_, "GET %lu %ld %s$%d %ld", 0l, offset, curr_dataset.uri_, data_id, to_read);
 		slog_info("[IMSS][get_data] Request - '%s'", key_);
 		ep = curr_imss.conns.eps[repl_servers[i]];
 
@@ -2139,11 +2139,11 @@ int32_t get_ndata(int32_t dataset_id, int32_t data_id, char *buffer, size_t len,
 		//slog_debug("[IMSS][get_data] send_data %f s", time_taken);
 
 
-		int size = 0;
-		if (data_id)
-			size = curr_dataset.data_entity_size;
-		else
-			size = sizeof(struct stat);
+		// int size = 0;
+		// if (data_id)
+		// 	size = curr_dataset.data_entity_size;
+		// else
+		// 	size = sizeof(struct stat);
 
 		//	gettimeofday(&start, NULL);
 		// printf("GET_DATA after send petition to read");

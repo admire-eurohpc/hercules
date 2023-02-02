@@ -38,7 +38,7 @@ pthread_mutex_t buff_size_mut;
 pthread_cond_t buff_size_cond;
 int32_t copied;
 
-uint64_t BLOCK_SIZE;   // In KB
+uint64_t BLOCK_SIZE; // In KB
 
 StsHeader *mem_pool;
 
@@ -62,7 +62,7 @@ extern int IMSS_THREAD_POOL;
 
 #define GARBAGE_COLLECTOR_PERIOD 120
 
-std::mutex * mut2;
+std::mutex *mut2;
 
 // Thread method attending client read-write data requests.
 void *srv_worker(void *th_argv)
@@ -86,7 +86,7 @@ void *srv_worker(void *th_argv)
 
 	map_server_eps = map_server_eps_create();
 
-	BLOCK_SIZE = arguments->blocksize*1024;
+	BLOCK_SIZE = arguments->blocksize * 1024;
 
 	for (;;)
 	{
@@ -164,7 +164,6 @@ void *srv_worker(void *th_argv)
 	}
 }
 
-
 int srv_worker_helper(p_argv *arguments, char *req)
 {
 	// slog_init("workers", SLOG_INFO, 1, 0, 1, 1, 1);
@@ -195,10 +194,11 @@ int srv_worker_helper(p_argv *arguments, char *req)
 	// slog_info("********** %d",ret);
 
 	// Elements conforming the request.
-    uint32_t block_size_recv, block_offset;
-    char uri_[URI_];
+	uint32_t block_size_recv, block_offset;
+	char uri_[URI_];
+	size_t to_read = 0;
 
-    sscanf(req, "%s %" PRIu32 " %" PRIu32  " %s", mode, &block_size_recv, &block_offset, uri_);
+	sscanf(req, "%s %" PRIu32 " %" PRIu32 " %s %lu", mode, &block_size_recv, &block_offset, uri_, &to_read);
 
 	if (!strcmp(mode, "GET"))
 		more = GET_OP;
@@ -206,7 +206,7 @@ int srv_worker_helper(p_argv *arguments, char *req)
 		more = SET_OP;
 
 	slog_debug("[srv_worker_thread] Request - mode '%s', block_size_recv '%" PRIu32 "', block_offset '%" PRIu32 "', uri_ '%s', more %ld",
-	           mode, block_size_recv, block_offset, uri_, more);
+			   mode, block_size_recv, block_offset, uri_, more);
 
 	// Create an std::string in order to be managed by the map structure.
 	std::string key;
@@ -242,8 +242,12 @@ int srv_worker_helper(p_argv *arguments, char *req)
 			{
 				// Send the requested block.
 				// TIMING(ret = send_data(arguments->ucp_worker, arguments->server_ep, address_, block_size_rtvd, arguments->worker_uid), "[srv_worker_thread][READ_OP][READ_OP] Send the requested block");
-				slog_debug("[srv_worker_thread][READ_OP][READ_OP] Send the requested block with key=%s, block_offset=%ld, block_size_rtvd=%ld", key.c_str(), block_offset, block_size_rtvd);
-				ret = send_data(arguments->ucp_worker, arguments->server_ep, address_+block_offset, block_size_rtvd, arguments->worker_uid);
+				if (to_read <= 0)
+				{
+					to_read = block_size_rtvd;
+				}
+				slog_debug("[srv_worker_thread][READ_OP][READ_OP] Send the requested block with key=%s, block_offset=%ld, block_size_rtvd=%ld kb, to_read=%ld kb", key.c_str(), block_offset, block_size_rtvd / 1024, to_read / 1024);
+				ret = send_data(arguments->ucp_worker, arguments->server_ep, address_ + block_offset, to_read, arguments->worker_uid);
 				// fprintf(stderr,"\tblock_size_rtvd=%ld, address_=%s\n", block_size_rtvd, address_);
 				if (ret < 0)
 				{
@@ -785,7 +789,7 @@ int srv_worker_helper(p_argv *arguments, char *req)
 				// char *buffer = (char *)malloc(block_size_recv);
 				clock_t tr;
 				// TIMING(recv_data(arguments->ucp_worker, arguments->server_ep, buffer, arguments->worker_uid, 1), "[srv_worker_thread][WRITE_OP] recv_data: Receive the block into the buffer.");
-				recv_data(arguments->ucp_worker, arguments->server_ep, buffer+block_offset, arguments->worker_uid, 1);
+				recv_data(arguments->ucp_worker, arguments->server_ep, buffer + block_offset, arguments->worker_uid, 1);
 				// sleep(5);
 				struct stat *stats = (struct stat *)buffer;
 				int32_t insert_successful;
@@ -793,12 +797,12 @@ int srv_worker_helper(p_argv *arguments, char *req)
 				// Include the new record in the tracking structure.
 				tr = clock();
 				// fprintf(stderr,"[srv_worker_thread][WRITE_OP] ****[PUT]********* key=%s\n",  key.c_str());
-				slog_debug("[srv_worker_thread][WRITE_OP] ****[PUT, block_size_recv=%ld, stats->st_size=%ld]********* key=%s", block_size_recv,stats->st_size, key.c_str());
-				//TODO: should this be block_size_recv or a different size? block_size_recv might not be the full block size
-				//insert_successful = map->put(key, buffer, block_size_recv);
-				fprintf(stderr, "BLOCK_SIZE=%ld", BLOCK_SIZE);
+				slog_debug("[srv_worker_thread][WRITE_OP] ****[PUT, block_size_recv=%ld, stats->st_size=%ld]********* key=%s", block_size_recv, stats->st_size, key.c_str());
+				// TODO: should this be block_size_recv or a different size? block_size_recv might not be the full block size
+				// insert_successful = map->put(key, buffer, block_size_recv);
+				//  fprintf(stderr, "BLOCK_SIZE=%ld", BLOCK_SIZE);
 				insert_successful = map->put(key, buffer, BLOCK_SIZE);
-				slog_debug("[srv_worker_thread][WRITE_OP] insert_successful %d key=%s",  insert_successful, key.c_str());
+				slog_debug("[srv_worker_thread][WRITE_OP] insert_successful %d key=%s", insert_successful, key.c_str());
 				// map->get(key, &address_, &block_size_rtvd);
 				// fprintf(stderr,"****[PUT2]********* key=%s\n",  key.c_str());
 
@@ -832,7 +836,7 @@ int srv_worker_helper(p_argv *arguments, char *req)
 					slog_debug("[srv_worker_thread][WRITE_OP] Updating block $0 (%d)", block_size_rtvd);
 					struct stat *old, *latest;
 
-					//TODO: make sure this works
+					// TODO: make sure this works
 					char *buffer = (char *)malloc(block_size_recv);
 
 					// TIMING(recv_data(arguments->ucp_worker, arguments->server_ep, buffer, arguments->worker_uid, 0), "[srv_worker_thread][WRITE_OP] recv_data Updating block $0");
@@ -843,9 +847,9 @@ int srv_worker_helper(p_argv *arguments, char *req)
 					latest->st_size = std::max(latest->st_size, old->st_size);
 					slog_debug("[srv_worker_thread] buffer: %ld", latest->st_size);
 
-					//TODO: make sure this works
-					memcpy(address_+block_offset, buffer, block_size_recv);
-					//TODO: should we update this block's size in the map?
+					// TODO: make sure this works
+					memcpy(address_ + block_offset, buffer, block_size_recv);
+					// TODO: should we update this block's size in the map?
 
 					// slog_debug("address_=%x", address_);
 					// free(buffer);
@@ -854,8 +858,8 @@ int srv_worker_helper(p_argv *arguments, char *req)
 				{
 					// TIMING(recv_data(arguments->ucp_worker, arguments->server_ep, address_, arguments->worker_uid, 1), ("[srv_worker_thread][WRITE_OP] recv_data Updated non 0 existing block"));
 					slog_debug("[srv_worker_thread][WRITE_OP] Updated non 0 existing block, key.c_str(): %s", key.c_str());
-					recv_data(arguments->ucp_worker, arguments->server_ep, address_+block_offset, arguments->worker_uid, 1);
-					// slog_debug("address_=%x", address_);	
+					recv_data(arguments->ucp_worker, arguments->server_ep, address_ + block_offset, arguments->worker_uid, 1);
+					// slog_debug("address_=%x", address_);
 				}
 			}
 			break;
@@ -1399,7 +1403,8 @@ void *srv_attached_dispatcher(void *th_argv)
 
 			// Send communication specifications.
 			if (send_data(ucp_data_worker, server_ep, response_, RESPONSE_SIZE, arguments->worker_uid) < 0)
-			{				perror("ERRIMSS_SRVDISP_SENDBLOCK");
+			{
+				perror("ERRIMSS_SRVDISP_SENDBLOCK");
 				// ep_flush(server_ep, ucp_data_worker);
 				ep_close(ucp_data_worker, server_ep, UCP_EP_CLOSE_MODE_FLUSH);
 				pthread_exit(NULL);
