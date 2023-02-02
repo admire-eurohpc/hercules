@@ -10,16 +10,31 @@
 #include "mpi.h"
 
 char abc[5] = {'a', 'b', 'c', 'd', 'e'};
+int rank, mpi_size;
 
 off_t fsize(const char *filename);
+
+void addTime(double start, double end, char *_summary, char *_header, char *msg)
+{
+    double time_taken_sum = 0.0;
+    double time_taken = end - start;
+    MPI_Reduce(&time_taken, &time_taken_sum, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+    if (!rank)
+    {
+        sprintf(_header, "%s \x1B[34m %s \033[0m", _header, msg);
+        sprintf(_summary, "%s \x1B[34m %5f \033[0m", _summary, time_taken_sum / (double)mpi_size);
+    }
+}
 
 int main(int argc, char **argv)
 {
 
-    int rank, mpi_size;
     char _stdout[1000];
+    char _summary[1000];
+    char _header[1000];
 
     _stdout[0] = '\0';
+    _summary[0] = '\0';
 
     MPI_Status status;
     MPI_Init(&argc, &argv);
@@ -28,7 +43,8 @@ int main(int argc, char **argv)
     fprintf(stderr, "Process  %d of %d is alive\n", rank, mpi_size);
 
     // to measure time.
-    clock_t t;
+    // clock_t t;
+    double start, end;
     double time_taken;
     int ret = -1;
 
@@ -42,7 +58,8 @@ int main(int argc, char **argv)
 
     // size_t buffer_size = file_size / mpi_size;
     // size_t buffer_size = file_size;
-    size_t offset = 1024;
+    // size_t offset = 1024;
+    size_t offset = 0;
     size_t buffer_size = atoi(argv[2]) * 1024;
     // fprintf(stderr, "buffer_size=%ld\n", buffer_size);
     char *buffer_w = NULL, *buffer_r = NULL;
@@ -85,40 +102,49 @@ int main(int argc, char **argv)
         // CREATE THE FILE.
         // fd = creat(file_path, 0666);
         // sleep(1 * rank);
+        start = MPI_Wtime();
         fd = open(file_path, O_CREAT, 0666);
         if (fd == -1)
         {
             perror("Error opening the file");
             exit(1);
         }
+        end = MPI_Wtime();
+        addTime(start, end, _summary, _header, "Open-O_CREAT");
         ////sleep(2);
         // close file.
-        close(fd);
 
-        // MPI_Finalize();
-        // return 0;
+        start = MPI_Wtime();
+        close(fd);
+        end = MPI_Wtime();
+        addTime(start, end, _summary, _header, "Close-O_CREAT");
 
         // OPEN FILE TO WRITE
+        start = MPI_Wtime();
         fd = open(file_path, O_RDWR, 0666);
         if (fd == -1)
         {
             perror("Error opening the file");
             exit(1);
         }
+        end = MPI_Wtime();
+        addTime(start, end, _summary, _header, "Open-O_RDWR");
 
         // write into the file.
-        t = clock();
+        // t = clock();
         {
             // WRITE BLOCK.
             // fprintf(stderr, "start_position=%ld\n", start_position);
+            start = MPI_Wtime();
             ret = lseek(fd, start_position, SEEK_SET);
+            end = MPI_Wtime();
+            addTime(start, end, _summary, _header, "Lseek-SEEK_SET");
             // real_write_size = write(fd, buffer_w + start_position, buffer_size);
             // //sleep(rank * 5);
+            start = MPI_Wtime();
             real_write_size = write(fd, buffer_w, buffer_size);
-
-            // lseek(fd, start_position, SEEK_SET);
-
-            // fprintf(stderr, "[WRITE] i=%ld/%ld\n", i, real_write_size);
+            end = MPI_Wtime();
+            addTime(start, end, _summary, _header, "Write");
             if (real_write_size != buffer_size)
             {
                 char error[500];
@@ -129,34 +155,45 @@ int main(int argc, char **argv)
             // fprintf(stderr, "real_write_size=%ld\n", real_write_size);
             sprintf(_stdout, "%s, real_write_size=%ld", _stdout, real_write_size);
         }
-        ////sleep(2);
         // close file.
+        start = MPI_Wtime();
         close(fd);
+        end = MPI_Wtime();
+        addTime(start, end, _summary, _header, "Close-O_RDWR");
 
-        // sleep(2);
+        // sleep(10);
 
         // OPEN FILE TO READ
+        start = MPI_Wtime();
         fd = open(file_path, O_RDONLY, 0666);
         // printf("fd=%d\n",fd);
         if (fd == -1)
         {
             perror("Error opening the file");
         }
+        end = MPI_Wtime();
+        addTime(start, end, _summary, _header, "Open-O_RDONLY");
 
-        // //sleep(10);
+        sleep(5);
 
         // allocate memory.
         buffer_r = (char *)malloc(buffer_size * sizeof(char) + 1);
         buffer_r[buffer_size] = '\0';
 
-        fprintf(stderr, "buffer_r address=%p\n", buffer_r);
+        // fprintf(stderr, "buffer_r address=%p\n", buffer_r);
 
         // read file.
         {
             // READ BLOCK.
+            start = MPI_Wtime();
             lseek(fd, start_position, SEEK_SET);
-            fprintf(stderr, "[CLIENT] %s\n", _stdout);
+            end = MPI_Wtime();
+            addTime(start, end, _summary, _header, "Lseek-SEEK_SET");
+            // fprintf(stderr, "[CLIENT] %s\n", _stdout);
+            start = MPI_Wtime();
             real_read_size = read(fd, buffer_r, buffer_size);
+            end = MPI_Wtime();
+            addTime(start, end, _summary, _header, "Read");
             if (real_read_size != buffer_size)
             {
                 fprintf(stderr, "[CLIENT] %s\n", _stdout);
@@ -170,7 +207,10 @@ int main(int argc, char **argv)
         }
 
         // close file.
+        start = MPI_Wtime();
         close(fd);
+        end = MPI_Wtime();
+        addTime(start, end, _summary, _header, "Close-O_RDONLY");
 
         int result = 0; // strcmp(buffer_w, buffer_r);
         size_t count_differences = 0;
@@ -183,11 +223,14 @@ int main(int argc, char **argv)
                 result = 1;
                 count_differences++;
                 // break;
-            } else {
+            }
+            else
+            {
                 // fprintf(stderr, "[%c] == [%c] pos=%ld\n", buffer_w[i], buffer_r[i], i);
             }
         }
         sprintf(_stdout, "%s, count_differences=%ld\n", _stdout, count_differences);
+
         // sprintf(_stdout, "%s, size of buffer_r %ld", _stdout, strlen(buffer_r));
         // fprintf(stderr, "strcmp = %d\n", result);
         if (result)
@@ -203,16 +246,14 @@ int main(int argc, char **argv)
             // fprintf(stderr, "buffer_w=%s\n", buffer_w);
             // fprintf(stderr, "buffer_r=%s\n", buffer_r);
         }
-        // fprintf(stderr, "buffer_w=%s\n", buffer_w+buffer_size-1024);
-        // fprintf(stderr, "buffer_r=%s\n", buffer_r+buffer_size-1024);
 
-        t = clock() - t;
-        time_taken = ((double)t) / (CLOCKS_PER_SEC / 1000);
-        // fprintf(stderr, "[%d][WRITE],%5f\n", rank, time_taken);
-        // MPI_Barrier(MPI_COMM_WORLD);
-        // //sleep(2);
-        // sprintf(_stdout, "%s, total_file_size=%ld", _stdout, fsize(file_path));
         fprintf(stderr, "[CLIENT] %s\n", _stdout);
+
+        MPI_Barrier(MPI_COMM_WORLD);
+        if (!rank)
+        {
+            fprintf(stderr, "[Summary] \n%s\n%s\n", _header,_summary);
+        }
 
         // free memory.
         free(buffer_w);
