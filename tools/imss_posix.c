@@ -744,13 +744,13 @@ int __open_2(const char *pathname, int flags, ...)
 				int err_create = imss_create(new_path, mode, &ret_ds);
 				if (err_create == -EEXIST)
 				{
-					imss_open(new_path, &ret_ds);
+					TIMING(imss_open(new_path, &ret_ds),"imss_open O_CREAT");
 				}
 			}
 			else
 			{
 				slog_debug("[POSIX %d]. Not O_CREAT", rank);
-				imss_open(new_path, &ret_ds);
+				TIMING(imss_open(new_path, &ret_ds),"imss_open Not O_CREAT");
 			}
 			// map_fd_search(map_fd, new_path, &ret, &p);
 		}

@@ -556,10 +556,10 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 			// byte_count += pending;
 		}
 		slog_warn("[imss_read] curr_blk=%ld, reading %" PRIu64 " kilobytes, block_offset=%ld kilobytes, byte_count=%ld", curr_blk, to_read / 1024, block_offset / 1024, byte_count);
-		get_ndata(ds, curr_blk, (char *)aux, to_read, block_offset);
-
+		get_ndata(ds, curr_blk, (char *)buf + byte_count, to_read, block_offset);
+	
 		block_offset = 0;
-		memcpy(buf + byte_count, aux, to_read);
+		// memcpy(buf + byte_count, aux, to_read);
 
 		//}
 		++curr_blk;

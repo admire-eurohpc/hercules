@@ -9,47 +9,72 @@
 #include <sys/types.h>
 #include "mpi.h"
 
-char abc[5] = {'a', 'b', 'c', 'd', 'e'};
+// char abc[5] = {'a', 'b', 'c', 'd', 'e'};
 int rank, mpi_size;
 
 off_t fsize(const char *filename);
 
-void addTime(double start, double end, char *_summary, char *_header, char *msg)
+void addMsg(char *msg, char *_summary, char *_header, char *header_msg)
 {
-    double time_taken_sum = 0.0;
-    double time_taken = end - start;
-    MPI_Reduce(&time_taken, &time_taken_sum, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-    if (!rank)
+    // double time_taken_sum = 0.0;
+    // double time_taken = end - start;
+    // MPI_Reduce(&time_taken, &time_taken_sum, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+    // if (!rank)
     {
-        sprintf(_header, "%s \x1B[34m %s \033[0m", _header, msg);
-        sprintf(_summary, "%s \x1B[34m %5f \033[0m", _summary, time_taken_sum / (double)mpi_size);
+        sprintf(_header, "%s,%s", _header, header_msg);
+        // sprintf(_summary, "%s,%5f", _summary, time_taken_sum / (double)mpi_size);
+        sprintf(_summary, "%s,%s", _summary, msg);
     }
+}
+
+uint32_t MurmurOAAT32(const char *key)
+{
+    uint32_t h = 335ul;
+    for (; *key; ++key)
+    {
+        h ^= *key;
+        h *= 0x5bd1e995;
+        h ^= h >> 15;
+    }
+    return abs(h);
 }
 
 int main(int argc, char **argv)
 {
 
-    char _stdout[1000];
-    char _summary[1000];
-    char _header[1000];
+    int ret = -1;
+    char _stdout[1000] = {0};
+    char _summary[1000] = {0};
+    char _header[1000] = {0};
+    // to measure time.
+    double start, end;
+    char msg[100];
+    // file variables.
+    char file_path[100];
+    int fd;
+    // Getting a mostly unique id for the distributed deployment.
+    char hostname[1024];
+    char hostname_pid[1024];
 
-    _stdout[0] = '\0';
-    _summary[0] = '\0';
+    ret = gethostname(&hostname[0], 512);
+    if (ret == -1)
+    {
+        perror("gethostname");
+        exit(EXIT_FAILURE);
+    }
+    sprintf(hostname_pid, "%s:%d", hostname, getpid());
+    rank = MurmurOAAT32(hostname_pid);
+
+    // _stdout[0] = '\0';
+    // _summary[0] = '>';
+
+    sprintf(_stdout, "[%s][%d]", hostname, rank);
 
     MPI_Status status;
     MPI_Init(&argc, &argv);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &mpi_size);
-    fprintf(stderr, "Process  %d of %d is alive\n", rank, mpi_size);
-
-    // to measure time.
-    // clock_t t;
-    double start, end;
-    double time_taken;
-    int ret = -1;
-
-    char file_path[100];
-    int fd;
+    // fprintf(stderr, "Process  %d of %d is alive\n", rank, mpi_size);
 
     strcpy(file_path, argv[1]); // path/name of the file.
     // int n_of_tests = atoi(argv[2]);           // number of tests to do.
@@ -67,7 +92,7 @@ int main(int argc, char **argv)
     size_t real_read_size = 0, real_write_size = 0;
     int b_i;
     size_t h, i, j;
-    // char c;
+    char c;
     // int c = 0;
 
     if (rank == 0)
@@ -76,11 +101,11 @@ int main(int argc, char **argv)
     //     fprintf(stderr, "[OPERATION],[TIME(ms)]\n");
     long start_position = rank * buffer_size + offset;
     // for (h = 1; h <= n_of_tests; h++)
-    sprintf(_stdout, "buffer_size=%ld, start_position=%ld", buffer_size, start_position);
+    sprintf(_stdout, "%s, buffer_size=%ld, start_position=%ld", _stdout, buffer_size, start_position);
 
     {
         // get a character.
-        // c = 48 + rank;
+        c = 48 + rank % 120;
         // c = abc[rank];
         // c = (int)(1 + start_position);
         // fprintf(stderr, "[%d] c=%ld, %ld\n", rank, (97 + start_position), c);
@@ -91,13 +116,21 @@ int main(int argc, char **argv)
         // fill the buffer.
         for (b_i = 0; b_i < buffer_size; b_i++)
         {
-            // buffer_w[b_i] = (char)c++;
-            buffer_w[b_i] = abc[rank];
+            // buffer_w[b_i] = abc[rank];
+            buffer_w[b_i] = (char)c; // abc[rank];
         }
         // buffer_w[buffer_size - 1] = '\n';
         buffer_w[buffer_size] = '\0';
         // fprintf(stderr, "buffer_w=%s\n", buffer_w);
         // fprintf(stderr, "[%d] buffer_r=%s\n", rank, buffer_r);
+        sprintf(msg, "%d", mpi_size);
+        addMsg(msg, _summary, _header, "#Process");
+
+        sprintf(msg, "%ld", buffer_size);
+        addMsg(msg, _summary, _header, "BufferSize");
+        
+        sprintf(msg, "%s", hostname);
+        addMsg(msg, _summary, _header, "Hostname");
 
         // CREATE THE FILE.
         // fd = creat(file_path, 0666);
@@ -110,14 +143,16 @@ int main(int argc, char **argv)
             exit(1);
         }
         end = MPI_Wtime();
-        addTime(start, end, _summary, _header, "Open-O_CREAT");
+        sprintf(msg, "%f", (end - start));
+        addMsg(msg, _summary, _header, "Open-O_CREAT");
         ////sleep(2);
         // close file.
 
         start = MPI_Wtime();
         close(fd);
         end = MPI_Wtime();
-        addTime(start, end, _summary, _header, "Close-O_CREAT");
+        sprintf(msg, "%f", end - start);
+        addMsg(msg, _summary, _header, "Close-O_CREAT");
 
         // OPEN FILE TO WRITE
         start = MPI_Wtime();
@@ -128,7 +163,8 @@ int main(int argc, char **argv)
             exit(1);
         }
         end = MPI_Wtime();
-        addTime(start, end, _summary, _header, "Open-O_RDWR");
+        sprintf(msg, "%f", end - start);
+        addMsg(msg, _summary, _header, "Open-O_RDWR");
 
         // write into the file.
         // t = clock();
@@ -138,13 +174,15 @@ int main(int argc, char **argv)
             start = MPI_Wtime();
             ret = lseek(fd, start_position, SEEK_SET);
             end = MPI_Wtime();
-            addTime(start, end, _summary, _header, "Lseek-SEEK_SET");
+            sprintf(msg, "%f", end - start);
+            addMsg(msg, _summary, _header, "Lseek-SEEK_SET");
             // real_write_size = write(fd, buffer_w + start_position, buffer_size);
             // //sleep(rank * 5);
             start = MPI_Wtime();
             real_write_size = write(fd, buffer_w, buffer_size);
             end = MPI_Wtime();
-            addTime(start, end, _summary, _header, "Write");
+            sprintf(msg, "%f", end - start);
+            addMsg(msg, _summary, _header, "Write");
             if (real_write_size != buffer_size)
             {
                 char error[500];
@@ -159,9 +197,11 @@ int main(int argc, char **argv)
         start = MPI_Wtime();
         close(fd);
         end = MPI_Wtime();
-        addTime(start, end, _summary, _header, "Close-O_RDWR");
+        sprintf(msg, "%f", end - start);
+        addMsg(msg, _summary, _header, "Close-O_RDWR");
 
         // sleep(10);
+        MPI_Barrier(MPI_COMM_WORLD);
 
         // OPEN FILE TO READ
         start = MPI_Wtime();
@@ -172,9 +212,8 @@ int main(int argc, char **argv)
             perror("Error opening the file");
         }
         end = MPI_Wtime();
-        addTime(start, end, _summary, _header, "Open-O_RDONLY");
-
-        sleep(5);
+        sprintf(msg, "%f", end - start);
+        addMsg(msg, _summary, _header, "Open-O_RDONLY");
 
         // allocate memory.
         buffer_r = (char *)malloc(buffer_size * sizeof(char) + 1);
@@ -188,12 +227,15 @@ int main(int argc, char **argv)
             start = MPI_Wtime();
             lseek(fd, start_position, SEEK_SET);
             end = MPI_Wtime();
-            addTime(start, end, _summary, _header, "Lseek-SEEK_SET");
+            sprintf(msg, "%f", end - start);
+            addMsg(msg, _summary, _header, "Lseek-SEEK_SET");
             // fprintf(stderr, "[CLIENT] %s\n", _stdout);
             start = MPI_Wtime();
             real_read_size = read(fd, buffer_r, buffer_size);
             end = MPI_Wtime();
-            addTime(start, end, _summary, _header, "Read");
+            sprintf(msg, "%f", end - start);
+            addMsg(msg, _summary, _header, "Read");
+            // fprintf(stderr, "Read time=%f\n", end - start);
             if (real_read_size != buffer_size)
             {
                 fprintf(stderr, "[CLIENT] %s\n", _stdout);
@@ -210,7 +252,8 @@ int main(int argc, char **argv)
         start = MPI_Wtime();
         close(fd);
         end = MPI_Wtime();
-        addTime(start, end, _summary, _header, "Close-O_RDONLY");
+        sprintf(msg, "%f", end - start);
+        addMsg(msg, _summary, _header, "Close-O_RDONLY");
 
         int result = 0; // strcmp(buffer_w, buffer_r);
         size_t count_differences = 0;
@@ -248,12 +291,13 @@ int main(int argc, char **argv)
         }
 
         fprintf(stderr, "[CLIENT] %s\n", _stdout);
-
         MPI_Barrier(MPI_COMM_WORLD);
         if (!rank)
         {
-            fprintf(stderr, "[Summary] \n%s\n%s\n", _header,_summary);
+            fprintf(stderr, "[Summary] \n%s\n", _header);
         }
+        MPI_Barrier(MPI_COMM_WORLD);
+        fprintf(stderr, "%s\n", _summary);
 
         // free memory.
         free(buffer_w);
