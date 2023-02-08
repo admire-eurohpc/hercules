@@ -63,7 +63,7 @@ wait_for_server() {
 }
 
 
-date="2023-02-02"
+date="2023-02-08"
 rm ./m-server-$date.log d-server-$date.log client-$date.log
 
 #set -x

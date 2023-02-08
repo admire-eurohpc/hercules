@@ -70,6 +70,9 @@ int main(int argc, char **argv)
 
     sprintf(_stdout, "[%s][%d]", hostname, rank);
 
+    sprintf(msg, "%d", rank);
+    addMsg(msg, _summary, _header, "Rank");
+
     MPI_Status status;
     MPI_Init(&argc, &argv);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
@@ -128,7 +131,7 @@ int main(int argc, char **argv)
 
         sprintf(msg, "%ld", buffer_size);
         addMsg(msg, _summary, _header, "BufferSize");
-        
+
         sprintf(msg, "%s", hostname);
         addMsg(msg, _summary, _header, "Hostname");
 
@@ -181,8 +184,8 @@ int main(int argc, char **argv)
             start = MPI_Wtime();
             real_write_size = write(fd, buffer_w, buffer_size);
             end = MPI_Wtime();
-            sprintf(msg, "%f", end - start);
-            addMsg(msg, _summary, _header, "Write");
+            sprintf(msg, "\x1B[34m%f\033[0m", end - start);
+            addMsg(msg, _summary, _header, "\x1B[34mWrite\033[0m");
             if (real_write_size != buffer_size)
             {
                 char error[500];
@@ -233,8 +236,9 @@ int main(int argc, char **argv)
             start = MPI_Wtime();
             real_read_size = read(fd, buffer_r, buffer_size);
             end = MPI_Wtime();
-            sprintf(msg, "%f", end - start);
-            addMsg(msg, _summary, _header, "Read");
+            // fprintf(stderr,"read=%f\n", end - start);
+            sprintf(msg, "\x1B[34m%f\033[0m", end - start);
+            addMsg(msg, _summary, _header, "\x1B[34mRead\033[0m");
             // fprintf(stderr, "Read time=%f\n", end - start);
             if (real_read_size != buffer_size)
             {

@@ -104,13 +104,16 @@ int32_t main(int32_t argc, char **argv)
 			IMSS_DEBUG_LEVEL = SLOG_LIVE;
 		else if (strstr(getenv("IMSS_DEBUG"), "all"))
 		{
-			IMSS_DEBUG_FILE = 1;			
+			IMSS_DEBUG_FILE = 1;
 			IMSS_DEBUG_LEVEL = SLOG_LIVE;
 		}
 		else if (strstr(getenv("IMSS_DEBUG"), "none"))
 			unsetenv("IMSS_DEBUG");
 		else
+		{
+			IMSS_DEBUG_FILE = 1;
 			IMSS_DEBUG_LEVEL = getLevel(getenv("IMSS_DEBUG"));
+		}
 	}
 
 	if (getenv("IMSS_THREAD_POOL") != NULL)

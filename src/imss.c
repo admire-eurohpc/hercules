@@ -2082,7 +2082,7 @@ int32_t get_ndata(int32_t dataset_id, int32_t data_id, char *buffer, size_t to_r
 	int32_t n_server;
 
 	// Server containing the corresponding data to be retrieved.
-	if ((n_server = get_data_location(dataset_id, data_id, GET)) == -1)
+	if ((n_server = TIMING(get_data_location(dataset_id, data_id, GET),"[imss_read]get_data_location", int32_t)) == -1)
 	{
 		return -1;
 	}
@@ -2121,36 +2121,18 @@ int32_t get_ndata(int32_t dataset_id, int32_t data_id, char *buffer, size_t to_r
 		// Key related to the requested data element.
 		// sprintf(key_, "GET 0 0 %s$%d", curr_dataset.uri_, data_id);
 		sprintf(key_, "GET %lu %ld %s$%d %ld", 0l, offset, curr_dataset.uri_, data_id, to_read);
-		slog_info("[IMSS][get_data] Request - '%s'", key_);
+		// slog_info("[IMSS][get_data] Request - '%s'", key_);
 		ep = curr_imss.conns.eps[repl_servers[i]];
 
-		if (send_req(ucp_worker_data, ep, local_addr_data, local_addr_len_data, key_) < 0)
+		if (TIMING(send_req(ucp_worker_data, ep, local_addr_data, local_addr_len_data, key_),"[imss_read]send_req", size_t) < 0)
 		{
 			perror("ERRIMSS_RLSIMSS_SENDADDR");
 			return -1;
 		}
 
-		/*	gettimeofday(&end, NULL);
-			delta_us = (long) (end.tv_usec - start.tv_usec);
-			printf("[CLIENT] [GET DATA] send petition delta_us=%6.3f",(delta_us/1000.0F));*/
-
-		//t = clock() - t;
-		//time_taken = ((double)t) / CLOCKS_PER_SEC; // in seconds
-		//slog_debug("[IMSS][get_data] send_data %f s", time_taken);
-
-
-		// int size = 0;
-		// if (data_id)
-		// 	size = curr_dataset.data_entity_size;
-		// else
-		// 	size = sizeof(struct stat);
-
-		//	gettimeofday(&start, NULL);
-		// printf("GET_DATA after send petition to read");
 		// Receive data related to the previous read request directly into the buffer.
-		//t = clock();
 		size_t length = 0;
-		length = recv_data(ucp_worker_data, ep, buffer, local_data_uid, 0);
+		length = TIMING(recv_data(ucp_worker_data, ep, buffer, local_data_uid, 0), "[imss_read]recv_data", size_t);
 		if (length < 0)
 		{
 			if (errno != EAGAIN)
@@ -2161,13 +2143,6 @@ int32_t get_ndata(int32_t dataset_id, int32_t data_id, char *buffer, size_t to_r
 			else
 				break;
 		}
-
-		// fprintf(stderr,"buffer en recv_data=%s\n", buffer);
-
-		//t = clock() - t;
-
-		//time_taken = ((double)t) / CLOCKS_PER_SEC; // in seconds
-		//slog_debug("[IMSS][get_data] RECV_STREAM %f s", time_taken);
 
 		// Check if the requested key was correctly retrieved.
 		if (strncmp((const char *)buffer, "$ERRIMSS_NO_KEY_AVAIL$", 22))

@@ -381,7 +381,7 @@ void getConfiguration()
 			IMSS_DEBUG_LEVEL = SLOG_LIVE;
 		else if (strstr(getenv("IMSS_DEBUG"), "all"))
 		{
-			IMSS_DEBUG_FILE = 1;			
+			IMSS_DEBUG_FILE = 1;
 			IMSS_DEBUG_LEVEL = SLOG_LIVE;
 		}
 		else if (strstr(getenv("IMSS_DEBUG"), "none"))
@@ -389,7 +389,6 @@ void getConfiguration()
 		else
 			IMSS_DEBUG_LEVEL = getLevel(getenv("IMSS_DEBUG"));
 	}
-
 }
 
 void __attribute__((destructor)) run_me_last()
@@ -428,11 +427,10 @@ int close(int fd)
 	if (map_fd_search_by_val(map_fd, path, fd) == 1)
 	{
 		slog_debug("[POSIX %d]. Calling 'close' %s.", rank, path);
-		imss_close(path);
+		TIMING(imss_close(path),"imss_close", int);
 		t = clock() - t;
 		double time_taken = ((double)t) / CLOCKS_PER_SEC; // in seconds
-
-		slog_info("[LD_PRELOAD] close time  total %f s", time_taken);
+		slog_info("[POSIX %d] close time total %f s", rank, time_taken);
 	}
 	else
 	{
@@ -565,7 +563,7 @@ int lstat(const char *pathname, struct stat *buf)
 	int ret;
 	unsigned long p = 0;
 	char *workdir = getenv("PWD");
-	fprintf(stderr,"[POSIX %d]. Calling 'lstat'.\n", rank);
+	fprintf(stderr, "[POSIX %d]. Calling 'lstat'.\n", rank);
 	real_lstat = dlsym(RTLD_NEXT, "lstat");
 
 	if (!init)
@@ -673,7 +671,7 @@ int statfs(const char *restrict path, struct statfs *restrict buf)
 	return ret;
 }
 
-char *realpath(const char* path, char* resolved_path)
+char *realpath(const char *path, char *resolved_path)
 {
 	fprintf(stderr, "[POSIX %d]. Calling 'realpath', path=%s.\n", rank, path);
 	real_realpath = dlsym(RTLD_NEXT, "realpath");
@@ -744,13 +742,13 @@ int __open_2(const char *pathname, int flags, ...)
 				int err_create = imss_create(new_path, mode, &ret_ds);
 				if (err_create == -EEXIST)
 				{
-					TIMING(imss_open(new_path, &ret_ds),"imss_open O_CREAT");
+					TIMING(imss_open(new_path, &ret_ds), "imss_open O_CREAT", int);
 				}
 			}
 			else
 			{
 				slog_debug("[POSIX %d]. Not O_CREAT", rank);
-				TIMING(imss_open(new_path, &ret_ds),"imss_open Not O_CREAT");
+				TIMING(imss_open(new_path, &ret_ds), "imss_open Not O_CREAT", int);
 			}
 			// map_fd_search(map_fd, new_path, &ret, &p);
 		}
@@ -882,13 +880,13 @@ int open(const char *pathname, int flags, ...)
 				{
 					slog_debug("[POSIX %d] dataset already exists.", rank);
 					slog_debug("[POSIX %d] 1 - imss_open(%s, %ld)", rank, new_path, &ret_ds);
-					imss_open(new_path, &ret_ds);
+					TIMING(imss_open(new_path, &ret_ds), "imss_open op1", int);
 				}
 			}
 			else
 			{
 				slog_debug("[POSIX %d] 2 - imss_open(%s, %ld)", rank, new_path, &ret_ds);
-				imss_open(new_path, &ret_ds);
+				TIMING(imss_open(new_path, &ret_ds), "imss_open op2", int);
 			}
 		}
 		// pthread_mutex_unlock(&lock2);
@@ -986,7 +984,7 @@ off_t lseek(int fd, off_t offset, int whence)
 ssize_t write(int fd, const void *buf, size_t size)
 {
 	real_write = dlsym(RTLD_NEXT, "write");
-	size_t ret;
+	size_t ret = -1;
 	unsigned long p = 0;
 
 	if (!init)
@@ -1004,9 +1002,9 @@ ssize_t write(int fd, const void *buf, size_t size)
 		imss_getattr(path, &ds_stat_n);
 		map_fd_search(map_fd, path, &fd, &p);
 		// printf("CUSTOM write worked! path=%s fd=%d, size=%ld offset=%ld, buffer=%s\n", path, fd, size, p, buf);
-		ret = imss_write(path, buf, size, p);
+		ret = TIMING(imss_write(path, buf, size, p), "imss_write", int);
 		// imss_release(path);
-		slog_debug("[POSIX %d]. Ending 'write'.", rank);
+		slog_debug("[POSIX %d]. Ending 'write'., ret=%ld", rank, ret);
 	}
 	else
 	{
@@ -1036,8 +1034,8 @@ ssize_t read(int fd, void *buf, size_t size)
 		slog_debug("[POSIX %d]. Calling 'read'.", rank);
 
 		// printf("CUSTOM read worked! path=%s fd=%d, size=%ld\n",path, fd, size);
-		map_fd_search(map_fd, path, &fd, &p);
-		ret = imss_read(path, buf, size, p);
+		TIMING(map_fd_search(map_fd, path, &fd, &p),"[read]map_fd_search", int);
+		ret = TIMING(imss_read(path, buf, size, p), "[read]imss_read", int);
 		slog_debug("[POSIX %d]. End 'read'  %ld.", rank, ret);
 		if (ret < size)
 			ret = 0;

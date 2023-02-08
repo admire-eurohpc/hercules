@@ -221,7 +221,7 @@ size_t recv_data(ucp_worker_h ucp_worker, ucp_ep_h ep, char *msg, uint64_t dest,
 	async=1;
 	clock_t t;
 
-        slog_debug("[COMM] Waiting message  as  %" PRIu64 ".", dest)	
+        // slog_debug("[COMM] Waiting message  as  %" PRIu64 ".", dest)	
 	do {
 		ucp_worker_progress(ucp_worker);
 		msg_tag = ucp_tag_probe_nb(ucp_worker, dest, tag_mask, 0, &info_tag);
@@ -246,10 +246,10 @@ size_t recv_data(ucp_worker_h ucp_worker, ucp_ep_h ep, char *msg, uint64_t dest,
 	recv_param.datatype     = ucp_dt_make_contig(1);
 	recv_param.cb.recv      = recv_handler;
 
-	slog_debug("[COMM] Probe tag (%ld bytes).", info_tag.length);
+	// slog_debug("[COMM] Probe tag (%ld bytes).", info_tag.length);
 	//	t = clock();
 	if (async) { 
-		request = (struct ucx_context *)ucp_tag_recv_nbx(ucp_worker, msg, info_tag.length, dest, tag_mask , &recv_param);
+		request = (struct ucx_context *)TIMING(ucp_tag_recv_nbx(ucp_worker, msg, info_tag.length, dest, tag_mask , &recv_param),"[imss_read]ucp_tag_recv_nbx", ucs_status_ptr_t);
 
 	} else {
 		request = (struct ucx_context *)ucp_tag_recv_nbx(ucp_worker, recv_buffer, info_tag.length, dest, tag_mask , &recv_param);
@@ -257,7 +257,7 @@ size_t recv_data(ucp_worker_h ucp_worker, ucp_ep_h ep, char *msg, uint64_t dest,
 	}	
 
 	// sleep(1);
-	status = ucx_wait(ucp_worker, request, "recv",  "data");
+	status = TIMING(ucx_wait(ucp_worker, request, "recv",  "data"),"[imss_read]ucx_wait", ucs_status_t);
 	// slog_debug("[COMM] status=%s.", ucs_status_string(status));
 	// slog_debug("--- %s\n", msg);
 
@@ -267,7 +267,7 @@ size_t recv_data(ucp_worker_h ucp_worker, ucp_ep_h ep, char *msg, uint64_t dest,
 
 
 
-	slog_debug("[COMM] Recv tag (%ld bytes).", info_tag.length);
+	// slog_debug("[COMM] Recv tag (%ld bytes).", info_tag.length);
 	// fprintf(stderr, "[COMM] Recv tag (%ld bytes).\n", info_tag.length);
 	return info_tag.length;
 }

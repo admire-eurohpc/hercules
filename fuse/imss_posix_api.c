@@ -406,8 +406,8 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 	// fprintf(stderr, "calling imss_sread\n");
 	int ret;
 	int32_t length;
-	clock_t t, tm, tmm;
-	t = clock();
+	// clock_t t, tm, tmm;
+	// t = clock();
 
 	dataset_info new_dataset;
 
@@ -431,7 +431,7 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 	size_t byte_count = 0;
 	int64_t rbytes;
 
-	slog_warn("buf address=%p\n", buf);
+	// slog_warn("buf address=%p\n", buf);
 
 	int fd;
 	struct stat stats;
@@ -440,7 +440,7 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 	// slog_live("rpath=%s", rpath);
 	// fd_lookup(rpath, &fd, &stats, &aux);
 	fd_lookup(rpath, &fd, &stats, &aux);
-	slog_warn("aux address=%p", aux);
+	// slog_warn("aux address=%p", aux);
 	// slog_live("stats_size=%ld", stats.st_size);
 	if (stats.st_size < size)
 	{
@@ -462,10 +462,10 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 		return -ENOENT;
 
 	//	gettimeofday(&start, NULL);
-	tm = clock();
-	memset(buf, 0, size);
-	tm = clock() - tm;
-	tmm += tm;
+	// tm = clock();
+	// memset(buf, 0, size);
+	// tm = clock() - tm;
+	// tmm += tm;
 
 	// slog_live("size=%ld\n", size);
 
@@ -556,8 +556,8 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 			// byte_count += pending;
 		}
 		slog_warn("[imss_read] curr_blk=%ld, reading %" PRIu64 " kilobytes, block_offset=%ld kilobytes, byte_count=%ld", curr_blk, to_read / 1024, block_offset / 1024, byte_count);
-		get_ndata(ds, curr_blk, (char *)buf + byte_count, to_read, block_offset);
-	
+		TIMING(get_ndata(ds, curr_blk, (char *)buf + byte_count, to_read, block_offset),"[imss_read]get_ndata", int32_t);
+
 		block_offset = 0;
 		// memcpy(buf + byte_count, aux, to_read);
 
@@ -569,11 +569,11 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 		delta_us1 = (long) (end1.tv_usec - start1.tv_usec);
 		printf("[CLIENT] [SREAD_END] delta_us=%6.3f\n",(delta_us1/1000.0F));*/
 
-	t = clock() - t;
-	double time_taken = ((double)t) / CLOCKS_PER_SEC; // in seconds
-	double time_mem = ((double)tmm) / CLOCKS_PER_SEC; // in seconds
+	// t = clock() - t;
+	// double time_taken = ((double)t) / CLOCKS_PER_SEC; // in seconds
+	// double time_mem = ((double)tmm) / CLOCKS_PER_SEC; // in seconds
 
-	slog_warn("[API] imss_read time  total %f mem %f  s, byte_count=%ld", time_taken, time_mem, byte_count);
+	// slog_warn("[API] imss_read time  total %f mem %f  s, byte_count=%ld", time_taken, time_mem, byte_count);
 
 	free(rpath);
 	return byte_count;
@@ -1855,17 +1855,14 @@ int imss_release(const char *path)
 
 int imss_close(const char *path)
 {
-	clock_t t;
-	t = clock();
-	flush_data();
-	imss_release(path);
-	imss_refresh(path);
-	t = clock() - t;
-
-	double time_taken = ((double)t) / CLOCKS_PER_SEC; // in seconds
-
-	slog_info("[API] imss_close time  total %f s", time_taken);
-
+	// clock_t t;
+	// t = clock();
+	TIMING(flush_data(), "[imss_close]flush_data", int32_t);
+	TIMING(imss_release(path), "[imss_close]imss_release", int);
+	TIMING(imss_refresh(path), "[imss_close]imss_refresh", int);
+	// t = clock() - t;
+	// double time_taken = ((double)t) / CLOCKS_PER_SEC; // in seconds
+	// slog_info("[imss_close] time total %f s", time_taken);
 	return 0;
 }
 

@@ -67,6 +67,7 @@ extern "C" {
 #define SLOG_ERROR  5
 #define SLOG_FATAL  6
 #define SLOG_PANIC  7
+#define SLOG_TIME   8
 
 #define slog_none(...) \
     slog(SLOG_NONE, __VA_ARGS__);
@@ -92,6 +93,8 @@ extern "C" {
 #define slog_panic(...) \
     slog(SLOG_PANIC, SOURCE_THROW_LOCATION __VA_ARGS__);
 
+#define slog_time(...) \
+    slog(SLOG_TIME, __VA_ARGS__);
 
 /* Definitions for version informations. */
 #define SLOGVERSION_MAJOR   1

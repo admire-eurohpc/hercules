@@ -289,6 +289,11 @@ void slog(int flag, const char *msg, ...)
             strncpy(color, CLR_RED, sizeof(color));
             strncpy(alarm, "PANIC", sizeof(alarm));
             break;
+        case SLOG_TIME:
+            strncpy(color, CLR_GREEN, sizeof(color));
+            strncpy(alarm, "TIME", sizeof(alarm));
+            slg.to_console = 0;
+            break;
         case SLOG_NONE:
             strncpy(prints, string, sizeof(string));
             break;
@@ -423,6 +428,8 @@ int getLevel(char *str)
         ret = SLOG_FATAL;
     if (!strcmp(str, "SLOG_PANIC"))
         ret = SLOG_PANIC;
+    if (!strcmp(str, "SLOG_TIME"))
+        ret = SLOG_TIME;
 
     if (ret == -1)
     {
