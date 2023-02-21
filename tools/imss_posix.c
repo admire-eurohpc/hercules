@@ -640,10 +640,10 @@ int statfs(const char *restrict path, struct statfs *restrict buf)
 {
 	fprintf(stderr, "[POSIX %d]. Calling 'statfs', path=%s.\n", rank, path);
 	real_statfs = dlsym(RTLD_NEXT, "statfs");
-	if (real_statfs)
-	{
-		fprintf(stderr, "dlsym works\n");
-	}
+	//if (real_statfs)
+	//{
+	//	fprintf(stderr, "dlsym works\n");
+	//}
 
 	char *workdir = getenv("PWD");
 	slog_debug("[POSIX %d]. Calling 'statfs', path=%s.", rank, path);
@@ -673,12 +673,12 @@ int statfs(const char *restrict path, struct statfs *restrict buf)
 
 char *realpath(const char *path, char *resolved_path)
 {
-	fprintf(stderr, "[POSIX %d]. Calling 'realpath', path=%s.\n", rank, path);
+	//fprintf(stderr, "[POSIX %d]. Calling 'realpath', path=%s.\n", rank, path);
 	real_realpath = dlsym(RTLD_NEXT, "realpath");
-	if (real_realpath)
-	{
-		fprintf(stderr, "dlsym works\n");
-	}
+	//if (real_realpath)
+	//{
+	//	fprintf(stderr, "dlsym works\n");
+	//}
 
 	char *workdir = getenv("PWD");
 	slog_debug("[POSIX %d]. Calling 'realpath', path=%s.", rank, path);
