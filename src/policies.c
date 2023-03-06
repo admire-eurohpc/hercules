@@ -127,6 +127,7 @@ find_server (int32_t 	  n_servers,
 			
 			
 			//First server that received a block from the current file.
+			// incluir "initial_server" en el dataset.
 			uint32_t initial_server = crc_ % n_servers;
 
 			if (n_blocks < n_servers)

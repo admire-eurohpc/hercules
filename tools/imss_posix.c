@@ -866,6 +866,7 @@ int open(const char *pathname, int flags, ...)
 		int exist = map_fd_search(map_fd, new_path, &ret, &p);
 		if (exist == -1) // if the "new_path" was not find:
 		{
+			slog_debug("[POSIX %d]. New file %s", rank, new_path);
 			ret = real_open("/dev/null", 0); // Get a file descriptor
 			// stores the file descriptor "ret" into the map "map_fd".
 			slog_debug("Map add=%x", &map_fd);

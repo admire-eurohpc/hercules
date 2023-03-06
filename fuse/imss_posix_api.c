@@ -74,6 +74,12 @@ pthread_mutex_t lock_file = PTHREAD_MUTEX_INITIALIZER;
 
 extern int32_t IMSS_DEBUG;
 
+// to simulate maliability.
+int32_t ior_operation_number = 0;
+int32_t mall_th_1 = 40;
+int32_t mall_th_2 = 70;
+int32_t malleability = 1;
+
 /*
    (*) Mapping for REPL_FACTOR values:
    NONE = 1;
@@ -404,6 +410,7 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 {
 	// TODO:[read]
 	// fprintf(stderr, "calling imss_sread\n");
+	// int malleability = 0;
 	int ret;
 	int32_t length;
 	// clock_t t, tm, tmm;
@@ -556,7 +563,32 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 			// byte_count += pending;
 		}
 		slog_warn("[imss_read] curr_blk=%ld, reading %" PRIu64 " kilobytes, block_offset=%ld kilobytes, byte_count=%ld", curr_blk, to_read / 1024, block_offset / 1024, byte_count);
-		TIMING(get_ndata(ds, curr_blk, (char *)buf + byte_count, to_read, block_offset),"[imss_read]get_ndata", int32_t);
+		if (malleability)
+		{
+			ior_operation_number++;
+			int32_t num_storages;
+
+			if (ior_operation_number < 140)
+			{
+				num_storages = N_SERVERS / 2;
+			}
+			else if (ior_operation_number < 170)
+			{
+				num_storages = 3 * N_SERVERS / 4;
+			}
+			else
+			{
+				num_storages = N_SERVERS;
+			}
+
+			slog_debug("ior_operation_number=%ld, num_storages=%ld", ior_operation_number, num_storages);
+
+			TIMING(get_data_mall(ds, curr_blk, (char *)buf + byte_count, to_read, block_offset, num_storages), "[imss_read]get_data_mall", int32_t);
+		}
+		else
+		{
+			TIMING(get_ndata(ds, curr_blk, (char *)buf + byte_count, to_read, block_offset), "[imss_read]get_ndata", int32_t);
+		}
 
 		block_offset = 0;
 		// memcpy(buf + byte_count, aux, to_read);
@@ -1192,6 +1224,8 @@ int imss_write(const char *path, const char *buf, size_t size, off_t off)
 	int ret;
 	clock_t t, tm, tmm;
 
+	// int malleability = 0;
+
 	tmm = 0;
 
 	t = clock();
@@ -1349,11 +1383,40 @@ int imss_write(const char *path, const char *buf, size_t size, off_t off)
 
 		// store block
 		slog_live("[imss_write] writting %" PRIu64 " kilobytes with an offset of %" PRIu64 "", bytes_to_copy / 1024, block_offset / 1024);
-		if (set_data(ds, curr_blk, data_pointer, bytes_to_copy, block_offset) < 0)
+
+		if (malleability)
 		{
-			slog_error("[IMSS-FUSE]	Error writing to imss.\n");
-			error_print = -ENOENT;
-			return -ENOENT;
+			ior_operation_number++;
+			int32_t num_storages;
+
+			if (ior_operation_number < 40)
+			{
+				num_storages = N_SERVERS / 2;
+			}
+			else if (ior_operation_number < 70)
+			{
+				num_storages = 3 * N_SERVERS / 4;
+			}
+			else
+			{
+				num_storages = N_SERVERS;
+			}
+
+			if (set_data_mall(ds, curr_blk, data_pointer, bytes_to_copy, block_offset, num_storages) < 0)
+			{
+				slog_error("[IMSS-FUSE]	Error writing to imss.\n");
+				error_print = -ENOENT;
+				return -ENOENT;
+			}
+		}
+		else
+		{
+			if (set_data(ds, curr_blk, data_pointer, bytes_to_copy, block_offset) < 0)
+			{
+				slog_error("[IMSS-FUSE]	Error writing to imss.\n");
+				error_print = -ENOENT;
+				return -ENOENT;
+			}
 		}
 
 		bytes_stored += bytes_to_copy;
@@ -1879,7 +1942,10 @@ int imss_create(const char *path, mode_t mode, uint64_t *fh)
 
 	// Assing file handler and create dataset
 	int res = 0;
-	res = create_dataset((char *)rpath, POLICY, N_BLKS, IMSS_BLKSIZE, REPL_FACTOR);
+
+	int32_t n_servers = 0;
+
+	res = create_dataset((char *)rpath, POLICY, N_BLKS, IMSS_BLKSIZE, REPL_FACTOR, n_servers);
 	slog_live("[imss_create] create_dataset((char*)rpath:%s, POLICY:%s,  N_BLKS:%ld, IMSS_BLKSIZE:%d, REPL_FACTOR:%ld), res:%d", (char *)rpath, POLICY, N_BLKS, IMSS_BLKSIZE, REPL_FACTOR, res);
 	if (res < 0)
 	{
@@ -1938,6 +2004,11 @@ int imss_create(const char *path, mode_t mode, uint64_t *fh)
 	pthread_mutex_unlock(&lock_file); // unlock.
 	free(rpath);
 	return 0;
+}
+
+int set_num_servers()
+{
+	int n_servers = N_SERVERS;
 }
 
 // Does nothing

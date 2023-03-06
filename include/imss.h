@@ -302,7 +302,7 @@ repl_factor    - Replication factor assigned to the concerned dataset: NONE, DRM
 RETURNS:	> 0 - Number identifying the created dataset among the client's session.
 -1 - In case of error.
 	 */
-	int32_t create_dataset(char *dataset_uri, char *policy, int32_t num_data_elem, int32_t data_elem_size, int32_t repl_factor);
+	int32_t create_dataset(char *dataset_uri, char *policy, int32_t num_data_elem, int32_t data_elem_size, int32_t repl_factor, int32_t n_servers);
 
 	/* Method creating the required resources in order to READ and WRITE an existing dataset.
 
@@ -407,7 +407,10 @@ RETURNS:	 0 - The requested block was successfully retrieved.
 	int32_t get_data(int32_t dataset_id, int32_t data_id, char *buffer);
 
 	int32_t get_ndata(int32_t dataset_id, int32_t data_id, char *buffer, size_t to_read, off_t offset);
+
+	int32_t get_data_mall(int32_t dataset_id, int32_t data_id, char *buffer, size_t to_read, off_t offset, int32_t num_storages);
 	/* Method storing a specific data element.
+	
 
 RECEIVES:	dataset_id - Number identifying the concerned dataset among the client's session.
 data_id    - Data block number identifying the data block to be stored.
@@ -419,6 +422,9 @@ RETURNS:	 0 - The requested block was successfully stored.
 -1 - In case of error.
 	 */
 	int32_t set_data(int32_t dataset_id, int32_t data_id, char *buffer, size_t size, off_t offset);
+
+	int32_t set_data_mall(int32_t dataset_id, int32_t data_id, char *buffer, size_t size, off_t offset, int32_t num_storages);
+
 
 	/* Method retrieving the location of a specific data object.
 

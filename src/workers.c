@@ -104,7 +104,7 @@ void *srv_worker(void *th_argv)
 		do
 		{
 			/* Progressing before probe to update the state */
-			ucp_worker_progress(arguments->ucp_worker);
+			TIMING(ucp_worker_progress(arguments->ucp_worker),"[srv_worker]ucp_worker_progress", unsigned int);
 			/* Probing incoming events in non-block mode */
 			msg_tag = ucp_tag_probe_nb(arguments->ucp_worker, tag_req, tag_mask, 1, &info_tag);
 		} while (msg_tag == NULL);
@@ -224,7 +224,7 @@ int srv_worker_helper(p_argv *arguments, const char *req)
 		{
 		case READ_OP:
 		{
-			int ret = TIMING(map->get(key, &address_, &block_size_rtvd),"[srv_worker_helper]map->get", int);
+			int ret = TIMING(map->get(key, &address_, &block_size_rtvd),"[srv_worker_helper][READ_OP]map->get", int);
 			// Check if there was an associated block to the key.
 			if (ret == 0)
 			{
@@ -245,7 +245,7 @@ int srv_worker_helper(p_argv *arguments, const char *req)
 					to_read = block_size_rtvd;
 				}
 				slog_debug("[srv_worker_thread][READ_OP][READ_OP] Send the requested block with key=%s, block_offset=%ld, block_size_rtvd=%ld kb, to_read=%ld kb", key.c_str(), block_offset, block_size_rtvd / 1024, to_read / 1024);
-				ret = send_data(arguments->ucp_worker, arguments->server_ep, address_ + block_offset, to_read, arguments->worker_uid);
+				ret = TIMING(send_data(arguments->ucp_worker, arguments->server_ep, address_ + block_offset, to_read, arguments->worker_uid),"[srv_worker_helper][READ_OP]send_data",uint64_t);
 				// fprintf(stderr,"\tblock_size_rtvd=%ld, address_=%s\n", block_size_rtvd, address_);
 				if (ret < 0)
 				{
