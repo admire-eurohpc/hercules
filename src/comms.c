@@ -335,7 +335,7 @@ void send_handler_data(void *request, ucs_status_t status, void *ctx)
 	//ucp_request_free(request);
 
 
-	slog_info("[COMM] send_handler data");
+	// slog_info("[COMM] send_handler data");
 	//ucp_request_free(request);
 }
 

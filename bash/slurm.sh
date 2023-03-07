@@ -70,9 +70,10 @@ wait_for_server() {
 
 
 # Uncomment when working in Tucan.
-#IOR_PATH=/home/software/io500/bin
+IOR_PATH=/home/software/io500/bin
 #module unload mpi
 #module load mpi/mpich3/3.2.1
+module load mpi/openmpi
 
 # Uncomment when working in MN4.
 #IOR_PATH=/apps/IOR/3.3.0/INTEL/IMPI/bin
@@ -90,9 +91,9 @@ wait_for_server() {
 #export SPACK_ROOT=/beegfs/home/javier.garciablas/opt/spack/
 #spack load cmake glib pcre ucx ior openmpi
 #spack load cmake glib pcre ucx
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HOME/rdma-core/build/lib
+#export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HOME/rdma-core/build/lib
 #spack load openmpi
-IOR_PATH=/beegfs/home/javier.garciablas/opt/spack/linux-ubuntu20.04-zen/gcc-9.4.0/ior-3.3.0-ssyaxpxjajmhy3v5icfqoo63kaeii6wv/bin
+#IOR_PATH=/beegfs/home/javier.garciablas/opt/spack/linux-ubuntu20.04-zen/gcc-9.4.0/ior-3.3.0-ssyaxpxjajmhy3v5icfqoo63kaeii6wv/bin
 
 
 # Avaible interfaces in Italia cluster: 'eno2'(tcp), 'ibs1'(tcp), 'lo'(tcp), 'opap6s0:1'(ib)
@@ -103,7 +104,7 @@ UCX_NET_DEVICES=$network_devices_list
 UCX_TLS=$transports_to_use
 
 #IMSS_DEBUG="SLOG_TIME"
-IMSS_DEBUG=none
+IMSS_DEBUG=all
 export IMSS_DEBUG=$IMSS_DEBUG
 
 echo $UCX_NET_DEVICES
@@ -205,5 +206,4 @@ echo "# IMMS: Running IOR"
         -x IMSS_DEBUG=$IMSS_DEBUG  \
 	-x UCX_NET_DEVICES=$network_devices_list \
 	-x UCX_TLS=$transports_to_use \
-	-x LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HOME/rdma-core/build/lib \
         $COMMAND

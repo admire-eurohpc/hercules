@@ -78,7 +78,7 @@ extern int32_t IMSS_DEBUG;
 int32_t ior_operation_number = 0;
 int32_t mall_th_1 = 40;
 int32_t mall_th_2 = 70;
-int32_t malleability = 1;
+int32_t MALLEABILITY;
 
 /*
    (*) Mapping for REPL_FACTOR values:
@@ -410,7 +410,7 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 {
 	// TODO:[read]
 	// fprintf(stderr, "calling imss_sread\n");
-	// int malleability = 0;
+	// int MALLEABILITY = 0;
 	int ret;
 	int32_t length;
 	// clock_t t, tm, tmm;
@@ -563,7 +563,7 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 			// byte_count += pending;
 		}
 		slog_warn("[imss_read] curr_blk=%ld, reading %" PRIu64 " kilobytes, block_offset=%ld kilobytes, byte_count=%ld", curr_blk, to_read / 1024, block_offset / 1024, byte_count);
-		if (malleability)
+		if (MALLEABILITY)
 		{
 			ior_operation_number++;
 			int32_t num_storages;
@@ -581,7 +581,7 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 				num_storages = N_SERVERS;
 			}
 
-			slog_debug("ior_operation_number=%ld, num_storages=%ld", ior_operation_number, num_storages);
+			slog_debug("[imss_read] ior_operation_number=%ld, num_storages=%ld", ior_operation_number, num_storages);
 
 			TIMING(get_data_mall(ds, curr_blk, (char *)buf + byte_count, to_read, block_offset, num_storages), "[imss_read]get_data_mall", int32_t);
 		}
@@ -1220,11 +1220,11 @@ int imss_read(const char *path, char *buf, size_t size, off_t offset)
 
 int imss_write(const char *path, const char *buf, size_t size, off_t off)
 {
-	slog_live("[%s] -----------------------------------------", buf + size - 1);
+	// slog_live("[%s] -----------------------------------------", buf + size - 1);
 	int ret;
 	clock_t t, tm, tmm;
 
-	// int malleability = 0;
+	// int MALLEABILITY = 0;
 
 	tmm = 0;
 
@@ -1273,63 +1273,6 @@ int imss_write(const char *path, const char *buf, size_t size, off_t off)
 		return -ENOENT;
 
 	slog_live("[imss_write] size=%ld, IMSS_DATA_BSIZE=%ld, stats.st_size=%ld, start_blk=%ld, start_offset=%ld, end_offset=%ld, end_blk=%ld, curr_blk=%ld, fd=%ld, off=%ld", size, IMSS_DATA_BSIZE, stats.st_size, start_blk, start_offset, end_offset, end_blk, curr_blk, fd, off);
-
-	// if (size == IMSS_DATA_BSIZE)
-	// {
-	// 	set_data(ds, curr_blk, buf);
-	// 	// Update header count if the file has become bigger
-	// 	if (size + off > stats.st_size)
-	// 	{
-	// 		// if(size + off != stats.st_size){
-	// 		stats.st_size = size + off;
-	// 		stats.st_blocks = curr_blk - 1;
-	// 		map_update(map, rpath, ds, stats);
-	// 	}
-	// 	free(rpath);
-	// 	// slog_live("buf=%s", buf);
-	// 	fd_lookup(rpath, &fd, &stats, &aux);
-	// 	slog_live("[imss_write] Writes in buf, size=%ld, IMSS_DATA_BSIZE=%ld, stats.st_size=%ld", size, IMSS_DATA_BSIZE, stats.st_size);
-	// 	return size;
-	// }
-
-	// if (size < IMSS_DATA_BSIZE)
-	// {
-	// 	slog_live("[imss_write] size < IMSS_DATA_BSIZE");
-	// 	// Get previous block
-	// 	if (get_data(ds, curr_blk, (char *)aux) < 0)
-	// 	{
-	// 		fprintf(stderr, "[IMSS-FUSE]	Error reading from imss.\n");
-	// 		error_print = -ENOENT;
-	// 		pthread_mutex_unlock(&lock);
-	// 		free(rpath);
-	// 		return -ENOENT;
-	// 	}
-	// 	// Bytes to write are the minimum between the size parameter and the remaining space in the block (BLOCKSIZE-start_offset)
-	// 	to_copy = (size < IMSS_DATA_BSIZE - start_offset) ? size : IMSS_DATA_BSIZE - start_offset;
-	// 	slog_live("[imss_write] to_copy=%ld, byte_count=%ld", to_copy, byte_count);
-	// 	memcpy(aux + start_offset, buf + byte_count, to_copy);
-
-	// 	slog_live("[imss_write](otherwise) writting %ld bytes", strlen(aux));
-	// 	if (set_data(ds, curr_blk, aux) < 0)
-	// 	{
-	// 		fprintf(stderr, "[IMSS-FUSE]	Error writing to imss.\n");
-	// 		error_print = -ENOENT;
-	// 		return -ENOENT;
-	// 	}
-	// 	// Update header count if the file has become bigger
-	// 	if (size + off > stats.st_size)
-	// 	{
-	// 		// if(size + off != stats.st_size){
-	// 		stats.st_size = size + off;
-	// 		stats.st_blocks = curr_blk - 1;
-	// 		map_update(map, rpath, ds, stats);
-	// 	}
-	// 	free(rpath);
-	// 	// slog_live("buf=%s", buf);
-	// 	fd_lookup(rpath, &fd, &stats, &aux);
-	// 	slog_live("[imss_write] Writes in buf, size=%ld, IMSS_DATA_BSIZE=%ld, stats.st_size=%ld", size, IMSS_DATA_BSIZE, stats.st_size);
-	// 	return to_copy;
-	// }
 
 	if (MULTIPLE_WRITE == 1)
 	{
@@ -1384,7 +1327,7 @@ int imss_write(const char *path, const char *buf, size_t size, off_t off)
 		// store block
 		slog_live("[imss_write] writting %" PRIu64 " kilobytes with an offset of %" PRIu64 "", bytes_to_copy / 1024, block_offset / 1024);
 
-		if (malleability)
+		if (MALLEABILITY)
 		{
 			ior_operation_number++;
 			int32_t num_storages;
@@ -1401,6 +1344,8 @@ int imss_write(const char *path, const char *buf, size_t size, off_t off)
 			{
 				num_storages = N_SERVERS;
 			}
+
+			slog_debug("[imss_write] ior_operation_number=%ld, num_storages=%ld, N_SERVERS=%ld", ior_operation_number, num_storages, N_SERVERS);
 
 			if (set_data_mall(ds, curr_blk, data_pointer, bytes_to_copy, block_offset, num_storages) < 0)
 			{

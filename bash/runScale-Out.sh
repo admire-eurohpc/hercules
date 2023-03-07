@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=imss    # Job name
 #SBATCH --time=00:60:00               # Time limit hrs:min:sec
-#SBATCH --output=logs/%j_scale-out.log   # Standard output and error log
+#SBATCH --output=logs/hercules/%j_scale-out.log   # Standard output and error log
 ##SBATCH --exclude=compute-3-1,compute-3-2,compute-6-1,compute-6-2
 #SBATCH --exclusive
 #SBATCH --mem=0
@@ -35,6 +35,7 @@ BLOCK_SIZE=$4
 STORAGE_SIZE=2
 META_PORT=$5
 DATA_PORT=$6
+MALLEABILITY=$7
 
 IMSS_PATH=$(dirname `pwd`)/build
 echo $IMSS_PATH
@@ -58,6 +59,8 @@ module load mpi/mpich3/3.2.1
 
 set -x
 
+rm client-2023-03-06.log
+
 # SCRIPT
 PWD=`pwd`
 srun hostname |sort > hostfile
@@ -69,7 +72,7 @@ head -n $NUM_METADATA hostfile > meta_hostfile
 cat meta_hostfile
 readarray -t hosts < meta_hostfile
 
-IMSS_DEBUG=file
+IMSS_DEBUG=none
 export IMSS_DEBUG=$IMSS_DEBUG
 
 ### Init metadata server.
@@ -78,7 +81,8 @@ do
 	srun --export=ALL -N 1 -w ${hosts[$i]} --exclusive $IMSS_PATH/server m --server-id=$i --stat-logfile=./metadata --port=$META_PORT --bufsize=0 1> server.log &
 done
 ### Wait for metadata server.
-wait_for_server Metadata $NUM_METADATA
+#wait_for_server Metadata $NUM_METADATA
+sleep 5
 
 echo "# IMMS: Running data servers"
 tail -n +$((NUM_METADATA+1)) hostfile | head -n $NUM_DATA > data_hostfile
@@ -91,18 +95,19 @@ do
 	srun --export=ALL -N 1 -w ${hosts[$i]} --exclusive $IMSS_PATH/server d --server-id=$i --imss-uri=imss:// --port=$DATA_PORT --bufsize=0 --stat-host=$META_NODE --stat-port=$META_PORT --num-servers=$NUM_DATA --deploy-hostfile=./data_hostfile --block-size=$BLOCK_SIZE --storage-size=$STORAGE_SIZE 1> server.log &
 done
 ### Wait for data server
-wait_for_server Data $NUM_DATA
+#wait_for_server Data $NUM_DATA
+sleep 5
 
 FILE_NAME="data.out"
-FILE_SIZE=512
+FILE_SIZE=102400
 # COMMAND="$IOR_PATH/ior -o /mnt/imss/$FILE_NAME -t ${FILE_SIZE}kb -b ${FILE_SIZE}kb -s 1 -k -E -w -i 1"
 # COMMAND2="$IOR_PATH/ior -o /mnt/imss/$FILE_NAME -t ${FILE_SIZE}kb -b ${FILE_SIZE}kb -s 1 -k -E -W -i 1"
-COMMAND="$IOR_PATH/ior -w -W -k -o /mnt/imss/data.out -t ${FILE_SIZE}kb -b ${FILE_SIZE}kb -s 1 -i 1"
+# COMMAND="$IOR_PATH/ior -w -W -k -o /mnt/imss/data.out -t ${FILE_SIZE}kb -b ${FILE_SIZE}kb -s 1 -i 1"
 # COMMAND2="$IOR_PATH/ior -o /mnt/imss/$FILE_NAME -t ${FILE_SIZE}kb -b ${FILE_SIZE}kb -s 1 -i 1 -WR -F"
 # COMMAND="$IOR_PATH/ior -o /mnt/imss/$FILE_NAME -t ${FILE_SIZE}kb -b ${FILE_SIZE}kb -s 1 -w -N=$NUM_CLIENT"
 # COMMAND="$IOR_PATH/ior -o /mnt/imss/$FILE_NAME -t ${FILE_SIZE}m -b ${FILE_SIZE}m -s 1 -i 1 -k -WR -F"
-# COMMAND="./exe_WRITE-AND-READ-TEST-BIFURCADO /mnt/imss/$FILE_NAME $FILE_SIZE"
-# COMMAND="$IOR_PATH/ior -o /mnt/imss/data.out -t ${FILE_SIZE}kb -b ${FILE_SIZE}kb -s 1 -i 1"
+#  COMMAND="./exe_WRITE-AND-READ-TEST-BIFURCADO /mnt/imss/$FILE_NAME $FILE_SIZE"
+COMMAND="$IOR_PATH/ior -o /mnt/imss/data.out -t ${FILE_SIZE}kb -b ${FILE_SIZE}kb -s 1 -i 5"
 
 echo "# IMMS: Running IOR"
 tail -n +$((NUM_METADATA+NUM_DATA+1)) hostfile | head -n $NUM_CLIENT > client_hostfile
@@ -121,4 +126,5 @@ mpiexec -n $NUM_CLIENT --ppn $NUM_CLIENT -f ./client_hostfile \
 	-env IMSS_STORAGE_SIZE $STORAGE_SIZE \
 	-env IMSS_METADATA_FILE $PWD/metadata \
 	-env IMSS_DEPLOYMENT 2 \
+	-env IMSS_MALLEABILITY $MALLEABILITY \
 	$COMMAND
