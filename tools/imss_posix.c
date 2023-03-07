@@ -638,7 +638,7 @@ int statvfs(const char *restrict path, struct statvfs *restrict buf)
 
 int statfs(const char *restrict path, struct statfs *restrict buf)
 {
-	fprintf(stderr, "[POSIX %d]. Calling 'statfs', path=%s.\n", rank, path);
+	//fprintf(stderr, "[POSIX %d]. Calling 'statfs', path=%s.\n", rank, path);
 	real_statfs = dlsym(RTLD_NEXT, "statfs");
 	//if (real_statfs)
 	//{
@@ -667,7 +667,7 @@ int statfs(const char *restrict path, struct statfs *restrict buf)
 	{
 		ret = real_statfs(path, buf);
 	}
-	fprintf(stderr, "[POSIX %d]. Exit 'statfs', path=%s.\n", rank, path);
+	//fprintf(stderr, "[POSIX %d]. Exit 'statfs', path=%s.\n", rank, path);
 	return ret;
 }
 

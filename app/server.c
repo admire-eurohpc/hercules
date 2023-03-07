@@ -237,11 +237,11 @@ int32_t main(int32_t argc, char **argv)
 
 			/* Send client UCX address to server */
 			ep_params.field_mask = UCP_EP_PARAM_FIELD_REMOTE_ADDRESS |
-								   UCP_EP_PARAM_FIELD_ERR_HANDLING_MODE |
-								   UCP_EP_PARAM_FIELD_ERR_HANDLER |
-								   UCP_EP_PARAM_FIELD_USER_DATA;
+					       UCP_EP_PARAM_FIELD_ERR_HANDLING_MODE |
+					       UCP_EP_PARAM_FIELD_ERR_HANDLER |
+					       UCP_EP_PARAM_FIELD_USER_DATA;
 			ep_params.address = peer_addr;
-			ep_params.err_mode = UCP_ERR_HANDLING_MODE_PEER;
+			ep_params.err_mode = UCP_ERR_HANDLING_MODE_NONE;
 			ep_params.err_handler.cb = err_cb_client;
 			ep_params.err_handler.arg = NULL;
 			ep_params.user_data = &ep_status;
@@ -252,7 +252,17 @@ int32_t main(int32_t argc, char **argv)
 			char formated_uri[REQUEST_SIZE];
 			sprintf(formated_uri, "%" PRIu32 " GET 0 %s", id, imss_uri);
 
-			status = ucp_worker_get_address(ucp_worker, &req_addr, &req_addr_len);
+			//status = ucp_worker_get_address(ucp_worker, &req_addr, &req_addr_len);
+			
+			ucp_worker_attr_t worker_attr;
+			worker_attr.field_mask = UCP_WORKER_ATTR_FIELD_ADDRESS;
+			status = ucp_worker_query(ucp_worker, &worker_attr);
+			printf ("Len %ld \n", worker_attr.address_length);
+    			req_addr_len = worker_attr.address_length;
+    			req_addr     = worker_attr.address;
+
+
+
 			attr.field_mask = UCP_WORKER_ADDRESS_ATTR_FIELD_UID;
 			ucp_worker_address_query(req_addr, &attr);
 			slog_debug("[srv_worker_thread] Server UID %" PRIu64 ".", attr.worker_uid);
@@ -378,24 +388,15 @@ int32_t main(int32_t argc, char **argv)
 	// Execute all threads.
 	for (int32_t i = 0; i < (IMSS_THREAD_POOL + 1); i++)
 	{
-		ret = init_worker(ucp_context, &ucp_worker_threads[i]);
 
 		// Add port number to thread arguments.
 		arguments[i].ucp_context = ucp_context;
 		arguments[i].blocksize = block_size;
 		arguments[i].storage_size = storage_size;
-		arguments[i].ucp_worker = ucp_worker_threads[i];
 		arguments[i].port = args.port;
 
 		// Add the instance URI to the thread arguments.
 		strcpy(arguments[i].my_uri, imss_uri);
-
-		if (ret != 0)
-		{
-			perror("ERRIMSS_WORKER_INIT");
-			pthread_exit(NULL);
-		}
-		status = ucp_worker_get_address(ucp_worker_threads[i], &local_addr[i], &local_addr_len[i]);
 
 		// Deploy all dispatcher + service threads.
 		if (i == 0)
@@ -411,6 +412,21 @@ int32_t main(int32_t argc, char **argv)
 		}
 		else
 		{
+			ret = init_worker(ucp_context, &ucp_worker_threads[i]);
+			if (ret != 0)
+                	{
+                        	perror("ERRIMSS_WORKER_INIT");
+                	}
+
+			arguments[i].ucp_worker = ucp_worker_threads[i];
+
+			// status = ucp_worker_get_address(ucp_worker_threads[i], &local_addr[i], &local_addr_len[i]);
+			ucp_worker_attr_t worker_attr;
+                        worker_attr.field_mask = UCP_WORKER_ATTR_FIELD_ADDRESS;
+                        status = ucp_worker_query(ucp_worker_threads[i], &worker_attr);
+                        local_addr_len[i] = worker_attr.address_length;
+                        local_addr[i]     = worker_attr.address;
+
 			// Add the reference to the map into the set of thread arguments.
 			arguments[i].map = map;
 			// Specify the address used by each thread to write inside the buffer.

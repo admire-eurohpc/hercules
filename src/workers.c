@@ -76,7 +76,7 @@ void *srv_worker(void *th_argv)
 						   UCP_EP_PARAM_FIELD_ERR_HANDLING_MODE |
 						   UCP_EP_PARAM_FIELD_ERR_HANDLER |
 						   UCP_EP_PARAM_FIELD_USER_DATA;
-	ep_params.err_mode = UCP_ERR_HANDLING_MODE_PEER;
+	ep_params.err_mode = UCP_ERR_HANDLING_MODE_NONE;
 	ep_params.err_handler.cb = err_cb_server;
 	ep_params.err_handler.arg = NULL;
 
@@ -892,20 +892,11 @@ void *garbage_collector(void *th_argv)
 // Thread method attending client read-write metadata requests.
 void *stat_worker(void *th_argv)
 {
-	ucp_ep_params_t ep_params;
 	ucp_am_handler_param_t param;
 	ucs_status_t status;
 	int ret = 0;
 
 	p_argv *arguments = (p_argv *)th_argv;
-
-	ep_params.field_mask = UCP_EP_PARAM_FIELD_REMOTE_ADDRESS |
-						   UCP_EP_PARAM_FIELD_ERR_HANDLING_MODE |
-						   UCP_EP_PARAM_FIELD_ERR_HANDLER |
-						   UCP_EP_PARAM_FIELD_USER_DATA;
-	ep_params.err_mode = UCP_ERR_HANDLING_MODE_PEER;
-	ep_params.err_handler.cb = err_cb_server;
-	ep_params.err_handler.arg = NULL;
 
 	map_server_eps = map_server_eps_create();
 
@@ -934,8 +925,8 @@ void *stat_worker(void *th_argv)
 		memset(msg, 0, info_tag.length);
 
 		recv_param.op_attr_mask = UCP_OP_ATTR_FIELD_CALLBACK |
-								  UCP_OP_ATTR_FIELD_DATATYPE |
-								  UCP_OP_ATTR_FLAG_NO_IMM_CMPL;
+					  UCP_OP_ATTR_FIELD_DATATYPE |
+					  UCP_OP_ATTR_FLAG_NO_IMM_CMPL;
 		recv_param.datatype = ucp_dt_make_contig(1);
 		recv_param.cb.recv = recv_handler;
 
@@ -959,10 +950,22 @@ void *stat_worker(void *th_argv)
 		// create ep if it's not in the map
 		if (ret < 0)
 		{
+			ucp_ep_params_t * ep_params;
+
+			ep_params = (ucp_ep_params_t *) malloc(sizeof(ucp_ep_params_t));
+			ep_params->field_mask = UCP_EP_PARAM_FIELD_REMOTE_ADDRESS |
+                                                UCP_EP_PARAM_FIELD_ERR_HANDLING_MODE |
+                                                UCP_EP_PARAM_FIELD_ERR_HANDLER |
+                                                UCP_EP_PARAM_FIELD_USER_DATA;
+        		ep_params->err_mode = UCP_ERR_HANDLING_MODE_NONE;
+        		ep_params->err_handler.cb = err_cb_server;
+        		ep_params->err_handler.arg = NULL;
+
 			ucp_ep_h new_ep;
-			ep_params.address = peer_addr;
-			ep_params.user_data = &ep_status;
-			status = ucp_ep_create(arguments->ucp_worker, &ep_params, &ep);
+			ep_params->address = peer_addr;
+			ep_params->user_data = &ep_status;
+			status = ucp_ep_create(arguments->ucp_worker, ep_params, &ep);
+			ucp_ep_print_info(ep, stderr);
 			// add ep to the map
 			map_server_eps_put(map_server_eps, attr.worker_uid, ep);
 		}
