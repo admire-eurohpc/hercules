@@ -248,6 +248,8 @@ int32_t main(int32_t argc, char **argv)
 
 			status = ucp_ep_create(ucp_worker, &ep_params, &client_ep);
 
+			fprintf(stderr,"ucp_ep_create status=%ld\n", status);
+
 			// Formated imss uri to be sent to the metadata server.
 			char formated_uri[REQUEST_SIZE];
 			sprintf(formated_uri, "%" PRIu32 " GET 0 %s", id, imss_uri);

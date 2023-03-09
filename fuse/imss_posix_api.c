@@ -75,11 +75,12 @@ pthread_mutex_t lock_file = PTHREAD_MUTEX_INITIALIZER;
 extern int32_t IMSS_DEBUG;
 
 // to simulate maliability.
-int32_t ior_operation_number = 0;
-int32_t mall_th_1 = 40;
-int32_t mall_th_2 = 70;
+int32_t ior_operation_number;
+int32_t mall_th_1 = 30;
+int32_t mall_th_2 = 60;
 int32_t MALLEABILITY;
-
+int32_t UPPER_BOUND_SERVERS;
+int32_t LOWER_BOUND_SERVERS;
 /*
    (*) Mapping for REPL_FACTOR values:
    NONE = 1;
@@ -363,6 +364,8 @@ int imss_open(const char *path, uint64_t *fh)
 	int32_t file_desc;
 	get_iuri(path, imss_path);
 
+	ior_operation_number = 0;
+
 	int fd;
 	struct stat stats;
 	char *aux;
@@ -422,13 +425,15 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 
 	get_iuri(path, rpath);
 
-	int64_t curr_blk, end_blk, start_offset, end_offset, block_offset;
+	int64_t curr_blk, num_of_blk, end_blk, start_offset, end_offset, block_offset, i_blk;
 	int64_t first = 0;
 	int ds = 0;
 	curr_blk = offset / IMSS_DATA_BSIZE + 1; // Plus one to skip the header (0) block
 	start_offset = offset % IMSS_DATA_BSIZE;
 	// end_blk = (offset+size) / IMSS_DATA_BSIZE + 1; //Plus one to skip the header (0) block
 	end_blk = ceil((double)(offset + size) / IMSS_DATA_BSIZE);
+
+	num_of_blk = end_blk - curr_blk;
 	end_offset = (offset + size) % IMSS_DATA_BSIZE;
 	size_t to_read = 0;
 
@@ -489,6 +494,7 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 	/*	struct timeval start1, end1;
 		long delta_us1;
 		gettimeofday(&start1, NULL);*/
+	i_blk = 0;
 	while (curr_blk <= end_blk)
 	{
 		// if( err != -1){
@@ -565,25 +571,27 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 		slog_warn("[imss_read] curr_blk=%ld, reading %" PRIu64 " kilobytes, block_offset=%ld kilobytes, byte_count=%ld", curr_blk, to_read / 1024, block_offset / 1024, byte_count);
 		if (MALLEABILITY)
 		{
-			ior_operation_number++;
-			int32_t num_storages;
+		        int32_t num_storages;
 
-			if (ior_operation_number < 140)
-			{
-				num_storages = N_SERVERS / 2;
-			}
-			else if (ior_operation_number < 170)
-			{
-				num_storages = 3 * N_SERVERS / 4;
-			}
-			else
-			{
-				num_storages = N_SERVERS;
-			}
+                        if (i_blk <  0.3F * num_of_blk)
+                        {
+                                num_storages = LOWER_BOUND_SERVERS;
+                        }
+                        else if (i_blk <  0.6F * num_of_blk)
+                        {
+                                num_storages = (LOWER_BOUND_SERVERS+UPPER_BOUND_SERVERS)/2;
+                        }
+                        else
+                        {
+                                num_storages = UPPER_BOUND_SERVERS;
+                        }
 
-			slog_debug("[imss_read] ior_operation_number=%ld, num_storages=%ld", ior_operation_number, num_storages);
+//			fprintf(stderr,"block %ld/%ld\n", i_blk, num_of_blk);
+
+			slog_debug("[imss_read] i_blk=%ld, num_storages=%ld, N_SERVERS=%ld", i_blk, num_storages, N_SERVERS);
 
 			TIMING(get_data_mall(ds, curr_blk, (char *)buf + byte_count, to_read, block_offset, num_storages), "[imss_read]get_data_mall", int32_t);
+			i_blk++;
 		}
 		else
 		{
@@ -1239,13 +1247,15 @@ int imss_write(const char *path, const char *buf, size_t size, off_t off)
 	char *aux_block;
 
 	// Compute offsets to write
-	int64_t curr_blk, end_blk, start_offset, end_offset, block_offset;
+	int64_t curr_blk, end_blk, start_offset, end_offset, block_offset, i_blk, num_of_blk;
 	int64_t start_blk = off / IMSS_DATA_BSIZE + 1; // Add one to skip block 0
 	start_offset = off % IMSS_DATA_BSIZE;
 	end_blk = ceil((double)(off + size) / IMSS_DATA_BSIZE);
 
 	end_offset = (off + size) % IMSS_DATA_BSIZE; // writev stuff
 	curr_blk = start_blk;
+
+	num_of_blk = end_blk - start_blk;
 
 	// Needed variables
 	size_t byte_count = 0;
@@ -1294,7 +1304,7 @@ int imss_write(const char *path, const char *buf, size_t size, off_t off)
 			return size;
 		}
 	}
-
+	i_blk = 0;
 	// WRITE NORMAL CASE
 	while (curr_blk <= end_blk)
 	{
@@ -1329,23 +1339,23 @@ int imss_write(const char *path, const char *buf, size_t size, off_t off)
 
 		if (MALLEABILITY)
 		{
-			ior_operation_number++;
+			
 			int32_t num_storages;
 
-			if (ior_operation_number < 40)
+			if (i_blk <  0.3F * num_of_blk)
 			{
-				num_storages = N_SERVERS / 2;
+				num_storages = LOWER_BOUND_SERVERS;
 			}
-			else if (ior_operation_number < 70)
+			else if (i_blk <  0.6F * num_of_blk)
 			{
-				num_storages = 3 * N_SERVERS / 4;
+				num_storages = (LOWER_BOUND_SERVERS+UPPER_BOUND_SERVERS)/2;
 			}
 			else
 			{
-				num_storages = N_SERVERS;
+				num_storages = UPPER_BOUND_SERVERS;
 			}
 
-			slog_debug("[imss_write] ior_operation_number=%ld, num_storages=%ld, N_SERVERS=%ld", ior_operation_number, num_storages, N_SERVERS);
+			slog_debug("[imss_write] i_blk=%ld, num_storages=%ld, N_SERVERS=%ld", i_blk, num_storages, N_SERVERS);
 
 			if (set_data_mall(ds, curr_blk, data_pointer, bytes_to_copy, block_offset, num_storages) < 0)
 			{
@@ -1353,6 +1363,7 @@ int imss_write(const char *path, const char *buf, size_t size, off_t off)
 				error_print = -ENOENT;
 				return -ENOENT;
 			}
+			i_blk++;
 		}
 		else
 		{

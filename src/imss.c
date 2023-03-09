@@ -1467,9 +1467,7 @@ int32_t set_dataset(char * dataset_uri, unsigned char * buffer, uint64_t offset)
 /**********************************************************************************/
 
 // Method retrieving the location of a specific data object.
-int32_t get_data_location(int32_t dataset_id,
-						  int32_t data_id,
-						  int32_t op_type)
+int32_t get_data_location(int32_t dataset_id, int32_t data_id, int32_t op_type)
 {
 	// If the current dataset policy was not established yet.
 	// slog_debug("[get_data_location] current_dataset=%ld, dataset_id=%ld", current_dataset, dataset_id);
@@ -2162,6 +2160,9 @@ int32_t get_data_mall(int32_t dataset_id, int32_t data_id, char *buffer, size_t 
 	// slog_fatal("Caller name: %pS", __builtin_return_address(0));
 	int32_t n_server;
 
+
+	curr_imss.info.num_storages = num_storages;
+
 	// Server containing the corresponding data to be retrieved.
 	if ((n_server = TIMING(get_data_location(dataset_id, data_id, GET), "[imss_read]get_data_location", int32_t)) == -1)
 	{
@@ -2171,17 +2172,9 @@ int32_t get_data_mall(int32_t dataset_id, int32_t data_id, char *buffer, size_t 
 	// Servers that the data block is going to be requested to.
 	int32_t repl_servers[curr_dataset.repl_factor];
 	int32_t curr_imss_storages = 0;
-
-	if (num_storages != 0)
-	{
-		curr_imss_storages = num_storages;
-	}
-	else
-	{
-		curr_imss_storages = curr_imss.info.num_storages;
-	}
-
+	curr_imss_storages = curr_imss.info.num_storages;
 	// Retrieve the corresponding connections to the previous servers.
+	
 	// slog_debug("curr_dataset.repl_factor=%d", curr_dataset.repl_factor);
 	for (int32_t i = 0; i < curr_dataset.repl_factor; i++)
 	{
@@ -2327,6 +2320,9 @@ int32_t set_data_mall(int32_t dataset_id, int32_t data_id, char *buffer, size_t 
 	// slog_debug("[IMSS][set_data]");
 	t = clock();
 
+
+	curr_imss.info.num_storages = num_storages;
+
 	// Server containing the corresponding data to be written.
 	if ((n_server = get_data_location(dataset_id, data_id, SET)) == -1)
 	{
@@ -2336,14 +2332,7 @@ int32_t set_data_mall(int32_t dataset_id, int32_t data_id, char *buffer, size_t 
 	}
 	char key_[REQUEST_SIZE];
 	int32_t curr_imss_storages = 0;
-	if (num_storages != 0)
-	{
-		curr_imss_storages = num_storages;
-	}
-	else
-	{
-		curr_imss_storages = curr_imss.info.num_storages;
-	}
+        curr_imss_storages = curr_imss.info.num_storages;
 
 	// slog_debug("[IMSS][set_data] get_data_location(dataset_id:%ld, data_id:%ld, SET:%d), n_server:%ld, curr_imss_storages:%ld", dataset_id, data_id, SET, n_server, curr_imss_storages);
 

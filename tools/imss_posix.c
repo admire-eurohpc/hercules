@@ -55,6 +55,9 @@ int32_t IMSS_DEBUG_SCREEN = 1;
 int IMSS_DEBUG_LEVEL = SLOG_FATAL;
 
 extern int32_t MALLEABILITY;
+extern int32_t UPPER_BOUND_SERVERS;
+extern int32_t LOWER_BOUND_SERVERS;
+
 
 uint16_t PREFETCH = 6;
 
@@ -255,6 +258,8 @@ imss_posix_init(void)
 	slog_debug(" -- IMSS_METADATA_FILE: %s", METADATA_FILE);
 	slog_debug(" -- IMSS_DEPLOYMENT: %d", deployment);
 	slog_debug(" -- IMSS_MALLEABILITY: %d", MALLEABILITY);
+	slog_debug(" -- UPPER_BOUND_SERVERS: %d", UPPER_BOUND_SERVERS);
+	slog_debug(" -- LOWER_BOUND_SERVERS: %d", LOWER_BOUND_SERVERS);
 
 	// Metadata server
 	if (stat_init(META_HOSTFILE, METADATA_PORT, N_META_SERVERS, rank) == -1)
@@ -372,6 +377,18 @@ void getConfiguration()
 	{
 		MALLEABILITY = atoi(getenv("IMSS_MALLEABILITY"));
 	}
+
+	if (getenv("IMSS_UPPER_BOUND_MALLEABILITY") != NULL)
+	{
+		UPPER_BOUND_SERVERS = atoi(getenv("IMSS_UPPER_BOUND_MALLEABILITY"));
+	}
+
+
+	if (getenv("IMSS_LOWER_BOUND_MALLEABILITY") != NULL)
+	{
+		LOWER_BOUND_SERVERS = atoi(getenv("IMSS_LOWER_BOUND_MALLEABILITY"));
+	}
+
 
 	if (getenv("IMSS_DEBUG") != NULL)
 	{

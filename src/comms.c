@@ -114,7 +114,7 @@ int init_context(ucp_context_h *ucp_context, ucp_config_t *config, ucp_worker_h 
 
 	ucp_config_release(config);
 
-	ucp_context_print_info(*ucp_context,stderr);
+	//ucp_context_print_info(*ucp_context,stderr);
 	if (status != UCS_OK)
 	{
 		fprintf(stderr, "failed to ucp_init (%s)", ucs_status_string(status));
@@ -467,7 +467,7 @@ ucs_status_t client_create_ep(ucp_worker_h worker, ucp_ep_h *ep, ucp_address_t *
 	ep_params.err_handler.arg = NULL;
 	ep_params.user_data = &ep_status;
 
-	ucp_worker_print_info(worker, stderr);
+	//ucp_worker_print_info(worker, stderr);
 	status = ucp_ep_create(worker, &ep_params, ep);
 	if (status != UCS_OK)
 	{

@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=imss    # Job name
 #SBATCH --time=00:60:00               # Time limit hrs:min:sec
-#SBATCH --output=logs/imss/%j_imss.log   # Standard output and error log
+#SBATCH --output=logs/hercules/%j_imss.log   # Standard output and error log
 #SBATCH --mem=0
 ##SBATCH --mem-per-cpu=3G
 ##SBATCH --cpus-per-task=1
@@ -31,17 +31,23 @@ DATA_PORT=$6
 FILE_SIZE_PER_CLIENT=$7
 SHARED_NODES=$8
 NODES_FOR_CLIENTS=$9
+MALLEABILITY=${10}
+IMSS_LOWER_BOUND_MALLEABILITY=${11}
+IMSS_UPPER_BOUND_MALLEABILITY=$2
 
 echo "# METADATA SERVERS: "$NUM_METADATA
 echo "# DATA SERVERS: "$NUM_DATA
 echo "# CLIENTS PER NODE: "$NUM_CLIENT
 echo "BLOCK SIZE: "$BLOCK_SIZE
 echo "STORAGE SIZE: "$STORAGE_SIZE
-echo "META PORT:"$META_PORT
-echo "DATA PORT:"$DATA_PORT
-echo "FILE SIZE PER CLIENT:"$FILE_SIZE_PER_CLIENT
-echo "SHARED NODES:"$SHARED_NODES
-echo "NODES FOR CLIENTS:"$NODES_FOR_CLIENTS
+echo "META PORT: "$META_PORT
+echo "DATA PORT: "$DATA_PORT
+echo "FILE SIZE PER CLIENT: "$FILE_SIZE_PER_CLIENT
+echo "SHARED NODES: "$SHARED_NODES
+echo "NODES FOR CLIENTS: "$NODES_FOR_CLIENTS
+echo "MALLEABILITY: "$MALLEABILITY
+echo "LOWER_BOUND: "$IMSS_LOWER_BOUND_MALLEABILITY
+echo "UPPER_BOUND: "$IMSS_UPPER_BOUND_MALLEABILITY
 
 IMSS_PATH=$(dirname `pwd`)/build
 echo "> IMSS_PATH: "$IMSS_PATH
@@ -73,7 +79,7 @@ wait_for_server() {
 IOR_PATH=/home/software/io500/bin
 #module unload mpi
 #module load mpi/mpich3/3.2.1
-module load mpi/openmpi
+#module load mpi/openmpi
 
 # Uncomment when working in MN4.
 #IOR_PATH=/apps/IOR/3.3.0/INTEL/IMPI/bin
@@ -91,20 +97,22 @@ module load mpi/openmpi
 #export SPACK_ROOT=/beegfs/home/javier.garciablas/opt/spack/
 #spack load cmake glib pcre ucx ior openmpi
 #spack load cmake glib pcre ucx
+#spack load ucx
 #export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HOME/rdma-core/build/lib
 #spack load openmpi
-#IOR_PATH=/beegfs/home/javier.garciablas/opt/spack/linux-ubuntu20.04-zen/gcc-9.4.0/ior-3.3.0-ssyaxpxjajmhy3v5icfqoo63kaeii6wv/bin
-
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HOME/rdma-core/build/lib
+IOR_PATH=/beegfs/home/javier.garciablas/opt/spack/linux-ubuntu20.04-zen/gcc-9.4.0/ior-3.3.0-ssyaxpxjajmhy3v5icfqoo63kaeii6wv/bin
 
 # Avaible interfaces in Italia cluster: 'eno2'(tcp), 'ibs1'(tcp), 'lo'(tcp), 'opap6s0:1'(ib)
 network_devices_list=all
 transports_to_use=all
 
-UCX_NET_DEVICES=$network_devices_list
-UCX_TLS=$transports_to_use
+export UCX_NET_DEVICES=$network_devices_list
+export UCX_TLS=$transports_to_use
 
 #IMSS_DEBUG="SLOG_TIME"
-IMSS_DEBUG=all
+IMSS_DEBUG=none
+#IMSS_DEBUG=all
 export IMSS_DEBUG=$IMSS_DEBUG
 
 echo $UCX_NET_DEVICES
@@ -206,4 +214,8 @@ echo "# IMMS: Running IOR"
         -x IMSS_DEBUG=$IMSS_DEBUG  \
 	-x UCX_NET_DEVICES=$network_devices_list \
 	-x UCX_TLS=$transports_to_use \
+	-x IMSS_MALLEABILITY=$MALLEABILITY \
+	-x LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HOME/rdma-core/build/lib \
+	-x IMSS_LOWER_BOUND_MALLEABILITY=$IMSS_LOWER_BOUND_MALLEABILITY \
+	-x IMSS_UPPER_BOUND_MALLEABILITY=$IMSS_UPPER_BOUND_MALLEABILITY \
         $COMMAND
