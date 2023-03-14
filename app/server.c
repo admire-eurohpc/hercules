@@ -54,6 +54,8 @@ int IMSS_THREAD_POOL = 1;
 int32_t main(int32_t argc, char **argv)
 {
 	// Print off a hello world message
+	clock_t t;
+	double time_taken;
 
 	uint16_t bind_port, aux_bind_port;
 	char *stat_add;
@@ -86,6 +88,7 @@ int32_t main(int32_t argc, char **argv)
 	/***************************************************************/
 	/******************** PARSE INPUT ARGUMENTS ********************/
 	/***************************************************************/
+	t = clock();
 	struct arguments args;
 
 	if (getenv("IMSS_DEBUG") != NULL)
@@ -124,8 +127,8 @@ int32_t main(int32_t argc, char **argv)
 	// get arguments.
 	parse_args(argc, argv, &args);
 
-	time_t t = time(NULL);
-	struct tm tm = *localtime(&t);
+	// time_t t = time(NULL);
+	// struct tm tm = *localtime(&t);
 	char log_path[1000];
 	// sprintf(log_path, "./%c-server.%02d-%02d-%02d", args.type, tm.tm_hour, tm.tm_min, tm.tm_sec);
 	sprintf(log_path, "./%c-server", args.type);
@@ -178,11 +181,11 @@ int32_t main(int32_t argc, char **argv)
 	mem_pool = StsQueue.create();
 	// figure out how many blocks we need and allocate them
 	num_blocks = max_storage_size / (args.block_size * KB);
-	for (int i = 0; i < num_blocks; ++i)
-	{
-		char *buffer = (char *)calloc(args.block_size * KB, sizeof(char));
-		StsQueue.push(mem_pool, buffer);
-	}
+	// for (int i = 0; i < num_blocks; ++i)
+	// {
+	// 	char *buffer = (char *)calloc(args.block_size * KB, sizeof(char));
+	// 	StsQueue.push(mem_pool, buffer);
+	// }
 
 	/* CHECK THIS OUT!
 	 ***************************************************
@@ -259,7 +262,7 @@ int32_t main(int32_t argc, char **argv)
 			ucp_worker_attr_t worker_attr;
 			worker_attr.field_mask = UCP_WORKER_ATTR_FIELD_ADDRESS;
 			status = ucp_worker_query(ucp_worker, &worker_attr);
-			printf ("Len %ld \n", worker_attr.address_length);
+			// printf ("Len %ld \n", worker_attr.address_length);
     			req_addr_len = worker_attr.address_length;
     			req_addr     = worker_attr.address;
 
@@ -529,6 +532,16 @@ int32_t main(int32_t argc, char **argv)
 	// Wait for threads to finish.
 	for (int32_t i = 0; i < (IMSS_THREAD_POOL + 1); i++)
 	{
+		// final deployment time.
+		t = clock() - t; 
+		time_taken = ((double)t) / (CLOCKS_PER_SEC);
+		// printf("[%c-server %d] Deployment time %f\n", args.type, args.id, time_taken);
+		if(!args.id)
+			printf("ServerID,Deployment time (s)\n");
+
+		printf("%d,%f\n", args.id, time_taken);
+		fflush(stdout);
+
 		// fprintf(stderr, "Server init\n");
 
 		// setenv("IMSS_INIT_SERVER", "1", 1);
@@ -537,8 +550,8 @@ int32_t main(int32_t argc, char **argv)
 		// int ret = system(command);
 		// fprintf(stderr,"system status=%d\n", ret);
 		// putenv("IMSS_INIT_SERVER=1");
-		printf("IMSS_INIT_SERVER=1\n");
-		fflush(stdout);
+		// printf("IMSS_INIT_SERVER=1\n");
+		// fflush(stdout);
 		if (pthread_join(threads[i], NULL) != 0)
 		{
 			perror("ERRIMSS_SRVTH_JOIN");
