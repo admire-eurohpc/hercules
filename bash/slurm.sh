@@ -76,7 +76,7 @@ wait_for_server() {
 
 
 # Uncomment when working in Tucan.
-IOR_PATH=/home/software/io500/bin
+#IOR_PATH=/home/software/io500/bin
 #module unload mpi
 #module load mpi/mpich3/3.2.1
 #module load mpi/openmpi
@@ -109,9 +109,15 @@ transports_to_use=all
 
 export UCX_NET_DEVICES=$network_devices_list
 export UCX_TLS=$transports_to_use
+#export UCX_IB_RCACHE_MAX_REGIONS="262144"
+#export UCX_NUM_EPS=24
+#export UCX_RCACHE_ENABLE=n
+#export UCX_IB_REG_METHODS=direct
+#export UCX_RC_VERBS_TIMEOUT=5000000.00us
 
 #IMSS_DEBUG="SLOG_TIME"
 IMSS_DEBUG=none
+#IMSS_DEBUG="SLOG_LIVE"
 #IMSS_DEBUG=all
 export IMSS_DEBUG=$IMSS_DEBUG
 
@@ -124,6 +130,8 @@ free -h
 echo "##############################"
 
 #MAX_CLIENTS_PER_NODE=`lscpu | grep "CPU(s)" | head -n 1 | cut -c 22-`
+
+rm *-2023-03-14.log
 
 set -x
 
@@ -195,7 +203,11 @@ echo "# IMMS: Running IOR"
 # COMMAND="$IOR_PATH/ior -o /mnt/imss/$FILE_NAME -t ${FILE_SIZE}kb -b ${FILE_SIZE}kb -s 1 -w -N=$NUM_CLIENT"
 # COMMAND="$IOR_PATH/ior -o /mnt/imss/$FILE_NAME -t ${FILE_SIZE}m -b ${FILE_SIZE}m -s 1 -i 1 -k -WR -F"
 # COMMAND="./exe_WRITE-AND-READ-TEST-BIFURCADO /mnt/imss/$FILE_NAME $FILE_SIZE_PER_CLIENT"
- COMMAND="$IOR_PATH/ior -o /mnt/imss/data.out -t ${FILE_SIZE_PER_CLIENT}kb -b ${FILE_SIZE_PER_CLIENT}kb -s 1 -i 10"
+
+
+COMMAND="$IOR_PATH/ior -o /mnt/imss/data.out -t ${FILE_SIZE_PER_CLIENT}kb -b ${FILE_SIZE_PER_CLIENT}kb -s 1 -i 10"
+#COMMAND="$IOR_PATH/ior -o /mnt/imss/data.out -t 1m -b 16m -s 16"
+
 
 /beegfs/home/javier.garciablas/opt/spack/linux-ubuntu20.04-zen/gcc-9.4.0/openmpi-4.1.3-4bpvwm3lcbftmjki6en35c4i5od6wjbr/bin/mpiexec --hostfile ./client_hostfile -npernode $NUM_CLIENT \
         -x LD_PRELOAD=$IMSS_PATH/tools/libimss_posix.so \
