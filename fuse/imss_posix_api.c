@@ -81,6 +81,12 @@ int32_t mall_th_2 = 60;
 int32_t MALLEABILITY;
 int32_t UPPER_BOUND_SERVERS;
 int32_t LOWER_BOUND_SERVERS;
+
+extern char *aux_refresh;
+extern char *imss_path_refresh;
+
+
+
 /*
    (*) Mapping for REPL_FACTOR values:
    NONE = 1;
@@ -138,24 +144,27 @@ int imss_refresh(const char *path)
 	uint32_t ds;
 	int fd;
 	char *aux2;
-	char *imss_path = calloc(MAX_PATH, sizeof(char));
-	char *aux = (char *)malloc(IMSS_DATA_BSIZE);
+	//char *imss_path = calloc(MAX_PATH, sizeof(char));
+	//char *aux = (char *)malloc(IMSS_DATA_BSIZE);
+	memset(imss_path_refresh, 0, MAX_PATH);
+	memset(aux_refresh, 0, IMSS_DATA_BSIZE);
 
-	get_iuri(path, imss_path);
 
-	fd_lookup(imss_path, &fd, &old_stats, &aux2);
+	get_iuri(path, imss_path_refresh);
+
+	fd_lookup(imss_path_refresh, &fd, &old_stats, &aux2);
 	if (fd >= 0)
 		ds = fd;
 	else
 		return -ENOENT;
 
-	get_data(ds, 0, aux);
-	stats = (struct stat *)aux;
+	get_data(ds, 0, aux_refresh);
+	stats = (struct stat *)aux_refresh;
 
-	map_update(map, imss_path, ds, *stats);
+	map_update(map, imss_path_refresh, ds, *stats);
 
-	free(aux);
-	free(imss_path);
+	//free(aux_refresh);
+	//free(imss_path_refresh);
 	return 0;
 }
 
@@ -571,22 +580,22 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 		slog_warn("[imss_read] curr_blk=%ld, reading %" PRIu64 " kilobytes, block_offset=%ld kilobytes, byte_count=%ld", curr_blk, to_read / 1024, block_offset / 1024, byte_count);
 		if (MALLEABILITY)
 		{
-		        int32_t num_storages;
+			int32_t num_storages;
 
-                        if (i_blk <  0.3F * num_of_blk)
-                        {
-                                num_storages = LOWER_BOUND_SERVERS;
-                        }
-                        else if (i_blk <  0.6F * num_of_blk)
-                        {
-                                num_storages = (LOWER_BOUND_SERVERS+UPPER_BOUND_SERVERS)/2;
-                        }
-                        else
-                        {
-                                num_storages = UPPER_BOUND_SERVERS;
-                        }
+			if (i_blk < 0.3F * num_of_blk)
+			{
+				num_storages = LOWER_BOUND_SERVERS;
+			}
+			else if (i_blk < 0.6F * num_of_blk)
+			{
+				num_storages = (LOWER_BOUND_SERVERS + UPPER_BOUND_SERVERS) / 2;
+			}
+			else
+			{
+				num_storages = UPPER_BOUND_SERVERS;
+			}
 
-//			fprintf(stderr,"block %ld/%ld\n", i_blk, num_of_blk);
+			//			fprintf(stderr,"block %ld/%ld\n", i_blk, num_of_blk);
 
 			slog_debug("[imss_read] i_blk=%ld, num_storages=%ld, N_SERVERS=%ld", i_blk, num_storages, N_SERVERS);
 
@@ -1339,16 +1348,16 @@ int imss_write(const char *path, const char *buf, size_t size, off_t off)
 
 		if (MALLEABILITY)
 		{
-			
+
 			int32_t num_storages;
 
-			if (i_blk <  0.3F * num_of_blk)
+			if (i_blk < 0.3F * num_of_blk)
 			{
 				num_storages = LOWER_BOUND_SERVERS;
 			}
-			else if (i_blk <  0.6F * num_of_blk)
+			else if (i_blk < 0.6F * num_of_blk)
 			{
-				num_storages = (LOWER_BOUND_SERVERS+UPPER_BOUND_SERVERS)/2;
+				num_storages = (LOWER_BOUND_SERVERS + UPPER_BOUND_SERVERS) / 2;
 			}
 			else
 			{
@@ -1395,7 +1404,7 @@ int imss_write(const char *path, const char *buf, size_t size, off_t off)
 	double time_taken = ((double)t) / CLOCKS_PER_SEC; // in seconds
 	double time_mem = ((double)tmm) / CLOCKS_PER_SEC; // in seconds
 
-	slog_live(">>>>>>> [API] imss_write time  total %f mem %f  s, total bytes = %ld, IMSS_DATA_BSIZE = %ld <<<<<<<<<", time_taken, time_mem, byte_count, IMSS_DATA_BSIZE);
+	slog_live(">>>>>>> [API] imss_write time  total %f mem %f  s, total bytes = %ld, IMSS_DATA_BSIZE = %ld <<<<<<<<<", time_taken, time_mem, bytes_stored, IMSS_DATA_BSIZE);
 
 	return bytes_stored;
 }
@@ -1876,9 +1885,16 @@ int imss_close(const char *path)
 {
 	// clock_t t;
 	// t = clock();
-	TIMING(flush_data(), "[imss_close]flush_data", int32_t);
+	// TIMING(flush_data(), "[imss_close]flush_data", int32_t);
+	TIMING(imss_flush_data(), "[imss_close]flush_data", int32_t);
+	slog_debug("[imss_close] Ending imss_flush_data");
 	TIMING(imss_release(path), "[imss_close]imss_release", int);
-	TIMING(imss_refresh(path), "[imss_close]imss_refresh", int);
+	slog_debug("[imss_close] Ending imss_release");
+	// imss_refresh is too slow. 
+	// When we remove it pass from 3.45 sec to 0.008505 sec.
+	TIMING(imss_refresh(path), "[imss_close]imss_refresh", int); 
+	slog_debug("[imss_close] Ending imss_refresh");
+
 	// t = clock() - t;
 	// double time_taken = ((double)t) / CLOCKS_PER_SEC; // in seconds
 	// slog_info("[imss_close] time total %f s", time_taken);

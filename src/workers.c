@@ -159,6 +159,8 @@ void *srv_worker(void *th_argv)
 		slog_info("[srv_worker] Serving time %f s", time_taken);
 
 		free(peer_addr);
+
+		// flush_ep(arguments->ucp_worker, ep);
 	}
 }
 
@@ -965,7 +967,7 @@ void *stat_worker(void *th_argv)
 			ep_params->address = peer_addr;
 			ep_params->user_data = &ep_status;
 			status = ucp_ep_create(arguments->ucp_worker, ep_params, &ep);
-			ucp_ep_print_info(ep, stderr);
+			//ucp_ep_print_info(ep, stderr);
 			// add ep to the map
 			map_server_eps_put(map_server_eps, attr.worker_uid, ep);
 		}

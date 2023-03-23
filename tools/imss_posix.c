@@ -34,8 +34,8 @@
 #define KB 1024
 #define GB 1073741824
 uint32_t deployment = 2; // Default 1=ATACHED, 0=DETACHED ONLY METADATA SERVER 2=DETACHED METADATA AND DATA SERVERS
-// char * POLICY = "RR"; //Default RR
-char *POLICY = "HASH";
+char * POLICY = "RR"; //Default RR
+// char *POLICY = "HASH";
 uint16_t IMSS_SRV_PORT = 1; // Not default, 1 will fail
 uint16_t METADATA_PORT = 1; // Not default, 1 will fail
 int32_t N_SERVERS = 1;		// Default
@@ -79,7 +79,10 @@ pthread_cond_t cond_prefetch;
 pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t lock2 = PTHREAD_MUTEX_INITIALIZER;
 
+#define MAX_PATH 256
 uint64_t IMSS_DATA_BSIZE;
+char *aux_refresh;
+char *imss_path_refresh;
 
 int LD_PRELOAD = 0;
 void *map;
@@ -213,6 +216,8 @@ imss_posix_init(void)
 	getConfiguration();
 
 	IMSS_DATA_BSIZE = IMSS_BLKSIZE * KB;
+	aux_refresh = (char *)malloc(IMSS_DATA_BSIZE); // global buffer to refresh metadata.
+	imss_path_refresh = calloc(MAX_PATH, sizeof(char));
 	// Hercules init -- Attached deploy
 	if (deployment == 1)
 	{
@@ -407,12 +412,15 @@ void getConfiguration()
 		else if (strstr(getenv("IMSS_DEBUG"), "all"))
 		{
 			IMSS_DEBUG_FILE = 1;
-			IMSS_DEBUG_LEVEL = SLOG_LIVE;
+			IMSS_DEBUG_LEVEL = SLOG_PANIC;
 		}
 		else if (strstr(getenv("IMSS_DEBUG"), "none"))
 			unsetenv("IMSS_DEBUG");
 		else
+		{
+			IMSS_DEBUG_FILE = 1;
 			IMSS_DEBUG_LEVEL = getLevel(getenv("IMSS_DEBUG"));
+		}
 	}
 }
 
@@ -420,6 +428,7 @@ void __attribute__((destructor)) run_me_last()
 {
 	if (init)
 	{
+		slog_live("Calling 'run_me_last'");
 		release_imss("imss://", CLOSE_DETACHED);
 		stat_release();
 	}
@@ -445,17 +454,18 @@ int close(int fd)
 		return real_close(fd);
 	}
 
-	clock_t t;
-	t = clock();
+	// clock_t t;
+	// t = clock();
 
 	char *path = (char *)calloc(256, sizeof(char));
 	if (map_fd_search_by_val(map_fd, path, fd) == 1)
 	{
 		slog_debug("[POSIX %d]. Calling 'close' %s.", rank, path);
 		TIMING(imss_close(path),"imss_close", int);
-		t = clock() - t;
-		double time_taken = ((double)t) / CLOCKS_PER_SEC; // in seconds
-		slog_info("[POSIX %d] close time total %f s", rank, time_taken);
+		slog_debug("[POSIX %d]. Ending 'close' %s.", rank, path);
+		// t = clock() - t;
+		// double time_taken = ((double)t) / CLOCKS_PER_SEC; // in seconds
+		// slog_info("[POSIX %d] close time total %f s", rank, time_taken);
 	}
 	else
 	{

@@ -111,7 +111,7 @@ static error_t parse_opt (int key, char * arg, struct argp_state * state)
             }
             if (args-> type == TYPE_DATA_SERVER &&
             (!args->stat_host || !args->stat_port || !args->num_servers ||
-            !args->deploy_hostfile || !args->block_size || !args->storage_size)) {
+            !args->deploy_hostfile || !args->block_size)) {
                 argp_failure(state, 1, 0, "Required options for data server type: -H, -P, -n, -d, -B, -s. \nSee --help for more detail");
                 exit (ARGP_ERR_UNKNOWN);
 
@@ -142,7 +142,7 @@ int parse_args (int argc, char ** argv, struct arguments * args)
     args->stat_port = 0;
     args->num_servers = 0;
     args->block_size = 64; //In KB
-    args->storage_size = 8; // Un GB
+    args->storage_size = 8; // In GB
 
     /* Parse arguments; every option seen by parse_opt will be
         reflected in arguments */

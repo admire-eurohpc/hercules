@@ -87,7 +87,7 @@ find_server (int32_t 	  n_servers,
 	     int32_t 	  op_type)
 {
 	int32_t next_server = -1;
-	// slog_debug("[find_server] session_plcy=%ld", session_plcy);
+	slog_debug("[find_server] session_plcy=%ld", session_plcy);
 	switch (session_plcy)
 	{
 		//Follow a round robin policy.

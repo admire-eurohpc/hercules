@@ -214,7 +214,7 @@ char *slog_get(SlogDate *pDate, char *msg, ...)
  */
 void slog(int flag, const char *msg, ...)
 {
-    if (flag < slg.level)
+    if (flag > slg.level)
     {
         return;
     }
@@ -256,7 +256,7 @@ void slog(int flag, const char *msg, ...)
     sprintf(string, "[%d]\t>\t%s", slg.rank, in_string);
 
     /* Check logging levels. */
-    if (flag >= slg.level || flag >= slg.file_level)
+    if (flag <= slg.level || flag <= slg.file_level)
     {
         /* Handle flags. */
         switch (flag)
@@ -306,7 +306,7 @@ void slog(int flag, const char *msg, ...)
         /* Print output. */
         if (slg.exclusive && flag >= slg.level)
             if (slg.to_console != 0)
-                if (flag >= slg.level || slg.pretty)
+                if (flag <= slg.level || slg.pretty)
                 {
                     if (flag != SLOG_NONE)
                     {
@@ -319,7 +319,7 @@ void slog(int flag, const char *msg, ...)
                 }
 
         /* Save log in file. */
-        if (slg.to_file && flag >= slg.file_level)
+        if (slg.to_file && flag <= slg.file_level)
         {
             if (slg.pretty)
             {

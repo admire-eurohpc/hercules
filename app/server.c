@@ -108,7 +108,7 @@ int32_t main(int32_t argc, char **argv)
 		else if (strstr(getenv("IMSS_DEBUG"), "all"))
 		{
 			IMSS_DEBUG_FILE = 1;
-			IMSS_DEBUG_LEVEL = SLOG_LIVE;
+			IMSS_DEBUG_LEVEL = SLOG_PANIC;
 		}
 		else if (strstr(getenv("IMSS_DEBUG"), "none"))
 			unsetenv("IMSS_DEBUG");
@@ -172,20 +172,24 @@ int32_t main(int32_t argc, char **argv)
 	max_system_ram_allowed = (uint64_t)sysconf(_SC_AVPHYS_PAGES) * sysconf(_SC_PAGESIZE) * RAM_STORAGE_USE_PCT;
 
 	// make sure we don't use more memory than available
-	if (max_storage_size >= max_system_ram_allowed)
+	if (max_storage_size >= max_system_ram_allowed || max_storage_size <= 0)
 	{
 		max_storage_size = max_system_ram_allowed;
 	}
+
+	fprintf(stderr,"max_storage_size=%ld\n", max_storage_size);
+
+	
 
 	// init memory pool
 	mem_pool = StsQueue.create();
 	// figure out how many blocks we need and allocate them
 	num_blocks = max_storage_size / (args.block_size * KB);
-	// for (int i = 0; i < num_blocks; ++i)
-	// {
-	// 	char *buffer = (char *)calloc(args.block_size * KB, sizeof(char));
-	// 	StsQueue.push(mem_pool, buffer);
-	// }
+	for (int i = 0; i < num_blocks; ++i)
+	{
+		char *buffer = (char *)calloc(args.block_size * KB, sizeof(char));
+	 	StsQueue.push(mem_pool, buffer);
+	}
 
 	/* CHECK THIS OUT!
 	 ***************************************************
@@ -207,7 +211,7 @@ int32_t main(int32_t argc, char **argv)
 		// data block size
 		block_size = args.block_size;
 		// total storage size
-		storage_size = args.storage_size;
+		// storage_size = max_storage_size;
 
 		int32_t imss_exists = 0;
 
@@ -397,7 +401,7 @@ int32_t main(int32_t argc, char **argv)
 		// Add port number to thread arguments.
 		arguments[i].ucp_context = ucp_context;
 		arguments[i].blocksize = block_size;
-		arguments[i].storage_size = storage_size;
+		arguments[i].storage_size = max_storage_size;
 		arguments[i].port = args.port;
 
 		// Add the instance URI to the thread arguments.
@@ -537,7 +541,7 @@ int32_t main(int32_t argc, char **argv)
 		time_taken = ((double)t) / (CLOCKS_PER_SEC);
 		// printf("[%c-server %d] Deployment time %f\n", args.type, args.id, time_taken);
 		if(!args.id)
-			printf("ServerID,Deployment time (s)\n");
+			printf("ServerID,'Deployment time (s)'\n");
 
 		printf("%d,%f\n", args.id, time_taken);
 		fflush(stdout);

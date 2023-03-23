@@ -165,9 +165,9 @@ void request_init(void *request);
 
 void flush_cb(void *request, ucs_status_t status);
 
+ucs_status_t flush_ep(ucp_worker_h worker, ucp_ep_h ep);
+
 ucs_status_t ucp_mem_alloc(ucp_context_h ucp_context, size_t length, void **address_p);
-
-
 
 ucs_status_t worker_flush(ucp_worker_h worker);
 #endif

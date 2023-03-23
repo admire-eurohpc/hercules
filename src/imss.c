@@ -1418,7 +1418,7 @@ int32_t stat_dataset(const char *dataset_uri, dataset_info *dataset_info_)
 	for (int32_t i = 0; i < datasetd->len; i++)
 	{
 		*dataset_info_ = g_array_index(datasetd, dataset_info, i);
-		slog_debug("[IMSS][create_dataset][stat_dataset] dataset_info_->uri_=%s", dataset_info_->uri_);
+		slog_debug("[IMSS][stat_dataset] dataset_info_->uri_=%s", dataset_info_->uri_);
 		if (!strcmp(dataset_uri, dataset_info_->uri_))
 			return 2;
 	}
@@ -1959,6 +1959,31 @@ return -1;
 int32_t flush_data()
 {
 	worker_flush(ucp_worker_data);
+	return 1;
+}
+
+int32_t imss_flush_data()
+{
+	// Search for the requested IMSS.
+	// imss imss_;
+	// int32_t imss_position;
+	// if ((imss_position = find_imss(imss_uri, &imss_)) == -1)
+	// {
+	// 	slog_fatal("ERRIMSS_IMSS_TO_FLUSH_NOTFOUND");
+	// 	return -1;
+	// }
+
+	// Release the set of connections to the corresponding IMSS.
+
+	for (int32_t i = 0; i < curr_imss.info.num_storages; i++)
+	{
+			ucp_ep_h ep;
+
+			ep = curr_imss.conns.eps[i];
+
+			flush_ep(ucp_worker_data, ep);
+	}
+
 	return 1;
 }
 

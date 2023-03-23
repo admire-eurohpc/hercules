@@ -366,7 +366,7 @@ void send_cb(void *request, ucs_status_t status, void *user_data)
 void err_cb_client(void *arg, ucp_ep_h ep, ucs_status_t status)
 {
 	if (status != UCS_ERR_CONNECTION_RESET && status != UCS_ERR_ENDPOINT_TIMEOUT)
-		printf("client error handling callback was invoked with status %d (%s)", status, ucs_status_string(status));
+		fprintf(stderr, "client error handling callback was invoked with status %d (%s)", status, ucs_status_string(status));
 	slog_debug("[COMM] Client error handling callback was invoked with status %d (%s)", status, ucs_status_string(status));
 }
 
@@ -395,7 +395,7 @@ void common_cb(void *user_data, const char *type_str)
 
 
 void flush_cb(void *request, ucs_status_t status) {
-	slog_info("flush");
+	slog_info("flush finished");
 
 }
 
@@ -728,6 +728,28 @@ ucs_status_t ep_flush(ucp_ep_h ep, ucp_worker_h worker)
 		return status;
 	}
 	slog_debug("[COMM] Flushed endpoint.");
+}
+
+ucs_status_t flush_ep(ucp_worker_h worker, ucp_ep_h ep)
+{
+    ucp_request_param_t param;
+    void *request;
+
+    param.op_attr_mask = 0;
+    request            = ucp_ep_flush_nbx(ep, &param);
+    if (request == NULL) {
+        return UCS_OK;
+    } else if (UCS_PTR_IS_ERR(request)) {
+        return UCS_PTR_STATUS(request);
+    } else {
+        ucs_status_t status;
+        do {
+            ucp_worker_progress(worker);
+            status = ucp_request_check_status(request);
+        } while (status == UCS_INPROGRESS);
+        ucp_request_free(request);
+        return status;
+    }
 }
 
 int connect_common(const char *server, uint16_t server_port, sa_family_t af)
