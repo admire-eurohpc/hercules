@@ -2,9 +2,9 @@
 
 port1=3000
 port2=3050
-script_name=slurm.sh
+script_name=IORTestSlurm.sh
 number_of_nodes=0
-FILE_SIZE=$((1024*1024*1))
+FILE_SIZE=$((1024*1024*5))
 SHARED_NODES=0
 TEST_TYPE="strong"
 MALLEABILITY=0
@@ -21,14 +21,14 @@ then
 fi
 
 ##for p in {1,2,4,8,16,32,64,98}
-for NUM_SERVERS in {2,4,8,16}
+for NUM_SERVERS in {1..1}
 do
 	LOWER_BOUND=$NUM_SERVERS
-	for NODES_FOR_CLIENTS in {16..16}
+	for NODES_FOR_CLIENTS in {1..1}
 	do
 		for CLIENTS_PER_NODE in {1..1}
 	        do
-        	        for BLOCK_SIZE in {8..8}
+        	        for BLOCK_SIZE in {1024..1024}
 	                do
 				if [ $SHARED_NODES -eq 1 ]
 				then

@@ -360,8 +360,7 @@ static int skeleton_daemon(int argc, char ** argv)
 
 
     mode_t mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH ;
-    //int run = creat("/var/run/imss.pid", mode);
-    int run = open ("/home/hcristobal/imss/build/imss.pid", O_CREAT | O_RDWR,  0777);
+    int run = creat("/var/run/imss.pid", mode);
 
 	char buff[16];
 

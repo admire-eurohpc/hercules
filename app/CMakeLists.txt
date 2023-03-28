@@ -2,7 +2,7 @@ set_source_files_properties(../src/comms.c ../src/crc.c ../src/directory.c ../sr
 set_source_files_properties(../src/memalloc.c ../src/policies.c ../src/stat.c ../src/workers.c ../src/arg_parser.c ../src/map_server_eps.cpp PROPERTIES LANGUAGE CXX )
 set_source_files_properties(./server.c ./release_imss.c PROPERTIES LANGUAGE CXX )
 
-ADD_EXECUTABLE( server 
+ADD_EXECUTABLE( hercules_server 
 		./server.c
 		../src/map_ep.cpp
 		../src/stat.cpp
@@ -58,12 +58,12 @@ ADD_LIBRARY( imss_shared SHARED
 SET(IMSS_INC "-I${CMAKE_SOURCE_DIR}/include")
 SET(IMSS_LIB "-L${CMAKE_SOURCE_DIR}/build/app")
 
-target_link_directories(server PUBLIC ${UCX_LIBRARIES})
+target_link_directories(hercules_server PUBLIC ${UCX_LIBRARIES})
 
 TARGET_LINK_LIBRARIES(imss_static ${CMAKE_THREAD_LIBS_INIT} ${MPI_LIBRARIES} ${GLIB_LIBRARIES} ucx::ucp ucx::ucs ) #${JEMALLOC_LIBRARIES})
 TARGET_LINK_LIBRARIES(imss_shared ${CMAKE_THREAD_LIBS_INIT}  ${MPI_LIBRARIES} ${GLIB_LIBRARIES} dl ucx::ucp ucx::ucs ) # ${JEMALLOC_LIBRARIES} )
-TARGET_LINK_LIBRARIES(server ${CMAKE_THREAD_LIBS_INIT}  ${MPI_LIBRARIES} ${GLIB_LIBRARIES} ${PCRE_LIBRARY} ucx::ucp ucx::ucs ) # ${JEMALLOC_LIBRARIES} )
+TARGET_LINK_LIBRARIES(hercules_server ${CMAKE_THREAD_LIBS_INIT}  ${MPI_LIBRARIES} ${GLIB_LIBRARIES} ${PCRE_LIBRARY} ucx::ucp ucx::ucs ) # ${JEMALLOC_LIBRARIES} )
 
-install(TARGETS server DESTINATION bin)
+install(TARGETS hercules_server DESTINATION bin)
 install(TARGETS imss_static DESTINATION lib)
 install(TARGETS imss_shared DESTINATION lib)
