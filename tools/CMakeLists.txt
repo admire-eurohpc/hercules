@@ -29,3 +29,10 @@ target_link_directories(umount.imss PUBLIC ${UCX_LIBRARIES})
 target_link_libraries(mount.imss  ${CMAKE_THREAD_LIBS_INIT} ${GLIB_LIBRARIES} imss_static)
 target_link_libraries(umount.imss ${CMAKE_THREAD_LIBS_INIT} ${GLIB_LIBRARIES} imss_static)
 target_link_libraries(imss_posix  ${CMAKE_THREAD_LIBS_INIT} ${GLIB_LIBRARIES} imss_posix_api imss_shared dl)
+
+
+install(TARGETS imss_posix DESTINATION lib)
+install(TARGETS imss_posix_api DESTINATION lib)
+
+install(TARGETS mount.imss DESTINATION bin)
+install(TARGETS umount.imss DESTINATION bin)
