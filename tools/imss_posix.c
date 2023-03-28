@@ -81,8 +81,8 @@ pthread_mutex_t lock2 = PTHREAD_MUTEX_INITIALIZER;
 
 #define MAX_PATH 256
 uint64_t IMSS_DATA_BSIZE;
-char *aux_refresh;
-char *imss_path_refresh;
+// char *aux_refresh;
+// char *imss_path_refresh;
 
 int LD_PRELOAD = 0;
 void *map;
@@ -216,8 +216,8 @@ imss_posix_init(void)
 	getConfiguration();
 
 	IMSS_DATA_BSIZE = IMSS_BLKSIZE * KB;
-	aux_refresh = (char *)malloc(IMSS_DATA_BSIZE); // global buffer to refresh metadata.
-	imss_path_refresh = calloc(MAX_PATH, sizeof(char));
+	// aux_refresh = (char *)malloc(IMSS_DATA_BSIZE); // global buffer to refresh metadata.
+	// imss_path_refresh = calloc(MAX_PATH, sizeof(char));
 	// Hercules init -- Attached deploy
 	if (deployment == 1)
 	{

@@ -82,8 +82,8 @@ int32_t MALLEABILITY;
 int32_t UPPER_BOUND_SERVERS;
 int32_t LOWER_BOUND_SERVERS;
 
-extern char *aux_refresh;
-extern char *imss_path_refresh;
+// extern char *aux_refresh;
+// extern char *imss_path_refresh;
 
 
 
@@ -144,27 +144,27 @@ int imss_refresh(const char *path)
 	uint32_t ds;
 	int fd;
 	char *aux2;
-	//char *imss_path = calloc(MAX_PATH, sizeof(char));
-	//char *aux = (char *)malloc(IMSS_DATA_BSIZE);
-	memset(imss_path_refresh, 0, MAX_PATH);
-	memset(aux_refresh, 0, IMSS_DATA_BSIZE);
+	char *imss_path = calloc(MAX_PATH, sizeof(char));
+	char *aux = (char *)malloc(IMSS_DATA_BSIZE);
+	memset(imss_path, 0, MAX_PATH);
+	memset(aux, 0, IMSS_DATA_BSIZE);
 
 
-	get_iuri(path, imss_path_refresh);
+	get_iuri(path, imss_path);
 
-	fd_lookup(imss_path_refresh, &fd, &old_stats, &aux2);
+	fd_lookup(imss_path, &fd, &old_stats, &aux2);
 	if (fd >= 0)
 		ds = fd;
 	else
 		return -ENOENT;
 
-	get_data(ds, 0, aux_refresh);
-	stats = (struct stat *)aux_refresh;
+	get_data(ds, 0, aux);
+	stats = (struct stat *)aux;
 
-	map_update(map, imss_path_refresh, ds, *stats);
+	map_update(map, imss_path, ds, *stats);
 
-	//free(aux_refresh);
-	//free(imss_path_refresh);
+	free(aux);
+	free(imss_path);
 	return 0;
 }
 

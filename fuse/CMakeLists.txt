@@ -17,5 +17,5 @@ target_compile_features(imssfs PRIVATE cxx_std_17)
 set(CMAKE_C_FLAGS " -fPIC -D_FILE_OFFSET_BITS=64 -lulockmgr -DFUSE")
 
 target_include_directories(imssfs PRIVATE ${FUSE_INCLUDE_DIR})
-target_link_libraries(imssfs  ${CMAKE_THREAD_LIBS_INIT} ${FUSE_LIBRARIES}  imss_posix_api imss_static ucx::ucp ucx::ucs )
+target_link_libraries(imssfs  ${CMAKE_THREAD_LIBS_INIT} ${FUSE_LIBRARIES}  hercules_posix_api imss_static ucx::ucp ucx::ucs )
 

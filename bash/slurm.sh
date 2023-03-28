@@ -8,11 +8,11 @@
 ##SBATCH --ntasks-per-node=10
 ##SBATCH --nodes=1
 ##SBATCH --ntasks=6
-##SBATCH --overcommit
+#SBATCH --overcommit
 ##SBATCH --sockets-per-node=1
 ##SBATCH --cores-per-socket=4
 ##SBATCH --threads-per-core=1
-##SBATCH --oversubscribe
+#SBATCH --oversubscribe
 ##SBATCH --nodelist=compute-11-6,compute-11-7
 ##SBATCH --nodelist=compute-7-[1-2]
 ##SBATCH --nodelist=compute-11-[5-6]
@@ -25,7 +25,7 @@ NUM_METADATA=$1
 NUM_DATA=$2
 NUM_CLIENT=$3
 BLOCK_SIZE=$4
-STORAGE_SIZE=2
+STORAGE_SIZE=0
 META_PORT=$5
 DATA_PORT=$6
 FILE_SIZE_PER_CLIENT=$7
@@ -75,35 +75,33 @@ wait_for_server() {
 }
 
 
-# Uncomment when working in Tucan.
+## Uncomment when working in Tucan.
 #IOR_PATH=/home/software/io500/bin
 #module unload mpi
 #module load mpi/mpich3/3.2.1
 #module load mpi/openmpi
 
-# Uncomment when working in MN4.
-#IOR_PATH=/apps/IOR/3.3.0/INTEL/IMPI/bin
-#module unload impi
-#module load gcc/9.2.0
-#module load java/8u131
-#module load openmpi/4.1.0
-#module load ucx/1.13.1
-#module load cmake/3.15.4
-#module unload openmpi
-#module load impi
-#module load ior
+## Uncomment when working in MN4.
+module unload impi
+module load gcc/9.2.0
+module load java/8u131
+module load openmpi/4.1.0
+module load ucx/1.13.1
+module load cmake/3.15.4
+module unload openmpi
+module load impi
+module load ior
+IOR_PATH=/apps/IOR/3.3.0/INTEL/IMPI/bin
+MPI_PATH=/gpfs/apps/MN4/INTEL/2017.4/compilers_and_libraries_2017.4.196/linux/mpi/intel64/bin
+USE_OPEN_MPI=0
 
-# Uncomment when working in Italia cluster.
-#export SPACK_ROOT=/beegfs/home/javier.garciablas/opt/spack/
-#spack load cmake glib pcre ucx ior openmpi
-#spack load cmake glib pcre ucx
-#spack load ucx
+## Uncomment when working in Italia cluster.
 #export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HOME/rdma-core/build/lib
-#spack load openmpi
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HOME/rdma-core/build/lib
-IOR_PATH=/beegfs/home/javier.garciablas/opt/spack/linux-ubuntu20.04-zen/gcc-9.4.0/ior-3.3.0-ssyaxpxjajmhy3v5icfqoo63kaeii6wv/bin
+#IOR_PATH=/beegfs/home/javier.garciablas/opt/spack/linux-ubuntu20.04-zen/gcc-9.4.0/ior-3.3.0-ssyaxpxjajmhy3v5icfqoo63kaeii6wv/bin
+#MPI_PATH=/beegfs/home/javier.garciablas/opt/spack/linux-ubuntu20.04-zen/gcc-9.4.0/openmpi-4.1.3-4bpvwm3lcbftmjki6en35c4i5od6wjbr/bin
+#USE_OPEN_MPI=1
 
-# Avaible interfaces in Italia cluster: 'eno2'(tcp), 'ibs1'(tcp), 'lo'(tcp), 'opap6s0:1'(ib)
+## Avaible interfaces in Italia cluster: 'eno2'(tcp), 'ibs1'(tcp), 'lo'(tcp), 'opap6s0:1'(ib)
 network_devices_list=all
 transports_to_use=all
 
@@ -131,9 +129,8 @@ echo "##############################"
 
 #MAX_CLIENTS_PER_NODE=`lscpu | grep "CPU(s)" | head -n 1 | cut -c 22-`
 
-rm *-2023-03-14.log
-
 set -x
+rm *-2023-03-22.log
 
 NODES_SUM=$((NUM_METADATA+NUM_DATA+NUM_CLIENT))
 
@@ -181,19 +178,26 @@ sleep 10
 #wait_for_server Data $NUM_DATA
 
 FILE_NAME="data.out"
-# 64 M
+## 64 M
 #FILE_SIZE_PER_CLIENT=$((128*BLOCK_SIZE/NUM_CLIENT))
 #FILE_SIZE_PER_CLIENT=$((100*1024))
 #MAX_CLIENTS_PER_NODE=$((NUM_CLIENT/NUM_DATA))
 #$((1600/$NUM_CLIENT))
 #file_size_per_client=$BLOCK_SIZE
 echo "# IMMS: Running IOR"
-# Clients are executed in different nodes.
+## Clients are executed in different nodes.
 #tail -n +$((NUM_METADATA+NUM_DATA+1)) hostfile | head -n $NUM_CLIENT > client_hostfile
 
-# Same hostfile to data servers and clients.
+## Same hostfile to data servers and clients.
 #cp data_hostfile client_hostfile
 #cp hostfile client_hostfile
+
+#TRANSFER_SIZE=$((FILE_SIZE_PER_CLIENT))
+TRANSFER_SIZE=$((1024*16))
+
+#COMMAND="$IOR_PATH/ior -t ${TRANSFER_SIZE}kb -b ${FILE_SIZE_PER_CLIENT}kb -s 1 -i 1 -k -w -W -o /mnt/imss/data.out"
+#COMMAND="./exe_WRITE-AND-READ-TEST-BIFURCADO /mnt/imss/$FILE_NAME $FILE_SIZE_PER_CLIENT"
+COMMAND="$IOR_PATH/ior -t ${TRANSFER_SIZE}kb -b ${FILE_SIZE_PER_CLIENT}kb -s 1 -i 10 -o /mnt/imss/data.out"
 
 # COMMAND="$IOR_PATH/ior -o /mnt/imss/data.out -t ${file_size_per_client}m -b ${file_size_per_client}m -s 1 -i 10 -F"
 # COMMAND="$IOR_PATH/ior -o /mnt/imss/$FILE_NAME -t ${FILE_SIZE}kb -b ${FILE_SIZE}kb -s 1 -k -E -w -i 1"
@@ -203,33 +207,53 @@ echo "# IMMS: Running IOR"
 # COMMAND="$IOR_PATH/ior -o /mnt/imss/$FILE_NAME -t ${FILE_SIZE}kb -b ${FILE_SIZE}kb -s 1 -w -N=$NUM_CLIENT"
 # COMMAND="$IOR_PATH/ior -o /mnt/imss/$FILE_NAME -t ${FILE_SIZE}m -b ${FILE_SIZE}m -s 1 -i 1 -k -WR -F"
 # COMMAND="./exe_WRITE-AND-READ-TEST-BIFURCADO /mnt/imss/$FILE_NAME $FILE_SIZE_PER_CLIENT"
-
-
-COMMAND="$IOR_PATH/ior -o /mnt/imss/data.out -t ${FILE_SIZE_PER_CLIENT}kb -b ${FILE_SIZE_PER_CLIENT}kb -s 1 -i 10"
+#COMMAND="$IOR_PATH/ior -o /mnt/imss/data.out -t ${FILE_SIZE_PER_CLIENT}kb -b ${FILE_SIZE_PER_CLIENT}kb -s 1 -i 10"
 #COMMAND="$IOR_PATH/ior -o /mnt/imss/data.out -t 1m -b 16m -s 16"
 
-
-/beegfs/home/javier.garciablas/opt/spack/linux-ubuntu20.04-zen/gcc-9.4.0/openmpi-4.1.3-4bpvwm3lcbftmjki6en35c4i5od6wjbr/bin/mpiexec --hostfile ./client_hostfile -npernode $NUM_CLIENT \
-        -x LD_PRELOAD=$IMSS_PATH/tools/libimss_posix.so \
-        -x IMSS_MOUNT_POINT=/mnt/imss \
-        -x IMSS_HOSTFILE=$PWD/data_hostfile \
-        -x IMSS_N_SERVERS=$NUM_DATA \
-        -x IMSS_SRV_PORT=$DATA_PORT \
-        -x IMSS_BUFFSIZE=1 \
-        -x IMSS_BLKSIZE=$BLOCK_SIZE \
-        -x IMSS_META_HOSTFILE=$PWD/meta_hostfile \
-        -x IMSS_META_PORT=$META_PORT \
-        -x IMSS_META_SERVERS=$NUM_METADATA \
-        -x IMSS_STORAGE_SIZE=$STORAGE_SIZE \
-        -x IMSS_METADATA_FILE=$PWD/metadata \
-        -x IMSS_DEPLOYMENT=2 \
-        -x IMSS_DEBUG=$IMSS_DEBUG  \
-	-x UCX_NET_DEVICES=$network_devices_list \
-	-x UCX_TLS=$transports_to_use \
-	-x IMSS_MALLEABILITY=$MALLEABILITY \
-	-x LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HOME/rdma-core/build/lib \
-	-x IMSS_LOWER_BOUND_MALLEABILITY=$IMSS_LOWER_BOUND_MALLEABILITY \
-	-x IMSS_UPPER_BOUND_MALLEABILITY=$IMSS_UPPER_BOUND_MALLEABILITY \
-	-x UCX_RCACHE_ENABLE=n \
-	-x UCX_IB_REG_METHODS=direct \
-        $COMMAND
+if [ $USE_OPEN_MPI -eq 1 ] 
+then
+	$MPI_PATH/mpiexec --hostfile ./client_hostfile -npernode $NUM_CLIENT \
+        	-x LD_PRELOAD=$IMSS_PATH/tools/libimss_posix.so \
+	        -x IMSS_MOUNT_POINT=/mnt/imss \
+        	-x IMSS_HOSTFILE=$PWD/data_hostfile \
+	        -x IMSS_N_SERVERS=$NUM_DATA \
+        	-x IMSS_SRV_PORT=$DATA_PORT \
+	        -x IMSS_BUFFSIZE=1 \
+        	-x IMSS_BLKSIZE=$BLOCK_SIZE \
+	        -x IMSS_META_HOSTFILE=$PWD/meta_hostfile \
+        	-x IMSS_META_PORT=$META_PORT \
+	        -x IMSS_META_SERVERS=$NUM_METADATA \
+	        -x IMSS_STORAGE_SIZE=$STORAGE_SIZE \
+	        -x IMSS_METADATA_FILE=$PWD/metadata \
+	        -x IMSS_DEPLOYMENT=2 \
+	        -x IMSS_DEBUG=$IMSS_DEBUG  \
+		-x UCX_NET_DEVICES=$network_devices_list \
+		-x UCX_TLS=$transports_to_use \
+		-x IMSS_MALLEABILITY=$MALLEABILITY \
+		-x IMSS_LOWER_BOUND_MALLEABILITY=$IMSS_LOWER_BOUND_MALLEABILITY \
+		-x IMSS_UPPER_BOUND_MALLEABILITY=$IMSS_UPPER_BOUND_MALLEABILITY \
+	        $COMMAND
+else
+	$MPI_PATH/mpiexec -f ./client_hostfile --ppn $NUM_CLIENT \
+	        -env LD_PRELOAD $IMSS_PATH/tools/libimss_posix.so \
+	        -env IMSS_MOUNT_POINT /mnt/imss \
+	        -env IMSS_HOSTFILE $PWD/data_hostfile \
+	        -env IMSS_N_SERVERS $NUM_DATA \
+	        -env IMSS_SRV_PORT $DATA_PORT \
+	        -env IMSS_BUFFSIZE 1 \
+	        -env IMSS_DEBUG $IMSS_DEBUG \
+        	-env IMSS_BLKSIZE $BLOCK_SIZE \
+	        -env IMSS_META_HOSTFILE $PWD/meta_hostfile \
+        	-env IMSS_META_PORT $META_PORT \
+	        -env IMSS_META_SERVERS $NUM_METADATA \
+        	-env IMSS_STORAGE_SIZE $STORAGE_SIZE \
+	        -env IMSS_METADATA_FILE $PWD/metadata \
+        	-env IMSS_DEPLOYMENT 2 \
+                -env IMSS_DEBUG $IMSS_DEBUG  \
+                -env UCX_NET_DEVICES $network_devices_list \
+                -env UCX_TLS $transports_to_use \
+                -env IMSS_MALLEABILITY $MALLEABILITY \
+                -env IMSS_LOWER_BOUND_MALLEABILITY $IMSS_LOWER_BOUND_MALLEABILITY \
+                -env IMSS_UPPER_BOUND_MALLEABILITY $IMSS_UPPER_BOUND_MALLEABILITY \
+		$COMMAND
+fi

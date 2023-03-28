@@ -150,3 +150,4 @@ int parse_args (int argc, char ** argv, struct arguments * args)
 
     return 0;
 }
+
