@@ -256,6 +256,9 @@ size_t recv_data(ucp_worker_h ucp_worker, ucp_ep_h ep, char *msg, uint64_t dest,
 		memcpy (msg, recv_buffer, info_tag.length);
 	}	
 
+	status = ucx_wait(ucp_worker, request, "recv",  "data");
+	// fprintf(stderr, "--- %s\n", msg);
+
 	//t = clock() -t;
 	//	double time_taken = ((double)t) / CLOCKS_PER_SEC; // in seconds
 	//              slog_info("[srv_worker_helper] recv_nbx time %f s", time_taken);

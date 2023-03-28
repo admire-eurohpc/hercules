@@ -16,12 +16,8 @@ ADD_EXECUTABLE( server
 		../src/arg_parser.c
 		../src/slog.c
 		../src/map_server_eps.cpp
+		../src/cfg_parse.c
 )
-
-#ADD_EXECUTABLE( release_imss 
-#				./release_imss.c
-#				../src/comms.c
-#)
 
 ADD_LIBRARY( imss_static STATIC
 		../src/crc.c
@@ -60,6 +56,6 @@ SET(IMSS_LIB "-L${CMAKE_SOURCE_DIR}/build/app")
 
 target_link_directories(server PUBLIC ${UCX_LIBRARIES})
 
-TARGET_LINK_LIBRARIES(imss_static ${CMAKE_THREAD_LIBS_INIT} ucx::ucp ucx::ucs ${MPI_LIBRARIES} ${GLIB_LIBRARIES}  ) #${JEMALLOC_LIBRARIES})
-TARGET_LINK_LIBRARIES(imss_shared ${CMAKE_THREAD_LIBS_INIT} ucx::ucp ucx::ucs ${MPI_LIBRARIES} ${GLIB_LIBRARIES} dl ) # ${JEMALLOC_LIBRARIES} )
-TARGET_LINK_LIBRARIES(server ${CMAKE_THREAD_LIBS_INIT} ucx::ucp ucx::ucs ${MPI_LIBRARIES} ${GLIB_LIBRARIES} ${PCRE_LIBRARY}  ) # ${JEMALLOC_LIBRARIES} )
+TARGET_LINK_LIBRARIES(imss_static ${CMAKE_THREAD_LIBS_INIT} ucx::ucp ucx::ucs ${MPI_LIBRARIES} ${GLIB_LIBRARIES}  ${JEMALLOC_LIBRARIES})
+TARGET_LINK_LIBRARIES(imss_shared ${CMAKE_THREAD_LIBS_INIT} ucx::ucp ucx::ucs ${MPI_LIBRARIES} ${GLIB_LIBRARIES} dl  ${JEMALLOC_LIBRARIES} )
+TARGET_LINK_LIBRARIES(server ${CMAKE_THREAD_LIBS_INIT} ucx::ucp ucx::ucs ${MPI_LIBRARIES} ${GLIB_LIBRARIES} ${PCRE_LIBRARY} ${JEMALLOC_LIBRARIES} )

@@ -26,6 +26,10 @@
 
 #undef _FILE_OFFSET_BITS
 
+#ifndef _STAT_VER
+#define _STAT_VER 0
+#endif
+
 #ifndef O_CREAT
 #define O_CREAT 0100 /* Not fcntl.  */
 #endif
@@ -92,6 +96,13 @@ static off_t (*real_lseek)(int fd, off_t offset, int whence) = NULL;
 static int (*real__lxstat)(int fd, const char *pathname, struct stat *buf) = NULL;
 static int (*real_xstat)(int fd, const char *path, struct stat *buf) = NULL;
 static int (*real_stat)(const char *pathname, struct stat *buf) = NULL;
+static int (*real__lxstat64)(int ver, const char * path, struct stat64 * stat_buf) = NULL;
+static int (*real_xstat64)(int ver, const char * path, struct stat64 * stat_buf) = NULL;
+static int (*real_stat64)(const char *__restrict__ pathname, struct stat64 *__restrict__ info) = NULL;
+static int (*real_fstat)(int fd, struct stat *buf) = NULL;
+static int (*real_fstatat)(int dirfd, const char *pathname, struct stat *buf, int flags) = NULL;
+static int (*real_fxstat64)(int ver, int fd, struct stat64 *buf) = NULL;
+static int (*real_fxstat)(int ver, int fd, struct stat *buf) = NULL;
 static int (*real_close)(int fd) = NULL;
 static int (*real_puts)(const char *str) = NULL;
 static int (*real__open_2)(const char *pathname, int flags, ...) = NULL;
@@ -114,6 +125,7 @@ static DIR *(*real_opendir)(const char *name) = NULL;
 static struct dirent *(*real_readdir)(DIR *dirp) = NULL;
 static int (*real_closedir)(DIR *dirp) = NULL;
 static int (*real_statvfs)(const char *restrict path, struct statvfs *restrict buf) = NULL;
+static int (*real_fsync)(int fd) = NULL;;
 
 uint32_t MurmurOAAT32(const char *key)
 {
@@ -478,9 +490,9 @@ int __xstat(int fd, const char *pathname, struct stat *buf)
 	// clock_t t;
 	// t = clock();
 
+	slog_debug("[POSIX %d] Calling '__xstat'.", rank);
 	if (!strncmp(pathname, MOUNT_POINT, strlen(MOUNT_POINT)) || !strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT)))
 	{
-		slog_debug("[POSIX %d] Calling '__xstat'.", rank);
 
 		char *new_path;
 		new_path = convert_path(pathname, MOUNT_POINT);
@@ -878,9 +890,11 @@ ssize_t read(int fd, void *buf, size_t size)
 		// printf("CUSTOM read worked! path=%s fd=%d, size=%ld\n",path, fd, size);
 		map_fd_search(map_fd, path, &fd, &p);
 		ret = imss_read(path, buf, size, p);
+		// fprintf(stderr, "read buf = %s\n", (char*) buf);
 		slog_debug("[POSIX %d]. End 'read'  %d.", rank, ret);
-		if (ret < size)
-			ret = 0;
+		p += ret;
+		map_fd_update_value(map_fd, path, fd, p);
+
 	}
 	else
 	{
@@ -978,6 +992,7 @@ int rmdir(const char *path)
 	}
 	else if (!strncmp(path, "imss://", strlen("imss://")))
 	{
+		slog_debug("[IMSS %d]. Calling 'imss_rmdir'.", rank)
 		ret = imss_rmdir(path);
 	}
 	else
@@ -992,6 +1007,8 @@ int unlinkat(int fd, const char *name, int flag)
 	real_unlinkat = dlsym(RTLD_NEXT, "unlinkat");
 	int ret = 0;
 	char *workdir = getenv("PWD");
+
+    fprintf(stderr, "unlinkat");
 
 	if (!init)
 	{
@@ -1293,3 +1310,192 @@ int closedir(DIR *dirp)
 	return ret;
 }
 
+
+int __lxstat64(int ver, const char * path, struct stat64 * stat_buf)
+{
+	int ret = 0;
+	unsigned long p = 0;
+	char *workdir = getenv("PWD");
+	real__lxstat64 = dlsym(RTLD_NEXT, "__lxstat64");
+
+	fprintf(stderr, " __lxstat64\n");
+	if (!init)
+	{
+		return real__lxstat64(ver, path, stat_buf);
+	}
+}
+
+
+int __xstat64(int ver, const char * path, struct stat64 * stat_buf)
+{
+	int ret = 0;
+	unsigned long p = 0;
+	char *workdir = getenv("PWD");
+	real_xstat64 = dlsym(RTLD_NEXT, "__xstat64");
+
+	fprintf(stderr, " __xstat64\n");
+	if (!init)
+	{
+		return real_xstat64(ver, path, stat_buf);
+	}
+	if (!strncmp(path, MOUNT_POINT, strlen(MOUNT_POINT)) || !strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT)))
+	{
+
+		slog_debug("[POSIX %d]. Calling '__lxstat'.", rank);
+
+		char *new_path;
+		new_path = convert_path(path, MOUNT_POINT);
+		// int exist = map_fd_search(map_fd, new_path, &ret, &p);
+		imss_refresh(new_path);
+		ret = imss_getattr(new_path, stat_buf);
+		errno = 0;
+		if (ret < 0) {
+            errno = -ret;
+            ret = -1;
+        }
+	}
+	else
+	{
+		ret = real_xstat64(ver, path, stat_buf);
+	}
+
+	slog_debug("[POSIX %d]. End '__xstat64'  %d %d.", rank, ret, errno);
+
+	return ret;
+
+}
+
+
+int stat64(const char *pathname, struct stat64 *info)
+{
+	int ret = 0;
+	unsigned long p = 0;
+	char *workdir = getenv("PWD");
+	real_stat64 = dlsym(RTLD_NEXT, "stat64");
+
+	fprintf(stderr, " stat64\n");
+	if (!init)
+	{
+		return real_stat64(pathname, info);
+	}
+}
+
+int fstat(int fd, struct stat *buf) 
+{
+	int ret = 0;
+    unsigned long p = 0;
+    char *workdir = getenv("PWD");
+    real_fstat = dlsym(RTLD_NEXT, "fstat");
+
+    fprintf(stderr, " fstat\n");
+    if (!init)
+    {
+        return real_fstat(fd, buf);
+    }
+
+}
+
+int fstatat(int dirfd, const char *pathname, struct stat *buf, int flags)
+{
+    int ret = 0;
+    unsigned long p = 0;
+    char *workdir = getenv("PWD");
+    real_fstatat = dlsym(RTLD_NEXT, "fstatat");
+
+    fprintf(stderr, " fstatat\n");
+    if (!init)
+    {
+        return real_fstatat(dirfd, pathname, buf, flags);
+    }
+}
+
+int __fxstat(int ver, int fd, struct stat *buf)
+{
+	int ret = 0;
+    unsigned long p = 0;
+    char *workdir = getenv("PWD");
+    real_fxstat = dlsym(RTLD_NEXT, "__fxstat");
+
+    fprintf(stderr, " __fxstat\n");
+    if (!init)
+    {
+        return real_fxstat(ver, fd, buf);
+    }
+
+}
+
+int __fxstat64(int ver, int fd, struct stat64 *buf)
+{
+    int ret = 0;
+    unsigned long p = 0;
+    char *workdir = getenv("PWD");
+    real_fxstat64 = dlsym(RTLD_NEXT, "__fxstat64");
+
+    fprintf(stderr, " __fxstat64\n");
+    if (!init)
+    {
+        return real_fxstat64(ver, fd, buf);
+    }
+}
+
+int  access(const char *path, int mode){
+    int ret = 0;
+    unsigned long p = 0;
+    char *workdir = getenv("PWD");
+    real_access = dlsym(RTLD_NEXT, "access");
+
+	fprintf(stderr, "access\n");
+    if (!init)
+    {   
+        return real_access(path, mode);
+    }
+    if (!strncmp(path, MOUNT_POINT, strlen(MOUNT_POINT)) || !strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT)))
+    {   
+		struct stat  stat_buf;        
+        slog_debug("[POSIX %d]. Calling 'access'.", rank);
+        
+        char *new_path;
+        new_path = convert_path(path, MOUNT_POINT);
+        // int exist = map_fd_search(map_fd, new_path, &ret, &p);
+        imss_refresh(new_path);
+        ret = imss_getattr(new_path, &stat_buf);
+        errno = 0;
+        if (ret < 0) {
+            errno = -ret;
+            ret = -1;
+        }
+
+		else if (mode == F_OK){
+        	ret = 0;     /* The file exists. */
+      	}
+
+        else if ((mode & X_OK) == 0 || (stat_buf.st_mode & (S_IXUSR | S_IXGRP | S_IXOTH)))
+        { 
+            ret = 0;
+        }
+		else {
+           ret = -1;
+		}
+    }
+    else
+    {   
+        ret = real_access(path, mode);
+    }
+
+    slog_debug("[POSIX %d]. End 'access'  %d %d.", rank, ret, errno);
+    return ret;
+}
+
+int fsync (int fd) {
+    int ret = 0;
+    unsigned long p = 0;
+    char *workdir = getenv("PWD");
+    real_fsync = dlsym(RTLD_NEXT, "fsync");
+
+    fprintf(stderr, "fsync\n");
+    if (!init)
+    {
+        return real_fsync(fd);
+    }
+
+}

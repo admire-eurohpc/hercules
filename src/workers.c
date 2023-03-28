@@ -190,25 +190,17 @@ int srv_worker_helper(p_argv *arguments, char * req)
 
 	// slog_info("********** %d",ret);
 
-	sscanf(req, "%" PRIu32 " %s", &client_id, mode);
+    uint32_t block_size_recv, block_offset;
+    char uri_[URI_];
 
-	char *req_content = strstr(req, mode);
-	req_content += 4;
+    sscanf(req, "%s %" PRIu32 " %" PRIu32  " %s", mode, &block_size_recv, &block_offset, uri_);
 
 	if (!strcmp(mode, "GET"))
 		more = GET_OP;
 	else
 		more = SET_OP;
 
-	slog_debug("[srv_worker_thread] Request - client_id '%" PRIu32 "', mode '%s', req '%s', more %ld", client_id, mode, req_content, more);
-
-	char number[16];
-	sscanf(req_content, "%s", number);
-	int32_t number_length = (int32_t)strlen(number);
-
-	// Elements conforming the request.
-	char *uri_ = req_content + number_length + 1;
-	uint64_t block_size_recv = (uint64_t)atoi(number);
+	slog_debug("[srv_worker_thread] Request - mode '%s', block_size_recv '%d' uri '%s'", mode, block_size_recv, uri_ );
 
 	// Create an std::string in order to be managed by the map structure.
 	std::string key;
@@ -781,6 +773,7 @@ int srv_worker_helper(p_argv *arguments, char * req)
 
 						// Include the new record in the tracking structure.
 						insert_successful = map->put(key, buffer, block_size_recv);
+						// fprintf(stderr, "-- %s\n", buffer);
 
 						// Include the new record in the tracking structure.
 						if (insert_successful != 0)
@@ -796,6 +789,7 @@ int srv_worker_helper(p_argv *arguments, char * req)
 					else
 					{
 						// Receive the block into the buffer.
+						fprintf(stderr, "---- %s\n", address_);
 						std::size_t found = key.find("$0");
 						if (found != std::string::npos)
 						{

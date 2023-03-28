@@ -18,6 +18,7 @@
 #define DEPLOY_HOSTFILE         'd'
 #define BLOCK_SIZE              'B'
 #define STORAGE_SIZE            's'
+#define THREAD_POOL             't'
 
 /* metadata server options */
 #define STAT_LOGFILE            'l'
@@ -42,6 +43,7 @@ struct arguments
     char *      stat_logfile;       /* metadata logfile arg to '-l' */
     uint64_t    block_size;         /* block size in KB arg to -B */
 	uint64_t    storage_size;       /* total storage size in GB to -s */
+    uint16_t    thread_pool;        /* thread pool size '-t' */
 };
 
 

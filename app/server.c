@@ -13,6 +13,7 @@
 #include "records.hpp"
 #include "arg_parser.h"
 #include "map_ep.hpp"
+#include "cfg_parse.h"
 #include <inttypes.h>
 
 // Pointer to the tree's root node.
@@ -46,8 +47,8 @@ int32_t is_client = 0; // also used for async write
 int32_t IMSS_DEBUG_FILE = 0;
 int32_t IMSS_DEBUG_SCREEN = 1;
 int     IMSS_DEBUG_LEVEL = SLOG_FATAL;
+int     IMSS_THREAD_POOL = 1;
 
-int 	IMSS_THREAD_POOL = 1;
 
 #define RAM_STORAGE_USE_PCT 0.75f // percentage of free system RAM to be used for storage
 
@@ -55,7 +56,7 @@ int 	IMSS_THREAD_POOL = 1;
 int32_t main(int32_t argc, char **argv)
 {
 	// Print off a hello world message
-
+    struct cfg_struct* cfg;
 	uint16_t bind_port, aux_bind_port;
 	char *stat_add;
 	char *metadata_file;
@@ -83,33 +84,57 @@ int32_t main(int32_t argc, char **argv)
 	uint64_t max_system_ram_allowed;
 	uint64_t max_storage_size; // memory pool size
 	uint32_t num_blocks;
+	struct arguments args;
 
+	// get arguments.
+	parse_args(argc, argv, &args);
+
+	cfg = cfg_init();
+
+	if (cfg_load(cfg, "hercules.conf") < 0)
+		cfg_load(cfg, getenv("IMSS_CONF"));
+  	
+    if(cfg_get(cfg, "IMSS_THREAD_POOL")) {
+		args.thread_pool = atoi(cfg_get(cfg, "IMSS_THREAD_POOL"));
+	}
 
 	/***************************************************************/
 	/******************** PARSE INPUT ARGUMENTS ********************/
 	/***************************************************************/
-	struct arguments args;
-
-	if (getenv("IMSS_DEBUG") != NULL)
-	{
-		if (strstr(getenv("IMSS_DEBUG"), "file"))
-			IMSS_DEBUG_FILE = 1;
-		if (strstr(getenv("IMSS_DEBUG"), "stdout"))
-            IMSS_DEBUG_SCREEN = 1;
-		if (strstr(getenv("IMSS_DEBUG"), "debug"))
-			IMSS_DEBUG_LEVEL = SLOG_DEBUG;
-        if (strstr(getenv("IMSS_DEBUG"), "all")) 
-			IMSS_DEBUG_LEVEL = SLOG_LIVE;
+	
+	if(cfg_get(cfg, "IMSS_URI")) { 
+		const char *aux = cfg_get(cfg, "IMSS_URI");
+		strcpy(args.imss_uri, aux);
 	}
+	if(cfg_get(cfg, "BLOCK_SIZE"))
+		args.block_size = atoi(cfg_get(cfg, "BLOCK_SIZE"));
+
+	if(cfg_get(cfg, "NUM_SERVERS"))
+		args.block_size = atoi(cfg_get(cfg, "NUM_SERVERS"));
+
+	if(cfg_get(cfg, "THREAD_POOL"))
+		args.thread_pool = atoi(cfg_get(cfg, "THREAD_POOL"));
+
+
 
 	if (getenv("IMSS_THREAD_POOL") != NULL)
-	{
-		IMSS_THREAD_POOL = atoi(getenv("IMSS_THREAD_POOL"));
-	}
-	
+    {
+        args.thread_pool = atoi(getenv("IMSS_THREAD_POOL"));
+    }
 
-	// get arguments.
-	parse_args(argc, argv, &args);
+    if (getenv("IMSS_DEBUG") != NULL)
+    {
+        if (strstr(getenv("IMSS_DEBUG"), "file"))
+            IMSS_DEBUG_FILE = 1;
+        if (strstr(getenv("IMSS_DEBUG"), "stdout"))
+            IMSS_DEBUG_SCREEN = 1;
+        if (strstr(getenv("IMSS_DEBUG"), "debug"))
+            IMSS_DEBUG_LEVEL = SLOG_DEBUG;
+        if (strstr(getenv("IMSS_DEBUG"), "all"))
+            IMSS_DEBUG_LEVEL = SLOG_LIVE;
+    }
+
+    IMSS_THREAD_POOL = args.thread_pool;
 
 	time_t t = time(NULL);
 	struct tm tm = *localtime(&t);
@@ -348,22 +373,22 @@ int32_t main(int32_t argc, char **argv)
 	}
 
 	// Buffer segment size assigned to each thread.
-	buffer_segment = data_reserved / IMSS_THREAD_POOL;
+	buffer_segment = data_reserved / args.thread_pool;
 
 	// Initialize pool of threads.
-	pthread_t threads[(IMSS_THREAD_POOL + 1)];
+	pthread_t threads[(args.thread_pool + 1)];
 	// Thread arguments.
-	p_argv arguments[(IMSS_THREAD_POOL + 1)];
+	p_argv arguments[(args.thread_pool + 1)];
 
 	if (args.type == TYPE_DATA_SERVER)
-		region_locks = (pthread_mutex_t *)calloc(IMSS_THREAD_POOL, sizeof(pthread_mutex_t));
+		region_locks = (pthread_mutex_t *)calloc(args.thread_pool, sizeof(pthread_mutex_t));
 
-	ucp_worker_threads = (ucp_worker_h *)malloc((IMSS_THREAD_POOL + 1) * sizeof(ucp_worker_h));
-	local_addr = (ucp_address_t **)malloc((IMSS_THREAD_POOL + 1) * sizeof(ucp_address_t *));
-	local_addr_len = (size_t *)malloc((IMSS_THREAD_POOL + 1) * sizeof(size_t));
+	ucp_worker_threads = (ucp_worker_h *)malloc((args.thread_pool + 1) * sizeof(ucp_worker_h));
+	local_addr = (ucp_address_t **)malloc((args.thread_pool + 1) * sizeof(ucp_address_t *));
+	local_addr_len = (size_t *)malloc((args.thread_pool + 1) * sizeof(size_t));
 
 	// Execute all threads.
-	for (int32_t i = 0; i < (IMSS_THREAD_POOL + 1); i++)
+	for (int32_t i = 0; i < (args.thread_pool + 1); i++)
 	{
 		ret = init_worker(ucp_context, &ucp_worker_threads[i]);
 
@@ -496,7 +521,7 @@ int32_t main(int32_t argc, char **argv)
 	}
 
 	// Wait for threads to finish.
-	for (int32_t i = 0; i < (IMSS_THREAD_POOL + 1); i++)
+	for (int32_t i = 0; i < (args.thread_pool + 1); i++)
 	{
 		if (pthread_join(threads[i], NULL) != 0)
 		{
