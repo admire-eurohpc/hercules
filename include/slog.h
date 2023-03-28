@@ -67,6 +67,7 @@ extern "C" {
 #define SLOG_ERROR  5
 #define SLOG_FATAL  6
 #define SLOG_PANIC  7
+#define SLOG_TIME   8
 
 #define slog_none(...) \
     slog(SLOG_NONE, __VA_ARGS__);
@@ -92,6 +93,8 @@ extern "C" {
 #define slog_panic(...) \
     slog(SLOG_PANIC, SOURCE_THROW_LOCATION __VA_ARGS__);
 
+#define slog_time(...) \
+    slog(SLOG_TIME, __VA_ARGS__);
 
 /* Definitions for version informations. */
 #define SLOGVERSION_MAJOR   1
@@ -129,6 +132,8 @@ typedef struct {
     short pretty;
     short filestamp;
     short td_safe;
+    short exclusive;
+    unsigned int rank;
 } SlogFlags;
 
 
@@ -200,8 +205,18 @@ void slog(int flag, const char *msg, ...);
  *         (t_safe) thread safety flag (1 enabled, 0 disabled).
  * RETURN: (void)
  */
-void slog_init(const char* fname, int lvl, int writeFile, int debugConsole, int debugColor, int filestamp, int t_safe);
+void slog_init(const char* fname, int lvl, int writeFile, int debugConsole, int debugColor, int filestamp, int t_safe, unsigned int rank);
 
+/*
+ * FUNCTION: getLevel.
+ * DESCRIPTION: Function to get slog level when it comes as string from args.
+ * PARAMS: (str) slog level name.
+ * 
+ * 
+ *    
+ * RETURN: slog level as integer.
+ */
+int getLevel(char *str);
 
 /* If include header in CPP code. */
 #ifdef __cplusplus

@@ -56,7 +56,7 @@ typedef struct {
 
 //Thread method attending client data requests.
 void * srv_worker (void * th_argv);
-int srv_worker_helper (p_argv *arguments, char * req);
+int srv_worker_helper (p_argv *arguments, const char * req);
 
 
 

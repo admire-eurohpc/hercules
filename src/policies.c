@@ -87,6 +87,7 @@ find_server (int32_t 	  n_servers,
 	     int32_t 	  op_type)
 {
 	int32_t next_server = -1;
+	slog_debug("[find_server] session_plcy=%ld", session_plcy);
 	switch (session_plcy)
 	{
 		//Follow a round robin policy.
@@ -95,6 +96,7 @@ find_server (int32_t 	  n_servers,
 			dataset_info new_dataset;
 			//Dataset metadata request.
 			int32_t stat_dataset_res = stat_dataset(fname, &new_dataset);
+			slog_debug("[find_server] fname=%s, stat_dataset_res=%ld", fname, stat_dataset_res);
 
 			if(stat_dataset_res==0){
 				uint16_t crc_ = crc16(fname, strlen(fname));
@@ -125,6 +127,7 @@ find_server (int32_t 	  n_servers,
 			
 			
 			//First server that received a block from the current file.
+			// incluir "initial_server" en el dataset.
 			uint32_t initial_server = crc_ % n_servers;
 
 			if (n_blocks < n_servers)
@@ -300,6 +303,6 @@ find_server (int32_t 	  n_servers,
 
 			break;
 	}
-
+	// slog_debug("[find_server] next_server=%ld", next_server);
 	return next_server;
 }

@@ -25,3 +25,4 @@ bash/scripts
 prev_CMakes
 hostfiles
 .vscode
+.log

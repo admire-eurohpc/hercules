@@ -1,13 +1,13 @@
 set_source_files_properties(./mount.c ../src/hercules.c ../src/slog.c PROPERTIES LANGUAGE CXX)
 
-add_executable(mount.imss
+add_executable(mount.hercules
     mount.c
     ../src/hercules.c
     ../src/map_ep.cpp
     ../src/slog.c
     )
 
-add_executable(umount.imss
+add_executable(umount.hercules
     umount.c
     ../src/map_ep.cpp
     ../src/slog.c
@@ -16,23 +16,23 @@ add_executable(umount.imss
 set(CMAKE_C_FLAGS "-fPIC")
 set(CMAKE_CXX_FLAGS "-fPIC")
 
-add_library(imss_posix_api STATIC ../fuse/imss_posix_api.c ../fuse/map.cpp ../fuse/mapprefetch.cpp ../src/slog.c)
+add_library(hercules_posix_api STATIC ../fuse/imss_posix_api.c ../fuse/map.cpp ../fuse/mapprefetch.cpp ../src/slog.c)
 
-add_library (imss_posix SHARED imss_posix.c mapfd.cpp ../fuse/map.cpp ../src/slog.c ../src/cfg_parse.c) 
+add_library (hercules_posix SHARED imss_posix.c mapfd.cpp ../fuse/map.cpp ../src/slog.c ../src/cfg_parse.c ) 
 
-target_include_directories(imss_posix PRIVATE ../fuse  .)
+target_include_directories(hercules_posix PRIVATE ../fuse  .)
 
-target_link_directories(imss_posix PUBLIC ${UCX_LIBRARIES})
-target_link_directories(mount.imss PUBLIC ${UCX_LIBRARIES})
-target_link_directories(umount.imss PUBLIC ${UCX_LIBRARIES})
+target_link_directories(hercules_posix PUBLIC ${UCX_LIBRARIES})
+target_link_directories(mount.hercules PUBLIC ${UCX_LIBRARIES})
+target_link_directories(umount.hercules PUBLIC ${UCX_LIBRARIES})
 
-target_link_libraries(mount.imss  ${CMAKE_THREAD_LIBS_INIT} ${GLIB_LIBRARIES} imss_static)
-target_link_libraries(umount.imss ${CMAKE_THREAD_LIBS_INIT} ${GLIB_LIBRARIES} imss_static)
-target_link_libraries(imss_posix  ${CMAKE_THREAD_LIBS_INIT} ${GLIB_LIBRARIES} imss_posix_api imss_shared dl)
+target_link_libraries(mount.hercules  ${CMAKE_THREAD_LIBS_INIT} ${GLIB_LIBRARIES} imss_static)
+target_link_libraries(umount.hercules ${CMAKE_THREAD_LIBS_INIT} ${GLIB_LIBRARIES} imss_static)
+target_link_libraries(hercules_posix  ${CMAKE_THREAD_LIBS_INIT} ${GLIB_LIBRARIES} hercules_posix_api imss_shared dl)
 
 
-install(TARGETS imss_posix DESTINATION lib)
-install(TARGETS imss_posix_api DESTINATION lib)
+install(TARGETS hercules_posix DESTINATION lib)
+install(TARGETS hercules_posix_api DESTINATION lib)
 
-install(TARGETS mount.imss DESTINATION bin)
-install(TARGETS umount.imss DESTINATION bin)
+install(TARGETS mount.hercules DESTINATION bin)
+install(TARGETS umount.hercules DESTINATION bin)

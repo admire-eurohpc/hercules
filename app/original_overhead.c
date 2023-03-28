@@ -79,7 +79,7 @@ int32_t main (int32_t argc, char **argv)
 		memset((void *) buffer, 'A', 1024 * block_size);
 
 		t1 = clk::now();
-		int32_t data_sent = set_data(datasetd_, 0, (char*) buffer);
+		int32_t data_sent = set_data(datasetd_, 0, (char*) buffer, 0, 0);
 		t2 = clk::now();
 
 		if (!i)

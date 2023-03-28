@@ -42,7 +42,7 @@ int32_t main (int32_t argc, char **argv)
 		memcpy(buffer, testdata, strlen(testdata));
 
 		//Set the data in 2 Blocks
-		int32_t data_sent = set_data(datasetd_, 0, (unsigned char*)buffer);
+		int32_t data_sent = set_data(datasetd_, 0, (unsigned char*)buffer, 0, 0);
 
 		printf("AFTR SET\n");
 

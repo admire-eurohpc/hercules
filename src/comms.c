@@ -70,7 +70,7 @@ int init_worker(ucp_context_h ucp_context, ucp_worker_h *ucp_worker)
 	memset(&worker_params, 0, sizeof(worker_params));
 
 	worker_params.field_mask = UCP_WORKER_PARAM_FIELD_THREAD_MODE;
-	worker_params.thread_mode = UCS_THREAD_MODE_SINGLE  ;
+	worker_params.thread_mode = UCS_THREAD_MODE_MULTI;
 
 	status = ucp_worker_create(ucp_context, &worker_params, ucp_worker);
 	if (status != UCS_OK)
@@ -101,16 +101,20 @@ int init_context(ucp_context_h *ucp_context, ucp_config_t *config, ucp_worker_h 
 
 	/* UCP initialization */
 	ucp_params.field_mask = UCP_PARAM_FIELD_FEATURES |
-		UCP_PARAM_FIELD_MT_WORKERS_SHARED |
 		UCP_PARAM_FIELD_REQUEST_SIZE |
-		UCP_PARAM_FIELD_REQUEST_INIT;
+		UCP_PARAM_FIELD_REQUEST_INIT |
+		UCP_PARAM_FIELD_NAME;
 
-	ucp_params.features = UCP_FEATURE_TAG |
-		UCP_FEATURE_WAKEUP;
+	ucp_params.features = UCP_FEATURE_TAG;
 	ucp_params.request_size    = sizeof(struct ucx_context);
 	ucp_params.request_init    = request_init;
-
+	ucp_params.name            = "hercules";
+	status = ucp_config_read(NULL, NULL, &config);
 	status = ucp_init(&ucp_params, config, ucp_context);
+
+	ucp_config_release(config);
+
+	//ucp_context_print_info(*ucp_context,stderr);
 	if (status != UCS_OK)
 	{
 		fprintf(stderr, "failed to ucp_init (%s)", ucs_status_string(status));
@@ -144,7 +148,7 @@ size_t send_data(ucp_worker_h ucp_worker, ucp_ep_h ep, const char *msg, size_t m
 	ucp_request_param_t send_param;
 	send_req_t ctx;
     
-	char req[2048];
+	// char req[2048];
 
 	ctx.buffer = (char*)msg;
 	//ctx.buffer = (char *)malloc(msg_len);
@@ -154,10 +158,10 @@ size_t send_data(ucp_worker_h ucp_worker, ucp_ep_h ep, const char *msg, size_t m
 //	ctx.buffer= bb;
 
 	send_param.op_attr_mask = UCP_OP_ATTR_FIELD_CALLBACK |
-                		  UCP_OP_ATTR_FIELD_DATATYPE |
 				  UCP_OP_ATTR_FIELD_USER_DATA;
 	send_param.cb.send      = send_handler_data;
-	send_param.datatype    = ucp_dt_make_contig(1);
+	// send_param.datatype    = ucp_dt_make_contig(1);
+        // send_param.memory_type  = UCS_MEMORY_TYPE_HOST;
 	send_param.user_data    = &ctx;
 
 
@@ -195,11 +199,11 @@ size_t send_req(ucp_worker_h ucp_worker, ucp_ep_h ep, ucp_address_t *addr, size_
 	ctx.buffer = (char *) msg;
 
 	send_param.op_attr_mask = UCP_OP_ATTR_FIELD_CALLBACK |
-		UCP_OP_ATTR_FIELD_DATATYPE |
 		UCP_OP_ATTR_FIELD_USER_DATA;
 
-	send_param.datatype = ucp_dt_make_contig(1);
+	//send_param.datatype = ucp_dt_make_contig(1);
 	send_param.cb.send = send_handler_req; 
+	//send_param.memory_type  = UCS_MEMORY_TYPE_HOST;
 	send_param.user_data = &ctx;
 
 	request = (struct ucx_context *) ucp_tag_send_nbx(ep, msg, msg_len, tag_req, &send_param);
@@ -221,7 +225,7 @@ size_t recv_data(ucp_worker_h ucp_worker, ucp_ep_h ep, char *msg, uint64_t dest,
 	async=1;
 	clock_t t;
 
-        slog_debug("[srv_worker_thread] Waiting message  as  %" PRIu64 ".", dest)	
+        // slog_debug("[COMM] Waiting message  as  %" PRIu64 ".", dest)	
 	do {
 		ucp_worker_progress(ucp_worker);
 		msg_tag = ucp_tag_probe_nb(ucp_worker, dest, tag_mask, 0, &info_tag);
@@ -239,25 +243,28 @@ size_t recv_data(ucp_worker_h ucp_worker, ucp_ep_h ep, char *msg, uint64_t dest,
 
 	   }	
 	 */
-	recv_param.op_attr_mask = UCP_OP_ATTR_FIELD_DATATYPE |
-		UCP_OP_ATTR_FIELD_CALLBACK |
-		UCP_OP_ATTR_FIELD_USER_DATA;
+	recv_param.op_attr_mask = UCP_OP_ATTR_FIELD_DATATYPE   |
+				  UCP_OP_ATTR_FIELD_CALLBACK   |
+				  UCP_OP_ATTR_FLAG_NO_IMM_CMPL |
+				  UCP_OP_ATTR_FIELD_USER_DATA;
 
 	recv_param.datatype     = ucp_dt_make_contig(1);
 	recv_param.cb.recv      = recv_handler;
 
-	slog_debug("[COMM] Probe tag (%ld bytes).", info_tag.length);
+	// slog_debug("[COMM] Probe tag (%ld bytes).", info_tag.length);
 	//	t = clock();
 	if (async) { 
-		request = (struct ucx_context *)ucp_tag_recv_nbx(ucp_worker, msg, info_tag.length, dest, tag_mask , &recv_param);
+		request = (struct ucx_context *)TIMING(ucp_tag_recv_nbx(ucp_worker, msg, info_tag.length, dest, tag_mask , &recv_param),"[imss_read]ucp_tag_recv_nbx", ucs_status_ptr_t);
 
 	} else {
 		request = (struct ucx_context *)ucp_tag_recv_nbx(ucp_worker, recv_buffer, info_tag.length, dest, tag_mask , &recv_param);
 		memcpy (msg, recv_buffer, info_tag.length);
 	}	
 
-	status = ucx_wait(ucp_worker, request, "recv",  "data");
-	// fprintf(stderr, "--- %s\n", msg);
+	// sleep(1);
+	status = TIMING(ucx_wait(ucp_worker, request, "recv",  "data"),"[imss_read]ucx_wait", ucs_status_t);
+	// slog_debug("[COMM] status=%s.", ucs_status_string(status));
+	// slog_debug("--- %s\n", msg);
 
 	//t = clock() -t;
 	//	double time_taken = ((double)t) / CLOCKS_PER_SEC; // in seconds
@@ -265,7 +272,8 @@ size_t recv_data(ucp_worker_h ucp_worker, ucp_ep_h ep, char *msg, uint64_t dest,
 
 
 
-	slog_debug("[COMM] Recv tag (%ld bytes).", info_tag.length);
+	// slog_debug("[COMM] Recv tag (%ld bytes).", info_tag.length);
+	// fprintf(stderr, "[COMM] Recv tag (%ld bytes).\n", info_tag.length);
 	return info_tag.length;
 }
 
@@ -327,7 +335,7 @@ void send_handler_data(void *request, ucs_status_t status, void *ctx)
 	//ucp_request_free(request);
 
 
-	slog_info("[COMM] send_handler data");
+	// slog_info("[COMM] send_handler data");
 	//ucp_request_free(request);
 }
 
@@ -358,7 +366,7 @@ void send_cb(void *request, ucs_status_t status, void *user_data)
 void err_cb_client(void *arg, ucp_ep_h ep, ucs_status_t status)
 {
 	if (status != UCS_ERR_CONNECTION_RESET && status != UCS_ERR_ENDPOINT_TIMEOUT)
-		printf("client error handling callback was invoked with status %d (%s)", status, ucs_status_string(status));
+		fprintf(stderr, "client error handling callback was invoked with status %d (%s)", status, ucs_status_string(status));
 	slog_debug("[COMM] Client error handling callback was invoked with status %d (%s)", status, ucs_status_string(status));
 }
 
@@ -387,7 +395,7 @@ void common_cb(void *user_data, const char *type_str)
 
 
 void flush_cb(void *request, ucs_status_t status) {
-	slog_info("flush");
+	slog_info("flush finished");
 
 }
 
@@ -423,7 +431,7 @@ ucs_status_t server_create_ep(ucp_worker_h data_worker,
 	ep_params.field_mask = UCP_EP_PARAM_FIELD_ERR_HANDLER | UCP_EP_PARAM_FIELD_CONN_REQUEST;
 	ep_params.conn_request = conn_request;
 	ep_params.err_handler.cb = err_cb_server;
-	ep_params.err_mode = UCP_ERR_HANDLING_MODE_PEER;
+	ep_params.err_mode = UCP_ERR_HANDLING_MODE_NONE;
 	ep_params.err_handler.arg = NULL;
 
 	status = ucp_ep_create(data_worker, &ep_params, server_ep);
@@ -454,11 +462,12 @@ ucs_status_t client_create_ep(ucp_worker_h worker, ucp_ep_h *ep, ucp_address_t *
 		UCP_EP_PARAM_FIELD_ERR_HANDLER |
 		UCP_EP_PARAM_FIELD_USER_DATA;
 	ep_params.address = peer_addr;
-	ep_params.err_mode = UCP_ERR_HANDLING_MODE_PEER;
+	ep_params.err_mode = UCP_ERR_HANDLING_MODE_NONE;
 	ep_params.err_handler.cb = err_cb_client;
 	ep_params.err_handler.arg = NULL;
 	ep_params.user_data = &ep_status;
 
+	//ucp_worker_print_info(worker, stderr);
 	status = ucp_ep_create(worker, &ep_params, ep);
 	if (status != UCS_OK)
 	{
@@ -721,6 +730,28 @@ ucs_status_t ep_flush(ucp_ep_h ep, ucp_worker_h worker)
 	slog_debug("[COMM] Flushed endpoint.");
 }
 
+ucs_status_t flush_ep(ucp_worker_h worker, ucp_ep_h ep)
+{
+    ucp_request_param_t param;
+    void *request;
+
+    param.op_attr_mask = 0;
+    request            = ucp_ep_flush_nbx(ep, &param);
+    if (request == NULL) {
+        return UCS_OK;
+    } else if (UCS_PTR_IS_ERR(request)) {
+        return UCS_PTR_STATUS(request);
+    } else {
+        ucs_status_t status;
+        do {
+            ucp_worker_progress(worker);
+            status = ucp_request_check_status(request);
+        } while (status == UCS_INPROGRESS);
+        ucp_request_free(request);
+        return status;
+    }
+}
+
 int connect_common(const char *server, uint16_t server_port, sa_family_t af)
 {
 	int sockfd   = -1;
@@ -822,9 +853,7 @@ ucs_status_t worker_flush(ucp_worker_h worker)
 {
 	ucp_worker_fence(worker);
 	ucp_worker_flush_nb(worker, 0, flush_cb);
-	return UCS_OK;	
-
-
+	return UCS_OK;
 }
 
 
