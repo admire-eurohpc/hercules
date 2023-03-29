@@ -67,3 +67,9 @@ TARGET_LINK_LIBRARIES(hercules_server ${CMAKE_THREAD_LIBS_INIT}  ${MPI_LIBRARIES
 install(TARGETS hercules_server DESTINATION bin)
 install(TARGETS imss_static DESTINATION lib)
 install(TARGETS imss_shared DESTINATION lib)
+
+install(FILES ../scripts/hercules DESTINATION bin
+        PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ
+                    GROUP_EXECUTE GROUP_READ)
+
+
