@@ -159,7 +159,7 @@ touch metadata
 readarray -t hosts < meta_hostfile
 for ((i=0;i<$NUM_METADATA;i++));
 do
-	srun --exclusive --export=ALL -N 1 -n 1 -w ${hosts[$i]} $IMSS_PATH/server m --server-id=$i --stat-logfile=./metadata --port=$META_PORT --bufsize=0 & > server.log
+	srun --exclusive --export=ALL -N 1 -n 1 -w ${hosts[$i]} $IMSS_PATH/hercules_server m --server-id=$i --stat-logfile=./metadata --port=$META_PORT --bufsize=0 & > server.log
 done
 sleep 5
 #wait_for_server Metadata $NUM_METADATA
@@ -172,7 +172,7 @@ readarray -t hosts < data_hostfile
 for ((i=0;i<$NUM_DATA;i++));
 do
         # PORT=`expr $DATA_PORT + $i`
-        srun --exclusive --export=ALL -N 1 -n 1 -w ${hosts[$i]} $IMSS_PATH/server d --server-id=$i --imss-uri=imss:// --port=$DATA_PORT --bufsize=0 --stat-host=$META_NODE --stat-port=$META_PORT --num-servers=$NUM_DATA --deploy-hostfile=./data_hostfile --block-size=$BLOCK_SIZE --storage-size=$STORAGE_SIZE & > server.log
+        srun --exclusive --export=ALL -N 1 -n 1 -w ${hosts[$i]} $IMSS_PATH/hercules_server d --server-id=$i --imss-uri=imss:// --port=$DATA_PORT --bufsize=0 --stat-host=$META_NODE --stat-port=$META_PORT --num-servers=$NUM_DATA --deploy-hostfile=./data_hostfile --block-size=$BLOCK_SIZE --storage-size=$STORAGE_SIZE & > server.log
 done
 sleep 10
 #wait_for_server Data $NUM_DATA
