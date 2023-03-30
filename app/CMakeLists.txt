@@ -16,12 +16,8 @@ ADD_EXECUTABLE( hercules_server
 		../src/arg_parser.c
 		../src/slog.c
 		../src/map_server_eps.cpp
+		../src/cfg_parse.c
 )
-
-#ADD_EXECUTABLE( release_imss 
-#				./release_imss.c
-#				../src/comms.c
-#)
 
 ADD_LIBRARY( imss_static STATIC
 		../src/crc.c
@@ -60,9 +56,9 @@ SET(IMSS_LIB "-L${CMAKE_SOURCE_DIR}/build/app")
 
 target_link_directories(hercules_server PUBLIC ${UCX_LIBRARIES})
 
-TARGET_LINK_LIBRARIES(imss_static ${CMAKE_THREAD_LIBS_INIT} ${MPI_LIBRARIES} ${GLIB_LIBRARIES} ucx::ucp ucx::ucs ) #${JEMALLOC_LIBRARIES})
-TARGET_LINK_LIBRARIES(imss_shared ${CMAKE_THREAD_LIBS_INIT}  ${MPI_LIBRARIES} ${GLIB_LIBRARIES} dl ucx::ucp ucx::ucs ) # ${JEMALLOC_LIBRARIES} )
-TARGET_LINK_LIBRARIES(hercules_server ${CMAKE_THREAD_LIBS_INIT}  ${MPI_LIBRARIES} ${GLIB_LIBRARIES} ${PCRE_LIBRARY} ucx::ucp ucx::ucs ) # ${JEMALLOC_LIBRARIES} )
+TARGET_LINK_LIBRARIES(imss_static ${CMAKE_THREAD_LIBS_INIT} ${MPI_LIBRARIES} ${GLIB_LIBRARIES} ucx::ucp ucx::ucs ${JEMALLOC_LIBRARIES})
+TARGET_LINK_LIBRARIES(imss_shared ${CMAKE_THREAD_LIBS_INIT}  ${MPI_LIBRARIES} ${GLIB_LIBRARIES} dl ucx::ucp ucx::ucs ${JEMALLOC_LIBRARIES} )
+TARGET_LINK_LIBRARIES(hercules_server ${CMAKE_THREAD_LIBS_INIT}  ${MPI_LIBRARIES} ${GLIB_LIBRARIES} ${PCRE_LIBRARY} ucx::ucp ucx::ucs ${JEMALLOC_LIBRARIES} )
 
 install(TARGETS hercules_server DESTINATION bin)
 install(TARGETS imss_static DESTINATION lib)
@@ -72,4 +68,6 @@ install(FILES ../scripts/hercules DESTINATION bin
         PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ
                     GROUP_EXECUTE GROUP_READ)
 
-
+install(FILES ../conf/hercules.conf DESTINATION conf
+        PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ
+                    GROUP_EXECUTE GROUP_READ)

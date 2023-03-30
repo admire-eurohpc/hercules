@@ -1,6 +1,7 @@
 #define _GNU_SOURCE
 #include "map.hpp"
 #include "mapfd.hpp"
+#include "cfg_parse.h"
 #include <stdio.h>
 #include <stdint.h>
 #include <dlfcn.h>
@@ -26,6 +27,10 @@
 #include <sys/utsname.h>
 
 #undef _FILE_OFFSET_BITS
+
+#ifndef _STAT_VER
+#define _STAT_VER 0
+#endif
 
 #ifndef O_CREAT
 #define O_CREAT 0100 /* Not fcntl.  */
@@ -104,6 +109,12 @@ static int (*real__lxstat64)(int ver, const char *pathname, struct stat64 *buf) 
 static int (*real_lstat)(const char *file_name, struct stat *buf) = NULL;
 static int (*real_xstat)(int fd, const char *path, struct stat *buf) = NULL;
 static int (*real_stat)(const char *pathname, struct stat *buf) = NULL;
+static int (*real_xstat64)(int ver, const char * path, struct stat64 * stat_buf) = NULL;
+static int (*real_stat64)(const char *__restrict__ pathname, struct stat64 *__restrict__ info) = NULL;
+static int (*real_fstat)(int fd, struct stat *buf) = NULL;
+static int (*real_fstatat)(int dirfd, const char *pathname, struct stat *buf, int flags) = NULL;
+static int (*real_fxstat64)(int ver, int fd, struct stat64 *buf) = NULL;
+static int (*real_fxstat)(int ver, int fd, struct stat *buf) = NULL;
 static int (*real_close)(int fd) = NULL;
 static int (*real_puts)(const char *str) = NULL;
 static int (*real__open_2)(const char *pathname, int flags, ...) = NULL;
@@ -128,6 +139,7 @@ static int (*real_closedir)(DIR *dirp) = NULL;
 static int (*real_statvfs)(const char *restrict path, struct statvfs *restrict buf) = NULL;
 static int (*real_statfs)(const char *path, struct statfs *buf) = NULL;
 static char *(*real_realpath)(const char *restrict path, char *restrict resolved_path) = NULL;
+static int (*real_fsync)(int fd) = NULL;
 
 uint32_t MurmurOAAT32(const char *key)
 {
@@ -204,12 +216,7 @@ char *convert_path(const char *name, char *replace)
 	return new_path;
 }
 
-__attribute__((constructor)) void
-imss_posix_init(void)
-{
-	// if (IMSS_DEBUG)
-	// slog_fatal( "IMSS2 client starting\n");
-
+__attribute__((constructor)) void imss_posix_init(void) {
 	map_fd = map_fd_create();
 
 	// fill global variables with the enviroment variables value.
@@ -229,6 +236,7 @@ imss_posix_init(void)
 		}
 	}
 
+
 	// Getting a mostly unique id for the distributed deployment.
 	char hostname[1024];
 	int ret = gethostname(&hostname[0], 512);
@@ -239,14 +247,26 @@ imss_posix_init(void)
 	}
 	sprintf(hostname, "%s:%d", hostname, getpid());
 
+	if (getenv("IMSS_DEBUG") != NULL)
+	{
+		if (strstr(getenv("IMSS_DEBUG"), "file"))
+			IMSS_DEBUG_FILE = 1;
+		if (strstr(getenv("IMSS_DEBUG"), "stdout"))
+			IMSS_DEBUG_SCREEN = 1;
+		if (strstr(getenv("IMSS_DEBUG"), "debug"))
+			IMSS_DEBUG_LEVEL = SLOG_DEBUG;
+		if (strstr(getenv("IMSS_DEBUG"), "all"))
+			IMSS_DEBUG_LEVEL = SLOG_LIVE;
+		if (strstr(getenv("IMSS_DEBUG"), "none"))
+			unsetenv("IMSS_DEBUG");
+	}
+
 	rank = MurmurOAAT32(hostname);
 
 	// log init.
 	time_t t = time(NULL);
 	struct tm tm = *localtime(&t);
-	// sprintf(log_path, "./client.%02d-%02d", tm.tm_hour, tm.tm_min);
-	sprintf(log_path, "./client");
-	//	sprintf(log_path, "./client.%02d-%02d-%02d.%d", tm.tm_hour, tm.tm_min, tm.tm_sec, rank);
+	sprintf(log_path, "./client.%02d-%02d-%02d.%d", tm.tm_hour, tm.tm_min, tm.tm_sec, rank);
 	slog_init(log_path, IMSS_DEBUG_LEVEL, IMSS_DEBUG_FILE, IMSS_DEBUG_SCREEN, 1, 1, 1, rank);
 	slog_info(",Time(msec), Comment, RetCode");
 
@@ -281,7 +301,7 @@ imss_posix_init(void)
 	if (deployment != 2)
 	{
 		// Initialize the IMSS servers
-		if (init_imss(IMSS_ROOT, IMSS_HOSTFILE, META_HOSTFILE, N_SERVERS, IMSS_SRV_PORT, IMSS_BUFFSIZE, deployment, "/home/hcristobal/imss/build/server", METADATA_PORT) < 0)
+		if (init_imss(IMSS_ROOT, IMSS_HOSTFILE, META_HOSTFILE, N_SERVERS, IMSS_SRV_PORT, IMSS_BUFFSIZE, deployment, "hercules_server", METADATA_PORT) < 0)
 		{
 			slog_fatal("[IMSS-FUSE]	IMSS init failed, cannot create servers.\n");
 		}
@@ -304,13 +324,86 @@ imss_posix_init(void)
 		}
 	}
 
-	//	sleep(10);
-
 	init = 1;
 }
 
 void getConfiguration()
 {
+	struct cfg_struct* cfg;
+
+    /***************************************************************/
+    /******************* PARSE FILE ARGUMENTS **********************/
+    /***************************************************************/
+
+    char path_save[PATH_MAX];
+    char abs_exe_path[PATH_MAX];
+    char abs_exe_path2[PATH_MAX];
+    char *p;
+
+    readlink("/proc/self/exe", abs_exe_path, PATH_MAX);
+
+    strcat(abs_exe_path, "../conf/hercules.conf");
+    strcpy(abs_exe_path2, abs_exe_path);
+    strcat(abs_exe_path2, "hercules.conf");
+
+    cfg = cfg_init();
+
+    if (cfg_load(cfg, "/etc/hercules.conf") < 0)
+        if (cfg_load(cfg, abs_exe_path) < 0)
+            if (cfg_load(cfg, abs_exe_path2) < 0)
+                cfg_load(cfg, "hercules.conf");
+
+    if(cfg_get(cfg, "URI")) {
+        const char *aux = cfg_get(cfg, "URI");
+        strcpy(IMSS_ROOT, aux);
+    }
+
+    if(cfg_get(cfg, "BLOCK_SIZE"))
+        IMSS_BLKSIZE = atoi(cfg_get(cfg, "BLOCK_SIZE"));
+
+	if(cfg_get(cfg, "MOUNT_POINT")) {
+        const char *aux = cfg_get(cfg, "MOUNT_POINT");
+        strcpy(MOUNT_POINT, aux);
+    }
+
+    if(cfg_get(cfg, "METADATA_PORT"))
+        METADATA_PORT = atoi(cfg_get(cfg, "METADATA_PORT"));
+
+	if(cfg_get(cfg, "DATA_PORT"))
+        IMSS_SRV_PORT = atoi(cfg_get(cfg, "DATA_PORT"));
+
+	if(cfg_get(cfg, "NUM_DATA_SERVERS"))
+        N_SERVERS = atoi(cfg_get(cfg, "NUM_DATA_SERVERS"));
+
+	if(cfg_get(cfg, "NUM_META_SERVERS"))
+        N_META_SERVERS = atoi(cfg_get(cfg, "NUM_META_SERVERS"));
+
+    if(cfg_get(cfg, "MALLEABILITY"))
+        MALLEABILITY = atoi(cfg_get(cfg, "MALLEABILITY"));
+
+	if(cfg_get(cfg, "UPPER_BOUND_MALLEABILITY"))
+        UPPER_BOUND_SERVERS = atoi(cfg_get(cfg, "UPPER_BOUND_MALLEABILITY"));
+
+	if(cfg_get(cfg, "LOWER_BOUND_MALLEABILITY"))
+        LOWER_BOUND_SERVERS = atoi(cfg_get(cfg, "LOWER_BOUND_MALLEABILITY"));
+
+	if(cfg_get(cfg, "METADATA_HOSTFILE")) {
+        const char *aux = cfg_get(cfg, "METADATA_HOSTFILE");
+        strcpy(METADATA_FILE, aux);
+    }
+
+	if(cfg_get(cfg, "DATA_HOSTFILE")) {
+        const char *aux = cfg_get(cfg, "DATA_HOSTFILE");
+        strcpy(IMSS_HOSTFILE, aux);
+    }
+
+	if(cfg_get(cfg, "METADA_PERSISTENCE_FILE")) {
+        const char *aux = cfg_get(cfg, "METADA_PERSISTENCE_FILE");
+        strcpy(METADATA_FILE, aux);
+    }
+
+	/*************************************************************************/
+
 	if (getenv("IMSS_MOUNT_POINT") != NULL)
 	{
 		MOUNT_POINT = getenv("IMSS_MOUNT_POINT");
@@ -454,8 +547,8 @@ int close(int fd)
 		return real_close(fd);
 	}
 
-	// clock_t t;
-	// t = clock();
+	clock_t t;
+	t = clock();
 
 	char *path = (char *)calloc(256, sizeof(char));
 	if (map_fd_search_by_val(map_fd, path, fd) == 1)
@@ -566,6 +659,7 @@ int __xstat(int fd, const char *pathname, struct stat *buf)
 	// clock_t t;
 	// t = clock();
 
+	slog_debug("[POSIX %d] Calling '__xstat'.", rank);
 	if (!strncmp(pathname, MOUNT_POINT, strlen(MOUNT_POINT)) || !strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT)))
 	{
 		slog_debug("[POSIX %d] Calling '__xstat'.", rank);
@@ -1145,9 +1239,9 @@ int unlink(const char *name)
 	else
 	{
 		ret = real_unlink(name);
-		// slog_debug("[POSIX %d]. Real 'unlink', name=%s.", rank, name);
+		slog_debug("[POSIX %d]. Real 'unlink'.", rank);
 	}
-	// slog_debug("[POSIX %d]. End 'unlink', name=%s.", rank, name);
+	slog_debug("[POSIX %d]. End 'unlink'.", rank);
 	return ret;
 }
 
@@ -1190,6 +1284,8 @@ int unlinkat(int fd, const char *name, int flag)
 	real_unlinkat = dlsym(RTLD_NEXT, "unlinkat");
 	int ret = 0;
 	char *workdir = getenv("PWD");
+
+    fprintf(stderr, "unlinkat");
 
 	if (!init)
 	{
@@ -1484,4 +1580,179 @@ int closedir(DIR *dirp)
 	int ret = real_closedir(dirp);
 
 	return ret;
+}
+
+
+int __xstat64(int ver, const char * path, struct stat64 * stat_buf)
+{
+	int ret = 0;
+	unsigned long p = 0;
+	char *workdir = getenv("PWD");
+	real_xstat64 = dlsym(RTLD_NEXT, "__xstat64");
+
+	fprintf(stderr, " __xstat64\n");
+	if (!init)
+	{
+		return real_xstat64(ver, path, stat_buf);
+	}
+	if (!strncmp(path, MOUNT_POINT, strlen(MOUNT_POINT)) || !strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT)))
+	{
+
+		slog_debug("[POSIX %d]. Calling '__lxstat'.", rank);
+
+		char *new_path;
+		new_path = convert_path(path, MOUNT_POINT);
+		// int exist = map_fd_search(map_fd, new_path, &ret, &p);
+		imss_refresh(new_path);
+		ret = imss_getattr(new_path, stat_buf);
+		errno = 0;
+		if (ret < 0) {
+            errno = -ret;
+            ret = -1;
+        }
+	}
+	else
+	{
+		ret = real_xstat64(ver, path, stat_buf);
+	}
+
+	slog_debug("[POSIX %d]. End '__xstat64'  %d %d.", rank, ret, errno);
+
+	return ret;
+
+}
+
+
+int stat64(const char *pathname, struct stat64 *info)
+{
+	int ret = 0;
+	unsigned long p = 0;
+	char *workdir = getenv("PWD");
+	real_stat64 = dlsym(RTLD_NEXT, "stat64");
+
+	fprintf(stderr, " stat64\n");
+	if (!init)
+	{
+		return real_stat64(pathname, info);
+	}
+}
+
+int fstat(int fd, struct stat *buf) 
+{
+	int ret = 0;
+    unsigned long p = 0;
+    char *workdir = getenv("PWD");
+    real_fstat = dlsym(RTLD_NEXT, "fstat");
+
+    fprintf(stderr, " fstat\n");
+    if (!init)
+    {
+        return real_fstat(fd, buf);
+    }
+
+}
+
+int fstatat(int dirfd, const char *pathname, struct stat *buf, int flags)
+{
+    int ret = 0;
+    unsigned long p = 0;
+    char *workdir = getenv("PWD");
+    real_fstatat = dlsym(RTLD_NEXT, "fstatat");
+
+    fprintf(stderr, " fstatat\n");
+    if (!init)
+    {
+        return real_fstatat(dirfd, pathname, buf, flags);
+    }
+}
+
+int __fxstat(int ver, int fd, struct stat *buf)
+{
+	int ret = 0;
+    unsigned long p = 0;
+    char *workdir = getenv("PWD");
+    real_fxstat = dlsym(RTLD_NEXT, "__fxstat");
+
+    fprintf(stderr, " __fxstat\n");
+    if (!init)
+    {
+        return real_fxstat(ver, fd, buf);
+    }
+
+}
+
+int __fxstat64(int ver, int fd, struct stat64 *buf)
+{
+    int ret = 0;
+    unsigned long p = 0;
+    char *workdir = getenv("PWD");
+    real_fxstat64 = dlsym(RTLD_NEXT, "__fxstat64");
+
+    fprintf(stderr, " __fxstat64\n");
+    if (!init)
+    {
+        return real_fxstat64(ver, fd, buf);
+    }
+}
+
+int  access(const char *path, int mode){
+    int ret = 0;
+    unsigned long p = 0;
+    char *workdir = getenv("PWD");
+    real_access = dlsym(RTLD_NEXT, "access");
+
+	fprintf(stderr, "access\n");
+    if (!init)
+    {   
+        return real_access(path, mode);
+    }
+    if (!strncmp(path, MOUNT_POINT, strlen(MOUNT_POINT)) || !strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT)))
+    {   
+		struct stat  stat_buf;        
+        slog_debug("[POSIX %d]. Calling 'access'.", rank);
+        
+        char *new_path;
+        new_path = convert_path(path, MOUNT_POINT);
+        // int exist = map_fd_search(map_fd, new_path, &ret, &p);
+        imss_refresh(new_path);
+        ret = imss_getattr(new_path, &stat_buf);
+        errno = 0;
+        if (ret < 0) {
+            errno = -ret;
+            ret = -1;
+        }
+
+		else if (mode == F_OK){
+        	ret = 0;     /* The file exists. */
+      	}
+
+        else if ((mode & X_OK) == 0 || (stat_buf.st_mode & (S_IXUSR | S_IXGRP | S_IXOTH)))
+        { 
+            ret = 0;
+        }
+		else {
+           ret = -1;
+		}
+    }
+    else
+    {   
+        ret = real_access(path, mode);
+    }
+
+    slog_debug("[POSIX %d]. End 'access'  %d %d.", rank, ret, errno);
+    return ret;
+}
+
+int fsync (int fd) {
+    int ret = 0;
+    unsigned long p = 0;
+    char *workdir = getenv("PWD");
+    real_fsync = dlsym(RTLD_NEXT, "fsync");
+
+    fprintf(stderr, "fsync\n");
+    if (!init)
+    {
+        return real_fsync(fd);
+    }
+
 }

@@ -308,6 +308,9 @@ int imss_readdir(const char *path, void *buf, posix_fill_dir_t filler, off_t off
 			return -ENOENT;
 		}
 	}
+
+	flush_data();
+
 	// Fill buffer
 	// TODO: Check if subdirectory
 	// printf("[FUSE] imss_readdir %s has=%d\n",path, n_ent);
@@ -831,6 +834,9 @@ int imss_vread_prefetch(const char *path, char *buf, size_t size, off_t offset)
 		++curr_blk;
 	}
 
+
+	flush_data();
+
 	// PREFETCH
 	pthread_mutex_lock(&lock);
 	prefetch_ds = ds;
@@ -989,6 +995,9 @@ int imss_vread_no_prefetch(const char *path, char *buf, size_t size, off_t offse
 		}
 		++curr_blk;
 	}
+
+	flush_data();
+
 	free(rpath);
 	return byte_count;
 }
