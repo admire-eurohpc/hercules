@@ -20,7 +20,20 @@ DATA_PORT=80000
 MALLEABILITY=0
 NUM_METADATA=1
 NUM_DATA=1
+NODES_FOR_CLIENTS=1
 OPTIND=2
+BLOCK_SIZE=512
+STORAGE_SIZE=0
+
+rm .hercules.conf
+echo -e "
+H_PATH $H_PATH\n
+H_META_PORT $META_PORT\n
+H_DATA_PORT $DATA_PORT\n
+H_BLOCK_SIZE $BLOCK_SIZE\n
+H_STORAGE_SIZE $STORAGE_SIZE
+" > .hercules.conf
+
 while getopts :m:d:o:c: flag
 do
     case "${flag}" in
@@ -111,9 +124,7 @@ echo $data_hosts > data_hostfile
 META_NODE=${meta_hosts[0]}
 NUM_METADATA=${#meta_hosts[@]}
 NUM_DATA=${#data_hosts[@]}
-export H_NUM_DATA=NUM_DATA
-BLOCK_SIZE=512
-STORAGE_SIZE=0
+#echo "H_NUM_DATA $NUM_DATA" > .hercules.env
 i=0
 for node in "${data_hosts[@]}"
 do
@@ -125,3 +136,7 @@ do
 	fi
 	i=$(($i+1))
 done
+
+tail -n +$((NUM_METADATA+NUM_DATA+1)) hostfile | head -n $NODES_FOR_CLIENTS > client_hostfile
+
+sleep 5

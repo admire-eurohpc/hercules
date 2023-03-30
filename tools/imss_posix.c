@@ -348,6 +348,13 @@ void getConfiguration()
 
     cfg = cfg_init();
 
+    
+
+    if (getenv("IMSS_CONF") != NULL)
+    {
+	cfg_load(cfg, getenv("IMSS_CONF"));
+    }
+
     if (cfg_load(cfg, "/etc/hercules.conf") < 0)
         if (cfg_load(cfg, abs_exe_path) < 0)
             if (cfg_load(cfg, abs_exe_path2) < 0)
