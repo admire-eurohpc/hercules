@@ -262,6 +262,7 @@ int cfg_save(const struct cfg_struct* cfg, const char* filename)
  */
 const char* cfg_get(const struct cfg_struct* cfg, const char* key)
 {
+  fprintf(stderr,"Getting %s\n", key);
   char* tkey;
   struct cfg_node* cur;
 
@@ -282,6 +283,7 @@ const char* cfg_get(const struct cfg_struct* cfg, const char* key)
     if (strcmp(tkey, cur->key) == 0)
     {
       free(tkey);
+      fprintf(stderr,"value %s\n", cur->value);
       return cur->value;
     }
   } while ((cur = cur->next) != NULL);

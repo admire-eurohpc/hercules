@@ -46,16 +46,16 @@ void *map_ep;		   // map_ep used for async write; server doesn't use it
 int32_t is_client = 0; // also used for async write
 
 int32_t IMSS_DEBUG_FILE = 0;
-int     IMSS_DEBUG_LEVEL = SLOG_FATAL;
+int IMSS_DEBUG_LEVEL = SLOG_FATAL;
 int32_t IMSS_DEBUG_SCREEN = 0;
-int     IMSS_THREAD_POOL = 1;
+int IMSS_THREAD_POOL = 1;
 
 #define RAM_STORAGE_USE_PCT 0.75f // percentage of free system RAM to be used for storage
 
 int32_t main(int32_t argc, char **argv)
 {
 	// Print off a hello world message
-	struct cfg_struct* cfg;
+	struct cfg_struct *cfg;
 	clock_t t;
 	double time_taken;
 
@@ -95,7 +95,6 @@ int32_t main(int32_t argc, char **argv)
 
 	cfg = cfg_init();
 
-
 	/***************************************************************/
 	/******************* PARSE FILE ARGUMENTS **********************/
 	/***************************************************************/
@@ -105,7 +104,7 @@ int32_t main(int32_t argc, char **argv)
 	char abs_exe_path2[PATH_MAX];
 	char *p;
 
-	if(!(p = strrchr(argv[0], '/')))
+	if (!(p = strrchr(argv[0], '/')))
 		getcwd(abs_exe_path, sizeof(abs_exe_path));
 	else
 	{
@@ -116,44 +115,63 @@ int32_t main(int32_t argc, char **argv)
 		chdir(path_save);
 	}
 
-	strcat(abs_exe_path, "../conf/hercules.conf");
+	strcat(abs_exe_path, "/../conf/hercules.conf");
 	strcpy(abs_exe_path2, abs_exe_path);
 	strcat(abs_exe_path2, "hercules.conf");
 
-	if (cfg_load(cfg, "/etc/hercules.conf") < 0)
-		if (cfg_load(cfg, abs_exe_path) < 0)
-			if (cfg_load(cfg, abs_exe_path2) < 0)
-		    	cfg_load(cfg, "hercules.conf");
+	fprintf(stderr, "Trying to load /etc/hercules.conf\n");
+	if (cfg_load(cfg, "/etc/hercules.conf") > 0)
+	{
+		fprintf(stderr, "Trying to load %s\n", abs_exe_path);
+		if (cfg_load(cfg, abs_exe_path) > 0)
+		{
+			fprintf(stderr, "Trying to load %s\n", abs_exe_path2);
+			if (cfg_load(cfg, abs_exe_path2) > 0)
+			{
+				cfg_load(cfg, "hercules.conf");
+			}
+		}
+	}
 
-	if(cfg_get(cfg, "URI")) { 
-		const char *aux = cfg_get(cfg, "IMSS_URI");
+	if (cfg_get(cfg, "URI"))
+	{
+		const char *aux = cfg_get(cfg, "URI");
 		strcpy(args.imss_uri, aux);
-	}	
+	}
 
-	if(cfg_get(cfg, "BLOCK_SIZE"))
+	if (cfg_get(cfg, "BLOCK_SIZE"))
 		args.block_size = atoi(cfg_get(cfg, "BLOCK_SIZE"));
 
-    if (args.type == TYPE_DATA_SERVER) { 
-		if(cfg_get(cfg, "NUM_DATA_SERVERS"))
+	if (args.type == TYPE_DATA_SERVER)
+	{
+		if (cfg_get(cfg, "NUM_DATA_SERVERS"))
 			args.block_size = atoi(cfg_get(cfg, "NUM_DATA_SERVERS"));
-	} else {
-        if(cfg_get(cfg, "NUM_META_SERVERS"))
-            args.block_size = atoi(cfg_get(cfg, "NUM_META_SERVERS"));
+	}
+	else
+	{
+		if (cfg_get(cfg, "NUM_META_SERVERS"))
+			args.block_size = atoi(cfg_get(cfg, "NUM_META_SERVERS"));
 	}
 
-	if(cfg_get(cfg, "THREAD_POOL"))
+	if (cfg_get(cfg, "THREAD_POOL"))
 		args.thread_pool = atoi(cfg_get(cfg, "THREAD_POOL"));
 
-	if(cfg_get(cfg, "STORAGE_SIZE"))
+	if (cfg_get(cfg, "STORAGE_SIZE"))
 		args.storage_size = atoi(cfg_get(cfg, "STORAGE_SIZE"));
 
-	if(cfg_get(cfg, "METADATA_HOST")) {
-		const char *aux = cfg_get(cfg, "METADATA_HOST");
-		strcpy(args.stat_host, aux);
-	}
+	// if (cfg_get(cfg, "METADATA_HOST"))
+	// {
+	// 	const char *aux = cfg_get(cfg, "METADATA_HOST");
+	// 	strcpy(args.stat_host, aux);
+	// }
+	
+	if (cfg_get(cfg, "METADATA_PORT"))
+		args.stat_port = atol(cfg_get(cfg, "METADATA_PORT"));
 
-	if(cfg_get(cfg, "METADATA_PORT"))
-		args.stat_port = atoi(cfg_get(cfg, "METADATA_PORT"));
+	if (cfg_get(cfg, "DATA_PORT"))
+		args.port = strtoul(cfg_get(cfg, "DATA_PORT"), NULL, 0);
+
+	fprintf(stderr,"args.port=%d\n", args.port);
 
 	/***************************************************************/
 	/******************** PARSE INPUT ARGUMENTS ********************/
@@ -189,7 +207,7 @@ int32_t main(int32_t argc, char **argv)
 
 	if (getenv("IMSS_THREAD_POOL") != NULL)
 	{
-		args.thread_pool = atoi(getenv("IMSS_THREAD_POOL"));
+		args.thread_pool = strtoul(getenv("IMSS_THREAD_POOL"), NULL, 0);
 	}
 
 	IMSS_THREAD_POOL = args.thread_pool;
@@ -199,7 +217,7 @@ int32_t main(int32_t argc, char **argv)
 	char log_path[1000];
 	// sprintf(log_path, "./%c-server.%02d-%02d-%02d", args.type, tm.tm_hour, tm.tm_min, tm.tm_sec);
 	sprintf(log_path, "./%c-server", args.type);
-	slog_init(log_path, IMSS_DEBUG_LEVEL, IMSS_DEBUG_FILE, IMSS_DEBUG_SCREEN, 1, 1, 1, args.id);
+	slog_init(log_path, SLOG_DEBUG, 1, 1, 1, 1, 1, args.id);
 	slog_info("IMSS DEBUG FILE AT %s", log_path);
 	slog_info(",Time(msec), Comment, RetCode");
 
@@ -208,7 +226,7 @@ int32_t main(int32_t argc, char **argv)
 	if (args.type == TYPE_DATA_SERVER)
 	{
 		slog_debug("imss_uri = %s stat-host = %s stat-port = %" PRId64 " num-servers = %" PRId64 " deploy-hostfile = %s block-size = %" PRIu64 " storage-size = %" PRIu64 "",
-				args.imss_uri, args.stat_host, args.stat_port, args.num_servers, args.deploy_hostfile, args.block_size, args.storage_size);
+				   args.imss_uri, args.stat_host, args.stat_port, args.num_servers, args.deploy_hostfile, args.block_size, args.storage_size);
 	}
 	else
 	{
@@ -244,7 +262,7 @@ int32_t main(int32_t argc, char **argv)
 		max_storage_size = max_system_ram_allowed;
 	}
 
-	fprintf(stderr,"max_storage_size=%ld\n", max_storage_size);
+	fprintf(stderr, "max_storage_size=%ld\n", max_storage_size);
 
 	// init memory pool
 	mem_pool = StsQueue.create();
@@ -309,9 +327,9 @@ int32_t main(int32_t argc, char **argv)
 
 			/* Send client UCX address to server */
 			ep_params.field_mask = UCP_EP_PARAM_FIELD_REMOTE_ADDRESS |
-				UCP_EP_PARAM_FIELD_ERR_HANDLING_MODE |
-				UCP_EP_PARAM_FIELD_ERR_HANDLER |
-				UCP_EP_PARAM_FIELD_USER_DATA;
+								   UCP_EP_PARAM_FIELD_ERR_HANDLING_MODE |
+								   UCP_EP_PARAM_FIELD_ERR_HANDLER |
+								   UCP_EP_PARAM_FIELD_USER_DATA;
 			ep_params.address = peer_addr;
 			ep_params.err_mode = UCP_ERR_HANDLING_MODE_NONE;
 			ep_params.err_handler.cb = err_cb_client;
@@ -324,14 +342,14 @@ int32_t main(int32_t argc, char **argv)
 			char formated_uri[REQUEST_SIZE];
 			sprintf(formated_uri, "%" PRIu32 " GET 0 %s", id, imss_uri);
 
-			//status = ucp_worker_get_address(ucp_worker, &req_addr, &req_addr_len);
+			// status = ucp_worker_get_address(ucp_worker, &req_addr, &req_addr_len);
 
 			ucp_worker_attr_t worker_attr;
 			worker_attr.field_mask = UCP_WORKER_ATTR_FIELD_ADDRESS;
 			status = ucp_worker_query(ucp_worker, &worker_attr);
 			// printf ("Len %ld \n", worker_attr.address_length);
 			req_addr_len = worker_attr.address_length;
-			req_addr     = worker_attr.address;
+			req_addr = worker_attr.address;
 
 			attr.field_mask = UCP_WORKER_ADDRESS_ATTR_FIELD_UID;
 			ucp_worker_address_query(req_addr, &attr);
@@ -494,7 +512,7 @@ int32_t main(int32_t argc, char **argv)
 			worker_attr.field_mask = UCP_WORKER_ATTR_FIELD_ADDRESS;
 			status = ucp_worker_query(ucp_worker_threads[i], &worker_attr);
 			local_addr_len[i] = worker_attr.address_length;
-			local_addr[i]     = worker_attr.address;
+			local_addr[i] = worker_attr.address;
 
 			// Add the reference to the map into the set of thread arguments.
 			arguments[i].map = map;
@@ -597,10 +615,10 @@ int32_t main(int32_t argc, char **argv)
 	for (int32_t i = 0; i < (args.thread_pool + 1); i++)
 	{
 		// final deployment time.
-		t = clock() - t; 
+		t = clock() - t;
 		time_taken = ((double)t) / (CLOCKS_PER_SEC);
 		// printf("[%c-server %d] Deployment time %f\n", args.type, args.id, time_taken);
-		if(!args.id)
+		if (!args.id)
 			printf("ServerID,'Deployment time (s)'\n");
 
 		printf("%d,%f\n", args.id, time_taken);
@@ -652,4 +670,3 @@ int32_t main(int32_t argc, char **argv)
 	// Free the publisher release address.
 	return 0;
 }
-
