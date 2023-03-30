@@ -1,6 +1,7 @@
 #define _GNU_SOURCE
 #include "map.hpp"
 #include "mapfd.hpp"
+#include "cfg_parse.h"
 #include <stdio.h>
 #include <stdint.h>
 #include <dlfcn.h>
@@ -215,12 +216,7 @@ char *convert_path(const char *name, char *replace)
 	return new_path;
 }
 
-__attribute__((constructor)) void
-imss_posix_init(void)
-{
-	// if (IMSS_DEBUG)
-	// slog_fatal( "IMSS2 client starting\n");
-
+__attribute__((constructor)) void imss_posix_init(void) {
 	map_fd = map_fd_create();
 
 	// fill global variables with the enviroment variables value.
@@ -239,6 +235,7 @@ imss_posix_init(void)
 			slog_fatal("[IMSS-FUSE]	Hercules init failed, cannot deploy IMSS.\n");
 		}
 	}
+
 
 	// Getting a mostly unique id for the distributed deployment.
 	char hostname[1024];
@@ -270,7 +267,6 @@ imss_posix_init(void)
 	time_t t = time(NULL);
 	struct tm tm = *localtime(&t);
 	sprintf(log_path, "./client.%02d-%02d-%02d.%d", tm.tm_hour, tm.tm_min, tm.tm_sec, rank);
-//	sprintf(log_path, "./client.%02d-%02d-%02d.%d", tm.tm_hour, tm.tm_min, tm.tm_sec, rank);
 	slog_init(log_path, IMSS_DEBUG_LEVEL, IMSS_DEBUG_FILE, IMSS_DEBUG_SCREEN, 1, 1, 1, rank);
 	slog_info(",Time(msec), Comment, RetCode");
 
@@ -305,7 +301,7 @@ imss_posix_init(void)
 	if (deployment != 2)
 	{
 		// Initialize the IMSS servers
-		if (init_imss(IMSS_ROOT, IMSS_HOSTFILE, META_HOSTFILE, N_SERVERS, IMSS_SRV_PORT, IMSS_BUFFSIZE, deployment, "/home/hcristobal/imss/build/server", METADATA_PORT) < 0)
+		if (init_imss(IMSS_ROOT, IMSS_HOSTFILE, META_HOSTFILE, N_SERVERS, IMSS_SRV_PORT, IMSS_BUFFSIZE, deployment, "hercules_server", METADATA_PORT) < 0)
 		{
 			slog_fatal("[IMSS-FUSE]	IMSS init failed, cannot create servers.\n");
 		}
@@ -333,6 +329,81 @@ imss_posix_init(void)
 
 void getConfiguration()
 {
+	struct cfg_struct* cfg;
+
+    /***************************************************************/
+    /******************* PARSE FILE ARGUMENTS **********************/
+    /***************************************************************/
+
+    char path_save[PATH_MAX];
+    char abs_exe_path[PATH_MAX];
+    char abs_exe_path2[PATH_MAX];
+    char *p;
+
+    readlink("/proc/self/exe", abs_exe_path, PATH_MAX);
+
+    strcat(abs_exe_path, "../conf/hercules.conf");
+    strcpy(abs_exe_path2, abs_exe_path);
+    strcat(abs_exe_path2, "hercules.conf");
+
+    cfg = cfg_init();
+
+    if (cfg_load(cfg, "/etc/hercules.conf") < 0)
+        if (cfg_load(cfg, abs_exe_path) < 0)
+            if (cfg_load(cfg, abs_exe_path2) < 0)
+                cfg_load(cfg, "hercules.conf");
+
+    if(cfg_get(cfg, "URI")) {
+        const char *aux = cfg_get(cfg, "URI");
+        strcpy(IMSS_ROOT, aux);
+    }
+
+    if(cfg_get(cfg, "BLOCK_SIZE"))
+        IMSS_BLKSIZE = atoi(cfg_get(cfg, "BLOCK_SIZE"));
+
+	if(cfg_get(cfg, "MOUNT_POINT")) {
+        const char *aux = cfg_get(cfg, "MOUNT_POINT");
+        strcpy(MOUNT_POINT, aux);
+    }
+
+    if(cfg_get(cfg, "METADATA_PORT"))
+        METADATA_PORT = atoi(cfg_get(cfg, "METADATA_PORT"));
+
+	if(cfg_get(cfg, "DATA_PORT"))
+        IMSS_SRV_PORT = atoi(cfg_get(cfg, "DATA_PORT"));
+
+	if(cfg_get(cfg, "NUM_DATA_SERVERS"))
+        N_SERVERS = atoi(cfg_get(cfg, "NUM_DATA_SERVERS"));
+
+	if(cfg_get(cfg, "NUM_META_SERVERS"))
+        N_META_SERVERS = atoi(cfg_get(cfg, "NUM_META_SERVERS"));
+
+    if(cfg_get(cfg, "MALLEABILITY"))
+        MALLEABILITY = atoi(cfg_get(cfg, "MALLEABILITY"));
+
+	if(cfg_get(cfg, "UPPER_BOUND_MALLEABILITY"))
+        UPPER_BOUND_SERVERS = atoi(cfg_get(cfg, "UPPER_BOUND_MALLEABILITY"));
+
+	if(cfg_get(cfg, "LOWER_BOUND_MALLEABILITY"))
+        LOWER_BOUND_SERVERS = atoi(cfg_get(cfg, "LOWER_BOUND_MALLEABILITY"));
+
+	if(cfg_get(cfg, "METADATA_HOSTFILE")) {
+        const char *aux = cfg_get(cfg, "METADATA_HOSTFILE");
+        strcpy(METADATA_FILE, aux);
+    }
+
+	if(cfg_get(cfg, "DATA_HOSTFILE")) {
+        const char *aux = cfg_get(cfg, "DATA_HOSTFILE");
+        strcpy(IMSS_HOSTFILE, aux);
+    }
+
+	if(cfg_get(cfg, "METADA_PERSISTENCE_FILE")) {
+        const char *aux = cfg_get(cfg, "METADA_PERSISTENCE_FILE");
+        strcpy(METADATA_FILE, aux);
+    }
+
+	/*************************************************************************/
+
 	if (getenv("IMSS_MOUNT_POINT") != NULL)
 	{
 		MOUNT_POINT = getenv("IMSS_MOUNT_POINT");

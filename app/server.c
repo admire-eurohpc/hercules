@@ -15,6 +15,7 @@
 #include "map_ep.hpp"
 #include "cfg_parse.h"
 #include <inttypes.h>
+#include <unistd.h>
 
 // Pointer to the tree's root node.
 extern GNode *tree_root;
@@ -54,7 +55,7 @@ int     IMSS_THREAD_POOL = 1;
 int32_t main(int32_t argc, char **argv)
 {
 	// Print off a hello world message
-    struct cfg_struct* cfg;
+	struct cfg_struct* cfg;
 	clock_t t;
 	double time_taken;
 
@@ -87,30 +88,76 @@ int32_t main(int32_t argc, char **argv)
 	uint32_t num_blocks;
 	struct arguments args;
 
+	t = clock();
+
 	// get arguments.
 	parse_args(argc, argv, &args);
 
 	cfg = cfg_init();
 
-	if (cfg_load(cfg, "hercules.conf") < 0)
-		cfg_load(cfg, getenv("IMSS_CONF"));
-  	
-    if(cfg_get(cfg, "IMSS_THREAD_POOL")) {
-		args.thread_pool = atoi(cfg_get(cfg, "IMSS_THREAD_POOL"));
+
+	/***************************************************************/
+	/******************* PARSE FILE ARGUMENTS **********************/
+	/***************************************************************/
+
+	char path_save[PATH_MAX];
+	char abs_exe_path[PATH_MAX];
+	char abs_exe_path2[PATH_MAX];
+	char *p;
+
+	if(!(p = strrchr(argv[0], '/')))
+		getcwd(abs_exe_path, sizeof(abs_exe_path));
+	else
+	{
+		*p = '\0';
+		getcwd(path_save, sizeof(path_save));
+		chdir(argv[0]);
+		getcwd(abs_exe_path, sizeof(abs_exe_path));
+		chdir(path_save);
 	}
+
+	strcat(abs_exe_path, "../conf/hercules.conf");
+	strcpy(abs_exe_path2, abs_exe_path);
+	strcat(abs_exe_path2, "hercules.conf");
+
+	if (cfg_load(cfg, "/etc/hercules.conf") < 0)
+		if (cfg_load(cfg, abs_exe_path) < 0)
+			if (cfg_load(cfg, abs_exe_path2) < 0)
+		    	cfg_load(cfg, "hercules.conf");
+
+	if(cfg_get(cfg, "URI")) { 
+		const char *aux = cfg_get(cfg, "IMSS_URI");
+		strcpy(args.imss_uri, aux);
+	}	
+
+	if(cfg_get(cfg, "BLOCK_SIZE"))
+		args.block_size = atoi(cfg_get(cfg, "BLOCK_SIZE"));
+
+    if (args.type == TYPE_DATA_SERVER) { 
+		if(cfg_get(cfg, "NUM_DATA_SERVERS"))
+			args.block_size = atoi(cfg_get(cfg, "NUM_DATA_SERVERS"));
+	} else {
+        if(cfg_get(cfg, "NUM_META_SERVERS"))
+            args.block_size = atoi(cfg_get(cfg, "NUM_META_SERVERS"));
+	}
+
+	if(cfg_get(cfg, "THREAD_POOL"))
+		args.thread_pool = atoi(cfg_get(cfg, "THREAD_POOL"));
+
+	if(cfg_get(cfg, "STORAGE_SIZE"))
+		args.storage_size = atoi(cfg_get(cfg, "STORAGE_SIZE"));
+
+	if(cfg_get(cfg, "METADATA_HOST")) {
+		const char *aux = cfg_get(cfg, "METADATA_HOST");
+		strcpy(args.stat_host, aux);
+	}
+
+	if(cfg_get(cfg, "METADATA_PORT"))
+		args.stat_port = atoi(cfg_get(cfg, "METADATA_PORT"));
 
 	/***************************************************************/
 	/******************** PARSE INPUT ARGUMENTS ********************/
 	/***************************************************************/
-	
-	if(cfg_get(cfg, "IMSS_URI")) { 
-		const char *aux = cfg_get(cfg, "IMSS_URI");
-		strcpy(args.imss_uri, aux);
-    }	
-	/***************************************************************/
-	/******************** PARSE INPUT ARGUMENTS ********************/
-	/***************************************************************/
-	t = clock();
 
 	if (getenv("IMSS_DEBUG") != NULL)
 	{
@@ -139,34 +186,13 @@ int32_t main(int32_t argc, char **argv)
 			IMSS_DEBUG_LEVEL = getLevel(getenv("IMSS_DEBUG"));
 		}
 	}
-	if(cfg_get(cfg, "BLOCK_SIZE"))
-		args.block_size = atoi(cfg_get(cfg, "BLOCK_SIZE"));
-
-	if(cfg_get(cfg, "NUM_SERVERS"))
-		args.block_size = atoi(cfg_get(cfg, "NUM_SERVERS"));
-
-	if(cfg_get(cfg, "THREAD_POOL"))
-		args.thread_pool = atoi(cfg_get(cfg, "THREAD_POOL"));
-
 
 	if (getenv("IMSS_THREAD_POOL") != NULL)
-    {
-        args.thread_pool = atoi(getenv("IMSS_THREAD_POOL"));
-    }
+	{
+		args.thread_pool = atoi(getenv("IMSS_THREAD_POOL"));
+	}
 
-    if (getenv("IMSS_DEBUG") != NULL)
-    {
-        if (strstr(getenv("IMSS_DEBUG"), "file"))
-            IMSS_DEBUG_FILE = 1;
-        if (strstr(getenv("IMSS_DEBUG"), "stdout"))
-            IMSS_DEBUG_SCREEN = 1;
-        if (strstr(getenv("IMSS_DEBUG"), "debug"))
-            IMSS_DEBUG_LEVEL = SLOG_DEBUG;
-        if (strstr(getenv("IMSS_DEBUG"), "all"))
-            IMSS_DEBUG_LEVEL = SLOG_LIVE;
-    }
-
-    IMSS_THREAD_POOL = args.thread_pool;
+	IMSS_THREAD_POOL = args.thread_pool;
 
 	// time_t t = time(NULL);
 	// struct tm tm = *localtime(&t);
@@ -182,7 +208,7 @@ int32_t main(int32_t argc, char **argv)
 	if (args.type == TYPE_DATA_SERVER)
 	{
 		slog_debug("imss_uri = %s stat-host = %s stat-port = %" PRId64 " num-servers = %" PRId64 " deploy-hostfile = %s block-size = %" PRIu64 " storage-size = %" PRIu64 "",
-				   args.imss_uri, args.stat_host, args.stat_port, args.num_servers, args.deploy_hostfile, args.block_size, args.storage_size);
+				args.imss_uri, args.stat_host, args.stat_port, args.num_servers, args.deploy_hostfile, args.block_size, args.storage_size);
 	}
 	else
 	{
@@ -220,8 +246,6 @@ int32_t main(int32_t argc, char **argv)
 
 	fprintf(stderr,"max_storage_size=%ld\n", max_storage_size);
 
-	
-
 	// init memory pool
 	mem_pool = StsQueue.create();
 	// figure out how many blocks we need and allocate them
@@ -229,7 +253,7 @@ int32_t main(int32_t argc, char **argv)
 	for (int i = 0; i < num_blocks; ++i)
 	{
 		char *buffer = (char *)calloc(args.block_size * KB, sizeof(char));
-	 	StsQueue.push(mem_pool, buffer);
+		StsQueue.push(mem_pool, buffer);
 	}
 
 	/* CHECK THIS OUT!
@@ -285,9 +309,9 @@ int32_t main(int32_t argc, char **argv)
 
 			/* Send client UCX address to server */
 			ep_params.field_mask = UCP_EP_PARAM_FIELD_REMOTE_ADDRESS |
-					       UCP_EP_PARAM_FIELD_ERR_HANDLING_MODE |
-					       UCP_EP_PARAM_FIELD_ERR_HANDLER |
-					       UCP_EP_PARAM_FIELD_USER_DATA;
+				UCP_EP_PARAM_FIELD_ERR_HANDLING_MODE |
+				UCP_EP_PARAM_FIELD_ERR_HANDLER |
+				UCP_EP_PARAM_FIELD_USER_DATA;
 			ep_params.address = peer_addr;
 			ep_params.err_mode = UCP_ERR_HANDLING_MODE_NONE;
 			ep_params.err_handler.cb = err_cb_client;
@@ -296,22 +320,18 @@ int32_t main(int32_t argc, char **argv)
 
 			status = ucp_ep_create(ucp_worker, &ep_params, &client_ep);
 
-			fprintf(stderr,"ucp_ep_create status=%ld\n", status);
-
 			// Formated imss uri to be sent to the metadata server.
 			char formated_uri[REQUEST_SIZE];
 			sprintf(formated_uri, "%" PRIu32 " GET 0 %s", id, imss_uri);
 
 			//status = ucp_worker_get_address(ucp_worker, &req_addr, &req_addr_len);
-			
+
 			ucp_worker_attr_t worker_attr;
 			worker_attr.field_mask = UCP_WORKER_ATTR_FIELD_ADDRESS;
 			status = ucp_worker_query(ucp_worker, &worker_attr);
 			// printf ("Len %ld \n", worker_attr.address_length);
-    			req_addr_len = worker_attr.address_length;
-    			req_addr     = worker_attr.address;
-
-
+			req_addr_len = worker_attr.address_length;
+			req_addr     = worker_attr.address;
 
 			attr.field_mask = UCP_WORKER_ADDRESS_ATTR_FIELD_UID;
 			ucp_worker_address_query(req_addr, &attr);
@@ -438,7 +458,6 @@ int32_t main(int32_t argc, char **argv)
 	// Execute all threads.
 	for (int32_t i = 0; i < (args.thread_pool + 1); i++)
 	{
-
 		// Add port number to thread arguments.
 		arguments[i].ucp_context = ucp_context;
 		arguments[i].blocksize = block_size;
@@ -464,18 +483,18 @@ int32_t main(int32_t argc, char **argv)
 		{
 			ret = init_worker(ucp_context, &ucp_worker_threads[i]);
 			if (ret != 0)
-                	{
-                        	perror("ERRIMSS_WORKER_INIT");
-                	}
+			{
+				perror("ERRIMSS_WORKER_INIT");
+			}
 
 			arguments[i].ucp_worker = ucp_worker_threads[i];
 
 			// status = ucp_worker_get_address(ucp_worker_threads[i], &local_addr[i], &local_addr_len[i]);
 			ucp_worker_attr_t worker_attr;
-                        worker_attr.field_mask = UCP_WORKER_ATTR_FIELD_ADDRESS;
-                        status = ucp_worker_query(ucp_worker_threads[i], &worker_attr);
-                        local_addr_len[i] = worker_attr.address_length;
-                        local_addr[i]     = worker_attr.address;
+			worker_attr.field_mask = UCP_WORKER_ATTR_FIELD_ADDRESS;
+			status = ucp_worker_query(ucp_worker_threads[i], &worker_attr);
+			local_addr_len[i] = worker_attr.address_length;
+			local_addr[i]     = worker_attr.address;
 
 			// Add the reference to the map into the set of thread arguments.
 			arguments[i].map = map;
