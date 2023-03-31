@@ -39,7 +39,7 @@ typedef struct {
 	//Pointer to the corresponding buffer region assigned to a thread. 
 	char *        pt;
 	//Integer specifying the port that a certain thread will listen to.
-	uint16_t      port;
+	uint64_t      port;
     //URI assigned to the current IMSS instance.
     char          my_uri[URI_];
 	int64_t       total_size;

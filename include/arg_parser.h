@@ -33,17 +33,17 @@ struct arguments
 {
     char        type;               /* type arg */
 	int			id;                 /* server ID arg to -r */
-    uint16_t    port;               /* port arg to '-p' */
+    uint64_t    port;               /* port arg to '-p' */
     int64_t     bufsize;            /* buffer size arg to '-b' */
     char        imss_uri[32];       /* IMSS URI arg to '-i' */
     char *      stat_host;          /* Metadata server hostname arg to '-H' */
     int64_t     stat_port;          /* Metadata server port number arg to '-P' */
     int64_t     num_servers;        /* number of data servers arg to '-n' */
-    char *      deploy_hostfile;    /* deploy hostfile arg to '-d' */
-    char *      stat_logfile;       /* metadata logfile arg to '-l' */
+    char      deploy_hostfile[254];    /* deploy hostfile arg to '-d' */
+    char      stat_logfile[512];       /* metadata logfile arg to '-l' */
     uint64_t    block_size;         /* block size in KB arg to -B */
 	uint64_t    storage_size;       /* total storage size in GB to -s */
-    uint16_t    thread_pool;        /* thread pool size '-t' */
+    uint64_t    thread_pool;        /* thread pool size '-t' */
 };
 
 

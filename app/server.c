@@ -59,7 +59,7 @@ int32_t main(int32_t argc, char **argv)
 	clock_t t;
 	double time_taken;
 
-	uint16_t bind_port, aux_bind_port;
+	uint64_t bind_port;
 	char *stat_add;
 	char *metadata_file;
 	char *deployfile;
@@ -89,9 +89,6 @@ int32_t main(int32_t argc, char **argv)
 	struct arguments args;
 
 	t = clock();
-
-	// get arguments.
-	parse_args(argc, argv, &args);
 
 	cfg = cfg_init();
 
@@ -128,10 +125,20 @@ int32_t main(int32_t argc, char **argv)
 			fprintf(stderr, "Trying to load %s\n", abs_exe_path2);
 			if (cfg_load(cfg, abs_exe_path2) > 0)
 			{
-				cfg_load(cfg, "hercules.conf");
+				fprintf(stderr, "Trying to load ./hercules.conf");
+				if (cfg_load(cfg, "hercules.conf") > 0)
+				{
+					// get arguments.
+					fprintf(stderr, "Trying get params");
+					parse_args(argc, argv, &args);
+				}
 			}
 		}
 	}
+
+	args.type = argv[1][0];
+	args.id = atoi(argv[2]);
+	args.stat_host = argv[3];
 
 	if (cfg_get(cfg, "URI"))
 	{
@@ -145,12 +152,7 @@ int32_t main(int32_t argc, char **argv)
 	if (args.type == TYPE_DATA_SERVER)
 	{
 		if (cfg_get(cfg, "NUM_DATA_SERVERS"))
-			args.block_size = atoi(cfg_get(cfg, "NUM_DATA_SERVERS"));
-	}
-	else
-	{
-		if (cfg_get(cfg, "NUM_META_SERVERS"))
-			args.block_size = atoi(cfg_get(cfg, "NUM_META_SERVERS"));
+			args.num_servers = atoi(cfg_get(cfg, "NUM_DATA_SERVERS"));
 	}
 
 	if (cfg_get(cfg, "THREAD_POOL"))
@@ -159,19 +161,30 @@ int32_t main(int32_t argc, char **argv)
 	if (cfg_get(cfg, "STORAGE_SIZE"))
 		args.storage_size = atoi(cfg_get(cfg, "STORAGE_SIZE"));
 
+	
+
 	// if (cfg_get(cfg, "METADATA_HOST"))
 	// {
 	// 	const char *aux = cfg_get(cfg, "METADATA_HOST");
 	// 	strcpy(args.stat_host, aux);
 	// }
-	
+	if (cfg_get(cfg, "METADA_PERSISTENCE_FILE"))
+	{
+		const char *aux = cfg_get(cfg, "METADA_PERSISTENCE_FILE");
+		strcpy(args.stat_logfile, aux);
+	}
+
 	if (cfg_get(cfg, "METADATA_PORT"))
 		args.stat_port = atol(cfg_get(cfg, "METADATA_PORT"));
 
 	if (cfg_get(cfg, "DATA_PORT"))
-		args.port = strtoul(cfg_get(cfg, "DATA_PORT"), NULL, 0);
+		args.port = atol(cfg_get(cfg, "DATA_PORT"));
 
-	fprintf(stderr,"args.port=%d\n", args.port);
+	if (cfg_get(cfg, "DATA_HOSTFILE"))
+	{
+		const char *aux = cfg_get(cfg, "DATA_HOSTFILE");
+		strcpy(args.deploy_hostfile, aux);
+	}
 
 	/***************************************************************/
 	/******************** PARSE INPUT ARGUMENTS ********************/
@@ -207,7 +220,7 @@ int32_t main(int32_t argc, char **argv)
 
 	if (getenv("IMSS_THREAD_POOL") != NULL)
 	{
-		args.thread_pool = strtoul(getenv("IMSS_THREAD_POOL"), NULL, 0);
+		args.thread_pool = atol(getenv("IMSS_THREAD_POOL"));
 	}
 
 	IMSS_THREAD_POOL = args.thread_pool;
@@ -216,28 +229,30 @@ int32_t main(int32_t argc, char **argv)
 	// struct tm tm = *localtime(&t);
 	char log_path[1000];
 	// sprintf(log_path, "./%c-server.%02d-%02d-%02d", args.type, tm.tm_hour, tm.tm_min, tm.tm_sec);
+	fprintf(stderr, "Server type=%c\n", args.type);
 	sprintf(log_path, "./%c-server", args.type);
 	slog_init(log_path, SLOG_DEBUG, 1, 1, 1, 1, 1, args.id);
 	slog_info("IMSS DEBUG FILE AT %s", log_path);
 	slog_info(",Time(msec), Comment, RetCode");
 
 	slog_debug("[SERVER] Starting server.");
-	slog_debug("[CLI PARAMS] type = %c port = %" PRIu16 " bufsize = %" PRId64 " ", args.type, args.port, args.bufsize);
 	if (args.type == TYPE_DATA_SERVER)
 	{
 		slog_debug("imss_uri = %s stat-host = %s stat-port = %" PRId64 " num-servers = %" PRId64 " deploy-hostfile = %s block-size = %" PRIu64 " storage-size = %" PRIu64 "",
 				   args.imss_uri, args.stat_host, args.stat_port, args.num_servers, args.deploy_hostfile, args.block_size, args.storage_size);
+		// bind port number.
+		bind_port = args.port;
 	}
 	else
 	{
+		slog_debug("[CLI PARAMS] type = %c port = %" PRId64 " bufsize = %" PRId64 " ", args.type, args.stat_port, args.bufsize);
 		slog_debug("stat-logfile = %s", args.stat_logfile);
+		// bind port number.
+		bind_port = args.stat_port;
 	}
 
 	status = ucp_config_read(NULL, NULL, &config);
 
-	// bind port number.
-	bind_port = args.port;
-	aux_bind_port = bind_port;
 	// buffer size provided
 	buffer_size = args.bufsize;
 	// set up imss uri (default value is already set up in args)
@@ -308,6 +323,8 @@ int32_t main(int32_t argc, char **argv)
 			ucs_status_t ep_status = UCS_OK;
 
 			uint32_t id = args.id;
+
+			fprintf(stderr,"Establishing a connection with %s:%ld\n", stat_add, stat_port);
 
 			oob_sock = connect_common(stat_add, stat_port, AF_INET);
 
@@ -403,34 +420,7 @@ int32_t main(int32_t argc, char **argv)
 	/***************************************************************/
 	/******************** INPROC COMMUNICATIONS ********************/
 	/***************************************************************/
-	// ucx_server_ctx_t context;
-	// ucp_worker_h     ucp_data_worker;
 
-	// ret = init_worker(ucp_context, &ucp_data_worker);
-	// if (ret != 0) {
-	//	perror("ERRIMSS_WORKER_INIT");
-	//	pthread_exit(NULL);
-	// }
-
-	/* Initialize the server's context. */
-	// context.conn_request = NULL;
-
-	// status = start_server(ucp_worker, &context, &context.listener, NULL, 0);
-	// status = start_server(ucp_worker, &context, &context.listener, NULL, bind_port + 1000);
-	// if (status != UCS_OK) {
-	//	perror("ERRIMSS_STAR_SERVER");
-	//	pthread_exit(NULL);
-	// }
-	/*
-	   while (context.conn_request == NULL) {
-	   ucp_worker_progress(ucp_worker);
-	   }
-	   status = server_create_ep(ucp_data_worker, context.conn_request, &pub_ep);
-	   if (status != UCS_OK) {
-	   perror("ERRIMSS_SERVER_CREATE_EP");
-	   pthread_exit(NULL);
-	   }
-	 */
 	// Map tracking saved records.
 	std::shared_ptr<map_records> map(new map_records(buffer_size * KB));
 
@@ -480,7 +470,7 @@ int32_t main(int32_t argc, char **argv)
 		arguments[i].ucp_context = ucp_context;
 		arguments[i].blocksize = block_size;
 		arguments[i].storage_size = max_storage_size;
-		arguments[i].port = args.port;
+		arguments[i].port = bind_port;
 
 		// Add the instance URI to the thread arguments.
 		strcpy(arguments[i].my_uri, imss_uri);
@@ -553,7 +543,7 @@ int32_t main(int32_t argc, char **argv)
 		strcpy(my_imss.uri_, imss_uri);
 		my_imss.ips = (char **)calloc(num_servers, sizeof(char *));
 		my_imss.num_storages = num_servers;
-		my_imss.conn_port = aux_bind_port;
+		my_imss.conn_port = bind_port;
 		my_imss.type = 'I'; // extremely important
 		// FILE entity managing the IMSS deployfile.
 		FILE *svr_nodes;
