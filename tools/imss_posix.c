@@ -222,6 +222,8 @@ __attribute__((constructor)) void imss_posix_init(void)
 	// fill global variables with the enviroment variables value.
 	getConfiguration();
 
+	fprintf(stderr, "IMSS_DEBUG_LEVEL=%d\n", IMSS_DEBUG_LEVEL);
+
 	IMSS_DATA_BSIZE = IMSS_BLKSIZE * KB;
 	// aux_refresh = (char *)malloc(IMSS_DATA_BSIZE); // global buffer to refresh metadata.
 	// imss_path_refresh = calloc(MAX_PATH, sizeof(char));
@@ -246,22 +248,6 @@ __attribute__((constructor)) void imss_posix_init(void)
 	}
 	sprintf(hostname, "%s:%d", hostname, getpid());
 
-	if (getenv("IMSS_DEBUG") != NULL)
-	{
-		if (strstr(getenv("IMSS_DEBUG"), "file"))
-			IMSS_DEBUG_FILE = 1;
-		if (strstr(getenv("IMSS_DEBUG"), "stdout"))
-			IMSS_DEBUG_SCREEN = 1;
-		if (strstr(getenv("IMSS_DEBUG"), "debug"))
-			IMSS_DEBUG_LEVEL = SLOG_DEBUG;
-		if (strstr(getenv("IMSS_DEBUG"), "all"))
-			IMSS_DEBUG_LEVEL = SLOG_LIVE;
-		if (strstr(getenv("IMSS_DEBUG"), "none"))
-			unsetenv("IMSS_DEBUG");
-	}
-
-	IMSS_DEBUG_LEVEL = SLOG_DEBUG;
-
 	rank = MurmurOAAT32(hostname);
 
 	// log init.
@@ -272,6 +258,7 @@ __attribute__((constructor)) void imss_posix_init(void)
 	slog_info(",Time(msec), Comment, RetCode");
 
 	slog_debug(" -- IMSS_MOUNT_POINT: %s", MOUNT_POINT);
+	slog_debug(" -- IMSS_ROOT: %s", IMSS_ROOT);
 	slog_debug(" -- IMSS_HOSTFILE: %s", IMSS_HOSTFILE);
 	slog_debug(" -- IMSS_N_SERVERS: %d", N_SERVERS);
 	slog_debug(" -- IMSS_SRV_PORT: %d", IMSS_SRV_PORT);
@@ -296,7 +283,11 @@ __attribute__((constructor)) void imss_posix_init(void)
 
 	if (deployment == 2)
 	{
-		open_imss(IMSS_ROOT);
+		ret = open_imss(IMSS_ROOT);
+		if(ret < 0) {
+			slog_fatal("Error creating IMSS's resources, the process cannot be started");
+			return 1;
+		}
 	}
 
 	if (deployment != 2)
@@ -345,10 +336,10 @@ void getConfiguration()
 	// readlink("/proc/self/exe", abs_exe_path, PATH_MAX);
 
 	getcwd(abs_exe_path, sizeof(abs_exe_path));
+	strcpy(abs_exe_path2, abs_exe_path);
 
 	strcat(abs_exe_path, "/../conf/hercules.conf");
-	strcpy(abs_exe_path2, abs_exe_path);
-	strcat(abs_exe_path2, "hercules.conf");
+	strcat(abs_exe_path2, "./hercules.conf");
 
 	cfg = cfg_init();
 
@@ -529,7 +520,12 @@ void getConfiguration()
 			IMSS_DEBUG_LEVEL = SLOG_PANIC;
 		}
 		else if (strstr(getenv("IMSS_DEBUG"), "none"))
+		{
+			IMSS_DEBUG_FILE = 0;
+			IMSS_DEBUG_SCREEN = 0;
+			IMSS_DEBUG_LEVEL = SLOG_NONE;
 			unsetenv("IMSS_DEBUG");
+		}
 		else
 		{
 			IMSS_DEBUG_FILE = 1;

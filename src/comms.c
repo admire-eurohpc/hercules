@@ -601,6 +601,9 @@ int32_t recv_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, void *data_str
 				// Copy the actual structure into the one provided through reference.
 				memcpy(struct_, msg_data, sizeof(imss_info));
 
+
+				slog_debug(" \t\t msg_data=%s", msg_data);
+
 				if (!strncmp("$ERRIMSS_NO_KEY_AVAIL$", struct_->uri_, 22))
 				{
 					slog_debug("[COMM] recv_dynamic_stream end %ld", length);
@@ -752,7 +755,7 @@ ucs_status_t flush_ep(ucp_worker_h worker, ucp_ep_h ep)
     }
 }
 
-int connect_common(const char *server, uint16_t server_port, sa_family_t af)
+int connect_common(const char *server, uint64_t server_port, sa_family_t af)
 {
 	int sockfd   = -1;
 	int listenfd = -1;
@@ -761,7 +764,7 @@ int connect_common(const char *server, uint16_t server_port, sa_family_t af)
 	struct addrinfo hints, *res, *t;
 	int ret;
 
-	snprintf(service, sizeof(service), "%u", server_port);
+	snprintf(service, sizeof(service), "%lu", server_port);
 	memset(&hints, 0, sizeof(hints));
 	hints.ai_flags    = (server == NULL) ? AI_PASSIVE : 0;
 	hints.ai_family   = af;

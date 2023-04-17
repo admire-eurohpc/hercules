@@ -223,7 +223,7 @@ delete_imss(char *imss_uri,
 
 // Method creating a communication channel with the IMSS metadata server. Besides, the stat_imss method initializes a set of elements that will be used through the session.
 int32_t stat_init(char *stat_hostfile,
-				  uint16_t port,
+				  uint64_t port,
 				  int32_t num_stat_servers,
 				  uint32_t rank)
 {
@@ -356,13 +356,14 @@ int32_t stat_init(char *stat_hostfile,
 		n_chars = getline(&stat_node, &l_size, stat_nodes);
 		// Erase the new line character ('') from the string.
 		stat_node[n_chars - 1] = '\0';
-		slog_debug("[IMSS] stat_client=%s", stat_node);
-		slog_debug("[IMSS] i=%d, stat_node=%s, port=%d, rank=%" PRIu32 "", i, stat_node, port, rank);
-		slog_debug("[IMSS] stat_int: Contacting stat dispatcher at %s:%d", stat_node, port);
+		// slog_debug("[IMSS] stat_client=%s", stat_node);
+		slog_debug("[IMSS][stat_int] i=%d, stat_node=%s, port=%ld, rank=%" PRIu32 "", i, stat_node, port, rank);
+		slog_debug("[IMSS][stat_int] Contacting stat dispatcher at %s:%ld", stat_node, port);
 
 		oob_sock = connect_common(stat_node, port, AF_INET);
 
 		sprintf(request, "%" PRIu32 " GET HELLO!", rank);
+		slog_debug("[IMSS][stat_int] request=%s", request);
 		if (send(oob_sock, request, REQUEST_SIZE, 0) < 0)
 		{
 			perror("ERRIMSS_STAT_HELLO");
@@ -375,7 +376,7 @@ int32_t stat_init(char *stat_hostfile,
 		close(oob_sock);
 
 		client_create_ep(ucp_worker_meta, &stat_eps[i], stat_addr[i]);
-		slog_debug("[IMSS] stat_int: created ep with %s", stat_node);
+		slog_debug("[IMSS] stat_int: created ep with %s:%ld", stat_node, port);
 	}
 	// Close the file.
 	if (fclose(stat_nodes) != 0)
@@ -728,7 +729,7 @@ int32_t open_imss(char *imss_uri)
 
 	int32_t not_initialized = 0;
 
-	slog_debug("[IMSS] open_imss: starting function");
+	slog_debug("[IMSS][open_imss] starting function, imss_uri=%s", imss_uri);
 	// Retrieve the actual information from the metadata server.
 	int32_t imss_existance = stat_imss(imss_uri, &new_imss.info);
 	// Check if the requested IMSS did not exist or was already stored in the local vector.
@@ -883,7 +884,7 @@ int32_t stat_imss(char *imss_uri, imss_info *imss_info_)
 	int ret = 0;
 	ucp_ep_h ep;
 
-	slog_debug("[IMSS][stat_imss]");
+	slog_debug("[IMSS][stat_imss] imss_uri=%s", imss_uri);
 	if ((imss_found_in = find_imss(imss_uri, &searched_imss)) != -1)
 	{
 		memcpy(imss_info_, &searched_imss.info, sizeof(imss_info));

@@ -174,7 +174,7 @@ rank	         - Application process identifier used as communications ID in the 
 RETURNS:	 0 - Communication channel and initializations performed successfully.
 -1 - In case of error.
 	 */
-	int32_t stat_init(char *stat_hostfile, uint16_t port, int32_t num_stat_servers, uint32_t rank);
+	int32_t stat_init(char *stat_hostfile, uint64_t port, int32_t num_stat_servers, uint32_t rank);
 
 	/* Method disabling the communication channel with the metadata server. Besides, the current method releases session-related elements previously initialized.
 

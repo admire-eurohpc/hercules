@@ -138,7 +138,6 @@ int32_t main(int32_t argc, char **argv)
 
 	args.type = argv[1][0];
 	args.id = atoi(argv[2]);
-	args.stat_host = argv[3];
 
 	if (cfg_get(cfg, "URI"))
 	{
@@ -207,11 +206,15 @@ int32_t main(int32_t argc, char **argv)
 		else if (strstr(getenv("IMSS_DEBUG"), "all"))
 		{
 			IMSS_DEBUG_FILE = 1;
+			IMSS_DEBUG_SCREEN = 1;
 			IMSS_DEBUG_LEVEL = SLOG_PANIC;
 		}
-		else if (strstr(getenv("IMSS_DEBUG"), "none"))
+		else if (strstr(getenv("IMSS_DEBUG"), "none")) {
+			IMSS_DEBUG_FILE = 0;
+			IMSS_DEBUG_SCREEN = 0;
+			IMSS_DEBUG_LEVEL = SLOG_NONE;
 			unsetenv("IMSS_DEBUG");
-		else
+		} else
 		{
 			IMSS_DEBUG_FILE = 1;
 			IMSS_DEBUG_LEVEL = getLevel(getenv("IMSS_DEBUG"));
@@ -231,13 +234,14 @@ int32_t main(int32_t argc, char **argv)
 	// sprintf(log_path, "./%c-server.%02d-%02d-%02d", args.type, tm.tm_hour, tm.tm_min, tm.tm_sec);
 	fprintf(stderr, "Server type=%c\n", args.type);
 	sprintf(log_path, "./%c-server", args.type);
-	slog_init(log_path, SLOG_DEBUG, 1, 1, 1, 1, 1, args.id);
-	slog_info("IMSS DEBUG FILE AT %s", log_path);
+	slog_init(log_path, IMSS_DEBUG_LEVEL, IMSS_DEBUG_FILE, IMSS_DEBUG_SCREEN, 1, 1, 1, args.id);
+	fprintf(stderr, "IMSS DEBUG FILE AT %s\n", log_path);
 	slog_info(",Time(msec), Comment, RetCode");
 
 	slog_debug("[SERVER] Starting server.");
 	if (args.type == TYPE_DATA_SERVER)
 	{
+		args.stat_host = argv[3];
 		slog_debug("imss_uri = %s stat-host = %s stat-port = %" PRId64 " num-servers = %" PRId64 " deploy-hostfile = %s block-size = %" PRIu64 " storage-size = %" PRIu64 "",
 				   args.imss_uri, args.stat_host, args.stat_port, args.num_servers, args.deploy_hostfile, args.block_size, args.storage_size);
 		// bind port number.
@@ -283,6 +287,7 @@ int32_t main(int32_t argc, char **argv)
 	mem_pool = StsQueue.create();
 	// figure out how many blocks we need and allocate them
 	num_blocks = max_storage_size / (args.block_size * KB);
+	slog_info("[main] num_blocks=%lu", num_blocks);
 	for (int i = 0; i < num_blocks; ++i)
 	{
 		char *buffer = (char *)calloc(args.block_size * KB, sizeof(char));

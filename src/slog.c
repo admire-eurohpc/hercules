@@ -304,7 +304,7 @@ void slog(int flag, const char *msg, ...)
         }
 
         /* Print output. */
-        if (slg.exclusive && flag >= slg.level)
+        if (slg.exclusive && flag <= slg.level)
             if (slg.to_console != 0)
                 if (flag <= slg.level || slg.pretty)
                 {

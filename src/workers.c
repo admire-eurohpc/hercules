@@ -1006,7 +1006,7 @@ int stat_worker_helper(p_argv *arguments, char *req)
 	int client_id = 0;
 	char mode[MODE_SIZE];
 
-	slog_debug("[STAT WORKER] Waiting for new request.");
+	// slog_debug("[STAT WORKER] Waiting for new request.");
 	// Save the request to be served.
 	// recv_data(arguments->ucp_worker, arguments->server_ep, req);
 	// slog_info("[STAT WORKER] Request - '%s'", req);
@@ -1028,6 +1028,7 @@ int stat_worker_helper(p_argv *arguments, char *req)
 	raw_msg[req_size] = '\0';
 
 	// printf("*********worker_metadata raw_msg %s",raw_msg);
+	slog_info("[workers][stat_worker_helper] request received=%s", req);
 
 	// Reference to the client request.
 	char number[16];
@@ -1036,6 +1037,8 @@ int stat_worker_helper(p_argv *arguments, char *req)
 	// Elements conforming the request.
 	char *uri_ = raw_msg + number_length + 1;
 	uint64_t block_size_recv = (uint64_t)atoi(number);
+
+	slog_info("[workers][stat_worker_helper] number=%s, number_length=%d uri=%s, block_size_recv=%ld", number, number_length, uri_, block_size_recv);
 
 	// Create an std::string in order to be managed by the map structure.
 	std::string key;
@@ -1487,7 +1490,7 @@ void *dispatcher(void *th_argv)
 				char mode[MODE_SIZE];
 
 				slog_debug("[DISPATCHER] Waiting for connection requests.");
-				fprintf(stderr, "[DISPATCHER] Waiting for connection requests.");
+				fprintf(stderr, "[DISPATCHER] Waiting for connection requests.\n");
 				sockfd = accept(listenfd, NULL, NULL);
 				ret = recv(sockfd, req, REQUEST_SIZE, MSG_WAITALL);
 

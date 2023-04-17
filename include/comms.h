@@ -155,7 +155,7 @@ int32_t send_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, void * data_st
 //Method retrieving a serialized dynamic data structure.
 int32_t recv_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, void * data_struct, int32_t data_type, uint64_t dest);
 
-int connect_common(const char *server, uint16_t server_port, sa_family_t af);
+int connect_common(const char *server, uint64_t server_port, sa_family_t af);
 
 ucs_status_t ucx_wait(ucp_worker_h ucp_worker, struct ucx_context *request, const char *op_str, const char *data_str);
 
