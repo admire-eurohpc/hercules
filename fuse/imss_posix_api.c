@@ -85,8 +85,6 @@ int32_t LOWER_BOUND_SERVERS;
 // extern char *aux_refresh;
 // extern char *imss_path_refresh;
 
-
-
 /*
    (*) Mapping for REPL_FACTOR values:
    NONE = 1;
@@ -131,6 +129,7 @@ int imss_truncate(const char *path, off_t offset)
 {
 	return 0;
 }
+
 int imss_access(const char *path, int permission)
 {
 	return 0;
@@ -138,7 +137,7 @@ int imss_access(const char *path, int permission)
 
 int imss_refresh(const char *path)
 {
-
+	slog_debug("\t[imss_refresh]");
 	struct stat *stats;
 	struct stat old_stats;
 	uint32_t ds;
@@ -146,9 +145,6 @@ int imss_refresh(const char *path)
 	char *aux2;
 	char *imss_path = calloc(MAX_PATH, sizeof(char));
 	char *aux = (char *)malloc(IMSS_DATA_BSIZE);
-	memset(imss_path, 0, MAX_PATH);
-	memset(aux, 0, IMSS_DATA_BSIZE);
-
 
 	get_iuri(path, imss_path);
 
@@ -162,6 +158,13 @@ int imss_refresh(const char *path)
 	stats = (struct stat *)aux;
 
 	map_update(map, imss_path, ds, *stats);
+
+	// 	slog_debug("[imss_refresh] Calling map_search, %s", path);
+	// if(map_search(map, path, &fd, stats, &aux)){
+	// 	slog_debug("[imss_refresh] key %s has been found", path);
+	// } else {
+	// 	slog_debug("[imss_refresh] key %s has not been found", path);
+	// }
 
 	free(aux);
 	free(imss_path);
@@ -833,7 +836,6 @@ int imss_vread_prefetch(const char *path, char *buf, size_t size, off_t offset)
 		}
 		++curr_blk;
 	}
-
 
 	flush_data();
 
@@ -1879,6 +1881,7 @@ int imss_release(const char *path)
 	if (set_data(ds, 0, head, 0, 0) < 0)
 	{
 		fprintf(stderr, "[IMSS-FUSE][release]	Error writing to imss.\n");
+		slog_error("[IMSS-FUSE][release]	Error writing to imss.");
 		error_print = -ENOENT;
 		pthread_mutex_unlock(&lock);
 		free(rpath);
@@ -1899,9 +1902,9 @@ int imss_close(const char *path)
 	slog_debug("[imss_close] Ending imss_flush_data");
 	TIMING(imss_release(path), "[imss_close]imss_release", int);
 	slog_debug("[imss_close] Ending imss_release");
-	// imss_refresh is too slow. 
+	// imss_refresh is too slow.
 	// When we remove it pass from 3.45 sec to 0.008505 sec.
-	TIMING(imss_refresh(path), "[imss_close]imss_refresh", int); 
+	TIMING(imss_refresh(path), "[imss_close]imss_refresh", int);
 	slog_debug("[imss_close] Ending imss_refresh");
 
 	// t = clock() - t;

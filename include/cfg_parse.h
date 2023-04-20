@@ -54,7 +54,7 @@ int cfg_save(const struct cfg_struct* cfg, const char* filename);
 /**
  * @brief Retrieves a value from a cfg_struct for a specified key.
  */
-const char* cfg_get(const struct cfg_struct* cfg, const char* key);
+char* cfg_get(const struct cfg_struct* cfg, const char* key);
 
 /**
  * @brief Retrieves a list of all keys in a cfg_struct.

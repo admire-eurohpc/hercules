@@ -1287,6 +1287,8 @@ int32_t delete_dataset(const char *dataset_uri)
 
 	sprintf(formated_uri, "%" PRIu32 " GET 4 %s", stat_ids[m_srv], dataset_uri); // delete
 
+	slog_debug("[IMSS][delete_dataset] formated_uri='%s'", formated_uri);
+
 	// Send the request.
 	if (send_req(ucp_worker_meta, ep, local_addr_meta, local_addr_len_meta, formated_uri) < 0)
 	{
@@ -1300,6 +1302,7 @@ int32_t delete_dataset(const char *dataset_uri)
 		perror("ERRIMSS_RECVDYNAMSTRUCT_RECV");
 		return -1;
 	}
+	slog_debug("[IMSS][delete_dataset] response=%s", result);
 
 	return 1;
 }
@@ -1419,7 +1422,7 @@ int32_t stat_dataset(const char *dataset_uri, dataset_info *dataset_info_)
 	for (int32_t i = 0; i < datasetd->len; i++)
 	{
 		*dataset_info_ = g_array_index(datasetd, dataset_info, i);
-		slog_debug("[IMSS][stat_dataset] dataset_info_->uri_=%s", dataset_info_->uri_);
+		slog_debug("[IMSS][stat_dataset] dataset_uri=%s, dataset_info_->uri_=%s", dataset_uri, dataset_info_->uri_);
 		if (!strcmp(dataset_uri, dataset_info_->uri_))
 			return 2;
 	}
@@ -1471,7 +1474,7 @@ int32_t set_dataset(char * dataset_uri, unsigned char * buffer, uint64_t offset)
 int32_t get_data_location(int32_t dataset_id, int32_t data_id, int32_t op_type)
 {
 	// If the current dataset policy was not established yet.
-	// slog_debug("[get_data_location] current_dataset=%ld, dataset_id=%ld", current_dataset, dataset_id);
+	slog_debug("[get_data_location] current_dataset=%ld, dataset_id=%ld", current_dataset, dataset_id);
 	if (current_dataset != dataset_id)
 	{
 		// Retrieve the corresponding dataset_info structure and the associated IMSS.
@@ -2034,7 +2037,7 @@ int32_t get_data(int32_t dataset_id, int32_t data_id, char *buffer)
 		// t = clock();
 		//  Key related to the requested data element.
 		sprintf(key_, "GET 0 0 %s$%d", curr_dataset.uri_, data_id);
-		// slog_info("[IMSS][get_data] Request - '%s'", key_);
+		slog_debug("[IMSS][get_data] Request - '%s' in repl_servers %ld", key_, repl_servers[i]);
 		ep = curr_imss.conns.eps[repl_servers[i]];
 
 		if (send_req(ucp_worker_data, ep, local_addr_data, local_addr_len_data, key_) < 0)

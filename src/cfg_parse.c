@@ -260,9 +260,9 @@ int cfg_save(const struct cfg_struct* cfg, const char* filename)
  * @param key String containing key to search for.
  * @return String containing associated value, or NULL if key was not found.
  */
-const char* cfg_get(const struct cfg_struct* cfg, const char* key)
+char* cfg_get(const struct cfg_struct* cfg, const char* key)
 {
-  fprintf(stderr,"Getting %s\n", key);
+  // fprintf(stderr,"Getting %s\n", key);
   char* tkey;
   struct cfg_node* cur;
 
@@ -283,7 +283,7 @@ const char* cfg_get(const struct cfg_struct* cfg, const char* key)
     if (strcmp(tkey, cur->key) == 0)
     {
       free(tkey);
-      fprintf(stderr,"value %s\n", cur->value);
+      // fprintf(stderr,"value %s\n", cur->value);
       return cur->value;
     }
   } while ((cur = cur->next) != NULL);

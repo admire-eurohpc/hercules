@@ -6,6 +6,9 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
+// to manage logs.
+#include "slog.h"
+
 extern uint64_t IMSS_BLKSIZE;
 #define KB 1024
 #define GB 1073741824
@@ -47,6 +50,9 @@ extern "C" {
 
 		if (search != m->end()) {
 			free(search->second.aux);
+			slog_debug("[map_erase] erasing element with key %s", k);
+		} else {
+			slog_debug("[map_erase] element with key %s was not find", k);
 		}
 		m->erase(std::string(k));
 		//return ret;

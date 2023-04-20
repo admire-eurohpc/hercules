@@ -51,17 +51,17 @@ extern int32_t IMSS_DEBUG;
  * Macro to measure the time spend by function_to_call.
  * char*::print_comment: comment to be concatenated to the elapsed time.
  */
-#define TIMING(function_to_call, print_comment, type) \
-	({ \
-		clock_t t; \
-		double time_taken; \
-		type ret; \
-		t = clock(); \
-		ret = function_to_call; \
-		t = clock() - t; \
-		time_taken = ((double)t) / (CLOCKS_PER_SEC); \
+#define TIMING(function_to_call, print_comment, type)          \
+	({                                                         \
+		clock_t t;                                             \
+		double time_taken;                                     \
+		type ret;                                              \
+		t = clock();                                           \
+		ret = function_to_call;                                \
+		t = clock() - t;                                       \
+		time_taken = ((double)t) / (CLOCKS_PER_SEC);           \
 		slog_time(",TIMING,%f,%s", time_taken, print_comment); \
-		ret; \
+		ret;                                                   \
 	})
 
 // typedef enum {
@@ -410,7 +410,7 @@ RETURNS:	 0 - The requested block was successfully retrieved.
 
 	int32_t get_data_mall(int32_t dataset_id, int32_t data_id, char *buffer, size_t to_read, off_t offset, int32_t num_storages);
 	/* Method storing a specific data element.
-	
+
 
 RECEIVES:	dataset_id - Number identifying the concerned dataset among the client's session.
 data_id    - Data block number identifying the data block to be stored.
@@ -424,7 +424,6 @@ RETURNS:	 0 - The requested block was successfully stored.
 	int32_t set_data(int32_t dataset_id, int32_t data_id, char *buffer, size_t size, off_t offset);
 
 	int32_t set_data_mall(int32_t dataset_id, int32_t data_id, char *buffer, size_t size, off_t offset, int32_t num_storages);
-
 
 	/* Method retrieving the location of a specific data object.
 
@@ -476,10 +475,10 @@ RETURNS:	0 - No entity associated to the URI provided exists.
 
 	// Method writing multiple data to a specific server
 
-	void * split_writev(void *th_argv);
+	void *split_writev(void *th_argv);
 
 	// Method retrieving multiple data from a specific server
-	void * split_readv(void *th_argv);
+	void *split_readv(void *th_argv);
 	/*int32_t
 	  split_readv(int32_t n_server,
 	  char * path,
@@ -509,9 +508,7 @@ RETURNS:	0 - Resources were released successfully.
 	 */
 	int32_t free_dataset(dataset_info *dataset_info_);
 
-
 	int32_t flush_data();
-
 
 	int32_t imss_flush_data();
 

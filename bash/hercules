@@ -2,26 +2,27 @@
 #######################################################
 #######################################################
 StopServers() {
-	NAME=$1
-	hosts=$2
-        echo "# Hercules: Stopping $NAME servers in $hosts"
-        for node in "${hosts[@]}"
-        do
-                (ssh $node "pkill hercules_server" ) &
-        done
+    NAME=$1
+    hosts=$2
+    echo "# Hercules: Stopping $NAME servers in $hosts"
+    for node in "${hosts[@]}"
+    do
+        # (ssh $node "pkill hercules_server" ) &
+		ssh $node "pkill hercules_server"
+    done
 }
 
-## Read configuration file.
+## To know if a configuration file exists in the default paths.
 for FILE in {"/etc/hercules.conf","../conf/hercules.conf","./hercules.conf"}
 do
-	echo $FILE
-	if [ -f "$FILE" ]; then
-		echo "Reading configuration file at $FILE"
-		break
-	fi
+    echo $FILE
+    if [ -f "$FILE" ]; then
+        echo "Reading configuration file at $FILE"
+        break
+    fi
 done
 
-## Uncomment when working in Tucan.
+## Read configuration file
 H_PATH=$(dirname `pwd`)
 H_BUILD_PATH=$H_PATH/build
 H_BASH_PATH=$H_PATH/bash
@@ -38,10 +39,10 @@ STORAGE_SIZE=$(cat $FILE | grep "STORAGE_SIZE" | awk '{print $3}')
 while getopts :m:d:o:c: flag
 do
     case "${flag}" in
-	m) META_SERVER_FILE=${OPTARG};;
+        m) META_SERVER_FILE=${OPTARG};;
         d) DATA_SERVER_FILE=${OPTARG};;
-	o) OUTPUT_FILE=${OPTARG};;
-	c) CLIENT_FILE=${OPTARG};;
+        o) OUTPUT_FILE=${OPTARG};;
+        c) CLIENT_FILE=${OPTARG};;
     esac
 done
 echo "DATA_SERVER_FILE=$DATA_SERVER_FILE"
@@ -50,46 +51,46 @@ echo "OUTPUT_FILE=$OUTPUT_FILE"
 echo "STATUS=$1"
 STATUS=$1
 if [[ $STATUS != "stop" && $STATUS != "start" ]]; then
-	echo "Incorrect argument"
-	exit 0
+    echo "Incorrect argument"
+    exit 0
 fi
 SLURM=$([ -z "$SLURM_CLUSTER_NAME" ] && echo 0 || echo 1)
 if [[ $STATUS = "stop" ]];
 then
-	#readarray -t hosts < <($([ -z "$DATA_SERVER_FILE" ] && echo $H_DATA_HOSTS || echo $DATA_SERVER_FILE))
-
-	#echo $H_DATA_HOSTS
-	#echo $H_META_HOSTS
-	#if [ -z "$DATA_SERVER_FILE" ] && [ -z "$H_DATA_HOSTS" ] && [ -z "$H_META_HOSTS" ]; then
-	#	echo "Nodes to stop hercules' services has not been defined"
-	#	exit 0
-	#fi
-	readarray -t hosts < data_hostfile
-	echo "hosts=$hosts"
-	StopServers "data" $hosts
-	#readarray -t hosts < <($([ -z "$META_SERVER_FILE" ] && echo $H_META_HOSTS || echo $META_SERVER_FILE))	
-	readarray -t hosts < meta_hostfile
-	echo "hosts=$hosts"
-	StopServers "metadata" $hosts
-	exit 0
+    #readarray -t hosts < <($([ -z "$DATA_SERVER_FILE" ] && echo $H_DATA_HOSTS || echo $DATA_SERVER_FILE))
+    
+    #echo $H_DATA_HOSTS
+    #echo $H_META_HOSTS
+    #if [ -z "$DATA_SERVER_FILE" ] && [ -z "$H_DATA_HOSTS" ] && [ -z "$H_META_HOSTS" ]; then
+    #	echo "Nodes to stop hercules' services has not been defined"
+    #	exit 0
+    #fi
+    readarray -t hosts < data_hostfile
+    echo "hosts=$hosts"
+    StopServers "data" $hosts
+    #readarray -t hosts < <($([ -z "$META_SERVER_FILE" ] && echo $H_META_HOSTS || echo $META_SERVER_FILE))
+    readarray -t hosts < meta_hostfile
+    echo "hosts=$hosts"
+    StopServers "metadata" $hosts
+    exit 0
 fi
 
 echo "SLURM=$SLURM"
 if [[ $SLURM -eq 1 ]]; then
-	srun -pernode hostname |sort > hostfile
+    srun -pernode hostname |sort > hostfile
 fi
 
 echo "# Hercules: Running metadata servers"
 if [[ -z $META_SERVER_FILE ]];
 then
-	if [[ $SLURM -eq 0 ]]; then
-		echo "Metadata server file not specified, please set one using -m <filename> flag"
-		exit 0
-	fi
-	echo "Metadata server file not specified, getting information from slurm"
-	readarray -t meta_hosts < <(head -n $NUM_METADATA hostfile)
+    if [[ $SLURM -eq 0 ]]; then
+        echo "Metadata server file not specified, please set one using -m <filename> flag"
+        exit 0
+    fi
+    echo "Metadata server file not specified, getting information from slurm"
+    readarray -t meta_hosts < <(head -n $NUM_METADATA hostfile)
 else
-	readarray -t meta_hosts < $META_SERVER_FILE
+    readarray -t meta_hosts < $META_SERVER_FILE
 fi
 #export H_META_HOSTS=$meta_hosts
 echo $meta_hosts > meta_hostfile
@@ -100,27 +101,27 @@ export IMSS_DEBUG=none
 i=0
 for node in "${meta_hosts[@]}"
 do
-	echo "Running metadata server $i in $node..."
-	if [[ $SLURM -eq 0 ]]; then
-		(ssh $node "cd $H_BASH_PATH && $H_BUILD_PATH/hercules_server m $i") &
-	else
-		srun --exclusive --export=ALL -N 1 -n 1 -w $node $H_BUILD_PATH/hercules_server m $i &
-	fi
-	i=$(($i+1))
+    echo "Running metadata server $i in $node..."
+    if [[ $SLURM -eq 0 ]]; then
+        (ssh $node "cd $H_BASH_PATH && $H_BUILD_PATH/hercules_server m $i") &
+    else
+        srun --exclusive --export=ALL -N 1 -n 1 -w $node $H_BUILD_PATH/hercules_server m $i 2> m_server.out &
+    fi
+    i=$(($i+1))
 done
 sleep 10
 
 echo "# Hercules: Running data servers"
 if [[ -z $DATA_SERVER_FILE ]];
 then
-	if [[ $SLURM -eq 0 ]]; then
-		echo "Data server file not specified, please set one using -d <filename> flag"
-		exit 0
-	fi
-	echo "Data server file not specified, getting information from slurm"
-	readarray -t data_hosts < <(tail -n +$((NUM_METADATA+1)) hostfile | head -n $NUM_DATA)
+    if [[ $SLURM -eq 0 ]]; then
+        echo "Data server file not specified, please set one using -d <filename> flag"
+        exit 0
+    fi
+    echo "Data server file not specified, getting information from slurm"
+    readarray -t data_hosts < <(tail -n +$((NUM_METADATA+1)) hostfile | head -n $NUM_DATA)
 else
-	readarray -t data_hosts < $DATA_SERVER_FILE
+    readarray -t data_hosts < $DATA_SERVER_FILE
 fi
 #export H_DATA_HOSTS=$data_hosts
 echo $data_hosts > data_hostfile
@@ -132,27 +133,30 @@ NUM_DATA=${#data_hosts[@]}
 i=0
 for node in "${data_hosts[@]}"
 do
-	echo "Running data server $i in $node..."
-	if [[ $SLURM -eq 0 ]]; then
-	        (ssh $node "cd $H_BASH_PATH && $H_BUILD_PATH/hercules_server d $i ${meta_hosts[0]}") &
-	else
-		srun --exclusive --export=ALL -N 1 -n 1 -w $node $H_BUILD_PATH/hercules_server d $i ${meta_hosts[0]} &
-	fi
-	i=$(($i+1))
+    echo "Running data server $i in $node..."
+    if [[ $SLURM -eq 0 ]]; then
+        (ssh $node "cd $H_BASH_PATH && $H_BUILD_PATH/hercules_server d $i ${meta_hosts[0]}") &
+    else
+        srun --exclusive --export=ALL -N 1 -n 1 -w $node $H_BUILD_PATH/hercules_server d $i ${meta_hosts[0]} 2> d_server.out &
+    fi
+    i=$(($i+1))
 done
 
 
-set -x
-readarray -t client_hosts < <(tail -n +$((NUM_METADATA+NUM_DATA+1)) hostfile | head -n $NUM_NODES_FOR_CLIENTS)
-echo $client_hosts
-rm client_hostfile
-for node in "${client_hosts[@]}"
-do
-	echo "Cheking $node information..."
-	#srun -N 1 -n 1 -w $node echo "Threads/core: $(nproc --all)" | awk '{print $2}' &
-	srun -N 1 -n $NUM_CLIENTS_PER_NODE -w $node hostname >> client_hostfile
-done
+#set -x
+# readarray -t client_hosts < <(tail -n +$((NUM_METADATA+NUM_DATA+1)) hostfile | head -n $NUM_NODES_FOR_CLIENTS)
+# echo $client_hosts
+# rm client_hostfile
+# for node in "${client_hosts[@]}"
+# do
+#     echo "Cheking $node information..."
+#     # srun -N 1 -n 1 -w $node echo "Threads/core: $(nproc --all)" | awk '{print $2}' &
+#     srun -N 1 -n $NUM_CLIENTS_PER_NODE -w $node hostname >> client_hostfile
+# done
 
-#tail -n +$((NUM_METADATA+NUM_DATA+1)) hostfile | head -n $NUM_NODES_FOR_CLIENTS > client_hostfile
+# tail -n +$((NUM_METADATA+NUM_DATA+1)) hostfile | head -n $NUM_NODES_FOR_CLIENTS | sed "s/$/\tslots=$NUM_CLIENTS_PER_NODE/" > client_hostfile
+tail -n +$((NUM_METADATA+NUM_DATA+1)) hostfile | head -n $NUM_NODES_FOR_CLIENTS > client_hostfile
 
 sleep 10
+
+# exit 50000

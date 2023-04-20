@@ -70,9 +70,6 @@ int main(int argc, char **argv)
 
     sprintf(_stdout, "[%s][%d]", hostname, rank);
 
-    sprintf(msg, "%d", rank);
-    addMsg(msg, _summary, _header, "Rank");
-
     MPI_Status status;
     MPI_Init(&argc, &argv);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
@@ -106,7 +103,13 @@ int main(int argc, char **argv)
     // for (h = 1; h <= n_of_tests; h++)
     sprintf(_stdout, "%s, buffer_size=%ld, start_position=%ld", _stdout, buffer_size, start_position);
 
+    for (size_t iteration = 0; iteration < 10; iteration++)
     {
+
+        sprintf(msg, "%d", rank);
+        addMsg(msg, _summary, _header, "Rank");
+        // fprintf(stderr, "Iteration %ld\n", iteration);
+        sprintf(_stdout, "%s, ITERATION=%ld", _stdout, iteration);
         // get a character.
         c = 48 + rank % 120;
         // c = abc[rank];
@@ -204,7 +207,7 @@ int main(int argc, char **argv)
         addMsg(msg, _summary, _header, "Close-O_RDWR");
 
         // sleep(10);
-        MPI_Barrier(MPI_COMM_WORLD);
+        // MPI_Barrier(MPI_COMM_WORLD);
 
         // OPEN FILE TO READ
         start = MPI_Wtime();
@@ -256,8 +259,8 @@ int main(int argc, char **argv)
         start = MPI_Wtime();
         close(fd);
         end = MPI_Wtime();
-        sprintf(msg, "%f", end - start);
-        addMsg(msg, _summary, _header, "Close-O_RDONLY");
+        sprintf(msg, "%f\n", end - start);
+        addMsg(msg, _summary, _header, "Close-O_RDONLY\n");
 
         int result = 0; // strcmp(buffer_w, buffer_r);
         size_t count_differences = 0;
@@ -294,19 +297,19 @@ int main(int argc, char **argv)
             // fprintf(stderr, "buffer_r=%s\n", buffer_r);
         }
 
-        fprintf(stderr, "[CLIENT] %s\n", _stdout);
-        MPI_Barrier(MPI_COMM_WORLD);
-        if (!rank)
-        {
-            fprintf(stderr, "[Summary] \n%s\n", _header);
-        }
-        MPI_Barrier(MPI_COMM_WORLD);
-        fprintf(stderr, "%s\n", _summary);
-
         // free memory.
         free(buffer_w);
         free(buffer_r);
     }
+
+    fprintf(stderr, "[CLIENT] %s\n", _stdout);
+    MPI_Barrier(MPI_COMM_WORLD);
+    if (!rank)
+    {
+        fprintf(stderr, "[Summary] \n%s\n", _header);
+    }
+    MPI_Barrier(MPI_COMM_WORLD);
+    fprintf(stderr, "%s\n", _summary);
 
     MPI_Finalize();
 }

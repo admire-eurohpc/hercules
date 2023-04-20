@@ -100,6 +100,7 @@ int32_t main(int32_t argc, char **argv)
 	char abs_exe_path[PATH_MAX];
 	char abs_exe_path2[PATH_MAX];
 	char *p;
+	char *aux;
 
 	if (!(p = strrchr(argv[0], '/')))
 		getcwd(abs_exe_path, sizeof(abs_exe_path));
@@ -141,7 +142,7 @@ int32_t main(int32_t argc, char **argv)
 
 	if (cfg_get(cfg, "URI"))
 	{
-		const char *aux = cfg_get(cfg, "URI");
+		aux = cfg_get(cfg, "URI");
 		strcpy(args.imss_uri, aux);
 	}
 
@@ -160,16 +161,9 @@ int32_t main(int32_t argc, char **argv)
 	if (cfg_get(cfg, "STORAGE_SIZE"))
 		args.storage_size = atoi(cfg_get(cfg, "STORAGE_SIZE"));
 
-	
-
-	// if (cfg_get(cfg, "METADATA_HOST"))
-	// {
-	// 	const char *aux = cfg_get(cfg, "METADATA_HOST");
-	// 	strcpy(args.stat_host, aux);
-	// }
 	if (cfg_get(cfg, "METADA_PERSISTENCE_FILE"))
 	{
-		const char *aux = cfg_get(cfg, "METADA_PERSISTENCE_FILE");
+		aux = cfg_get(cfg, "METADA_PERSISTENCE_FILE");
 		strcpy(args.stat_logfile, aux);
 	}
 
@@ -181,45 +175,60 @@ int32_t main(int32_t argc, char **argv)
 
 	if (cfg_get(cfg, "DATA_HOSTFILE"))
 	{
-		const char *aux = cfg_get(cfg, "DATA_HOSTFILE");
+		aux = cfg_get(cfg, "DATA_HOSTFILE");
 		strcpy(args.deploy_hostfile, aux);
 	}
 
-	/***************************************************************/
-	/******************** PARSE INPUT ARGUMENTS ********************/
-	/***************************************************************/
-
-	if (getenv("IMSS_DEBUG") != NULL)
+	if (cfg_get(cfg, "DEBUG_LEVEL"))
 	{
-		if (strstr(getenv("IMSS_DEBUG"), "file"))
+		aux = cfg_get(cfg, "DEBUG_LEVEL");
+	}
+	else if (getenv("IMSS_DEBUG") != NULL)
+	{
+		aux = getenv("IMSS_DEBUG");
+	}
+	else
+	{
+		aux = NULL;
+	}
+
+	if (aux != NULL)
+	{
+		if (strstr(aux, "file"))
 		{
 			IMSS_DEBUG_FILE = 1;
 			IMSS_DEBUG_SCREEN = 0;
 			IMSS_DEBUG_LEVEL = SLOG_LIVE;
 		}
-		else if (strstr(getenv("IMSS_DEBUG"), "stdout"))
+		else if (strstr(aux, "stdout"))
 			IMSS_DEBUG_SCREEN = 1;
-		else if (strstr(getenv("IMSS_DEBUG"), "debug"))
+		else if (strstr(aux, "debug"))
 			IMSS_DEBUG_LEVEL = SLOG_DEBUG;
-		else if (strstr(getenv("IMSS_DEBUG"), "live"))
+		else if (strstr(aux, "live"))
 			IMSS_DEBUG_LEVEL = SLOG_LIVE;
-		else if (strstr(getenv("IMSS_DEBUG"), "all"))
+		else if (strstr(aux, "all"))
 		{
 			IMSS_DEBUG_FILE = 1;
 			IMSS_DEBUG_SCREEN = 1;
 			IMSS_DEBUG_LEVEL = SLOG_PANIC;
 		}
-		else if (strstr(getenv("IMSS_DEBUG"), "none")) {
+		else if (strstr(aux, "none"))
+		{
 			IMSS_DEBUG_FILE = 0;
 			IMSS_DEBUG_SCREEN = 0;
 			IMSS_DEBUG_LEVEL = SLOG_NONE;
 			unsetenv("IMSS_DEBUG");
-		} else
+		}
+		else
 		{
 			IMSS_DEBUG_FILE = 1;
-			IMSS_DEBUG_LEVEL = getLevel(getenv("IMSS_DEBUG"));
+			IMSS_DEBUG_LEVEL = getLevel(aux);
 		}
 	}
+
+	/***************************************************************/
+	/******************** PARSE INPUT ARGUMENTS ********************/
+	/***************************************************************/
 
 	if (getenv("IMSS_THREAD_POOL") != NULL)
 	{
@@ -228,12 +237,11 @@ int32_t main(int32_t argc, char **argv)
 
 	IMSS_THREAD_POOL = args.thread_pool;
 
-	// time_t t = time(NULL);
-	// struct tm tm = *localtime(&t);
 	char log_path[1000];
-	// sprintf(log_path, "./%c-server.%02d-%02d-%02d", args.type, tm.tm_hour, tm.tm_min, tm.tm_sec);
 	fprintf(stderr, "Server type=%c\n", args.type);
-	sprintf(log_path, "./%c-server", args.type);
+	struct tm tm = *localtime(&t);
+	sprintf(log_path, "./%c-server.%02d-%02d-%02d", args.type, tm.tm_hour, tm.tm_min, tm.tm_sec);
+	// sprintf(log_path, "./%c-server", args.type);
 	slog_init(log_path, IMSS_DEBUG_LEVEL, IMSS_DEBUG_FILE, IMSS_DEBUG_SCREEN, 1, 1, 1, args.id);
 	fprintf(stderr, "IMSS DEBUG FILE AT %s\n", log_path);
 	slog_info(",Time(msec), Comment, RetCode");
@@ -329,7 +337,7 @@ int32_t main(int32_t argc, char **argv)
 
 			uint32_t id = args.id;
 
-			fprintf(stderr,"Establishing a connection with %s:%ld\n", stat_add, stat_port);
+			fprintf(stderr, "Establishing a connection with %s:%ld\n", stat_add, stat_port);
 
 			oob_sock = connect_common(stat_add, stat_port, AF_INET);
 
