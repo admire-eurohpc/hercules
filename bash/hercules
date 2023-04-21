@@ -8,9 +8,33 @@ StopServers() {
     for node in "${hosts[@]}"
     do
         # (ssh $node "pkill hercules_server" ) &
-		ssh $node "pkill hercules_server"
+        ssh $node "pkill hercules_server"
     done
 }
+
+STATUS=$1
+if [[ $STATUS != "stop" && $STATUS != "start" ]]; then
+    echo "Incorrect argument"
+    exit 0
+fi
+
+## Verify if slurm is installed.
+SLURM=$([ -z "$SLURM_CLUSTER_NAME" ] && echo 0 || echo 1)
+echo "SLURM=$SLURM"
+if [[ $STATUS = "stop" ]];
+then
+    if [[ $SLURM -eq 0 ]]; then
+        ## Stops data and metadata servers.
+        readarray -t hosts < data_hostfile
+        echo "hosts=$hosts"
+        StopServers "data" $hosts
+        
+        readarray -t hosts < meta_hostfile
+        echo "hosts=$hosts"
+        StopServers "metadata" $hosts
+    fi
+    exit 0
+fi
 
 ## To know if a configuration file exists in the default paths.
 for FILE in {"/etc/hercules.conf","../conf/hercules.conf","./hercules.conf"}
@@ -22,10 +46,34 @@ do
     fi
 done
 
-## Read configuration file
+## Check if user pass arguments.
+while getopts :m:d:o:c: flag
+do
+    case "${flag}" in
+        m) META_SERVER_FILE=${OPTARG};;
+        d) DATA_SERVER_FILE=${OPTARG};;
+        o) OUTPUT_FILE=${OPTARG};;
+        c) CLIENT_FILE=${OPTARG};;
+    esac
+done
+
+echo "DATA_SERVER_FILE=$DATA_SERVER_FILE"
+echo "META_SERVER_FILE=$META_SERVER_FILE"
+echo "OUTPUT_FILE=$OUTPUT_FILE"
+echo "STATUS=$1"
+## If slurm is used, then we create a hostfile containing the allocated nodes.
+if [[ $SLURM -eq 1 ]]; then
+    srun -pernode hostname |sort > hostfile
+fi
+
+## Define values.
 H_PATH=$(dirname `pwd`)
 H_BUILD_PATH=$H_PATH/build
 H_BASH_PATH=$H_PATH/bash
+H_MPI_HOSTFILE_NAME="client_hostfile"
+H_POSIX_PRELOAD="LD_PRELOAD=$H_PATH/build/tools/libhercules_posix.so"
+
+## Read configuration file.
 META_PORT=$(cat $FILE | grep "METADATA_PORT" | awk '{print $3}')
 DATA_PORT=$(cat $FILE | grep "DATA_PORT" | awk '{print $3}')
 MALLEABILITY=$(cat $FILE | grep "MALLEABILITY" | awk '{print $3}')
@@ -36,58 +84,20 @@ NUM_CLIENTS_PER_NODE=$(cat $FILE | grep "NUM_CLIENTS_PER_NODE" | awk '{print $3}
 BLOCK_SIZE=$(cat $FILE | grep "BLOCK_SIZE" | awk '{print $3}')
 STORAGE_SIZE=$(cat $FILE | grep "STORAGE_SIZE" | awk '{print $3}')
 
-while getopts :m:d:o:c: flag
-do
-    case "${flag}" in
-        m) META_SERVER_FILE=${OPTARG};;
-        d) DATA_SERVER_FILE=${OPTARG};;
-        o) OUTPUT_FILE=${OPTARG};;
-        c) CLIENT_FILE=${OPTARG};;
-    esac
-done
-echo "DATA_SERVER_FILE=$DATA_SERVER_FILE"
-echo "META_SERVER_FILE=$META_SERVER_FILE"
-echo "OUTPUT_FILE=$OUTPUT_FILE"
-echo "STATUS=$1"
-STATUS=$1
-if [[ $STATUS != "stop" && $STATUS != "start" ]]; then
-    echo "Incorrect argument"
-    exit 0
-fi
-SLURM=$([ -z "$SLURM_CLUSTER_NAME" ] && echo 0 || echo 1)
-if [[ $STATUS = "stop" ]];
-then
-    #readarray -t hosts < <($([ -z "$DATA_SERVER_FILE" ] && echo $H_DATA_HOSTS || echo $DATA_SERVER_FILE))
-    
-    #echo $H_DATA_HOSTS
-    #echo $H_META_HOSTS
-    #if [ -z "$DATA_SERVER_FILE" ] && [ -z "$H_DATA_HOSTS" ] && [ -z "$H_META_HOSTS" ]; then
-    #	echo "Nodes to stop hercules' services has not been defined"
-    #	exit 0
-    #fi
-    readarray -t hosts < data_hostfile
-    echo "hosts=$hosts"
-    StopServers "data" $hosts
-    #readarray -t hosts < <($([ -z "$META_SERVER_FILE" ] && echo $H_META_HOSTS || echo $META_SERVER_FILE))
-    readarray -t hosts < meta_hostfile
-    echo "hosts=$hosts"
-    StopServers "metadata" $hosts
-    exit 0
-fi
-
-echo "SLURM=$SLURM"
-if [[ $SLURM -eq 1 ]]; then
-    srun -pernode hostname |sort > hostfile
-fi
-
+## To run the metadata servers.
 echo "# Hercules: Running metadata servers"
+## Checks if a metadata hostfile was not defined.
 if [[ -z $META_SERVER_FILE ]];
 then
+    ## Error if slurm is not being used and no metadata hostfile was defined.
     if [[ $SLURM -eq 0 ]]; then
         echo "Metadata server file not specified, please set one using -m <filename> flag"
         exit 0
     fi
     echo "Metadata server file not specified, getting information from slurm"
+    ## If a metadata file was not defined and we have slurm's nodes allocated,
+    ## then we create an array which contains the hostnames of the nodes that
+    ## will be used to deploy the determinate set of metadata servers.
     readarray -t meta_hosts < <(head -n $NUM_METADATA hostfile)
 else
     readarray -t meta_hosts < $META_SERVER_FILE
@@ -96,7 +106,6 @@ fi
 echo $meta_hosts > meta_hostfile
 
 export IMSS_DEBUG=none
-#rm *"2023-04-14.log"
 
 i=0
 for node in "${meta_hosts[@]}"
@@ -154,9 +163,52 @@ done
 #     srun -N 1 -n $NUM_CLIENTS_PER_NODE -w $node hostname >> client_hostfile
 # done
 
-# tail -n +$((NUM_METADATA+NUM_DATA+1)) hostfile | head -n $NUM_NODES_FOR_CLIENTS | sed "s/$/\tslots=$NUM_CLIENTS_PER_NODE/" > client_hostfile
-tail -n +$((NUM_METADATA+NUM_DATA+1)) hostfile | head -n $NUM_NODES_FOR_CLIENTS > client_hostfile
+# tail -n +$((NUM_METADATA+NUM_DATA+1)) hostfile | head -n $NUM_NODES_FOR_CLIENTS | sed "s/$/\tslots=12/" > client_hostfile
+tail -n +$((NUM_METADATA+NUM_DATA+1)) hostfile | head -n $NUM_NODES_FOR_CLIENTS > $H_MPI_HOSTFILE_NAME
+export H_NCPN=$NUM_CLIENTS_PER_NODE
 
 sleep 10
 
-# exit 50000
+## Search for the mpi distribution installed.
+for MPI_DS in {"openmpi","mpich","impi"}
+do
+    RET=$(which mpiexec | grep -c $MPI_DS)
+    if [ $RET -gt 0 ]; then
+        echo "MPI distribution found; $MPI_DS"
+        break;
+    fi
+done
+
+case $MPI_DS in
+    "openmpi")
+        echo "Option openmpi"
+        export H_MPI_ENV_DEF="-x"
+        export H_MPI_HOSTFILE_DEF="-hostfile"
+    ;;
+    "mpich")
+        echo "Option mpich"
+        export H_MPI_ENV_DEF="-env"
+        export H_MPI_HOSTFILE_DEF="-f"
+    ;;
+    "impi")
+        echo "Option impi"
+        export H_MPI_ENV_DEF="-env"
+        export H_MPI_HOSTFILE_DEF="-f"
+    ;;
+    *)
+        # Check!
+        echo "No option"
+        exit 0
+    ;;
+esac
+
+
+unset META_PORT
+unset DATA_PORT
+unset MALLEABILITY
+unset NUM_METADATA
+unset NUM_DATA
+unset NUM_NODES_FOR_CLIENTS
+unset NUM_CLIENTS_PER_NODE
+unset BLOCK_SIZE
+unset STORAGE_SIZE

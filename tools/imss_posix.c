@@ -698,9 +698,9 @@ int __xstat(int fd, const char *pathname, struct stat *buf)
 		ret = imss_getattr(new_path, buf);
 		if (ret < 0)
 		{
-			slog_error("[POSIX %d] Error en __xstat", rank);
 			errno = -ret;
 			ret = -1;
+			slog_error("[POSIX %d] Error __xstat: %s", rank, strerror(errno));
 		}
 		// t = clock() -t ;
 		// double time_taken = ((double)t) / CLOCKS_PER_SEC; // in seconds
