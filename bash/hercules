@@ -12,6 +12,11 @@ StopServers() {
     done
 }
 
+
+HelloWorld() {
+    echo "Hello in $hostname" 
+}
+
 STATUS=$1
 if [[ $STATUS != "stop" && $STATUS != "start" ]]; then
     echo "Incorrect argument"
@@ -100,26 +105,45 @@ then
     ## will be used to deploy the determinate set of metadata servers.
     readarray -t meta_hosts < <(head -n $NUM_METADATA hostfile)
 else
+    ## If a metadata file was defined we read it to create an array which 
+    ## contains the hostnames of the nodes that will be used to deploy the 
+    ## determinate set of metadata servers.
+    echo "Reading metadata server file."
     readarray -t meta_hosts < $META_SERVER_FILE
 fi
-#export H_META_HOSTS=$meta_hosts
+## To create the default metadata hostfile.
 echo $meta_hosts > meta_hostfile
 
-export IMSS_DEBUG=none
-
+## The array is read to deploy the services.
 i=0
 for node in "${meta_hosts[@]}"
 do
     echo "Running metadata server $i in $node..."
+    ## If slurm is not being used, we deploy the service by connecting
+    ## to the node via ssh.
     if [[ $SLURM -eq 0 ]]; then
         (ssh $node "cd $H_BASH_PATH && $H_BUILD_PATH/hercules_server m $i") &
     else
+    ## If slurm is being used, the service is deploy using srun.
         srun --exclusive --export=ALL -N 1 -n 1 -w $node $H_BUILD_PATH/hercules_server m $i 2> m_server.out &
     fi
     i=$(($i+1))
 done
-sleep 10
 
+## To wait until all the metadata servers are up.
+sleep 10
+# i=0
+# for node in "${meta_hosts[@]}"
+# do
+#     echo "Running comprobation $i in $node..."
+#     # (ssh $node "until [ -f /tmp/m-hercules-$1 ]; do echo "Waiting for metadata server in $node"; sleep 1; done") &
+#     # srun --exclusive --export=ALL -N 1 -n 1 -w $node HelloWorld &
+#     srun --exclusive --export=ALL -N 1 -n 1 -w $node until [ -f /tmp/m-hercules-$i ]; do echo "Waiting"; sleep 1; done &
+#     i=$(($i+1))
+# done
+
+
+## To run the data servers.
 echo "# Hercules: Running data servers"
 if [[ -z $DATA_SERVER_FILE ]];
 then
@@ -132,13 +156,11 @@ then
 else
     readarray -t data_hosts < $DATA_SERVER_FILE
 fi
-#export H_DATA_HOSTS=$data_hosts
+
 echo $data_hosts > data_hostfile
-#META_NODE=$(head -n 1 $META_SERVER_FILE)
 META_NODE=${meta_hosts[0]}
 NUM_METADATA=${#meta_hosts[@]}
 NUM_DATA=${#data_hosts[@]}
-#echo "H_NUM_DATA $NUM_DATA" > .hercules.env
 i=0
 for node in "${data_hosts[@]}"
 do
@@ -150,7 +172,6 @@ do
     fi
     i=$(($i+1))
 done
-
 
 #set -x
 # readarray -t client_hosts < <(tail -n +$((NUM_METADATA+NUM_DATA+1)) hostfile | head -n $NUM_NODES_FOR_CLIENTS)
@@ -185,13 +206,8 @@ case $MPI_DS in
         export H_MPI_ENV_DEF="-x"
         export H_MPI_HOSTFILE_DEF="-hostfile"
     ;;
-    "mpich")
-        echo "Option mpich"
-        export H_MPI_ENV_DEF="-env"
-        export H_MPI_HOSTFILE_DEF="-f"
-    ;;
-    "impi")
-        echo "Option impi"
+    "mpich" | "impi")
+        echo "Option mpich | impi"
         export H_MPI_ENV_DEF="-env"
         export H_MPI_HOSTFILE_DEF="-f"
     ;;

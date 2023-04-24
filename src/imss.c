@@ -227,11 +227,6 @@ int32_t stat_init(char *stat_hostfile,
 				  int32_t num_stat_servers,
 				  uint32_t rank)
 {
-	if (getenv("IMSS_DEBUG") != NULL)
-	{
-		IMSS_DEBUG = 1;
-	}
-
 	slog_debug("[IMSS] Calling stat_init.");
 
 	// Number of metadata servers to connect to.

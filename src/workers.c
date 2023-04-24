@@ -1476,8 +1476,9 @@ void *dispatcher(void *th_argv)
 		if (ret < 0)
 		{
 
-			perror("Server");
-			pthread_exit(NULL);
+			// perror("Dispatcher Server");
+			perror("ERRIMSS_DISPATCHER_DEPLOY");
+			exit(-1);
 		}
 		else if (ret == 0)
 		{

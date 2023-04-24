@@ -16,6 +16,7 @@
 #include "cfg_parse.h"
 #include <inttypes.h>
 #include <unistd.h>
+#include <disk.h>
 
 // Pointer to the tree's root node.
 extern GNode *tree_root;
@@ -505,7 +506,7 @@ int32_t main(int32_t argc, char **argv)
 			ret = init_worker(ucp_context, &ucp_worker_threads[i]);
 			if (ret != 0)
 			{
-				perror("ERRIMSS_WORKER_INIT");
+				return -1;
 			}
 
 			arguments[i].ucp_worker = ucp_worker_threads[i];
@@ -624,24 +625,29 @@ int32_t main(int32_t argc, char **argv)
 		if (!args.id)
 			printf("ServerID,'Deployment time (s)'\n");
 
-		printf("%d,%f\n", args.id, time_taken);
-		fflush(stdout);
+		char tmp_file_path[100];
+		sprintf(tmp_file_path, "/tmp/hercules.%d", getpid());
 
-		// fprintf(stderr, "Server init\n");
+		fprintf(stderr, "tmp_file_path=%s", tmp_file_path);
 
-		// setenv("IMSS_INIT_SERVER", "1", 1);
-		// char command[100];
-		// strcpy(command,"export IMSS_INIT_SERVER=1");
-		// int ret = system(command);
-		// fprintf(stderr,"system status=%d\n", ret);
-		// putenv("IMSS_INIT_SERVER=1");
-		// printf("IMSS_INIT_SERVER=1\n");
+		FILE *tmp_file = tmpfile(); // make the file pointer as temporary file.
+		tmp_file = fopen(tmp_file_path, "w");
+		if (tmp_file == NULL)
+		{
+			puts("Error in creating temporary file");
+			return 0;
+		}
+		fclose(tmp_file);
+
+		// printf("%d,%f\n", args.id, time_taken);
 		// fflush(stdout);
+		
 		if (pthread_join(threads[i], NULL) != 0)
 		{
 			perror("ERRIMSS_SRVTH_JOIN");
 			return -1;
 		}
+		unlink(tmp_file_path);
 	}
 
 	// Write the metadata structures retrieved by the metadata server threads.

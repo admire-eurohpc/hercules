@@ -3,6 +3,7 @@
 #SBATCH --time=00:60:00               # Time limit hrs:min:sec
 #SBATCH --output=logs/hercules/%j_imss.log   # Standard output and error log
 #SBATCH --mem=0
+#SBATCH --overcommit
 #SBATCH --oversubscribe
 
 ## Uncomment when working in Tucan.
@@ -10,7 +11,23 @@ IOR_PATH=/home/software/io500/bin
 module unload mpi
 module load mpi/mpich3/3.2.1
 
-## Uncomment when working in Italia cluster.
+## Uncomment when working in Unito.
+# IOR_PATH=/home/software/io500/bin
+# module unload mpi
+# module load mpi/mpich3/3.2.1
+# module load mpi/openmpi
+
+## Uncomment when working in MN4.
+# IOR_PATH=/apps/IOR/3.3.0/INTEL/IMPI/bin
+# module unload impi
+# module load gcc/9.2.0
+# module load java/8u131
+# module load openmpi/4.1.0
+# module load ucx/1.13.1
+# module load cmake/3.15.4
+# module unload openmpi
+# module load impi
+# module load ior
 
 source hercules start
 
