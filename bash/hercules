@@ -1,31 +1,50 @@
 #!/bin/bash
 #######################################################
 #######################################################
+## To stop all servers.
 StopServers() {
     NAME=$1
     hosts=$2
     echo "# Hercules: Stopping $NAME servers in $hosts"
     for node in "${hosts[@]}"
     do
-        # (ssh $node "pkill hercules_server" ) &
         ssh $node "pkill hercules_server"
     done
 }
 
-
-HelloWorld() {
-    echo "Hello in $hostname" 
+## To wait until all the servers are up.
+WaitForServers() {
+    i=0
+    SERVER_NAME=$1
+    shift
+    SERVER_TYPE=$1
+    shift
+    hosts=("$@")
+    echo "hostsnames=${hosts[@]}"
+    for node in "${hosts[@]}"
+    do
+        echo "[+] Running comprobation $i in $node..."
+        srun --exclusive --export=ALL -N 1 -n 1 -w $node check-servers.sh $SERVER_TYPE $i
+        ret=$?
+        if [ "$ret" -gt 0 ]; then
+            echo "[Error: $ret] It has not been possible to run a $SERVER_NAME server on $node, please verify the configuration file and logs."
+            exit 1
+        fi
+        echo "[OK] $SERVER_NAME server running in $node"
+        i=$(($i+1))
+    done
 }
 
 STATUS=$1
 if [[ $STATUS != "stop" && $STATUS != "start" ]]; then
     echo "Incorrect argument"
-    exit 0
+    exit 1
 fi
 
 ## Verify if slurm is installed.
 SLURM=$([ -z "$SLURM_CLUSTER_NAME" ] && echo 0 || echo 1)
 echo "SLURM=$SLURM"
+## Checks if the user wants to stop the services.
 if [[ $STATUS = "stop" ]];
 then
     if [[ $SLURM -eq 0 ]]; then
@@ -97,7 +116,7 @@ then
     ## Error if slurm is not being used and no metadata hostfile was defined.
     if [[ $SLURM -eq 0 ]]; then
         echo "Metadata server file not specified, please set one using -m <filename> flag"
-        exit 0
+        exit 1
     fi
     echo "Metadata server file not specified, getting information from slurm"
     ## If a metadata file was not defined and we have slurm's nodes allocated,
@@ -105,17 +124,19 @@ then
     ## will be used to deploy the determinate set of metadata servers.
     readarray -t meta_hosts < <(head -n $NUM_METADATA hostfile)
 else
-    ## If a metadata file was defined we read it to create an array which 
-    ## contains the hostnames of the nodes that will be used to deploy the 
+    ## If a metadata file was defined we read it to create an array which
+    ## contains the hostnames of the nodes that will be used to deploy the
     ## determinate set of metadata servers.
     echo "Reading metadata server file."
     readarray -t meta_hosts < $META_SERVER_FILE
 fi
 ## To create the default metadata hostfile.
-echo $meta_hosts > meta_hostfile
+# echo $meta_hosts > meta_hostfile
+printf "%s\n" "${meta_hosts[@]}" > meta_hostfile
 
-## The array is read to deploy the services.
+## The array is read to deploy the metadata servers.
 i=0
+start=`date +%s.%N`
 for node in "${meta_hosts[@]}"
 do
     echo "Running metadata server $i in $node..."
@@ -124,24 +145,17 @@ do
     if [[ $SLURM -eq 0 ]]; then
         (ssh $node "cd $H_BASH_PATH && $H_BUILD_PATH/hercules_server m $i") &
     else
-    ## If slurm is being used, the service is deploy using srun.
+        ## If slurm is being used, the service is deploy using srun.
         srun --exclusive --export=ALL -N 1 -n 1 -w $node $H_BUILD_PATH/hercules_server m $i 2> m_server.out &
     fi
     i=$(($i+1))
 done
 
-## To wait until all the metadata servers are up.
-sleep 10
-# i=0
-# for node in "${meta_hosts[@]}"
-# do
-#     echo "Running comprobation $i in $node..."
-#     # (ssh $node "until [ -f /tmp/m-hercules-$1 ]; do echo "Waiting for metadata server in $node"; sleep 1; done") &
-#     # srun --exclusive --export=ALL -N 1 -n 1 -w $node HelloWorld &
-#     srun --exclusive --export=ALL -N 1 -n 1 -w $node until [ -f /tmp/m-hercules-$i ]; do echo "Waiting"; sleep 1; done &
-#     i=$(($i+1))
-# done
-
+## Wait until all metadata servers are up.
+WaitForServers "metadata" "m" "${meta_hosts[@]}"
+end=`date +%s.%N`
+runtime=$( echo "$end - $start" | bc -l )
+echo "Metadata servers started in $runtime seconds, start=$start, end=$end"
 
 ## To run the data servers.
 echo "# Hercules: Running data servers"
@@ -149,19 +163,21 @@ if [[ -z $DATA_SERVER_FILE ]];
 then
     if [[ $SLURM -eq 0 ]]; then
         echo "Data server file not specified, please set one using -d <filename> flag"
-        exit 0
+        exit 1
     fi
     echo "Data server file not specified, getting information from slurm"
     readarray -t data_hosts < <(tail -n +$((NUM_METADATA+1)) hostfile | head -n $NUM_DATA)
+    echo "tail -n +$((NUM_METADATA+1)) hostfile | head -n $NUM_DATA"
 else
     readarray -t data_hosts < $DATA_SERVER_FILE
 fi
 
-echo $data_hosts > data_hostfile
-META_NODE=${meta_hosts[0]}
-NUM_METADATA=${#meta_hosts[@]}
-NUM_DATA=${#data_hosts[@]}
+printf "%s\n" "${data_hosts[@]}" > data_hostfile
+# META_NODE=${meta_hosts[0]}
+# NUM_METADATA=${#meta_hosts[@]}
+# NUM_DATA=${#data_hosts[@]}
 i=0
+start=`date +%s.%N`
 for node in "${data_hosts[@]}"
 do
     echo "Running data server $i in $node..."
@@ -173,6 +189,11 @@ do
     i=$(($i+1))
 done
 
+# Wait until all data servers are up.
+WaitForServers "data" "d" "${data_hosts[@]}"
+end=`date +%s.%N`
+runtime=$( echo "$end - $start" | bc -l )
+echo "Data servers started in $runtime seconds, start=$start, end=$end"
 #set -x
 # readarray -t client_hosts < <(tail -n +$((NUM_METADATA+NUM_DATA+1)) hostfile | head -n $NUM_NODES_FOR_CLIENTS)
 # echo $client_hosts
@@ -187,8 +208,6 @@ done
 # tail -n +$((NUM_METADATA+NUM_DATA+1)) hostfile | head -n $NUM_NODES_FOR_CLIENTS | sed "s/$/\tslots=12/" > client_hostfile
 tail -n +$((NUM_METADATA+NUM_DATA+1)) hostfile | head -n $NUM_NODES_FOR_CLIENTS > $H_MPI_HOSTFILE_NAME
 export H_NCPN=$NUM_CLIENTS_PER_NODE
-
-sleep 10
 
 ## Search for the mpi distribution installed.
 for MPI_DS in {"openmpi","mpich","impi"}
@@ -214,7 +233,7 @@ case $MPI_DS in
     *)
         # Check!
         echo "No option"
-        exit 0
+        exit 1
     ;;
 esac
 
@@ -228,3 +247,4 @@ unset NUM_NODES_FOR_CLIENTS
 unset NUM_CLIENTS_PER_NODE
 unset BLOCK_SIZE
 unset STORAGE_SIZE
+

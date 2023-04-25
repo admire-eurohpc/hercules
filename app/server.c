@@ -89,6 +89,8 @@ int32_t main(int32_t argc, char **argv)
 	uint32_t num_blocks;
 	struct arguments args;
 
+	char tmp_file_path[100];
+
 	t = clock();
 
 	cfg = cfg_init();
@@ -102,6 +104,17 @@ int32_t main(int32_t argc, char **argv)
 	char abs_exe_path2[PATH_MAX];
 	char *p;
 	char *aux;
+
+	args.type = argv[1][0];
+	args.id = atoi(argv[2]);
+
+	sprintf(tmp_file_path, "/tmp/%c-hercules-%d", args.type, args.id);
+
+	if (remove(tmp_file_path) == 0) {
+        fprintf(stderr, "The file %s is deleted successfully.\n", tmp_file_path);
+    } else {
+        fprintf(stderr, "The file %s is not deleted.\n", tmp_file_path);
+    }
 
 	if (!(p = strrchr(argv[0], '/')))
 		getcwd(abs_exe_path, sizeof(abs_exe_path));
@@ -137,9 +150,6 @@ int32_t main(int32_t argc, char **argv)
 			}
 		}
 	}
-
-	args.type = argv[1][0];
-	args.id = atoi(argv[2]);
 
 	if (cfg_get(cfg, "URI"))
 	{
@@ -625,10 +635,7 @@ int32_t main(int32_t argc, char **argv)
 		if (!args.id)
 			printf("ServerID,'Deployment time (s)'\n");
 
-		char tmp_file_path[100];
-		sprintf(tmp_file_path, "/tmp/hercules.%d", getpid());
-
-		fprintf(stderr, "tmp_file_path=%s", tmp_file_path);
+		fprintf(stderr, "tmp_file_path=%s\n", tmp_file_path);
 
 		FILE *tmp_file = tmpfile(); // make the file pointer as temporary file.
 		tmp_file = fopen(tmp_file_path, "w");

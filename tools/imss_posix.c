@@ -222,7 +222,7 @@ __attribute__((constructor)) void imss_posix_init(void)
 	// fill global variables with the enviroment variables value.
 	getConfiguration();
 
-	fprintf(stderr, "IMSS_DEBUG_LEVEL=%d\n", IMSS_DEBUG_LEVEL);
+	// fprintf(stderr, "IMSS_DEBUG_LEVEL=%d\n", IMSS_DEBUG_LEVEL);
 
 	IMSS_DATA_BSIZE = IMSS_BLKSIZE * KB;
 	// aux_refresh = (char *)malloc(IMSS_DATA_BSIZE); // global buffer to refresh metadata.
@@ -329,19 +329,19 @@ void getConfiguration()
 	/******************* PARSE FILE ARGUMENTS **********************/
 	/***************************************************************/
 
-	char path_save[PATH_MAX];
+	char conf_path[PATH_MAX];
 	char abs_exe_path[PATH_MAX];
-	char abs_exe_path2[PATH_MAX];
+	// char abs_exe_path2[PATH_MAX];
 	char *p;
 	char *aux;
 
 	// readlink("/proc/self/exe", abs_exe_path, PATH_MAX);
 
 	getcwd(abs_exe_path, sizeof(abs_exe_path));
-	strcpy(abs_exe_path2, abs_exe_path);
+	// strcpy(abs_exe_path2, abs_exe_path);
 
-	strcat(abs_exe_path, "/../conf/hercules.conf");
-	strcat(abs_exe_path2, "./hercules.conf");
+	// strcat(abs_exe_path, "/../conf/hercules.conf");
+	// strcat(abs_exe_path2, "./hercules.conf");
 
 	cfg = cfg_init();
 
@@ -350,19 +350,26 @@ void getConfiguration()
 		cfg_load(cfg, getenv("IMSS_CONF"));
 	}
 
-	fprintf(stderr, "[Client] Trying to load /etc/hercules.conf\n");
-	if (cfg_load(cfg, "/etc/hercules.conf") > 0)
+	// fprintf(stderr, "[Client] Trying to load /etc/hercules.conf\n");
+	strcpy(conf_path, "/etc/hercules.conf");
+	if (cfg_load(cfg, conf_path) > 0)
 	{
-		fprintf(stderr, "[Client] Trying to load %s\n", abs_exe_path);
-		if (cfg_load(cfg, abs_exe_path) > 0)
+		// strcpy(abs_exe_path, "/../conf/hercules.conf");
+		sprintf(conf_path, "%s/%s", abs_exe_path, "../conf/hercules.conf");
+		// fprintf(stderr, "[Client] Trying to load %s\n", abs_exe_path);
+		if (cfg_load(cfg, conf_path) > 0)
 		{
-			fprintf(stderr, "[Client] Trying to load %s\n", abs_exe_path2);
-			if (cfg_load(cfg, abs_exe_path2) > 0)
+			// strcpy(abs_exe_path, "./hercules.conf");
+			sprintf(conf_path, "%s", "./hercules.conf");
+			// fprintf(stderr, "[Client] Trying to load %s\n", abs_exe_path2);
+			if (cfg_load(cfg, conf_path) > 0)
 			{
 				cfg_load(cfg, "hercules.conf");
 			}
 		}
 	}
+
+	fprintf(stderr, "[Client] Configuration file loaded %s\n", conf_path);
 
 	if (cfg_get(cfg, "URI"))
 	{

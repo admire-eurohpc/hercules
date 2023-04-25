@@ -29,7 +29,16 @@ module load mpi/mpich3/3.2.1
 # module load impi
 # module load ior
 
+# start=`date +%s`
+start_=`date +%s.%N`
 source hercules start
+end_=`date +%s.%N`
+runtime=$( echo "$end_ - $start_" | bc -l )
+# runtime=$(time source hercules start)
+# end=`date +%s`
+# runtime=$((end-start))
+echo "Hercules started in $runtime seconds, start=$start_, end=$end_"
+
 
 echo "Running clients"
 COMMAND="$IOR_PATH/ior -t 1M -b 10M -s 1 -i 10 -o /mnt/imss/data.out"
