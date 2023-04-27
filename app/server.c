@@ -110,11 +110,13 @@ int32_t main(int32_t argc, char **argv)
 
 	sprintf(tmp_file_path, "/tmp/%c-hercules-%d", args.type, args.id);
 
-	if (remove(tmp_file_path) == 0) {
-        fprintf(stderr, "The file %s is deleted successfully.\n", tmp_file_path);
-    } else {
-        fprintf(stderr, "The file %s is not deleted.\n", tmp_file_path);
-    }
+	fprintf(stderr, "tmp_file_path=%s", tmp_file_path);
+
+	// if (remove(tmp_file_path) == 0) {
+	//     fprintf(stderr, "The file %s is deleted successfully.\n", tmp_file_path);
+	// } else {
+	//     fprintf(stderr, "The file %s is not deleted.\n", tmp_file_path);
+	// }
 
 	if (!(p = strrchr(argv[0], '/')))
 		getcwd(abs_exe_path, sizeof(abs_exe_path));
@@ -648,7 +650,7 @@ int32_t main(int32_t argc, char **argv)
 
 		// printf("%d,%f\n", args.id, time_taken);
 		// fflush(stdout);
-		
+
 		if (pthread_join(threads[i], NULL) != 0)
 		{
 			perror("ERRIMSS_SRVTH_JOIN");

@@ -20,14 +20,20 @@ WaitForServers() {
     SERVER_TYPE=$1
     shift
     hosts=("$@")
-    echo "hostsnames=${hosts[@]}"
+    echo "hostnames=$hosts"
     for node in "${hosts[@]}"
     do
-        echo "[+] Running comprobation $i in $node..."
-        srun --exclusive --export=ALL -N 1 -n 1 -w $node check-servers.sh $SERVER_TYPE $i
+        COMMAND="$H_BASH_PATH/check-servers.sh $SERVER_TYPE $i"
+        echo "[+] Running comprobation $i in $node... $COMMAND"
+        if [[ "$SLURM" -eq "0" ]]; then
+            ssh $node "$COMMAND"
+        else
+            srun --exclusive --export=ALL -N 1 -n 1 -w $node $COMMAND
+        fi
         ret=$?
         if [ "$ret" -gt 0 ]; then
             echo "[Error: $ret] It has not been possible to run a $SERVER_NAME server on $node, please verify the configuration file and logs."
+            StopServers $SERVER_NAME $hosts
             exit 1
         fi
         echo "[OK] $SERVER_NAME server running in $node"
@@ -36,18 +42,40 @@ WaitForServers() {
 }
 
 STATUS=$1
+shift
 if [[ $STATUS != "stop" && $STATUS != "start" ]]; then
     echo "Incorrect argument"
     exit 1
 fi
 
+## Check if user pass arguments.
+while getopts :m:d:o:c:s: flag
+do
+    echo "Entra en getopts"
+    case "${flag}" in
+        m) META_SERVER_FILE=${OPTARG};;
+        d) DATA_SERVER_FILE=${OPTARG};;
+        o) OUTPUT_FILE=${OPTARG};;
+        c) CLIENT_FILE=${OPTARG};;
+        s) SLURM=${OPTARG};;
+    esac
+done
+
 ## Verify if slurm is installed.
-SLURM=$([ -z "$SLURM_CLUSTER_NAME" ] && echo 0 || echo 1)
+if [ -z "$SLURM" ]; then
+    SLURM=$([ -z "$SLURM_CLUSTER_NAME" ] && echo 0 || echo 1)
+fi
+
+echo "DATA_SERVER_FILE=$DATA_SERVER_FILE"
+echo "META_SERVER_FILE=$META_SERVER_FILE"
+echo "OUTPUT_FILE=$OUTPUT_FILE"
 echo "SLURM=$SLURM"
+echo "STATUS=$STATUS"
+
 ## Checks if the user wants to stop the services.
 if [[ $STATUS = "stop" ]];
 then
-    if [[ $SLURM -eq 0 ]]; then
+    if [[ "$SLURM" -eq "0" ]]; then
         ## Stops data and metadata servers.
         readarray -t hosts < data_hostfile
         echo "hosts=$hosts"
@@ -70,21 +98,6 @@ do
     fi
 done
 
-## Check if user pass arguments.
-while getopts :m:d:o:c: flag
-do
-    case "${flag}" in
-        m) META_SERVER_FILE=${OPTARG};;
-        d) DATA_SERVER_FILE=${OPTARG};;
-        o) OUTPUT_FILE=${OPTARG};;
-        c) CLIENT_FILE=${OPTARG};;
-    esac
-done
-
-echo "DATA_SERVER_FILE=$DATA_SERVER_FILE"
-echo "META_SERVER_FILE=$META_SERVER_FILE"
-echo "OUTPUT_FILE=$OUTPUT_FILE"
-echo "STATUS=$1"
 ## If slurm is used, then we create a hostfile containing the allocated nodes.
 if [[ $SLURM -eq 1 ]]; then
     srun -pernode hostname |sort > hostfile
@@ -109,16 +122,16 @@ BLOCK_SIZE=$(cat $FILE | grep "BLOCK_SIZE" | awk '{print $3}')
 STORAGE_SIZE=$(cat $FILE | grep "STORAGE_SIZE" | awk '{print $3}')
 
 ## To run the metadata servers.
-echo "# Hercules: Running metadata servers"
+echo "[+] Hercules: Running metadata servers"
 ## Checks if a metadata hostfile was not defined.
 if [[ -z $META_SERVER_FILE ]];
 then
     ## Error if slurm is not being used and no metadata hostfile was defined.
-    if [[ $SLURM -eq 0 ]]; then
-        echo "Metadata server file not specified, please set one using -m <filename> flag"
+    if [[ "$SLURM" -eq "0" ]]; then
+        echo "[Error] Metadata server file not specified, please set one using -m <filename> flag"
         exit 1
     fi
-    echo "Metadata server file not specified, getting information from slurm"
+    echo "[+] Metadata server file not specified, getting information from slurm"
     ## If a metadata file was not defined and we have slurm's nodes allocated,
     ## then we create an array which contains the hostnames of the nodes that
     ## will be used to deploy the determinate set of metadata servers.
@@ -127,11 +140,10 @@ else
     ## If a metadata file was defined we read it to create an array which
     ## contains the hostnames of the nodes that will be used to deploy the
     ## determinate set of metadata servers.
-    echo "Reading metadata server file."
+    echo "[+] Reading metadata server file."
     readarray -t meta_hosts < $META_SERVER_FILE
 fi
 ## To create the default metadata hostfile.
-# echo $meta_hosts > meta_hostfile
 printf "%s\n" "${meta_hosts[@]}" > meta_hostfile
 
 ## The array is read to deploy the metadata servers.
@@ -139,14 +151,15 @@ i=0
 start=`date +%s.%N`
 for node in "${meta_hosts[@]}"
 do
-    echo "Running metadata server $i in $node..."
+    COMMAND="rm /tmp/m-hercules-$i; cd $H_BASH_PATH && $H_BUILD_PATH/hercules_server m $i 2> m_server.out"
+    echo "[+] Running metadata server $i in $node... $COMMAND"
     ## If slurm is not being used, we deploy the service by connecting
     ## to the node via ssh.
-    if [[ $SLURM -eq 0 ]]; then
-        (ssh $node "cd $H_BASH_PATH && $H_BUILD_PATH/hercules_server m $i") &
+    if [[ "$SLURM" -eq "0" ]]; then
+        (ssh $node "$COMMAND") &
     else
         ## If slurm is being used, the service is deploy using srun.
-        srun --exclusive --export=ALL -N 1 -n 1 -w $node $H_BUILD_PATH/hercules_server m $i 2> m_server.out &
+        srun --exclusive --export=ALL -N 1 -n 1 -w $node $COMMAND &
     fi
     i=$(($i+1))
 done
@@ -155,57 +168,52 @@ done
 WaitForServers "metadata" "m" "${meta_hosts[@]}"
 end=`date +%s.%N`
 runtime=$( echo "$end - $start" | bc -l )
-echo "Metadata servers started in $runtime seconds, start=$start, end=$end"
+echo "[-] Metadata servers started in $runtime seconds, start=$start, end=$end"
 
 ## To run the data servers.
-echo "# Hercules: Running data servers"
+echo "[+] Hercules: Running data servers"
 if [[ -z $DATA_SERVER_FILE ]];
 then
-    if [[ $SLURM -eq 0 ]]; then
-        echo "Data server file not specified, please set one using -d <filename> flag"
+    ## Error if slurm is not being used and no data hostfile was defined.
+    if [[ "$SLURM" -eq "0" ]]; then
+        echo "[Error] Data server file not specified, please set one using -d <filename> flag"
         exit 1
     fi
-    echo "Data server file not specified, getting information from slurm"
+    ## If a data file was not defined and we have slurm's nodes allocated,
+    ## then we create an array which contains the hostnames of the nodes that
+    ## will be used to deploy the determinate set of data servers.
+    echo "[+] Data server file not specified, getting information from slurm"
     readarray -t data_hosts < <(tail -n +$((NUM_METADATA+1)) hostfile | head -n $NUM_DATA)
-    echo "tail -n +$((NUM_METADATA+1)) hostfile | head -n $NUM_DATA"
 else
+    ## If a data file was defined we read it to create an array which
+    ## contains the hostnames of the nodes that will be used to deploy the
+    ## determinate set of data servers.
+    echo "[+] Reading data server file."
     readarray -t data_hosts < $DATA_SERVER_FILE
 fi
 
+## To create the default data hostfile.
 printf "%s\n" "${data_hosts[@]}" > data_hostfile
-# META_NODE=${meta_hosts[0]}
-# NUM_METADATA=${#meta_hosts[@]}
-# NUM_DATA=${#data_hosts[@]}
 i=0
 start=`date +%s.%N`
 for node in "${data_hosts[@]}"
 do
-    echo "Running data server $i in $node..."
-    if [[ $SLURM -eq 0 ]]; then
-        (ssh $node "cd $H_BASH_PATH && $H_BUILD_PATH/hercules_server d $i ${meta_hosts[0]}") &
+    COMMAND="rm /tmp/d-hercules-$i; cd $H_BASH_PATH && $H_BUILD_PATH/hercules_server d $i ${meta_hosts[0]} 2> d_server.out"
+    echo "[+] Running data server $i in $node... $COMMAND"
+    if [[ "$SLURM" -eq "0" ]]; then
+        (ssh $node "$COMMAND") &
     else
-        srun --exclusive --export=ALL -N 1 -n 1 -w $node $H_BUILD_PATH/hercules_server d $i ${meta_hosts[0]} 2> d_server.out &
+        srun --exclusive --export=ALL -N 1 -n 1 -w $node $COMMAND &
     fi
     i=$(($i+1))
 done
 
-# Wait until all data servers are up.
+## Wait until all data servers are up.
 WaitForServers "data" "d" "${data_hosts[@]}"
 end=`date +%s.%N`
 runtime=$( echo "$end - $start" | bc -l )
-echo "Data servers started in $runtime seconds, start=$start, end=$end"
-#set -x
-# readarray -t client_hosts < <(tail -n +$((NUM_METADATA+NUM_DATA+1)) hostfile | head -n $NUM_NODES_FOR_CLIENTS)
-# echo $client_hosts
-# rm client_hostfile
-# for node in "${client_hosts[@]}"
-# do
-#     echo "Cheking $node information..."
-#     # srun -N 1 -n 1 -w $node echo "Threads/core: $(nproc --all)" | awk '{print $2}' &
-#     srun -N 1 -n $NUM_CLIENTS_PER_NODE -w $node hostname >> client_hostfile
-# done
+echo "[-] Data servers started in $runtime seconds, start=$start, end=$end"
 
-# tail -n +$((NUM_METADATA+NUM_DATA+1)) hostfile | head -n $NUM_NODES_FOR_CLIENTS | sed "s/$/\tslots=12/" > client_hostfile
 tail -n +$((NUM_METADATA+NUM_DATA+1)) hostfile | head -n $NUM_NODES_FOR_CLIENTS > $H_MPI_HOSTFILE_NAME
 export H_NCPN=$NUM_CLIENTS_PER_NODE
 
@@ -214,25 +222,25 @@ for MPI_DS in {"openmpi","mpich","impi"}
 do
     RET=$(which mpiexec | grep -c $MPI_DS)
     if [ $RET -gt 0 ]; then
-        echo "MPI distribution found; $MPI_DS"
+        echo "[+] MPI distribution found; $MPI_DS"
         break;
     fi
 done
 
 case $MPI_DS in
     "openmpi")
-        echo "Option openmpi"
+        echo "[+] Option openmpi"
         export H_MPI_ENV_DEF="-x"
         export H_MPI_HOSTFILE_DEF="-hostfile"
     ;;
     "mpich" | "impi")
-        echo "Option mpich | impi"
+        echo "[+] Option mpich | impi"
         export H_MPI_ENV_DEF="-env"
         export H_MPI_HOSTFILE_DEF="-f"
     ;;
     *)
         # Check!
-        echo "No option"
+        echo "[Error] No option"
         exit 1
     ;;
 esac
