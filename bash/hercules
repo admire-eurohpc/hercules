@@ -55,20 +55,19 @@ do
     case "${flag}" in
         m) META_SERVER_FILE=${OPTARG};;
         d) DATA_SERVER_FILE=${OPTARG};;
-        o) OUTPUT_FILE=${OPTARG};;
         c) CLIENT_FILE=${OPTARG};;
+        # Indicates whether slurm should be used when it is installed.
         s) SLURM=${OPTARG};;
     esac
 done
 
-## Verify if slurm is installed.
 if [ -z "$SLURM" ]; then
+    ## Verify if slurm is installed.
     SLURM=$([ -z "$SLURM_CLUSTER_NAME" ] && echo 0 || echo 1)
 fi
 
 echo "DATA_SERVER_FILE=$DATA_SERVER_FILE"
 echo "META_SERVER_FILE=$META_SERVER_FILE"
-echo "OUTPUT_FILE=$OUTPUT_FILE"
 echo "SLURM=$SLURM"
 echo "STATUS=$STATUS"
 
@@ -148,16 +147,24 @@ printf "%s\n" "${meta_hosts[@]}" > meta_hostfile
 
 ## The array is read to deploy the metadata servers.
 i=0
+# set -x
 start=`date +%s.%N`
 for node in "${meta_hosts[@]}"
 do
-    COMMAND="rm /tmp/m-hercules-$i; cd $H_BASH_PATH && $H_BUILD_PATH/hercules_server m $i 2> m_server.out"
-    echo "[+] Running metadata server $i in $node... $COMMAND"
+    # COMMAND="{ rm /tmp/m-hercules-$i; }; { cd $H_BASH_PATH && $H_BUILD_PATH/hercules_server m $i 2> m_server.out; };"
+    # COMMAND="rm /tmp/m-hercules-$i"
+    
+    
+    echo "[+] Running metadata server $i in $node..."
+    RM="rm /tmp/m-hercules-$i"
+    COMMAND="$H_BUILD_PATH/hercules_server m $i"
     ## If slurm is not being used, we deploy the service by connecting
     ## to the node via ssh.
     if [[ "$SLURM" -eq "0" ]]; then
-        (ssh $node "$COMMAND") &
+        (ssh $node "$RM; cd $H_BASH_PATH && $COMMAND") &
     else
+        ## Deletes the file that we use to make sure that the server has started.
+        srun --exclusive --export=ALL -N 1 -n 1 -w $node $RM
         ## If slurm is being used, the service is deploy using srun.
         srun --exclusive --export=ALL -N 1 -n 1 -w $node $COMMAND &
     fi
@@ -198,11 +205,17 @@ i=0
 start=`date +%s.%N`
 for node in "${data_hosts[@]}"
 do
-    COMMAND="rm /tmp/d-hercules-$i; cd $H_BASH_PATH && $H_BUILD_PATH/hercules_server d $i ${meta_hosts[0]} 2> d_server.out"
-    echo "[+] Running data server $i in $node... $COMMAND"
+    
+    
+    echo "[+] Running data server $i in $node..-"
+    RM="rm /tmp/d-hercules-$i"
+    COMMAND="$H_BUILD_PATH/hercules_server d $i ${meta_hosts[0]}"
     if [[ "$SLURM" -eq "0" ]]; then
-        (ssh $node "$COMMAND") &
+        (ssh $node "$RM; cd $H_BASH_PATH &&  $COMMAND") &
     else
+        ## Deletes the file that we use to make sure that the server has started.
+        srun --exclusive --export=ALL -N 1 -n 1 -w $node $RM
+        ## If slurm is being used, the service is deploy using srun.
         srun --exclusive --export=ALL -N 1 -n 1 -w $node $COMMAND &
     fi
     i=$(($i+1))

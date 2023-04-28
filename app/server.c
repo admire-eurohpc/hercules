@@ -110,7 +110,7 @@ int32_t main(int32_t argc, char **argv)
 
 	sprintf(tmp_file_path, "/tmp/%c-hercules-%d", args.type, args.id);
 
-	fprintf(stderr, "tmp_file_path=%s", tmp_file_path);
+	fprintf(stderr, "tmp_file_path=%s\n", tmp_file_path);
 
 	// if (remove(tmp_file_path) == 0) {
 	//     fprintf(stderr, "The file %s is deleted successfully.\n", tmp_file_path);

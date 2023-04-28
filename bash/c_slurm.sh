@@ -5,6 +5,7 @@
 #SBATCH --mem=0
 #SBATCH --overcommit
 #SBATCH --oversubscribe
+#SBATCH --exclusive=user
 
 ## Uncomment when working in Tucan.
 IOR_PATH=/home/software/io500/bin
@@ -39,6 +40,8 @@ runtime=$( echo "$end_ - $start_" | bc -l )
 # runtime=$((end-start))
 echo "Hercules started in $runtime seconds, start=$start_, end=$end_"
 
+# exit 0
+
 
 echo "Running clients"
 COMMAND="$IOR_PATH/ior -t 1M -b 10M -s 1 -i 10 -o /mnt/imss/data.out"
@@ -47,7 +50,7 @@ COMMAND="$IOR_PATH/ior -t 1M -b 10M -s 1 -i 10 -o /mnt/imss/data.out"
 #COMMAND="echo 'hello' > /tmp/hello"
 #COMMAND="free -h
 
-set -x
+# set -x
 mpiexec $H_MPI_HOSTFILE_DEF ./client_hostfile -np $H_NCPN \
 	$H_MPI_ENV_DEF $H_POSIX_PRELOAD \
 	$COMMAND
