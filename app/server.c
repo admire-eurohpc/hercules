@@ -16,7 +16,7 @@
 #include "cfg_parse.h"
 #include <inttypes.h>
 #include <unistd.h>
-#include <disk.h>
+//#include <disk.h>
 
 // Pointer to the tree's root node.
 extern GNode *tree_root;
