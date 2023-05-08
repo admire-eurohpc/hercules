@@ -1491,7 +1491,7 @@ void *dispatcher(void *th_argv)
 				char mode[MODE_SIZE];
 
 				slog_debug("[DISPATCHER] Waiting for connection requests.");
-				fprintf(stderr, "[DISPATCHER] Waiting for connection requests.\n");
+				// fprintf(stderr, "[DISPATCHER] Waiting for connection requests.\n");
 				sockfd = accept(listenfd, NULL, NULL);
 				ret = recv(sockfd, req, REQUEST_SIZE, MSG_WAITALL);
 

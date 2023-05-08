@@ -328,43 +328,41 @@ void getConfiguration()
 	/***************************************************************/
 	/******************* PARSE FILE ARGUMENTS **********************/
 	/***************************************************************/
+	int ret = 0;
 
-	char conf_path[PATH_MAX];
-	char abs_exe_path[PATH_MAX];
-	// char abs_exe_path2[PATH_MAX];
-	char *p;
+	char *conf_path;
+	char abs_exe_path[1024];
 	char *aux;
 
-	// readlink("/proc/self/exe", abs_exe_path, PATH_MAX);
-
-	getcwd(abs_exe_path, sizeof(abs_exe_path));
-	// strcpy(abs_exe_path2, abs_exe_path);
-
-	// strcat(abs_exe_path, "/../conf/hercules.conf");
-	// strcat(abs_exe_path2, "./hercules.conf");
-
 	cfg = cfg_init();
-
-	if (getenv("IMSS_CONF") != NULL)
+	conf_path = getenv("IMSS_CONF");
+	if (conf_path != NULL)
 	{
-		cfg_load(cfg, getenv("IMSS_CONF"));
+		ret = cfg_load(cfg, conf_path);
+	}
+	else
+	{
+		ret = 1;
 	}
 
-	// fprintf(stderr, "[Client] Trying to load /etc/hercules.conf\n");
-	strcpy(conf_path, "/etc/hercules.conf");
-	if (cfg_load(cfg, conf_path) > 0)
+	if (ret)
 	{
-		// strcpy(abs_exe_path, "/../conf/hercules.conf");
-		sprintf(conf_path, "%s/%s", abs_exe_path, "../conf/hercules.conf");
-		// fprintf(stderr, "[Client] Trying to load %s\n", abs_exe_path);
+		conf_path = (char *)malloc(sizeof(char) * PATH_MAX);
+		strcpy(conf_path, "/etc/hercules.conf");
 		if (cfg_load(cfg, conf_path) > 0)
 		{
-			// strcpy(abs_exe_path, "./hercules.conf");
-			sprintf(conf_path, "%s", "./hercules.conf");
-			// fprintf(stderr, "[Client] Trying to load %s\n", abs_exe_path2);
+			if(getcwd(abs_exe_path, sizeof(abs_exe_path)) != NULL ) {
+				sprintf(conf_path, "%s/%s", abs_exe_path, "../conf/hercules.conf");
+			} else {
+				sprintf(conf_path, "%s", "./hercules.conf");
+			}
 			if (cfg_load(cfg, conf_path) > 0)
 			{
-				cfg_load(cfg, "hercules.conf");
+				sprintf(conf_path, "%s", "./hercules.conf");
+				if (cfg_load(cfg, conf_path) > 0)
+				{
+					cfg_load(cfg, "hercules.conf");
+				}
 			}
 		}
 	}

@@ -20,7 +20,7 @@ WaitForServers() {
     SERVER_TYPE=$1
     shift
     hosts=("$@")
-    echo "hostnames=$hosts"
+    echo "hostnames=${hosts[@]}"
     for node in "${hosts[@]}"
     do
         COMMAND="$H_BASH_PATH/check-servers.sh $SERVER_TYPE $i"
@@ -36,8 +36,8 @@ WaitForServers() {
             StopServers $SERVER_NAME $hosts
             exit 1
         fi
-        echo "[OK] $SERVER_NAME server running in $node"
-        i=$(($i+1))
+        echo "[OK] $SERVER_NAME $i server running in $node"
+        i=$((i+1))
     done
 }
 
@@ -49,7 +49,7 @@ if [[ $STATUS != "stop" && $STATUS != "start" ]]; then
 fi
 
 ## Check if user pass arguments.
-while getopts :m:d:o:c:s: flag
+while getopts :m:d:o:c:s:f: flag
 do
     echo "Entra en getopts"
     case "${flag}" in
@@ -58,6 +58,8 @@ do
         c) CLIENT_FILE=${OPTARG};;
         # Indicates whether slurm should be used when it is installed.
         s) SLURM=${OPTARG};;
+        # Configuration file path.
+        f) FILE=${OPTARG};;
     esac
 done
 
@@ -70,6 +72,7 @@ echo "DATA_SERVER_FILE=$DATA_SERVER_FILE"
 echo "META_SERVER_FILE=$META_SERVER_FILE"
 echo "SLURM=$SLURM"
 echo "STATUS=$STATUS"
+echo "FILE=$FILE"
 
 ## Checks if the user wants to stop the services.
 if [[ $STATUS = "stop" ]];
@@ -87,15 +90,26 @@ then
     exit 0
 fi
 
-## To know if a configuration file exists in the default paths.
-for FILE in {"/etc/hercules.conf","../conf/hercules.conf","./hercules.conf"}
-do
-    echo $FILE
-    if [ -f "$FILE" ]; then
-        echo "Reading configuration file at $FILE"
-        break
-    fi
-done
+## If a configuration file was not provided.
+if [ -z "$FILE" ]; then
+    ## To know if a configuration file exists in the default paths.
+    for FILE in {"/etc/hercules.conf","../conf/hercules.conf","./hercules.conf"}
+    do
+        echo $FILE
+        if [ -f "$FILE" ]; then
+            break
+        fi
+    done
+fi
+
+if [ -z "$FILE" ]; then
+    echo "No configuration file was provided. Please create one and specify it using -f <file_path>"
+    exit 1
+fi
+
+echo "Reading configuration file at $FILE"
+export HERCULES_CONF="$FILE"
+
 
 ## If slurm is used, then we create a hostfile containing the allocated nodes.
 if [[ $SLURM -eq 1 ]]; then
@@ -229,6 +243,7 @@ echo "[-] Data servers started in $runtime seconds, start=$start, end=$end"
 
 tail -n +$((NUM_METADATA+NUM_DATA+1)) hostfile | head -n $NUM_NODES_FOR_CLIENTS > $H_MPI_HOSTFILE_NAME
 export H_NCPN=$NUM_CLIENTS_PER_NODE
+export H_NNFC=$NUM_NODES_FOR_CLIENTS
 
 ## Search for the mpi distribution installed.
 for MPI_DS in {"openmpi","mpich","impi"}
@@ -245,11 +260,14 @@ case $MPI_DS in
         echo "[+] Option openmpi"
         export H_MPI_ENV_DEF="-x"
         export H_MPI_HOSTFILE_DEF="-hostfile"
+        export H_MPI_PPN="--npernode"
+        #export H_MPI_NNFC=""
     ;;
     "mpich" | "impi")
         echo "[+] Option mpich | impi"
         export H_MPI_ENV_DEF="-env"
         export H_MPI_HOSTFILE_DEF="-f"
+        export H_MPI_PPN="-ppn"
     ;;
     *)
         # Check!

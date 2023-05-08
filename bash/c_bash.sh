@@ -1,15 +1,20 @@
 #!/bin/bash
 
 ## Uncomment when working in Tucan.
-IOR_PATH=/home/software/io500/bin
-module unload mpi
-module load mpi/mpich3/3.2.1
-
-## Uncomment when working in Unito.
 # IOR_PATH=/home/software/io500/bin
 # module unload mpi
 # module load mpi/mpich3/3.2.1
-# module load mpi/openmpi
+
+## Uncomment when working in Unito.
+IOR_PATH=/beegfs/home/javier.garciablas/io500/bin
+ spack load \
+    cmake@3.24.3%gcc@9.4.0 arch=linux-ubuntu20.04-broadwell \
+    glib@2.74.1%gcc@9.4.0 arch=linux-ubuntu20.04-broadwell \
+    ucx@1.14.0%gcc@9.4.0 arch=linux-ubuntu20.04-broadwell \
+    pcre@8.45%gcc@9.4.0 arch=linux-ubuntu20.04-broadwell \
+    jemalloc
+ spack load openmpi@4.1.5%gcc@9.4.0 arch=linux-ubuntu20.04-broadwell
+
 
 source ./hercules start -m meta_hostfile -d data_hostfile -o /mnt/imss/data.out -s 0
 

@@ -1,11 +1,17 @@
 #!/bin/bash
-#SBATCH --job-name=imss    # Job name
-#SBATCH --time=00:60:00               # Time limit hrs:min:sec
-#SBATCH --output=logs/hercules/%j_imss.log   # Standard output and error log
+#SBATCH --job-name=hercules    # Job name
+#SBATCH --time=00:30:00               # Time limit hrs:min:sec
+#SBATCH --output=logs/hercules/%j_hercules.log   # Standard output and error log
 #SBATCH --mem=0
 #SBATCH --overcommit
 #SBATCH --oversubscribe
-#SBATCH --exclusive=user
+##SBATCH --nodelist=broadwell-[038-043]
+##SBATCH --nodelist=broadwell-[000-004]
+#SBATCH --exclude=broadwell-[036-067]
+###SBATCH --exclusive=user
+
+
+CONFIG_PATH=$1
 
 ## Uncomment when working in Tucan.
 # IOR_PATH=/home/software/io500/bin
@@ -19,8 +25,9 @@
     glib@2.74.1%gcc@9.4.0 arch=linux-ubuntu20.04-broadwell \
     ucx@1.14.0%gcc@9.4.0 arch=linux-ubuntu20.04-broadwell \
     pcre@8.45%gcc@9.4.0 arch=linux-ubuntu20.04-broadwell \
-    jemalloc
- spack load openmpi@4.1.5%gcc@9.4.0 arch=linux-ubuntu20.04-broadwell
+    openmpi@4.1.5%gcc@9.4.0 arch=linux-ubuntu20.04-broadwell \
+    jemalloc 
+#  spack load openmpi@4.1.5%gcc@9.4.0 arch=linux-ubuntu20.04-broadwell
 
 ## Uncomment when working in MN4.
 # IOR_PATH=/apps/IOR/3.3.0/INTEL/IMPI/bin
@@ -38,7 +45,12 @@
 
 # start=`date +%s`
 start_=`date +%s.%N`
-source hercules start
+if [ -z "$CONFIG_PATH" ]; then
+   echo "here"
+   source hercules start
+else
+   source hercules start -f "$CONFIG_PATH"
+fi
 end_=`date +%s.%N`
 runtime=$( echo "$end_ - $start_" | bc -l )
 # runtime=$(time source hercules start)
@@ -50,20 +62,22 @@ echo "Hercules started in $runtime seconds, start=$start_, end=$end_"
 
 
 echo "Running clients"
-COMMAND="$IOR_PATH/ior -t 1M -b 10M -s 1 -i 5 -o /mnt/imss/data.out"
+COMMAND="$IOR_PATH/ior -t 1M -b 10M -s 1 -i 5 -F -o /mnt/imss/data.out"
 # COMMAND="./exe_WRITE-AND-READ-TEST-BIFURCADO /mnt/imss/data.out 10240"
 # COMMAND="hostname"
 #COMMAND="echo 'hello' > /tmp/hello"
 #COMMAND="free -h
 
 # set -x
-mpiexec $H_MPI_HOSTFILE_DEF ./client_hostfile -np $H_NCPN \
+echo "mpiexec $H_MPI_HOSTFILE_DEF ./client_hostfile -n $H_NNFC $H_MPI_PPN $H_NCPN \
 	$H_MPI_ENV_DEF $H_POSIX_PRELOAD \
+   	$H_MPI_ENV_DEF IMSS_CONF=$CONFIG_PATH \
+	$COMMAND"
+
+mpiexec $H_MPI_HOSTFILE_DEF ./client_hostfile -n $H_NNFC $H_MPI_PPN $H_NCPN \
+	$H_MPI_ENV_DEF $H_POSIX_PRELOAD \
+   	$H_MPI_ENV_DEF IMSS_CONF=$CONFIG_PATH \
 	$COMMAND
 
-# mpiexec --hostfile ./client_hostfile -npernode $H_NUM_CLIENT \
-# 	-x LD_PRELOAD=$HERCULES_PATH/build/tools/libhercules_posix.so \
-# 	-x IMSS_DEBUG=none \
-#         $COMMAND
 
 ./hercules stop

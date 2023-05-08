@@ -206,3 +206,6 @@ On each data node (node, node4):
 </details>
 
 
+
+lustre path in Broadwell
+/lustre/scratch/javier.garciablas

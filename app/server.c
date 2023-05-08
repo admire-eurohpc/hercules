@@ -16,7 +16,7 @@
 #include "cfg_parse.h"
 #include <inttypes.h>
 #include <unistd.h>
-//#include <disk.h>
+// #include <disk.h>
 
 // Pointer to the tree's root node.
 extern GNode *tree_root;
@@ -80,7 +80,7 @@ int32_t main(int32_t argc, char **argv)
 	ucp_ep_h client_ep;
 
 	ucp_am_handler_param_t param;
-	int ret;
+	int ret = 0;
 	ucp_config_t *config;
 	ucp_worker_address_attr_t attr;
 
@@ -91,66 +91,55 @@ int32_t main(int32_t argc, char **argv)
 
 	char tmp_file_path[100];
 
-	t = clock();
+	char *conf_path;
+	char abs_exe_path[1024];
+	char *aux;
 
-	cfg = cfg_init();
+	t = clock();
 
 	/***************************************************************/
 	/******************* PARSE FILE ARGUMENTS **********************/
 	/***************************************************************/
 
-	char path_save[PATH_MAX];
-	char abs_exe_path[PATH_MAX];
-	char abs_exe_path2[PATH_MAX];
-	char *p;
-	char *aux;
-
 	args.type = argv[1][0];
 	args.id = atoi(argv[2]);
-
 	sprintf(tmp_file_path, "/tmp/%c-hercules-%d", args.type, args.id);
 
-	fprintf(stderr, "tmp_file_path=%s\n", tmp_file_path);
-
-	// if (remove(tmp_file_path) == 0) {
-	//     fprintf(stderr, "The file %s is deleted successfully.\n", tmp_file_path);
-	// } else {
-	//     fprintf(stderr, "The file %s is not deleted.\n", tmp_file_path);
-	// }
-
-	if (!(p = strrchr(argv[0], '/')))
-		getcwd(abs_exe_path, sizeof(abs_exe_path));
+	cfg = cfg_init();
+	conf_path = getenv("HERCULES_CONF");
+	if (conf_path != NULL)
+	{
+		ret = cfg_load(cfg, conf_path);
+	}
 	else
 	{
-		*p = '\0';
-		getcwd(path_save, sizeof(path_save));
-		chdir(argv[0]);
-		getcwd(abs_exe_path, sizeof(abs_exe_path));
-		chdir(path_save);
+		ret = 1;
 	}
 
-	strcat(abs_exe_path, "/../conf/hercules.conf");
-	strcpy(abs_exe_path2, abs_exe_path);
-	strcat(abs_exe_path2, "hercules.conf");
-
-	fprintf(stderr, "Trying to load /etc/hercules.conf\n");
-	if (cfg_load(cfg, "/etc/hercules.conf") > 0)
+	if (ret)
 	{
-		fprintf(stderr, "Trying to load %s\n", abs_exe_path);
-		if (cfg_load(cfg, abs_exe_path) > 0)
+		conf_path = (char *)malloc(sizeof(char) * PATH_MAX);
+		strcpy(conf_path, "/etc/hercules.conf");
+		if (cfg_load(cfg, conf_path) > 0)
 		{
-			fprintf(stderr, "Trying to load %s\n", abs_exe_path2);
-			if (cfg_load(cfg, abs_exe_path2) > 0)
+			if (getcwd(abs_exe_path, sizeof(abs_exe_path)) != NULL)
 			{
-				fprintf(stderr, "Trying to load ./hercules.conf");
-				if (cfg_load(cfg, "hercules.conf") > 0)
+				sprintf(conf_path, "%s/%s", abs_exe_path, "../conf/hercules.conf");
+			}
+			else
+			{
+				sprintf(conf_path, "%s", "./hercules.conf");
+			}
+			if (cfg_load(cfg, conf_path) > 0)
+			{
+				sprintf(conf_path, "%s", "./hercules.conf");
+				if (cfg_load(cfg, conf_path) > 0)
 				{
-					// get arguments.
-					fprintf(stderr, "Trying get params");
-					parse_args(argc, argv, &args);
+					cfg_load(cfg, "hercules.conf");
 				}
 			}
 		}
+		free(conf_path);
 	}
 
 	if (cfg_get(cfg, "URI"))
@@ -256,7 +245,7 @@ int32_t main(int32_t argc, char **argv)
 	sprintf(log_path, "./%c-server.%02d-%02d-%02d", args.type, tm.tm_hour, tm.tm_min, tm.tm_sec);
 	// sprintf(log_path, "./%c-server", args.type);
 	slog_init(log_path, IMSS_DEBUG_LEVEL, IMSS_DEBUG_FILE, IMSS_DEBUG_SCREEN, 1, 1, 1, args.id);
-	fprintf(stderr, "IMSS DEBUG FILE AT %s\n", log_path);
+	// fprintf(stderr, "IMSS DEBUG FILE AT %s\n", log_path);
 	slog_info(",Time(msec), Comment, RetCode");
 
 	slog_debug("[SERVER] Starting server.");
@@ -302,7 +291,8 @@ int32_t main(int32_t argc, char **argv)
 		max_storage_size = max_system_ram_allowed;
 	}
 
-	fprintf(stderr, "max_storage_size=%ld\n", max_storage_size);
+	//slog_info("[Server-%c] tmp_file_path=%s, Configuration file loaded %s, max_storage_size=%ld\n", args.type, tmp_file_path, max_storage_size);
+	// fprintf(stderr, "max_storage_size=%ld\n", max_storage_size);
 
 	// init memory pool
 	mem_pool = StsQueue.create();
@@ -637,7 +627,7 @@ int32_t main(int32_t argc, char **argv)
 		if (!args.id)
 			printf("ServerID,'Deployment time (s)'\n");
 
-		fprintf(stderr, "tmp_file_path=%s\n", tmp_file_path);
+		// fprintf(stderr, "tmp_file_path=%s\n", tmp_file_path);
 
 		FILE *tmp_file = tmpfile(); // make the file pointer as temporary file.
 		tmp_file = fopen(tmp_file_path, "w");
