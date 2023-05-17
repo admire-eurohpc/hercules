@@ -477,11 +477,11 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 	slog_warn("[imss_read] size %ld, first %ld, start_offset %ld, end_blk %ld, end_offset %ld, curr_blk %ld, offset=%ld, IMSS_DATA_BSIZE=%ld, stats.st_size=%ld", size, first, start_offset, end_blk, end_offset, curr_blk, offset, IMSS_DATA_BSIZE, stats.st_size);
 
 	// Check if offset is bigger than filled, return 0 because is EOF case
-	if (start_offset >= stats.st_size)
-	{
-		slog_warn("[imss_read] returning size 0");
-		return 0;
-	}
+	// if (start_offset >= stats.st_size)
+	// {
+	// 	slog_warn("[imss_read] returning size 0");
+	// 	return 0;
+	// }
 
 	if (fd >= 0)
 		ds = fd;
@@ -1930,7 +1930,7 @@ int imss_create(const char *path, mode_t mode, uint64_t *fh)
 	int32_t n_servers = 0;
 
 	res = create_dataset((char *)rpath, POLICY, N_BLKS, IMSS_BLKSIZE, REPL_FACTOR, n_servers);
-	slog_live("[imss_create] create_dataset((char*)rpath:%s, POLICY:%s,  N_BLKS:%ld, IMSS_BLKSIZE:%d, REPL_FACTOR:%ld), res:%d", (char *)rpath, POLICY, N_BLKS, IMSS_BLKSIZE, REPL_FACTOR, res);
+	slog_live("[imss_create] create_dataset((char*)rpath:%s, POLICY:%s,  N_BLKS:%ld, IMSS_BLKSIZE:%d, REPL_FACTOR:%ld, n_servers:%d), res:%d", (char *)rpath, POLICY, N_BLKS, IMSS_BLKSIZE, REPL_FACTOR, n_servers, res);
 	if (res < 0)
 	{
 		if (IMSS_DEBUG)
@@ -1966,6 +1966,7 @@ int imss_create(const char *path, mode_t mode, uint64_t *fh)
 	char *buff = (char *)malloc(IMSS_DATA_BSIZE); //[IMSS_DATA_BSIZE];
 	memcpy(buff, &ds_stat, sizeof(struct stat));
 	pthread_mutex_lock(&lock); // lock.
+	// stores block 0.
 	set_data(*fh, 0, (char *)buff, 0, 0);
 	pthread_mutex_unlock(&lock); // unlock.
 
@@ -1978,12 +1979,13 @@ int imss_create(const char *path, mode_t mode, uint64_t *fh)
 
 	pthread_mutex_lock(&lock_file); // lock.
 	map_put(map, rpath, *fh, ds_stat, buff);
-	slog_live("[imss_create] map_put(map, rpath:%s, fh:%ld, ds_stat, buff:%s)", rpath, *fh, buff);
+	// slog_live("[imss_create] map_put(map, rpath:%s, fh:%ld, ds_stat, buff:%s)", rpath, *fh, buff);
+	slog_live("[imss_create] map_put(map, rpath:%s, fh:%ld, ds_stat.st_blksize=%ld)", rpath, *fh, ds_stat.st_blksize);
 	if (PREFETCH != 0)
 	{
 		char *buff = (char *)malloc(PREFETCH * IMSS_BLKSIZE * KB);
 		map_init_prefetch(map_prefetch, rpath, buff);
-		slog_live("[imss_create] PREFETCH:%ld, map_init_prefetch(map_prefetch, rpath:%s, buff:%s)", PREFETCH, rpath, buff);
+		slog_live("[imss_create] PREFETCH:%ld, map_init_prefetch(map_prefetch, rpath:%s)", PREFETCH, rpath);
 	}
 	pthread_mutex_unlock(&lock_file); // unlock.
 	free(rpath);

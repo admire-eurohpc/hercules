@@ -323,7 +323,9 @@ int32_t stat_init(char *stat_hostfile,
 	// Open the file containing the IMSS metadata server nodes.
 	if ((stat_nodes = fopen(stat_hostfile, "r+")) == NULL)
 	{
-		perror("ERRIMSS_OPEN_STATFILE");
+		char error_msg[500];
+		sprintf(error_msg, "ERRIMSS_OPEN_STATFILE: %s", stat_hostfile);
+		perror(error_msg);
 		return -1;
 	}
 
@@ -1126,7 +1128,7 @@ int32_t open_dataset(char *dataset_uri)
 	{
 		case 0:
 			{
-				slog_fatal("ERRIMSS_OPENDATASET_NOTEXISTS");
+				slog_fatal("ERRIMSS_OPENDATASET_NOTEXISTS: %s", dataset_uri);
 				return -1;
 			}
 		case 2:

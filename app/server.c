@@ -106,7 +106,7 @@ int32_t main(int32_t argc, char **argv)
 	sprintf(tmp_file_path, "/tmp/%c-hercules-%d", args.type, args.id);
 
 	cfg = cfg_init();
-	conf_path = getenv("HERCULES_CONF");
+	conf_path = getenv("H_CONF");
 	if (conf_path != NULL)
 	{
 		ret = cfg_load(cfg, conf_path);
@@ -118,28 +118,46 @@ int32_t main(int32_t argc, char **argv)
 
 	if (ret)
 	{
-		conf_path = (char *)malloc(sizeof(char) * PATH_MAX);
-		strcpy(conf_path, "/etc/hercules.conf");
-		if (cfg_load(cfg, conf_path) > 0)
+		char default_paths[3][PATH_MAX] = {
+			"/etc/hercules.conf",
+			"./hercules.conf",
+			"hercules.conf"};
+
+		for (size_t i = 0; i < 3; i++)
+		{
+			fprintf(stderr, "Loading %s\n", default_paths[i]);
+			if (cfg_load(cfg, default_paths[i]) == 0)
+			{
+				ret = 0;
+				break;
+			}
+		}
+		if (ret)
 		{
 			if (getcwd(abs_exe_path, sizeof(abs_exe_path)) != NULL)
 			{
+				conf_path = (char *)malloc(sizeof(char) * PATH_MAX);
 				sprintf(conf_path, "%s/%s", abs_exe_path, "../conf/hercules.conf");
-			}
-			else
-			{
-				sprintf(conf_path, "%s", "./hercules.conf");
-			}
-			if (cfg_load(cfg, conf_path) > 0)
-			{
-				sprintf(conf_path, "%s", "./hercules.conf");
-				if (cfg_load(cfg, conf_path) > 0)
+				if (cfg_load(cfg, conf_path) == 0)
 				{
-					cfg_load(cfg, "hercules.conf");
+					ret = 0;
 				}
 			}
 		}
+
+		if (!ret)
+		{
+			fprintf(stderr, "Configuration file loaded: %s\n", conf_path);
+		}
+		else
+		{
+			fprintf(stderr, "Configuration file not found\n");
+		}
 		free(conf_path);
+	}
+	else
+	{
+		fprintf(stderr, "Configuration file loaded: %s\n", conf_path);
 	}
 
 	if (cfg_get(cfg, "URI"))
@@ -291,8 +309,8 @@ int32_t main(int32_t argc, char **argv)
 		max_storage_size = max_system_ram_allowed;
 	}
 
-	//slog_info("[Server-%c] tmp_file_path=%s, Configuration file loaded %s, max_storage_size=%ld\n", args.type, tmp_file_path, max_storage_size);
-	// fprintf(stderr, "max_storage_size=%ld\n", max_storage_size);
+	// slog_info("[Server-%c] tmp_file_path=%s, Configuration file loaded %s, max_storage_size=%ld\n", args.type, tmp_file_path, max_storage_size);
+	//  fprintf(stderr, "max_storage_size=%ld\n", max_storage_size);
 
 	// init memory pool
 	mem_pool = StsQueue.create();

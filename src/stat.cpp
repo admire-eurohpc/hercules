@@ -24,7 +24,9 @@ metadata_read(char * 		metadata_file,
 	struct stat meta_inf;
 	if (stat(metadata_file, &meta_inf) == -1)
 	{
-		perror("ERRIMSS_METADATAREAD_GETMETAINF");
+		char error_msg[500];
+		sprintf(error_msg, "ERRIMSS_METADATAREAD_GETMETAINF: %s", metadata_file);
+		perror(error_msg);
 		return NULL;
 	}
 

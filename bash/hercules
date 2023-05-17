@@ -26,6 +26,9 @@ WaitForServers() {
         COMMAND="$H_BASH_PATH/check-servers.sh $SERVER_TYPE $i"
         echo "[+] Running comprobation $i in $node... $COMMAND"
         if [[ "$SLURM" -eq "0" ]]; then
+            if [ -z "$(ssh-keygen -F $node)" ]; then
+                ssh-keyscan -H $node >> ~/.ssh/known_hosts
+            fi
             ssh $node "$COMMAND"
         else
             srun --exclusive --export=ALL -N 1 -n 1 -w $node $COMMAND
@@ -55,7 +58,7 @@ do
     case "${flag}" in
         m) META_SERVER_FILE=${OPTARG};;
         d) DATA_SERVER_FILE=${OPTARG};;
-        c) CLIENT_FILE=${OPTARG};;
+        c) H_MPI_HOSTFILE_NAME=${OPTARG};;
         # Indicates whether slurm should be used when it is installed.
         s) SLURM=${OPTARG};;
         # Configuration file path.
@@ -70,6 +73,7 @@ fi
 
 echo "DATA_SERVER_FILE=$DATA_SERVER_FILE"
 echo "META_SERVER_FILE=$META_SERVER_FILE"
+echo "CLIENT_FILE=$H_MPI_HOSTFILE_NAME"
 echo "SLURM=$SLURM"
 echo "STATUS=$STATUS"
 echo "FILE=$FILE"
@@ -90,10 +94,16 @@ then
     exit 0
 fi
 
+## Define values.
+H_PATH=$(dirname `pwd`)
+H_BUILD_PATH=$H_PATH/build
+H_BASH_PATH=$H_PATH/bash
+H_POSIX_PRELOAD="LD_PRELOAD=$H_PATH/build/tools/libhercules_posix.so"
+
 ## If a configuration file was not provided.
 if [ -z "$FILE" ]; then
     ## To know if a configuration file exists in the default paths.
-    for FILE in {"/etc/hercules.conf","../conf/hercules.conf","./hercules.conf"}
+    for FILE in {"/etc/hercules.conf","./hercules.conf","hercules.conf","$H_PATH/conf/hercules.conf"}
     do
         echo $FILE
         if [ -f "$FILE" ]; then
@@ -108,7 +118,7 @@ if [ -z "$FILE" ]; then
 fi
 
 echo "Reading configuration file at $FILE"
-export HERCULES_CONF="$FILE"
+export H_CONF="$FILE"
 
 
 ## If slurm is used, then we create a hostfile containing the allocated nodes.
@@ -116,12 +126,7 @@ if [[ $SLURM -eq 1 ]]; then
     srun -pernode hostname |sort > hostfile
 fi
 
-## Define values.
-H_PATH=$(dirname `pwd`)
-H_BUILD_PATH=$H_PATH/build
-H_BASH_PATH=$H_PATH/bash
-H_MPI_HOSTFILE_NAME="client_hostfile"
-H_POSIX_PRELOAD="LD_PRELOAD=$H_PATH/build/tools/libhercules_posix.so"
+
 
 ## Read configuration file.
 META_PORT=$(cat $FILE | grep "METADATA_PORT" | awk '{print $3}')
@@ -133,6 +138,18 @@ NUM_NODES_FOR_CLIENTS=$(cat $FILE | grep "NUM_NODES_FOR_CLIENTS" | awk '{print $
 NUM_CLIENTS_PER_NODE=$(cat $FILE | grep "NUM_CLIENTS_PER_NODE" | awk '{print $3}')
 BLOCK_SIZE=$(cat $FILE | grep "BLOCK_SIZE" | awk '{print $3}')
 STORAGE_SIZE=$(cat $FILE | grep "STORAGE_SIZE" | awk '{print $3}')
+
+## If a client hostfile was not provided we set a default path.
+if [ -z "$H_MPI_HOSTFILE_NAME" ]; then
+    ## Error if slurm is not being used and no client hostfile was defined.
+    if [[ "$SLURM" -eq "0" ]]; then
+        echo "[Error] Client hostfile not specified, please set one using -c <filename> flag"
+        exit 1
+    fi
+    H_MPI_HOSTFILE_NAME="$H_BASH_PATH/client_hostfile"
+    tail -n +$((NUM_METADATA+NUM_DATA+1)) hostfile | head -n $NUM_NODES_FOR_CLIENTS > $H_MPI_HOSTFILE_NAME
+fi
+
 
 ## To run the metadata servers.
 echo "[+] Hercules: Running metadata servers"
@@ -168,14 +185,15 @@ do
     # COMMAND="{ rm /tmp/m-hercules-$i; }; { cd $H_BASH_PATH && $H_BUILD_PATH/hercules_server m $i 2> m_server.out; };"
     # COMMAND="rm /tmp/m-hercules-$i"
     
-    
     echo "[+] Running metadata server $i in $node..."
     RM="rm /tmp/m-hercules-$i"
     COMMAND="$H_BUILD_PATH/hercules_server m $i"
     ## If slurm is not being used, we deploy the service by connecting
     ## to the node via ssh.
     if [[ "$SLURM" -eq "0" ]]; then
-        (ssh $node "$RM; cd $H_BASH_PATH && $COMMAND") &
+        #{ ssh $node "$RM; cd $H_BASH_PATH && $COMMAND"; } &
+        ( ssh $node "$RM" )
+        ( ssh $node "cd $H_BASH_PATH && $COMMAND" ) &
     else
         ## Deletes the file that we use to make sure that the server has started.
         srun --exclusive --export=ALL -N 1 -n 1 -w $node $RM
@@ -219,13 +237,13 @@ i=0
 start=`date +%s.%N`
 for node in "${data_hosts[@]}"
 do
-    
-    
     echo "[+] Running data server $i in $node..-"
     RM="rm /tmp/d-hercules-$i"
     COMMAND="$H_BUILD_PATH/hercules_server d $i ${meta_hosts[0]}"
     if [[ "$SLURM" -eq "0" ]]; then
-        (ssh $node "$RM; cd $H_BASH_PATH &&  $COMMAND") &
+        # ssh $node "$RM; cd $H_BASH_PATH &&  $COMMAND &"
+        ( ssh $node "$RM" )
+        ( ssh $node "cd $H_BASH_PATH && $COMMAND" ) &
     else
         ## Deletes the file that we use to make sure that the server has started.
         srun --exclusive --export=ALL -N 1 -n 1 -w $node $RM
@@ -241,22 +259,24 @@ end=`date +%s.%N`
 runtime=$( echo "$end - $start" | bc -l )
 echo "[-] Data servers started in $runtime seconds, start=$start, end=$end"
 
-tail -n +$((NUM_METADATA+NUM_DATA+1)) hostfile | head -n $NUM_NODES_FOR_CLIENTS > $H_MPI_HOSTFILE_NAME
+
+
 export H_NCPN=$NUM_CLIENTS_PER_NODE
 export H_NNFC=$NUM_NODES_FOR_CLIENTS
 
 ## Search for the mpi distribution installed.
-for MPI_DS in {"openmpi","mpich","impi"}
+for MPI_DS in {"open-mpi","mpich","Intel"}
 do
-    RET=$(which mpiexec | grep -c $MPI_DS)
+    RET=$(mpiexec --version | grep -c $MPI_DS)
     if [ $RET -gt 0 ]; then
         echo "[+] MPI distribution found; $MPI_DS"
         break;
     fi
+    MPI_DS=''
 done
 
 case $MPI_DS in
-    "openmpi")
+    "open-mpi")
         echo "[+] Option openmpi"
         export H_MPI_ENV_DEF="-x"
         export H_MPI_HOSTFILE_DEF="-hostfile"

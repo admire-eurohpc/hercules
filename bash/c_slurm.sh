@@ -19,15 +19,14 @@ CONFIG_PATH=$1
 # module load mpi/mpich3/3.2.1
 
 ## Uncomment when working in Unito.
- IOR_PATH=/beegfs/home/javier.garciablas/io500/bin
- spack load \
-    cmake@3.24.3%gcc@9.4.0 arch=linux-ubuntu20.04-broadwell \
-    glib@2.74.1%gcc@9.4.0 arch=linux-ubuntu20.04-broadwell \
-    ucx@1.14.0%gcc@9.4.0 arch=linux-ubuntu20.04-broadwell \
-    pcre@8.45%gcc@9.4.0 arch=linux-ubuntu20.04-broadwell \
-    openmpi@4.1.5%gcc@9.4.0 arch=linux-ubuntu20.04-broadwell \
-    jemalloc 
-#  spack load openmpi@4.1.5%gcc@9.4.0 arch=linux-ubuntu20.04-broadwell
+#  IOR_PATH=/beegfs/home/javier.garciablas/io500/bin
+#  spack load \
+#     cmake@3.24.3%gcc@9.4.0 arch=linux-ubuntu20.04-broadwell \
+#     glib@2.74.1%gcc@9.4.0 arch=linux-ubuntu20.04-broadwell \
+#     ucx@1.14.0%gcc@9.4.0 arch=linux-ubuntu20.04-broadwell \
+#     pcre@8.45%gcc@9.4.0 arch=linux-ubuntu20.04-broadwell \
+#     openmpi@4.1.5%gcc@9.4.0 arch=linux-ubuntu20.04-broadwell \
+#     jemalloc 
 
 ## Uncomment when working in MN4.
 # IOR_PATH=/apps/IOR/3.3.0/INTEL/IMPI/bin
@@ -41,9 +40,10 @@ CONFIG_PATH=$1
 # module load impi
 # module load ior
 
-#set -x
+## Local
+IOR_PATH=/usr/local/bin
 
-# start=`date +%s`
+
 start_=`date +%s.%N`
 if [ -z "$CONFIG_PATH" ]; then
    echo "here"
@@ -53,30 +53,22 @@ else
 fi
 end_=`date +%s.%N`
 runtime=$( echo "$end_ - $start_" | bc -l )
-# runtime=$(time source hercules start)
-# end=`date +%s`
-# runtime=$((end-start))
 echo "Hercules started in $runtime seconds, start=$start_, end=$end_"
-
-# exit 0
 
 
 echo "Running clients"
 COMMAND="$IOR_PATH/ior -t 1M -b 10M -s 1 -i 5 -F -o /mnt/imss/data.out"
-# COMMAND="./exe_WRITE-AND-READ-TEST-BIFURCADO /mnt/imss/data.out 10240"
-# COMMAND="hostname"
-#COMMAND="echo 'hello' > /tmp/hello"
-#COMMAND="free -h
+#COMMAND="../../bin/nekbmpi eddy_uv 2"
 
 # set -x
-echo "mpiexec $H_MPI_HOSTFILE_DEF ./client_hostfile -n $H_NNFC $H_MPI_PPN $H_NCPN \
+echo "mpiexec $H_MPI_HOSTFILE_DEF $H_MPI_HOSTFILE_NAME -n $H_NNFC $H_MPI_PPN $H_NCPN \
 	$H_MPI_ENV_DEF $H_POSIX_PRELOAD \
-   	$H_MPI_ENV_DEF IMSS_CONF=$CONFIG_PATH \
+   $H_MPI_ENV_DEF IMSS_CONF=$CONFIG_PATH \
 	$COMMAND"
 
-mpiexec $H_MPI_HOSTFILE_DEF ./client_hostfile -n $H_NNFC $H_MPI_PPN $H_NCPN \
+mpiexec $H_MPI_HOSTFILE_DEF $H_MPI_HOSTFILE_NAME -n $H_NNFC $H_MPI_PPN $H_NCPN \
 	$H_MPI_ENV_DEF $H_POSIX_PRELOAD \
-   	$H_MPI_ENV_DEF IMSS_CONF=$CONFIG_PATH \
+   $H_MPI_ENV_DEF IMSS_CONF=$CONFIG_PATH \
 	$COMMAND
 
 
