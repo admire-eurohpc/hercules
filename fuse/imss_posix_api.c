@@ -1933,8 +1933,7 @@ int imss_create(const char *path, mode_t mode, uint64_t *fh)
 	slog_live("[imss_create] create_dataset((char*)rpath:%s, POLICY:%s,  N_BLKS:%ld, IMSS_BLKSIZE:%d, REPL_FACTOR:%ld, n_servers:%d), res:%d", (char *)rpath, POLICY, N_BLKS, IMSS_BLKSIZE, REPL_FACTOR, n_servers, res);
 	if (res < 0)
 	{
-		if (IMSS_DEBUG)
-			fprintf(stderr, "[imss_create]	Cannot create new dataset.\n");
+		fprintf(stderr, "[imss_create]	Cannot create new dataset.\n");
 		slog_error("[imss_create] Cannot create new dataset.\n");
 		free(rpath);
 		return res;
@@ -2114,8 +2113,7 @@ int imss_utimens(const char *path, const struct timespec tv[2])
 		file_desc = open_dataset(rpath);
 	if (file_desc < 0)
 	{
-		if (IMSS_DEBUG)
-			fprintf(stderr, "[IMSS-FUSE]    Cannot open dataset.\n");
+		fprintf(stderr, "[IMSS-FUSE]    Cannot open dataset.\n");
 	}
 
 	// char *buff = malloc(IMSS_DATA_BSIZE);
@@ -2184,8 +2182,7 @@ int imss_flush(const char *path)
 		file_desc = open_dataset(rpath);
 	if (file_desc < 0)
 	{
-		if (IMSS_DEBUG)
-			fprintf(stderr, "[IMSS-FUSE]    Cannot open dataset.\n");
+		fprintf(stderr, "[IMSS-FUSE]    Cannot open dataset.\n");
 		return -EACCES;
 	}
 
@@ -2199,8 +2196,7 @@ int imss_flush(const char *path)
 	pthread_mutex_lock(&lock);
 	if (set_data(file_desc, 0, (char *)buff, 0, 0) < 0)
 	{
-		if (IMSS_DEBUG)
-			fprintf(stderr, "[IMSS-FUSE]	Error writing to imss.\n");
+		fprintf(stderr, "[IMSS-FUSE]	Error writing to imss.\n");
 		error_print = -ENOENT;
 		pthread_mutex_unlock(&lock);
 		return -ENOENT;
@@ -2238,8 +2234,8 @@ int imss_chmod(const char *path, mode_t mode)
 		file_desc = open_dataset(rpath);
 	if (file_desc < 0)
 	{
-		if (IMSS_DEBUG)
-			fprintf(stderr, "[IMSS-FUSE]    Cannot open dataset.\n");
+
+		fprintf(stderr, "[IMSS-FUSE]    Cannot open dataset.\n");
 	}
 
 	pthread_mutex_lock(&lock);
@@ -2282,8 +2278,8 @@ int imss_chown(const char *path, uid_t uid, gid_t gid)
 		file_desc = open_dataset(rpath);
 	if (file_desc < 0)
 	{
-		if (IMSS_DEBUG)
-			fprintf(stderr, "[IMSS-FUSE]    Cannot open dataset.\n");
+
+		fprintf(stderr, "[IMSS-FUSE]    Cannot open dataset.\n");
 	}
 
 	pthread_mutex_lock(&lock);
@@ -2344,8 +2340,8 @@ int imss_rename(const char *old_path, const char *new_path)
 
 			if (file_desc_o < 0)
 			{
-				if (IMSS_DEBUG)
-					fprintf(stderr, "[IMSS-FUSE]    Cannot open dataset.\n");
+
+				fprintf(stderr, "[IMSS-FUSE]    Cannot open dataset.\n");
 				free(new_rpath);
 				return -ENOENT;
 			}
@@ -2410,8 +2406,8 @@ int imss_rename(const char *old_path, const char *new_path)
 
 	if (file_desc_o < 0)
 	{
-		if (IMSS_DEBUG)
-			fprintf(stderr, "[IMSS-FUSE]    Cannot open dataset.\n");
+
+		fprintf(stderr, "[IMSS-FUSE]    Cannot open dataset.\n");
 		free(old_rpath);
 		free(new_rpath);
 		return -ENOENT;

@@ -26,24 +26,26 @@ source ./hercules start \
 
 echo "[+] Running clients"
 
+
+set -x
+
 # COMMAND="$IOR_PATH/ior -t 1M -b 10M -s 1 -i 5 -F -o /mnt/imss/data.out"
 # COMMAND="$IOR_PATH/ior -t 1M -b 10M -s 1 -i 5 -F -o /home/genarog/Documents/UC3M/Codes/UPDATED_IMSS/imss/bash/data.out"
-COMMAND="/home/genarog/Documents/UC3M/Codes/Apps/Nek5000/run/eddy_uv/nek5000 eddy_uv 1"
+COMMAND="/home/genarog/Documents/UC3M/Codes/Apps/Nek5000/run/eddy_uv/nek5000 eddy_uv"
+# COMMAND="./exe_WRITE-AND-READ-TEST-BIFURCADO /mnt/imss/eddy hola.txt 1024"
 # COMMAND="./exe_READ_EXISTING_FILE /home/genarog/Documents/UC3M/Codes/UPDATED_IMSS/imss/bash/test_file.txt 11"
 # COMMAND="./exe_READ_EXISTING_FILE /mnt/imss/test_file.txt 11"
 
-
-# mpiexec
-mpirun -np 1 -npernode 1 $H_MPI_HOSTFILE_DEF $H_MPI_HOSTFILE_NAME  \
+mpiexec -np $H_NNFC -npernode $H_NCPN $H_MPI_HOSTFILE_DEF $H_MPI_HOSTFILE_NAME  \
    $H_MPI_ENV_DEF H_CONF=$H_CONF \
    $H_MPI_ENV_DEF $H_POSIX_PRELOAD \
-	strace -s 2000 -o strace.log $COMMAND
-	# $COMMAND
+	$COMMAND > logfile
+	# strace -s 2000 -o strace.log $COMMAND
+	#ltrace -s 2000 -o ltrace.log $COMMAND
 
 
 
 # sleep 20
-set -x
 # export $H_POSIX_PRELOAD 
 # export LD_PRELOAD=/home/genarog/Documents/UC3M/Codes/UPDATED_IMSS/imss/build/tools/libhercules_posix.so
 # sleep 20

@@ -120,7 +120,7 @@ static int (*real__open_2)(const char *pathname, int flags, ...) = NULL;
 static int (*real_open64)(const char *pathname, int flags, ...) = NULL;
 static int (*real_open)(const char *pathname, int flags, ...) = NULL;
 static FILE *(*real_fopen)(const char *restrict pathname, const char *restrict mode) = NULL;
-static FILE *(*real_fopen64)(const char *restrict pathname, const char *restrict mode) = NULL;
+// static FILE *(*real_fopen64)(const char *restrict pathname, const char *restrict mode) = NULL;
 static int (*real_access)(const char *pathname, int mode) = NULL;
 static int (*real_mkdir)(const char *path, mode_t mode) = NULL;
 static ssize_t (*real_write)(int fd, const void *buf, size_t size) = NULL;
@@ -138,6 +138,39 @@ static int (*real_closedir)(DIR *dirp) = NULL;
 static int (*real_statvfs)(const char *restrict path, struct statvfs *restrict buf) = NULL;
 static int (*real_statfs)(const char *path, struct statfs *buf) = NULL;
 static char *(*real_realpath)(const char *restrict path, char *restrict resolved_path) = NULL;
+static int (*real__openat)(int dirfd, const char *pathname, int flags, ...) = NULL;
+// static int (*real_openat)(int dirfd, const char *pathname, int flags, ...) = NULL;
+static int (*real__openat64)(int fd, const char *file, int oflag, ...) = NULL;
+static int (*real__openat64_2)(int fd, const char *file, int oflag) = NULL;
+static int (*real__libc_openat)(int fd, const char *file, int oflag, ...) = NULL;
+static int (*real__libc_open64)(const char *file, int oflag, ...) = NULL;
+static int (*real_openat)(int dirfd, const char *pathname, int flags) = NULL;
+static int (*real_fclose)(FILE *fp) = NULL;
+static size_t (*real_fread)(void *buf, size_t size, size_t count, FILE *fp) = NULL;
+static size_t (*real_fwrite)(const void *buf, size_t size, size_t count, FILE *fp) = NULL;
+static int (*real_ferror)(FILE *fp) = NULL;
+static int (*real_feof)(FILE *fp) = NULL;
+
+
+
+
+// int _openat(int dirfd, const char *pathname, int flags, ...)
+// {
+// 	real__openat = dlsym(RTLD_NEXT, "_openat");
+// 	int mode = 0;
+
+// 	if (flags & O_CREAT)
+// 	{
+// 		va_list ap;
+// 		va_start(ap, flags);
+// 		mode = va_arg(ap, unsigned);
+// 		va_end(ap);
+// 	}
+
+// 	fprintf(stderr, "Calling _openat %s\n", pathname);
+// 	return real__openat(dirfd, pathname, flags);
+// }
+
 // static int (*real_fsync)(int fd) = NULL;
 
 uint32_t MurmurOAAT32(const char *key)
@@ -351,9 +384,12 @@ void getConfiguration()
 		strcpy(conf_path, "/etc/hercules.conf");
 		if (cfg_load(cfg, conf_path) > 0)
 		{
-			if(getcwd(abs_exe_path, sizeof(abs_exe_path)) != NULL ) {
+			if (getcwd(abs_exe_path, sizeof(abs_exe_path)) != NULL)
+			{
 				sprintf(conf_path, "%s/%s", abs_exe_path, "../conf/hercules.conf");
-			} else {
+			}
+			else
+			{
 				sprintf(conf_path, "%s", "./hercules.conf");
 			}
 			if (cfg_load(cfg, conf_path) > 0)
@@ -573,7 +609,6 @@ void check_ld_preload(void)
 
 int close(int fd)
 {
-	int ret = 0;
 	real_close = dlsym(RTLD_NEXT, "close");
 	if (!init)
 	{
@@ -582,7 +617,7 @@ int close(int fd)
 
 	clock_t t;
 	t = clock();
-
+	int ret = 0;
 	char *path = (char *)calloc(256, sizeof(char));
 	if (TIMING(map_fd_search_by_val(map_fd, path, fd), "[POSIX] Searching fd by val", int) == 1)
 	{
@@ -694,7 +729,7 @@ int __xstat(int fd, const char *pathname, struct stat *buf)
 
 	if (!strncmp(pathname, MOUNT_POINT, strlen(MOUNT_POINT)) || !strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT)))
 	{
-		slog_debug("[POSIX %d] Calling hercules '__xstat', pathname=%s.", rank, pathname);
+		slog_debug("[POSIX %d] Calling Hercules '__xstat', pathname=%s.", rank, pathname);
 
 		char *new_path;
 		new_path = convert_path(pathname, MOUNT_POINT);
@@ -705,19 +740,19 @@ int __xstat(int fd, const char *pathname, struct stat *buf)
 		{
 			errno = -ret;
 			ret = -1;
-			slog_error("[POSIX %d] Error __xstat: %s", rank, strerror(errno));
+			slog_error("[POSIX %d] Error Hercules '__xstat'	: %s", rank, strerror(errno));
 		}
 		// t = clock() -t ;
 		// double time_taken = ((double)t) / CLOCKS_PER_SEC; // in seconds
 
 		// slog_info("[LD_PRELOAD] _xstat time  total %f s", time_taken);
-		slog_debug("[POSIX %d] End '__xstat'   %d %d.", rank, ret, errno);
+		slog_debug("[POSIX %d] End Hercules '__xstat'   %d %d.", rank, ret, errno);
 	}
 	else
 	{
-		slog_debug("[POSIX %d] Calling 'real_xstat', pathname=%s.", rank, pathname);
+		// slog_debug("[POSIX %d] Calling real 'real_xstat', pathname=%s.", rank, pathname);
 		ret = real_xstat(fd, pathname, buf);
-		slog_debug("[POSIX %d] End '__xstat'   %d %d.", rank, ret, errno);
+		// slog_debug("[POSIX %d] End  real '__xstat'   %d %d.", rank, ret, errno);
 	}
 	return ret;
 }
@@ -869,6 +904,8 @@ int __open_2(const char *pathname, int flags, ...)
 
 	int mode = 0;
 
+	// fprintf(stderr, "Running open_2, pathname=%s, MOUNT_POINT=%s", pathname, MOUNT_POINT);
+
 	if (flags & O_CREAT)
 	{
 		va_list ap;
@@ -887,12 +924,14 @@ int __open_2(const char *pathname, int flags, ...)
 
 	char *workdir = getenv("PWD");
 
+	// slog_debug("Running open_2, workdir=%s, pathname=%s, MOUNT_POINT=%s", workdir, pathname, MOUNT_POINT);
+
 	if (!strncmp(pathname, MOUNT_POINT, strlen(MOUNT_POINT)) || !strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT)))
 	{
 
 		char *new_path;
 		new_path = convert_path(pathname, MOUNT_POINT);
-		slog_debug("[POSIX %d]. Calling '__open_2': %s.", rank, new_path);
+		slog_debug("[POSIX %d]. Calling Hercules '__open_2': %s.", rank, new_path);
 
 		int exist = map_fd_search(map_fd, new_path, &ret, &p);
 		if (exist == -1)
@@ -916,7 +955,7 @@ int __open_2(const char *pathname, int flags, ...)
 			}
 			// map_fd_search(map_fd, new_path, &ret, &p);
 		}
-		slog_debug("[POSIX %d]. Ending '__open_2'.", rank);
+		slog_debug("[POSIX %d]. Ending Hercules '__open_2'.", rank);
 	}
 	else
 	{
@@ -936,6 +975,8 @@ int open64(const char *pathname, int flags, ...)
 	unsigned long p = 0;
 
 	int mode = 0;
+
+	// fprintf(stderr, "Running open64, pathname=%s, MOUNT_POINT=%s", pathname, MOUNT_POINT);
 
 	if (flags & O_CREAT)
 	{
@@ -957,7 +998,7 @@ int open64(const char *pathname, int flags, ...)
 
 	if (!strncmp(pathname, MOUNT_POINT, strlen(MOUNT_POINT)) || !strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT)))
 	{
-		slog_debug("[POSIX %d]. Calling 'open64'.", rank);
+		slog_debug("[POSIX %d]. Calling Hercules 'open64'.", rank);
 
 		char *new_path;
 		new_path = convert_path(pathname, MOUNT_POINT);
@@ -981,6 +1022,7 @@ int open64(const char *pathname, int flags, ...)
 				imss_open(new_path, &ret_ds);
 			}
 		}
+		slog_debug("[POSIX %d]. Ending Hercules 'open64'.", rank);
 	}
 	else
 	{
@@ -992,12 +1034,255 @@ int open64(const char *pathname, int flags, ...)
 	return ret;
 }
 
+int fclose(FILE *fp)
+{
+	real_fclose = dlsym(RTLD_NEXT, "fclose");
+	if (!init)
+	{
+		return real_fclose(fp);
+	}
+
+	int ret = 0;
+	char *pathname = (char *)calloc(256, sizeof(char));
+	if (map_fd_search_by_val(map_fd, pathname, fp->_fileno) == 1)
+	{
+		slog_debug( "[POSIX %d]. Calling 'fclose' %s.\n", rank, pathname);
+		imss_close(pathname);
+		slog_debug( "[POSIX %d]. Ending 'fclose' %s.\n", rank, pathname);
+		free(fp);
+	}
+	else
+	{
+		ret = real_fclose(fp);
+	}
+
+	free(pathname);
+
+	return ret;
+}
+
+size_t fread(void *buf, size_t size, size_t count, FILE *fp)
+{
+	real_fread = dlsym(RTLD_NEXT, "fread");
+
+	if (!init)
+	{
+		return real_fread(buf, size, count, fp);
+	}
+
+	size_t ret;
+	unsigned long p = 0;
+	char *path = (char *)calloc(256, sizeof(char));
+
+	if (map_fd_search_by_val(map_fd, path, fp->_fileno) == 1)
+	{
+		slog_debug( "[POSIX %d]. Calling 'fread'.\n", rank);
+
+		// printf("CUSTOM read worked! path=%s fd=%d, size=%ld\n",path, fd, size);
+		map_fd_search(map_fd, path, &fp->_fileno, &p);
+		ret = imss_read(path, buf, count, p);
+		slog_debug( "[POSIX %d]. End 'read'  %ld.\n", rank, ret);
+		if (ret < count)
+			ret = 0;
+	}
+	else
+	{
+		ret = real_fread(buf, size, count, fp);
+	}
+	free(path);
+
+	return ret;
+
+	// return real_fread;
+}
+
+size_t fwrite(const void *buf, size_t size, size_t count, FILE *fp)
+{
+	real_fwrite = dlsym(RTLD_NEXT, "fwrite");
+
+	if (!init)
+	{
+		return real_fwrite(buf, size, count, fp);
+	}
+
+	size_t ret = -1;
+	unsigned long p = 0;
+	char *path = (char *)calloc(256, sizeof(char));
+	if (map_fd_search_by_val(map_fd, path, fp->_fileno) == 1)
+	{
+		slog_debug( "[POSIX %d]. Calling 'fwrite'.\n", rank);
+
+		struct stat ds_stat_n;
+		imss_getattr(path, &ds_stat_n);
+		map_fd_search(map_fd, path, &fp->_fileno, &p);
+		// printf("CUSTOM write worked! path=%s fd=%d, size=%ld offset=%ld, buffer=%s\n", path, fd, size, p, buf);
+		ret = imss_write(path, buf, count, p);
+		// imss_release(path);
+		slog_debug("[POSIX %d]. Ending 'fwrite'., ret=%ld\n", rank, ret);
+	}
+	else
+	{
+		ret = real_fwrite(buf, size, count, fp);
+	}
+	free(path);
+
+	return ret;
+}
+
+int ferror(FILE *fp)
+{
+	real_ferror = dlsym(RTLD_NEXT, "ferror");
+	if (!init)
+	{
+		return real_ferror(fp);
+	}
+
+	int ret = 0;
+	char *pathname = (char *)calloc(256, sizeof(char));
+	if (map_fd_search_by_val(map_fd, pathname, fp->_fileno) == 1)
+	{
+		// ret = real_ferror(fp);
+		slog_debug( "[POSIX %d]. Calling 'ferror' %s.\n", rank, pathname);
+		return 0;
+		slog_debug( "[POSIX %d]. Ending 'ferror' %s.\n", rank, pathname);
+	}
+	else
+	{
+		ret = real_ferror(fp);
+	}
+
+	free(pathname);
+
+	return ret;
+}
+
+int feof(FILE *fp)
+{
+	real_feof = dlsym(RTLD_NEXT, "feof");
+	if (!init)
+	{
+		return real_feof(fp);
+	}
+
+	int ret = 0;
+	char *pathname = (char *)calloc(256, sizeof(char));
+	if (map_fd_search_by_val(map_fd, pathname, fp->_fileno) == 1)
+	{
+		// ret = real_ferror(fp);
+		slog_debug( "[POSIX %d]. Calling 'feof' %s.\n", rank, pathname);
+		return 0;
+		slog_debug( "[POSIX %d]. Ending 'feof' %s.\n", rank, pathname);
+	}
+	else
+	{
+		ret = real_feof(fp);
+	}
+
+	free(pathname);
+
+	return ret;
+}
+
+// static FILE *fopen(const char *restrict pathname, const char *restrict mode)
+FILE *fopen(const char *restrict pathname, const char *restrict mode)
+{
+	real_fopen = dlsym(RTLD_NEXT, "fopen");
+	int ret = 0;
+	uint64_t ret_ds;
+	unsigned long p = 0;
+
+	if (!init)
+	{
+		return real_fopen(pathname, mode);
+	}
+
+	FILE *file = NULL;
+
+	if (!strncmp(pathname, MOUNT_POINT, strlen(MOUNT_POINT)))
+	{
+		slog_debug( "Calling Hercules fopen pathname=%s\n", pathname);
+
+		char *new_path;
+		new_path = convert_path(pathname, MOUNT_POINT);
+		// Search for the path "new_path" on the map "map_fd".
+		slog_debug( "[POSIX %d]. Searching for the %s on the map\n", rank, new_path);
+		int exist = map_fd_search(map_fd, new_path, &ret, &p);
+		if (exist == -1) // if the "new_path" was not find:
+		{
+			slog_debug( "[POSIX %d]. New file %s\n", rank, new_path);
+			ret = real_open("/dev/null", 0); // Get a file descriptor
+			// stores the file descriptor "ret" into the map "map_fd".
+			if (strstr(mode, "+"))
+			{
+				p = 0; // TODO
+			}
+			else
+			{
+				p = 0;
+			}
+			slog_debug( "[POSIX %d] map_fd_put\n", rank);
+			map_fd_put(map_fd, new_path, ret, p);
+
+			int create_flag = 0;
+			if (strstr(mode, "w"))
+				create_flag = O_CREAT;
+
+			slog_debug( "[POSIX %d] new_path:%s, exist: %d, create_flag: %d\n", rank, new_path, exist, create_flag);
+			if (create_flag == O_CREAT)
+			{
+				int err_create = imss_create(new_path, mode, &ret_ds);
+				slog_debug( "[POSIX %d] imss_create(%s, %s, %ld), err_create: %d\n", rank, new_path, mode, ret_ds, err_create);
+				if (err_create == -EEXIST)
+				{
+					slog_debug( "[POSIX %d] dataset already exists.\n", rank);
+					slog_debug( "[POSIX %d] 1 - imss_open(%s, %ld)\n", rank, new_path, ret_ds);
+					TIMING(imss_open(new_path, &ret_ds), "imss_open op1", int);
+				}
+			}
+			else
+			{
+				slog_debug( "[POSIX %d] 2 - imss_open(%s, %ld)\n", rank, new_path, ret_ds);
+				TIMING(imss_open(new_path, &ret_ds), "imss_open op2", int);
+			}
+		}
+
+		slog_debug( "File descriptor %d\n", ret);
+
+		file = malloc(sizeof(struct _IO_FILE));
+
+		file->_fileno = ret;
+		file->_flags2 = IMSS_BLKSIZE * KB;
+		file->_offset = p;
+		file->_mode = 0;
+
+		// file->_flags =
+		// file->_mode = mode;
+
+		if (file == NULL)
+		{
+			slog_debug( "File %s was not found\n", pathname);
+		}
+
+		slog_debug( "Ending Hercules fopen pathname=%s\n", pathname);
+	}
+	else
+	{
+		file = real_fopen(pathname, mode);
+	}
+
+	return file;
+}
+
 int open(const char *pathname, int flags, ...)
 {
+	// fprintf(stderr, "Running open, pathname=%s, MOUNT_POINT=%s\n", pathname, MOUNT_POINT);
+
 	real_open = dlsym(RTLD_NEXT, "open");
 	int ret = 0;
 	uint64_t ret_ds;
 	unsigned long p = 0;
+
+	// slog_debug("");
 
 	int mode = 0;
 
@@ -1020,7 +1305,7 @@ int open(const char *pathname, int flags, ...)
 
 	if (!strncmp(pathname, MOUNT_POINT, strlen(MOUNT_POINT)) || !strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT)))
 	{
-		slog_debug("[POSIX %d]. Calling 'open' flags %d, mode=%d.", rank, flags, mode);
+		slog_debug("[POSIX %d]. Calling Hercules 'open' flags %d, mode=%d.", rank, flags, mode);
 		// pthread_mutex_lock(&lock2);
 		// slog_debug("Loked by %ld", rank);
 
@@ -1034,7 +1319,7 @@ int open(const char *pathname, int flags, ...)
 			slog_debug("[POSIX %d]. New file %s", rank, new_path);
 			ret = real_open("/dev/null", 0); // Get a file descriptor
 			// stores the file descriptor "ret" into the map "map_fd".
-			slog_debug("Map add=%x", &map_fd);
+			// slog_debug("Map add=%x", &map_fd);
 			map_fd_put(map_fd, new_path, ret, p);
 			int create_flag = (flags & O_CREAT);
 			slog_debug("[POSIX %d] new_path:%s, exist: %d, create_flag: %d", rank, new_path, exist, create_flag);
@@ -1056,14 +1341,16 @@ int open(const char *pathname, int flags, ...)
 			}
 		}
 		// pthread_mutex_unlock(&lock2);
-		slog_debug("[POSIX %d] Ending 'open' %d", rank, ret);
+		slog_debug("[POSIX %d] Ending Hercules 'open' %d", rank, ret);
 	}
 	else
 	{
+		slog_debug("[POSIX %d]. Calling real 'open' flags %d, mode=%d, pathname=%s.", rank, flags, mode, pathname);
 		if (!mode)
 			ret = real_open(pathname, flags);
 		else
 			ret = real_open(pathname, flags, mode);
+		slog_debug("[POSIX %d]. Calling real 'open' flags %d, mode=%d, pathname=%s.", rank, flags, mode, pathname);
 	}
 	return ret;
 }
@@ -1081,15 +1368,18 @@ int mkdir(const char *path, mode_t mode)
 	char *workdir = getenv("PWD");
 	if (!strncmp(path, MOUNT_POINT, strlen(MOUNT_POINT)) || !strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT)))
 	{
-		slog_debug("[POSIX %d]. Calling 'mkdir'.", rank);
+		slog_debug("[POSIX %d]. Calling hercules 'mkdir', path=%s.", rank, path);
 
 		char *new_path;
 		new_path = convert_path(path, MOUNT_POINT);
 		ret = imss_mkdir(new_path, mode);
+		slog_debug("[POSIX %d]. Ending hercules 'mkdir', path=%s.", rank, path);
 	}
 	else
 	{
+		slog_debug("[POSIX %d]. Calling real 'mkdir', path=%s.", rank, path);
 		ret = real_mkdir(path, mode);
+		slog_debug("[POSIX %d]. Ending real 'mkdir', path=%s.", rank, path);
 	}
 	return ret;
 }
@@ -1180,6 +1470,40 @@ ssize_t write(int fd, const void *buf, size_t size)
 
 	return ret;
 }
+
+// ssize_t fwrite(int fd, const void *buf, size_t size)
+// {
+// 	real_write = dlsym(RTLD_NEXT, "write");
+// 	size_t ret = -1;
+// 	unsigned long p = 0;
+
+// 	if (!init)
+// 	{
+// 		return real_write(fd, buf, size);
+// 	}
+
+// 	char *path = (char *)calloc(256, sizeof(char));
+
+// 	if (map_fd_search_by_val(map_fd, path, fd) == 1)
+// 	{
+// 		slog_debug("[POSIX %d]. Calling 'write'.", rank);
+
+// 		struct stat ds_stat_n;
+// 		imss_getattr(path, &ds_stat_n);
+// 		map_fd_search(map_fd, path, &fd, &p);
+// 		// printf("CUSTOM write worked! path=%s fd=%d, size=%ld offset=%ld, buffer=%s\n", path, fd, size, p, buf);
+// 		ret = TIMING(imss_write(path, buf, size, p), "imss_write", int);
+// 		// imss_release(path);
+// 		slog_debug("[POSIX %d]. Ending 'write'., ret=%ld", rank, ret);
+// 	}
+// 	else
+// 	{
+// 		ret = real_write(fd, buf, size);
+// 	}
+// 	free(path);
+
+// 	return ret;
+// }
 
 ssize_t read(int fd, void *buf, size_t size)
 {
@@ -1321,7 +1645,7 @@ int unlinkat(int fd, const char *name, int flag)
 	int ret = 0;
 	char *workdir = getenv("PWD");
 
-	fprintf(stderr, "unlinkat");
+	// fprintf(stderr, "unlinkat");
 
 	if (!init)
 	{
@@ -1617,6 +1941,66 @@ int closedir(DIR *dirp)
 
 	return ret;
 }
+
+/************************/
+
+// int openat(int dirfd, const char *pathname, int flags)
+// {
+// 	real_openat = dlsym(RTLD_NEXT, "openat");
+// 	fprintf(stderr, "Calling openat %s\n", pathname);
+
+// 	return real_openat;
+// }
+
+// int _openat(int dirfd, const char *pathname, int flags)
+// {
+// 	fprintf(stderr, "Calling _openat %s\n", pathname);
+// 	return 1;
+// }
+
+// int __openat64(int fd, const char *file, int oflag)
+// {
+// 	fprintf(stderr, "Calling __openat64 %s\n", file);
+// 	return 1;
+// }
+
+// int __openat64_2(int fd, const char *file, int oflag)
+// {
+// 	fprintf(stderr, "Calling __openat64_2 %s\n", file);
+// 	return 1;
+// }
+
+// int __libc_openat(int fd, const char *file, int oflag, ...)
+// {
+// 	fprintf(stderr, "Calling __libc_openat %s\n", file);
+// 	return 1;
+// }
+
+// int __libc_open64(const char *file, int oflag, ...)
+// {
+// 	fprintf(stderr, "Calling __libc_open64 %s\n", file);
+// 	return 1;
+// }
+
+// int __open64(const char *file, int oflag, ...)
+// {
+// 	fprintf(stderr, "Calling __open64 %s\n", file);
+// 	return 1;
+// }
+
+// int __open(const char *file, int oflag, ...)
+// {
+// 	fprintf(stderr, "Calling __open %s\n", file);
+// 	return 1;
+// }
+
+// int _open(const char *pathname, int flags, ...)
+// {
+// 	fprintf(stderr, "Calling _open %s\n", pathname);
+// 	return 1;
+// }
+
+/*****************************/
 
 // int __xstat64(int ver, const char *path, struct stat64 *stat_buf)
 // {

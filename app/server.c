@@ -258,7 +258,7 @@ int32_t main(int32_t argc, char **argv)
 	IMSS_THREAD_POOL = args.thread_pool;
 
 	char log_path[1000];
-	fprintf(stderr, "Server type=%c\n", args.type);
+	slog_debug("Server type=%c\n", args.type);
 	struct tm tm = *localtime(&t);
 	sprintf(log_path, "./%c-server.%02d-%02d-%02d", args.type, tm.tm_hour, tm.tm_min, tm.tm_sec);
 	// sprintf(log_path, "./%c-server", args.type);
