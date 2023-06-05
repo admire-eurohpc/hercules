@@ -208,4 +208,9 @@ On each data node (node, node4):
 
 
 lustre path in Broadwell
+salloc -N1
 /lustre/scratch/javier.garciablas
+
+nek500 path in Broadwell
+/beegfs/home/Shared/admire/opt/spack/linux-ubuntu20.04-zen/gcc-9.4.0/nek5000-19.0-mweeslmcmhczonxvewvzdqvamoran3ua/bin/Nek5000/bin/
+/beegfs/home/Shared/admire/opt/spack/linux-ubuntu20.04-zen/gcc-9.4.0/nek5000-19.0-mweeslmcmhczonxvewvzdqvamoran3ua

@@ -257,8 +257,7 @@ int imss_getattr(const char *path, struct stat *stbuf)
 			}
 			else
 			{
-				if (IMSS_DEBUG)
-					fprintf(stderr, "[IMSS-FUSE]	Cannot get dataset metadata.");
+				fprintf(stderr, "[IMSS-FUSE]	Cannot get dataset metadata.");
 				return -ENOENT;
 			}
 		}
@@ -268,8 +267,8 @@ int imss_getattr(const char *path, struct stat *stbuf)
 		}
 		else
 		{
-			if (IMSS_DEBUG)
-				fprintf(stderr, "[IMSS-FUSE]	Cannot get dataset metadata.");
+			
+			fprintf(stderr, "[IMSS-FUSE]	Cannot get dataset metadata.");
 			return -ENOENT;
 		}
 		return 0;
@@ -395,6 +394,9 @@ int imss_open(const char *path, uint64_t *fh)
 	{
 
 		file_desc = open_dataset(imss_path);
+		if(file_desc < 0){ // dataset was not found.
+			return -1;
+		}
 		aux = (char *)malloc(IMSS_DATA_BSIZE);
 		ret = get_data(file_desc, 0, (char *)aux);
 		slog_debug("[imss_open] ret=%ld", ret);
@@ -414,7 +416,7 @@ int imss_open(const char *path, uint64_t *fh)
 
 	// File does not exist
 	if (file_desc < 0)
-		return -ENOENT;
+		return -1;
 
 	// Assign file descriptor
 	*fh = file_desc;

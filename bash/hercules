@@ -129,6 +129,8 @@ fi
 
 
 ## Read configuration file.
+export MOUNT_POINT=$(cat $FILE | grep "MOUNT_POINT" | head -1 | awk '{print $3}')
+echo MOUNT_POINT=$MOUNT_POINT
 META_PORT=$(cat $FILE | grep "METADATA_PORT" | awk '{print $3}')
 DATA_PORT=$(cat $FILE | grep "DATA_PORT" | awk '{print $3}')
 MALLEABILITY=$(cat $FILE | grep "MALLEABILITY" | awk '{print $3}')
@@ -185,19 +187,22 @@ do
     # COMMAND="{ rm /tmp/m-hercules-$i; }; { cd $H_BASH_PATH && $H_BUILD_PATH/hercules_server m $i 2> m_server.out; };"
     # COMMAND="rm /tmp/m-hercules-$i"
     
-    echo "[+] Running metadata server $i in $node..."
     RM="rm /tmp/m-hercules-$i"
     COMMAND="$H_BUILD_PATH/hercules_server m $i"
     ## If slurm is not being used, we deploy the service by connecting
     ## to the node via ssh.
     if [[ "$SLURM" -eq "0" ]]; then
         #{ ssh $node "$RM; cd $H_BASH_PATH && $COMMAND"; } &
+        echo "[+] Removing temporal files on $node"
         ( ssh $node "$RM" )
+        echo "[+] Running metadata server $i in $node..."
         ( ssh $node "cd $H_BASH_PATH && $COMMAND" ) &
     else
         ## Deletes the file that we use to make sure that the server has started.
+        echo "[+] Removing temporal files on $node"
         srun --exclusive --export=ALL -N 1 -n 1 -w $node $RM
         ## If slurm is being used, the service is deploy using srun.
+        echo "[+] Running metadata server $i in $node..."
         srun --exclusive --export=ALL -N 1 -n 1 -w $node $COMMAND &
     fi
     i=$(($i+1))
@@ -242,12 +247,16 @@ do
     COMMAND="$H_BUILD_PATH/hercules_server d $i ${meta_hosts[0]}"
     if [[ "$SLURM" -eq "0" ]]; then
         # ssh $node "$RM; cd $H_BASH_PATH &&  $COMMAND &"
+        echo "[+] Removing temporal files on $node"
         ( ssh $node "$RM" )
+        echo "[+] Running data server $i in $node..."
         ( ssh $node "cd $H_BASH_PATH && $COMMAND" ) &
     else
         ## Deletes the file that we use to make sure that the server has started.
+        echo "[+] Removing temporal files on $node"
         srun --exclusive --export=ALL -N 1 -n 1 -w $node $RM
         ## If slurm is being used, the service is deploy using srun.
+        echo "[+] Running data server $i in $node..."
         srun --exclusive --export=ALL -N 1 -n 1 -w $node $COMMAND &
     fi
     i=$(($i+1))
@@ -301,7 +310,7 @@ unset META_PORT
 unset DATA_PORT
 unset MALLEABILITY
 unset NUM_METADATA
-unset NUM_DATA
+#unset NUM_DATA
 unset NUM_NODES_FOR_CLIENTS
 unset NUM_CLIENTS_PER_NODE
 unset BLOCK_SIZE

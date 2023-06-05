@@ -151,9 +151,6 @@ static size_t (*real_fwrite)(const void *buf, size_t size, size_t count, FILE *f
 static int (*real_ferror)(FILE *fp) = NULL;
 static int (*real_feof)(FILE *fp) = NULL;
 
-
-
-
 // int _openat(int dirfd, const char *pathname, int flags, ...)
 // {
 // 	real__openat = dlsym(RTLD_NEXT, "_openat");
@@ -252,6 +249,18 @@ __attribute__((constructor)) void imss_posix_init(void)
 {
 	map_fd = map_fd_create();
 
+	// Getting a mostly unique id for the distributed deployment.
+	char hostname[1024];
+	int ret = gethostname(&hostname[0], 512);
+	if (ret == -1)
+	{
+		perror("gethostname");
+		exit(EXIT_FAILURE);
+	}
+	sprintf(hostname, "%s:%d", hostname, getpid());
+
+	rank = MurmurOAAT32(hostname);
+
 	// fill global variables with the enviroment variables value.
 	getConfiguration();
 
@@ -270,18 +279,6 @@ __attribute__((constructor)) void imss_posix_init(void)
 			slog_fatal("[IMSS-FUSE]	Hercules init failed, cannot deploy IMSS.\n");
 		}
 	}
-
-	// Getting a mostly unique id for the distributed deployment.
-	char hostname[1024];
-	int ret = gethostname(&hostname[0], 512);
-	if (ret == -1)
-	{
-		perror("gethostname");
-		exit(EXIT_FAILURE);
-	}
-	sprintf(hostname, "%s:%d", hostname, getpid());
-
-	rank = MurmurOAAT32(hostname);
 
 	// log init.
 	time_t t = time(NULL);
@@ -350,7 +347,8 @@ __attribute__((constructor)) void imss_posix_init(void)
 		}
 	}
 
-	slog_debug("Client ready\n");
+	slog_debug("[CLIENT %d] ready!\n", rank);
+	fprintf(stderr, "[CLIENT %d] ready!\n", rank);
 	init = 1;
 }
 
@@ -368,7 +366,7 @@ void getConfiguration()
 	char *aux;
 
 	cfg = cfg_init();
-	conf_path = getenv("IMSS_CONF");
+	conf_path = getenv("H_CONF");
 	if (conf_path != NULL)
 	{
 		ret = cfg_load(cfg, conf_path);
@@ -380,30 +378,47 @@ void getConfiguration()
 
 	if (ret)
 	{
-		conf_path = (char *)malloc(sizeof(char) * PATH_MAX);
-		strcpy(conf_path, "/etc/hercules.conf");
-		if (cfg_load(cfg, conf_path) > 0)
+		char default_paths[3][PATH_MAX] = {
+			"/etc/hercules.conf",
+			"./hercules.conf",
+			"hercules.conf"};
+
+		for (size_t i = 0; i < 3; i++)
+		{
+			fprintf(stderr, "Loading %s\n", default_paths[i]);
+			if (cfg_load(cfg, default_paths[i]) == 0)
+			{
+				ret = 0;
+				break;
+			}
+		}
+		if (ret)
 		{
 			if (getcwd(abs_exe_path, sizeof(abs_exe_path)) != NULL)
 			{
+				conf_path = (char *)malloc(sizeof(char) * PATH_MAX);
 				sprintf(conf_path, "%s/%s", abs_exe_path, "../conf/hercules.conf");
-			}
-			else
-			{
-				sprintf(conf_path, "%s", "./hercules.conf");
-			}
-			if (cfg_load(cfg, conf_path) > 0)
-			{
-				sprintf(conf_path, "%s", "./hercules.conf");
-				if (cfg_load(cfg, conf_path) > 0)
+				if (cfg_load(cfg, conf_path) == 0)
 				{
-					cfg_load(cfg, "hercules.conf");
+					ret = 0;
 				}
 			}
 		}
-	}
 
-	fprintf(stderr, "[Client] Configuration file loaded %s\n", conf_path);
+		if (!ret)
+		{
+			fprintf(stderr, "[CLIENT %d] Configuration file loaded: %s\n", rank, conf_path);
+		}
+		else
+		{
+			fprintf(stderr, "[CLIENT %d] Configuration file not found\n", rank);
+		}
+		free(conf_path);
+	}
+	else
+	{
+		fprintf(stderr, "[CLIENT %d] Configuration file loaded: %s\n", rank, conf_path);
+	}
 
 	if (cfg_get(cfg, "URI"))
 	{
@@ -1046,9 +1061,9 @@ int fclose(FILE *fp)
 	char *pathname = (char *)calloc(256, sizeof(char));
 	if (map_fd_search_by_val(map_fd, pathname, fp->_fileno) == 1)
 	{
-		slog_debug( "[POSIX %d]. Calling 'fclose' %s.\n", rank, pathname);
+		slog_debug("[POSIX %d]. Calling 'fclose' %s.\n", rank, pathname);
 		imss_close(pathname);
-		slog_debug( "[POSIX %d]. Ending 'fclose' %s.\n", rank, pathname);
+		slog_debug("[POSIX %d]. Ending 'fclose' %s.\n", rank, pathname);
 		free(fp);
 	}
 	else
@@ -1076,12 +1091,12 @@ size_t fread(void *buf, size_t size, size_t count, FILE *fp)
 
 	if (map_fd_search_by_val(map_fd, path, fp->_fileno) == 1)
 	{
-		slog_debug( "[POSIX %d]. Calling 'fread'.\n", rank);
+		slog_debug("[POSIX %d]. Calling 'fread'.\n", rank);
 
 		// printf("CUSTOM read worked! path=%s fd=%d, size=%ld\n",path, fd, size);
 		map_fd_search(map_fd, path, &fp->_fileno, &p);
 		ret = imss_read(path, buf, count, p);
-		slog_debug( "[POSIX %d]. End 'read'  %ld.\n", rank, ret);
+		slog_debug("[POSIX %d]. End 'read'  %ld.\n", rank, ret);
 		if (ret < count)
 			ret = 0;
 	}
@@ -1110,7 +1125,7 @@ size_t fwrite(const void *buf, size_t size, size_t count, FILE *fp)
 	char *path = (char *)calloc(256, sizeof(char));
 	if (map_fd_search_by_val(map_fd, path, fp->_fileno) == 1)
 	{
-		slog_debug( "[POSIX %d]. Calling 'fwrite'.\n", rank);
+		slog_debug("[POSIX %d]. Calling 'fwrite'.\n", rank);
 
 		struct stat ds_stat_n;
 		imss_getattr(path, &ds_stat_n);
@@ -1142,9 +1157,9 @@ int ferror(FILE *fp)
 	if (map_fd_search_by_val(map_fd, pathname, fp->_fileno) == 1)
 	{
 		// ret = real_ferror(fp);
-		slog_debug( "[POSIX %d]. Calling 'ferror' %s.\n", rank, pathname);
+		slog_debug("[POSIX %d]. Calling 'ferror' %s.\n", rank, pathname);
 		return 0;
-		slog_debug( "[POSIX %d]. Ending 'ferror' %s.\n", rank, pathname);
+		slog_debug("[POSIX %d]. Ending 'ferror' %s.\n", rank, pathname);
 	}
 	else
 	{
@@ -1169,9 +1184,9 @@ int feof(FILE *fp)
 	if (map_fd_search_by_val(map_fd, pathname, fp->_fileno) == 1)
 	{
 		// ret = real_ferror(fp);
-		slog_debug( "[POSIX %d]. Calling 'feof' %s.\n", rank, pathname);
+		slog_debug("[POSIX %d]. Calling Hercules 'feof' %s.\n", rank, pathname);
 		return 0;
-		slog_debug( "[POSIX %d]. Ending 'feof' %s.\n", rank, pathname);
+		slog_debug("[POSIX %d]. Ending Hercules 'feof' %s.\n", rank, pathname);
 	}
 	else
 	{
@@ -1200,16 +1215,16 @@ FILE *fopen(const char *restrict pathname, const char *restrict mode)
 
 	if (!strncmp(pathname, MOUNT_POINT, strlen(MOUNT_POINT)))
 	{
-		slog_debug( "Calling Hercules fopen pathname=%s\n", pathname);
+		slog_debug("Calling Hercules fopen pathname=%s\n", pathname);
 
 		char *new_path;
 		new_path = convert_path(pathname, MOUNT_POINT);
 		// Search for the path "new_path" on the map "map_fd".
-		slog_debug( "[POSIX %d]. Searching for the %s on the map\n", rank, new_path);
+		slog_debug("[POSIX %d]. Searching for the %s on the map\n", rank, new_path);
 		int exist = map_fd_search(map_fd, new_path, &ret, &p);
 		if (exist == -1) // if the "new_path" was not find:
 		{
-			slog_debug( "[POSIX %d]. New file %s\n", rank, new_path);
+			slog_debug("[POSIX %d]. New file %s\n", rank, new_path);
 			ret = real_open("/dev/null", 0); // Get a file descriptor
 			// stores the file descriptor "ret" into the map "map_fd".
 			if (strstr(mode, "+"))
@@ -1220,33 +1235,33 @@ FILE *fopen(const char *restrict pathname, const char *restrict mode)
 			{
 				p = 0;
 			}
-			slog_debug( "[POSIX %d] map_fd_put\n", rank);
+			slog_debug("[POSIX %d] map_fd_put\n", rank);
 			map_fd_put(map_fd, new_path, ret, p);
 
 			int create_flag = 0;
 			if (strstr(mode, "w"))
 				create_flag = O_CREAT;
 
-			slog_debug( "[POSIX %d] new_path:%s, exist: %d, create_flag: %d\n", rank, new_path, exist, create_flag);
+			slog_debug("[POSIX %d] new_path:%s, exist: %d, create_flag: %d\n", rank, new_path, exist, create_flag);
 			if (create_flag == O_CREAT)
 			{
 				int err_create = imss_create(new_path, mode, &ret_ds);
-				slog_debug( "[POSIX %d] imss_create(%s, %s, %ld), err_create: %d\n", rank, new_path, mode, ret_ds, err_create);
+				slog_debug("[POSIX %d] imss_create(%s, %s, %ld), err_create: %d\n", rank, new_path, mode, ret_ds, err_create);
 				if (err_create == -EEXIST)
 				{
-					slog_debug( "[POSIX %d] dataset already exists.\n", rank);
-					slog_debug( "[POSIX %d] 1 - imss_open(%s, %ld)\n", rank, new_path, ret_ds);
-					TIMING(imss_open(new_path, &ret_ds), "imss_open op1", int);
+					slog_debug("[POSIX %d] dataset already exists.\n", rank);
+					slog_debug("[POSIX %d] 1 - imss_fopen(%s, %ld)\n", rank, new_path, ret_ds);
+					TIMING(ret = imss_open(new_path, &ret_ds), "imss_open op1", int);
 				}
 			}
 			else
 			{
-				slog_debug( "[POSIX %d] 2 - imss_open(%s, %ld)\n", rank, new_path, ret_ds);
-				TIMING(imss_open(new_path, &ret_ds), "imss_open op2", int);
+				slog_debug("[POSIX %d] 2 - imss_fopen(%s, %ld)\n", rank, new_path, ret_ds);
+				TIMING(ret = imss_open(new_path, &ret_ds), "imss_open op2", int);
 			}
 		}
 
-		slog_debug( "File descriptor %d\n", ret);
+		slog_debug("File descriptor %d\n", ret);
 
 		file = malloc(sizeof(struct _IO_FILE));
 
@@ -1260,10 +1275,10 @@ FILE *fopen(const char *restrict pathname, const char *restrict mode)
 
 		if (file == NULL)
 		{
-			slog_debug( "File %s was not found\n", pathname);
+			slog_debug("File %s was not found\n", pathname);
 		}
 
-		slog_debug( "Ending Hercules fopen pathname=%s\n", pathname);
+		slog_debug("Ending Hercules fopen pathname=%s\n", pathname);
 	}
 	else
 	{
@@ -1331,13 +1346,13 @@ int open(const char *pathname, int flags, ...)
 				{
 					slog_debug("[POSIX %d] dataset already exists.", rank);
 					slog_debug("[POSIX %d] 1 - imss_open(%s, %ld)", rank, new_path, &ret_ds);
-					TIMING(imss_open(new_path, &ret_ds), "imss_open op1", int);
+					TIMING(ret = imss_open(new_path, &ret_ds), "imss_open op1", int);
 				}
 			}
 			else
 			{
 				slog_debug("[POSIX %d] 2 - imss_open(%s, %ld)", rank, new_path, &ret_ds);
-				TIMING(imss_open(new_path, &ret_ds), "imss_open op2", int);
+				TIMING(ret = imss_open(new_path, &ret_ds), "imss_open op2", int);
 			}
 		}
 		// pthread_mutex_unlock(&lock2);
@@ -1452,7 +1467,7 @@ ssize_t write(int fd, const void *buf, size_t size)
 
 	if (map_fd_search_by_val(map_fd, path, fd) == 1)
 	{
-		slog_debug("[POSIX %d]. Calling 'write'.", rank);
+		slog_debug("[POSIX %d]. Calling Hercules 'write', path=%s.", rank, path);
 
 		struct stat ds_stat_n;
 		imss_getattr(path, &ds_stat_n);
@@ -1460,7 +1475,7 @@ ssize_t write(int fd, const void *buf, size_t size)
 		// printf("CUSTOM write worked! path=%s fd=%d, size=%ld offset=%ld, buffer=%s\n", path, fd, size, p, buf);
 		ret = TIMING(imss_write(path, buf, size, p), "imss_write", int);
 		// imss_release(path);
-		slog_debug("[POSIX %d]. Ending 'write'., ret=%ld", rank, ret);
+		slog_debug("[POSIX %d]. Ending Hercules 'write', path=%s, ret=%ld.", rank, path, ret);
 	}
 	else
 	{
@@ -1521,12 +1536,11 @@ ssize_t read(int fd, void *buf, size_t size)
 
 	if (map_fd_search_by_val(map_fd, path, fd) == 1)
 	{
-		slog_debug("[POSIX %d]. Calling 'read'.", rank);
-
+		slog_debug("[POSIX %d]. Calling Hercules 'read', path=%s.", rank, path);
 		// printf("CUSTOM read worked! path=%s fd=%d, size=%ld\n",path, fd, size);
 		TIMING(map_fd_search(map_fd, path, &fd, &p), "[read]map_fd_search", int);
 		ret = TIMING(imss_read(path, buf, size, p), "[read]imss_read", int);
-		slog_debug("[POSIX %d]. End 'read'  %ld.", rank, ret);
+		slog_debug("[POSIX %d]. End Hercules 'read', path=%s, ret=%ld.", rank, path, ret);
 		if (ret < size)
 			ret = 0;
 	}

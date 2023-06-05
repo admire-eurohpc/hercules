@@ -65,7 +65,8 @@ extern "C"
 		if (search != m->end())
 		{
 			// get the pair values (refered as *v=first and *p=second) from the value (refered as second) of the map (refered as search).
-			slog_debug("[map_fd_search] fd with key %s has been found", k);
+			fprintf(stderr, "[map_fd_search] fd with key %s has been found", k);
+			// slog_debug("[map_fd_search] fd with key %s has been found", k);
 			*v = search->second.first;
 			*p = search->second.second;
 			return 1;
