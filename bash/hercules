@@ -95,10 +95,7 @@ then
 fi
 
 ## Define values.
-H_PATH=$(dirname `pwd`)
-H_BUILD_PATH=$H_PATH/build
-H_BASH_PATH=$H_PATH/bash
-H_POSIX_PRELOAD="LD_PRELOAD=$H_PATH/build/tools/libhercules_posix.so"
+
 
 ## If a configuration file was not provided.
 if [ -z "$FILE" ]; then
@@ -126,7 +123,17 @@ if [[ $SLURM -eq 1 ]]; then
     srun -pernode hostname |sort > hostfile
 fi
 
+if [ -z "$FILE" ]; then
+    H_PATH=$(dirname `pwd`)
+else
+    H_PATH=$(cat $FILE | grep "HERCULES_PATH" | awk '{print $3}')
+fi
 
+echo "Using $H_PATH"
+
+H_BUILD_PATH=$H_PATH/build
+H_BASH_PATH=$H_PATH/bash
+H_POSIX_PRELOAD="LD_PRELOAD=$H_PATH/build/tools/libhercules_posix.so"
 
 ## Read configuration file.
 export MOUNT_POINT=$(cat $FILE | grep "MOUNT_POINT" | head -1 | awk '{print $3}')

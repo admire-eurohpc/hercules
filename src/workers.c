@@ -923,7 +923,7 @@ void *stat_worker(void *th_argv)
 			msg_tag = ucp_tag_probe_nb(arguments->ucp_worker, tag_req, tag_mask, 1, &info_tag);
 		} while (msg_tag == NULL);
 
-		msg = (msg_req_t *)malloc(info_tag.length);
+		msg = (msg_req_t *)malloc(info_tag.length); // Should the msg memory be free?
 		memset(msg, 0, info_tag.length);
 
 		recv_param.op_attr_mask = UCP_OP_ATTR_FIELD_CALLBACK |
