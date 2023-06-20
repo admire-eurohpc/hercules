@@ -88,8 +88,9 @@ set -x
 
 echo "Running the client"
 export LD_PRELOAD=/beegfs/home/javier.garciablas/imss/build/tools/libhercules_posix.so
-# python writeFile.py
-# python readFile.py
+python writeFile.py /mnt/imss/example.txt
+python getSizeFile.py /mnt/imss/example.txt
+ltrace -S -o readFile.ltrace python readFile.py /mnt/imss/example.txt
 # touch /mnt/imss/example.wps
 
 # ln -sf $WRF_ROOT/$WRF/WPS/geogrid.exe
@@ -97,61 +98,61 @@ export LD_PRELOAD=/beegfs/home/javier.garciablas/imss/build/tools/libhercules_po
 
 
 # LD_PRELOAD=/beegfs/home/javier.garciablas/imss/build/tools/libhercules_posix.so strace -o out.txt cat /mnt/imss/nameList.wps
-cat > /mnt/imss/namelist.wps << EOF
-&share
- wrf_core = 'ARW',
- start_date = '$INITIAL','$INITIAL','$INITIAL','$INITIAL','$INITIAL','$INITIAL',
- end_date   = '$FINAL','$FINAL','$FINAL','$FINAL','$FINAL','$FINAL',
- interval_seconds = 10800
- max_dom = 3,
- io_form_geogrid = 2,
-/
+# cat > /mnt/imss/namelist.wps << EOF
+# &share
+#  wrf_core = 'ARW',
+#  start_date = '$INITIAL','$INITIAL','$INITIAL','$INITIAL','$INITIAL','$INITIAL',
+#  end_date   = '$FINAL','$FINAL','$FINAL','$FINAL','$FINAL','$FINAL',
+#  interval_seconds = 10800
+#  max_dom = 3,
+#  io_form_geogrid = 2,
+# /
 
-&geogrid
- parent_id         =    1,      1,      2,      3,      4,     5,
- parent_grid_ratio =    1,      5,      5,      5,      3,     3,     
- i_parent_start    = 1,120,173,
- j_parent_start    = 1,33,112,
- e_we              = 280,361,301,
- e_sn              = 209,336,306,
- geog_data_res     = '30s','30s','30s','30s','30s',
- dx = 25000,
- dy = 25000,
- map_proj = 'lambert',
- ref_lat   =  50.36,
- ref_lon   =   8.959,
- truelat1  =  50.36,
- truelat2  =  50.36,
- stand_lon =   8.959,
- geog_data_path = './geog'
- OPT_GEOGRID_TBL_PATH = './geogrid'
-/
+# &geogrid
+#  parent_id         =    1,      1,      2,      3,      4,     5,
+#  parent_grid_ratio =    1,      5,      5,      5,      3,     3,     
+#  i_parent_start    = 1,120,173,
+#  j_parent_start    = 1,33,112,
+#  e_we              = 280,361,301,
+#  e_sn              = 209,336,306,
+#  geog_data_res     = '30s','30s','30s','30s','30s',
+#  dx = 25000,
+#  dy = 25000,
+#  map_proj = 'lambert',
+#  ref_lat   =  50.36,
+#  ref_lon   =   8.959,
+#  truelat1  =  50.36,
+#  truelat2  =  50.36,
+#  stand_lon =   8.959,
+#  geog_data_path = './geog'
+#  OPT_GEOGRID_TBL_PATH = './geogrid'
+# /
 
-&ungrib
- out_format = 'WPS',
- prefix = 'FILE',
-/
+# &ungrib
+#  out_format = 'WPS',
+#  prefix = 'FILE',
+# /
 
 
-&metgrid
- fg_name = 'FILE'
- io_form_metgrid = 2,
-/
+# &metgrid
+#  fg_name = 'FILE'
+#  io_form_metgrid = 2,
+# /
 
-&mod_levs
- press_pa = 201300 , 200100 , 100000 ,
-             95000 ,  90000 ,
-             85000 ,  80000 ,
-             75000 ,  70000 ,
-             65000 ,  60000 ,
-             55000 ,  50000 ,
-             45000 ,  40000 ,
-             35000 ,  30000 ,
-             25000 ,  20000 ,
-             15000 ,  10000 ,
-              5000 ,   1000
-/
-EOF
+# &mod_levs
+#  press_pa = 201300 , 200100 , 100000 ,
+#              95000 ,  90000 ,
+#              85000 ,  80000 ,
+#              75000 ,  70000 ,
+#              65000 ,  60000 ,
+#              55000 ,  50000 ,
+#              45000 ,  40000 ,
+#              35000 ,  30000 ,
+#              25000 ,  20000 ,
+#              15000 ,  10000 ,
+#               5000 ,   1000
+# /
+# EOF
 
 
 # COMMAND="python writeFile.py"

@@ -1,3 +1,5 @@
+import sys
+
 def write_file(filename, content):
     try:
         with open(filename, 'w') as file:
@@ -7,6 +9,7 @@ def write_file(filename, content):
         print(f"An error occurred while writing to the file '{filename}'.")
 
 # Example usage:
-file_name = '/mnt/imss/example.txt'
+# file_name = '/mnt/imss/example.txt'
+file_name = sys.argv[1]
 file_content = "Hello, world!"
 write_file(file_name, file_content)
