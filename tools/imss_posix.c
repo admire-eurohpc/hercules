@@ -1604,11 +1604,20 @@ ssize_t read(int fd, void *buf, size_t size)
 		struct stat ds_stat_n;
 		imss_getattr(path, &ds_stat_n);
 		slog_debug("[POSIX %d]. pathname=%s, stat.size=%ld.", rank, path, ds_stat_n.st_size);
-		ret = TIMING(imss_read(path, buf, size, p), "[read]imss_read", int);
+		
+		if (p >= ds_stat_n.st_size)
+		{
+			ret = 0;
+		}
+		else
+		{
+			ret = TIMING(imss_read(path, buf, size, p), "[read]imss_read", int);
 
-		// map_fd_search(map_fd, path, &fd, &p);
-		p += ret;
-		map_fd_update_value(map_fd, path, fd, p);
+			// map_fd_search(map_fd, path, &fd, &p);
+			p += ret;
+			slog_debug("[POSIX %d] Updating map_fd, offset=%d", rank, p);
+			map_fd_update_value(map_fd, path, fd, p);
+		}
 
 		// ret = size+1;
 		slog_debug("[POSIX %d]. End Hercules 'read', pathname=%s, ret=%ld, size=%ld.", rank, path, ret, size);
