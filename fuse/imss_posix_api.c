@@ -1958,7 +1958,10 @@ int imss_create(const char *path, mode_t mode, uint64_t *fh)
 	ds_stat.st_gid = getgid();
 	ds_stat.st_blocks = 0;
 	ds_stat.st_blksize = IMSS_DATA_BSIZE;
-	slog_live("[imss_create] IMSS_DATA_BSIZE:%ld", IMSS_DATA_BSIZE);
+	ds_stat.st_ino = res;
+	ds_stat.st_dev = 0;
+
+	slog_live("[imss_create] IMSS_DATA_BSIZE:%ld, res=%d", IMSS_DATA_BSIZE, res);
 	if (!S_ISDIR(mode))
 		mode |= S_IFREG;
 	ds_stat.st_mode = mode;
