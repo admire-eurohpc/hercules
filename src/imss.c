@@ -363,7 +363,7 @@ int32_t stat_init(char *stat_hostfile,
 		slog_debug("[IMSS][stat_int] request=%s", request);
 		if (send(oob_sock, request, REQUEST_SIZE, 0) < 0)
 		{
-			perror("ERRIMSS_STAT_HELLO");
+			perror("ERRIMSS_STAT_HELLO_2");
 			return -1;
 		}
 
@@ -661,7 +661,7 @@ int32_t init_imss(char *imss_uri,
 
 		if (send(oob_sock, request, REQUEST_SIZE, 0) < 0)
 		{
-			perror("ERRIMSS_STAT_HELLO");
+			perror("ERRIMSS_STAT_HELLO_0");
 			return -1;
 		}
 
@@ -782,9 +782,12 @@ int32_t open_imss(char *imss_uri)
 		char request[REQUEST_SIZE];
 		sprintf(request, "%" PRIu32 " GET %s", process_rank, "HELLO!JOIN");
 
+		slog_debug("[open_imss] ip_address=%s:%d", new_imss.info.ips[i], new_imss.info.conn_port);
+		fprintf(stderr, "[open_imss] ip_address=%s:%d\n", new_imss.info.ips[i], new_imss.info.conn_port);
+
 		if (send(oob_sock, request, REQUEST_SIZE, 0) < 0)
 		{
-			perror("ERRIMSS_STAT_HELLO");
+			perror("ERRIMSS_STAT_HELLO_1");
 			return -1;
 		}
 
@@ -2155,7 +2158,7 @@ int32_t get_ndata(int32_t dataset_id, int32_t data_id, char *buffer, size_t to_r
 		sprintf(key_, "GET %lu %ld %s$%d %ld", 0l, offset, curr_dataset.uri_, data_id, to_read);
 		// slog_info("[IMSS][get_data] Request - '%s'", key_);
 		ep = curr_imss.conns.eps[repl_servers[i]];
-
+		slog_debug("[get_ndata] Sending request %s", key_);
 		if (TIMING(send_req(ucp_worker_data, ep, local_addr_data, local_addr_len_data, key_), "[imss_read]send_req", size_t) < 0)
 		{
 			perror("ERRIMSS_RLSIMSS_SENDADDR");
@@ -2165,6 +2168,7 @@ int32_t get_ndata(int32_t dataset_id, int32_t data_id, char *buffer, size_t to_r
 		// Receive data related to the previous read request directly into the buffer.
 		size_t length = 0;
 		length = TIMING(recv_data(ucp_worker_data, ep, buffer, local_data_uid, 0), "[imss_read]recv_data", size_t);
+		slog_debug("[get_ndata] Receiving request, length=%ld", length);
 		if (length < 0)
 		{
 			if (errno != EAGAIN)

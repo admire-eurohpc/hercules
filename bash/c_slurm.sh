@@ -88,9 +88,26 @@ set -x
 
 echo "Running the client"
 export LD_PRELOAD=/beegfs/home/javier.garciablas/imss/build/tools/libhercules_posix.so
+######################## Write, get size and read a File with Python #############################################
 python writeFile.py /mnt/imss/example.txt
 python getSizeFile.py /mnt/imss/example.txt
-ltrace -S -o readFile.ltrace python readFile.py /mnt/imss/example.txt
+python readFile.py /mnt/imss/example.txt
+# ltrace -S -o readFile.ltrace 
+##################################################################################################################
+
+
+
+######################## Create a directory and copy files with Bash #############################################
+# mkdir /mnt/imss/envapp
+# # strace -o copy.strace cp /beegfs/home/javier.garciablas/imss/README.md /beegfs/home/javier.garciablas/imss/README2.md
+# # strace -o copy.strace 
+# cp /beegfs/home/javier.garciablas/imss/README.md /mnt/imss/envapp/HERCULES_README.md
+# # ./exe_fstatExample /mnt/imss/envapp/HERCULES_README.md
+# cp /mnt/imss/envapp/HERCULES_README.md /mnt/imss/envapp/2HERCULES_README.md
+# cat /mnt/imss/envapp/2HERCULES_README.md > output.cat
+##################################################################################################################
+
+
 # touch /mnt/imss/example.wps
 
 # ln -sf $WRF_ROOT/$WRF/WPS/geogrid.exe
