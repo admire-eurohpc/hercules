@@ -31,14 +31,17 @@ The following software packages are required for the compilation of Hercules IMS
 - FUSE
 - MPI (MPICH or OpenMPI)
     
+## Project build
 
 Hercules IMSS is a CMAKE-based project, so the compilation process is quite simple:  
-`
-    mkdir build
-    cd build
-    cmake ..
-    make
-`
+
+```
+> mkdir build                          
+> cd build.                     
+> cmake ..                      
+> make                                    
+> make install                         
+```
 
 As a result the project generates the following outputs:
 - mount.imss: run as daemons the necessary instances for Hercules IMSS. Later, it enables the usage of the interception library with execution persistency.
@@ -48,164 +51,105 @@ As a result the project generates the following outputs:
 - libimss_static.a: static library of IMSS's API.
 - imfssfs: application for mounting HERCULES IMSS at user space by using FUSE engine.
     
+## Spack module
+
+Clone the project from the project GIT repository:
+
+```
+git clone https://gitlab.arcos.inf.uc3m.es/admire/spack.git
+```
+
+Now, you can add repositories under the admire namespace:
+
+```
+spack repo add spack/adhoc-recipes 
+spack install hercules
+spack load hercules
+```
 
 # Usage
 
-The current prototype of Hercules IMSS enables the access to the storage infrastructure in three different ways: API library, FUSE, and LD_PRELOAD by overriding symbols. In the following subsections, we describe the characteristics of each alternative.
-
-## API
-
-Hercules IMSS is defectively accessible by using C-based API. This API includes the following calls:
-
--  *hercules_init*: initializes the infrastructure required to deploy an IMSS attached server within the calling client. Besides, it deploys an attached metadata server if requested.
-- *hercules_release*: releases infrastructure resources of an attached deployment.
-- *stat_init*: creates a communication channel with every metadata server. Besides, the former method declares additional resources that will be required throughout the client session.
-- *stat_release*: releases resources required to communicate with the metadata servers and additional session parameters.
-- *init_imss*: deploys an IMSS detached instance or initializes an IMSS attached one.
-- *open_imss*: joins to an existing IMSS instance enabling access to the stored datasets.
-- *release_imss*: releases resources required to communicate with an IMSS instance as well as the every IMSS instance server if requested.
-- *create_dataset*: creates a new dataset within a previously created or joined IMSS instance.
-- *open_dataset*: subscribes to an existing dataset within a previously created or joined IMSS instance.
-- *release_dataset*: frees resources required to read and write blocks of a certain dataset.
-- *get_data*: retrieves a certain block of a previously created or opened dataset from one of the IMSS servers conforming the instance.
-- *set_data*: stores a certain block of a previously created or opened dataset into a set of IMSS servers part of the same instance.
-- *get_type*: given a certain URI, the former method returns if it corresponds to an IMSS instance or dataset.
-
-The below code excerpt depicts an usage example of Hercules IMSS by using the proposed API. The example creates a determined number of datasets in-memory.
+The current prototype of Hercules enables the access to the storage infrastructure in three different ways: API library, FUSE, and LD_PRELOAD by overriding symbols. In the following subsection we describe the characteristics of the preferred option.
 
 
-## FUSE
+## Running with LD_PRELOAD
+We provide a script that launches a Hercules deployment (_scripts/hercules_). This script reads all initialization parameters from a provided configuration file (_hercules.conf_).
 
-We have constructed a file system layer on top of the previously described library. The in-memory file system currently supports both data and metadata operations, such as file permissions, ownership, folders, and namespaces. Files and folders are presented as datasets inside Hercules IMSS, conforming a hierarchical representation supported by URIs, which univocally identifies each dataset. Data is partitioned into multiple blocks, reserving the first block for storing metadata. We distinguish between inner metadata, which represents the classical POSIX-like metadata mainly represented by the *struct stat* representation and outer metadata, which depicts the metadata related to the data blocks location and the applied distribution policy. Inner metadata is stored as a data block on each data set. Outer metadata is maintained by a separate metadata server. Hercules IMSS supports attached and detached metadata servers.
+Custom configuration files can be specified launching Hercules in this manner, where "CONF_PATH" is the path to the configuration file:
 
-Using the call above, we have to mount the Hercules IMSS file system using FUSE.
+```
+hercules start -f <CONF_PATH>
+```
 
-`
-./imssfs -p 5555 -m 5569 -M ./metadata -h ./hostfile -b 1000000  -r imss:// -a ./stat_hostfile -S 10000000000 -d 0 -B 1048576000 -l /mnt/imss/}
-`
+Hercules can override I/O calls by using the LD_PRELOAD environment variable. Both data and metadata calls are currently intercepted by the implemented dynamic library.
 
-The mount call requires the following parameters:
-- *-p*: determines the listening port number of the I/O servers.
-- *-m*: indicates the port number of the external/internal metadata server.
-- *-h*: requires a file containing the hostnames of all I/O server involved.
-- *-b*: specifies the block size employed for all network data transfers used by ZeroMQ.
-- *-r*: determines the default dataset root for the deployed file system.
-- *-a*: requires a file containing the hostnames of all metadata servers involved.
-- *-s*: the maximum capacity in bytes of the storage system.
-- *-d*: determines the deployment mode. 0 indicates an attached deployment strategy (metadata and data services are instantiated as a FUSE process) and 2 indicates a completely detached deployment, is such a way, both data and metadata servers have to be executed as independent processes.
-- *-l*: indicates the mount point path.
+```
+export LD_PRELOAD=/beegfs/home/javier.garciablas/imss/build/tools/libhercules_posix.so
+```
+To stop a Hercules deployment:
 
+```
+hercules stop
+```
 
-## LD_PRELOAD
-
-The project repository provides support for running Hercules IMSS overriding I/O calls by using the LD_PRELOAD environment variable. Both data and metadata calls are currently intercepted by the implemented dynamic library.
-
-Initially, it is necesary to set up the configuration environment variables:
-
-
-> export IMSS_MOUNT_POINT=/mnt/imss 
-> export IMSS_HOSTFILE=./hostfile    
-> export IMSS_N_SERVERS=3   
-> export IMSS_SRV_PORT=5555    
-> export IMSS_BUFFSIZE=1    
-> export IMSS_META_HOSTFILE=./stat_hostfile   
-> export IMSS_META_PORT=5569    
-> export IMSS_META_SERVERS=1   
-> export IMSS_STORAGE_SIZE=10    
-> export IMSS_METADATA_FILE=./metadata   
-> export IMSS_DEPLOYMENT=2  
- 
-In this case, IMSS will employ 3 data servers and one metadata server. The file _hostfile_ containts the hostnames of the data servers. File _stat_hostfile_ contains the hostname of the dedicated metadata hosts. Finally, file _metadata_ stores the current information of the employed metadata servers for future usage.
-
-Once, the application can be executed using the aforementioned deployment modes:
-
-`
-LD_PRELOAD=libimss_posix.so ls -l /mnt/imss/
-`
-
-# Example deployment setup
-
-Using this example deployement setup:
-
-- node1: initial metadata node.
-- node2: metadata node.
-- node3: initial data node.
-- node4: data node.
-- client1
-- client2
-
-# Running without MPI
-
-
-<details><summary>Click to expand</summary>
-## Configuration Files
-
-_hostfile_
-> node3  
-> node4  
-
-_stat_hostfile_
-> node1  
-> node2  
-
-## Metadata servers 
-
-On each metadata node (node1, node2):
-
-> ./server ./metadata 5569 0 
-
-
-## Data servers
-
-On each data node (node, node4):
-
-> ./server imss:// 5555 0 node1 5569 4 ./hostfile 1
-       
-
-## Clients
-
-> LD_PRELOAD=/home/imss/build/tools/libimss_posix.so /home/benchs/ior/bin/ior -k  -w -o /mnt/testimss/data.ot 10m -b 100m -s 5
-
-</details>
-
-# Running with MPI
-
+## Configuration File (_hercules.conf_)
+Here we briefly explain each field of the configuration file.
 
 <details><summary>Click to expand</summary>
 
-## Metadata servers
+### Used URI for internal items definition
+> URI = imss://
 
+### Block size (in KB)
+> BLOCK_SIZE = 512
 
-> mpirun.mpich -np 1 -f ./stat_hostfile ./server ./metadata 5569 0 
-> 
-> or
-> 
-> mpiexec -np 1 --hostfile ./stat_hostfile ./server ./metadata 5569 0 
+### Used mount point in the client side
+> MOUNT_POINT = /mnt/imss/
 
+### Where the Hercules project is
+> HERCULES_PATH = /beegfs/home/javier.garciablas/imss
 
-## Data servers
+### Port listening in the metadata node service
+> METADATA_PORT = 75000
 
+### Port listening in the data node service
+> DATA_PORT = 85000
 
-> mpirun.mpich -np 4 -f ./hostfile ./server imss:// 5555 0 node1 5569 4 ./hostfile 1
-> 
-> or
-> 
-> mpirun -np 4 --pernode --hostfile ./hostfile ./server imss:// 5555 0 node1 5569 4 ./hostfile 1
+### Total number of data nodes
+> NUM_DATA_SERVERS = 1 
 
-           
+### Total number of metadadata nodes
+> NUM_META_SERVERS = 1
 
-## Clients
+### Total number of client nodes
+> NUM_NODES_FOR_CLIENTS = 1
 
+### Total number of clients per node
+> NUM_CLIENTS_PER_NODE = 1
 
-> mpirun.mpich -np 1 -f ./clientfile -genv LD_PRELOAD /home/imss/build/tools/libimss_posix.so ./test_simple /mnt/testimss/data.out
-> 
-> or
-> 
-> mpirun -np 2 --pernode --hostfile ./clientfile -x LD_PRELOAD=/home/imss/build/tools/libimss_posix.so /home/benchs/ior/bin/ior -k  -w -o /mnt/testimss/data.ot 10m -b 100m -s 5
+### 1: enables malleability functions
+> MALLEABILITY = 0      
+> UPPER_BOUND_MALLEABILITY = 0    
+> LOWER_BOUND_MALLEABILITY = 0   
 
+### File containing a list of nodes serving as data nodes
+> DATA_HOSTFILE = /beegfs/home/javier.garciablas/imss/bash/data_hostfile
+
+### File path of the persistence metadata
+> METADA_PERSISTENCE_FILE = /beegfs/home/javier.garciablas/imss/bash/metadata
+
+### Number of threads attending data requests
+> THREAD_POOL = 1
+
+### Maximum size used by the data nodes
+> STORAGE_SIZE = 0 # No limit
+
+### File containing a list of nodes serving as metadata nodes
+> METADATA_HOSTFILE = /beegfs/home/javier.garciablas/imss/bash/meta_hostfile
+
+### Debug mode (none or all)
+> DEBUG_LEVEL = all
 </details>
-
-
 
 lustre path in Broadwell
 salloc -N1
