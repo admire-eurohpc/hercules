@@ -84,7 +84,7 @@ hercules start -f <CONF_PATH>
 Hercules can override I/O calls by using the LD_PRELOAD environment variable. Both data and metadata calls are currently intercepted by the implemented dynamic library.
 
 ```
-export LD_PRELOAD=/beegfs/home/javier.garciablas/imss/build/tools/libhercules_posix.so
+export LD_PRELOAD=/beegfs/home/hercules/build/tools/libhercules_posix.so
 ```
 To stop a Hercules deployment:
 
@@ -107,7 +107,7 @@ Here we briefly explain each field of the configuration file.
 > MOUNT_POINT = /mnt/imss/
 
 ### Where the Hercules project is
-> HERCULES_PATH = /beegfs/home/javier.garciablas/imss
+> HERCULES_PATH = /beegfs/home/hercules
 
 ### Port listening in the metadata node service
 > METADATA_PORT = 75000
@@ -133,10 +133,10 @@ Here we briefly explain each field of the configuration file.
 > LOWER_BOUND_MALLEABILITY = 0   
 
 ### File containing a list of nodes serving as data nodes
-> DATA_HOSTFILE = /beegfs/home/javier.garciablas/imss/bash/data_hostfile
+> DATA_HOSTFILE = /beegfs/home/hercules/bash/data_hostfile
 
 ### File path of the persistence metadata
-> METADA_PERSISTENCE_FILE = /beegfs/home/javier.garciablas/imss/bash/metadata
+> METADA_PERSISTENCE_FILE = /beegfs/home/hercules/bash/metadata
 
 ### Number of threads attending data requests
 > THREAD_POOL = 1
@@ -145,16 +145,8 @@ Here we briefly explain each field of the configuration file.
 > STORAGE_SIZE = 0 # No limit
 
 ### File containing a list of nodes serving as metadata nodes
-> METADATA_HOSTFILE = /beegfs/home/javier.garciablas/imss/bash/meta_hostfile
+> METADATA_HOSTFILE = /beegfs/home/hercules/bash/meta_hostfile
 
 ### Debug mode (none or all)
 > DEBUG_LEVEL = all
 </details>
-
-lustre path in Broadwell
-salloc -N1
-/lustre/scratch/javier.garciablas
-
-nek500 path in Broadwell
-/beegfs/home/Shared/admire/opt/spack/linux-ubuntu20.04-zen/gcc-9.4.0/nek5000-19.0-mweeslmcmhczonxvewvzdqvamoran3ua/bin/Nek5000/bin/
-/beegfs/home/Shared/admire/opt/spack/linux-ubuntu20.04-zen/gcc-9.4.0/nek5000-19.0-mweeslmcmhczonxvewvzdqvamoran3ua
