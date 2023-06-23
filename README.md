@@ -2,30 +2,30 @@
 
 # Design summary
 
-The architectural design of IMSS follows a client-server design model where the client itself will be responsible of the server entities deployment. We propose an application-attached deployment constrained to application's nodes and an application-detached considering offshore nodes. 
+The architectural design of Hercules follows a client-server design model where the client itself will be responsible of the server entities deployment. We propose an application-attached deployment constrained to application's nodes and an application-detached considering offshore nodes. 
 
-The development of the present work was strictly conditioned by a set of well-defined objectives. Firstly, IMSS should provide flexibility in terms of deployment. To achieve this, the IMSS API provides a set of deployment methods where the number of servers conforming the instance, as well as their locations, buffer sizes, and their coupled or decoupled nature, can be specified. Second, parallelism should be maximised. To achieve this, IMSS follows a multi-threaded design architecture. Each server conforming an instance counts with a dispatcher thread and a pool of worker threads. The dispatcher thread distributes the incoming workload between the worker threads with the aim of balancing the workload in a multi-threaded scenario. Main entities conforming the architectural design are IMSS clients (front-end), IMSS server (back-end), and IMSS metadata server. Addressing the interaction between these components, the IMSS client will exclusively communicate with the IMSS metadata server whenever a metadata-related operation is performed, such as: *create_dataset* and *open_imss*. Data-related operations (*get_data* & *set_data*) will be handled directly by the corresponding storage server. Finally, IMSS offers to the application a set of distribution policies at dataset level increasing the application's awareness about the location of the data. As a result, the storage system will increase awareness in terms of data distribution at the client side, providing benefits such as data locality exploitation and load balancing.
+The development of the present work was strictly conditioned by a set of well-defined objectives. Firstly, Hercules should provide flexibility in terms of deployment. To achieve this, the Hercules API provides a set of deployment methods where the number of servers conforming the instance, as well as their locations, buffer sizes, and their coupled or decoupled nature, can be specified. Second, parallelism should be maximised. To achieve this, Hercules follows a multi-threaded design architecture. Each server conforming an instance counts with a dispatcher thread and a pool of worker threads. The dispatcher thread distributes the incoming workload between the worker threads with the aim of balancing the workload in a multi-threaded scenario. Main entities conforming the architectural design are Hercules clients (front-end), Hercules server (back-end), and Hercules metadata server. Addressing the interaction between these components, the Hercules client will exclusively communicate with the Hercules metadata server whenever a metadata-related operation is performed, such as: *create_dataset* and *open_imss*. Data-related operations (*get_data* & *set_data*) will be handled directly by the corresponding storage server. Finally, Hercules offers to the application a set of distribution policies at dataset level increasing the application's awareness about the location of the data. As a result, the storage system will increase awareness in terms of data distribution at the client side, providing benefits such as data locality exploitation and load balancing.
 
-IMSS takes advantage of UCX in order to handle communications between the different entities conforming an IMSS instance. UCX has been qualified as one of the most efficient libraries for creating distributed applications. UCX provides multiple communication patterns across various transport layers, such as inter-threaded, inter-process, TCP, UDP, and multicast. 
+Hercules takes advantage of UCX in order to handle communications between the different entities conforming an Hercules instance. UCX has been qualified as one of the most efficient libraries for creating distributed applications. UCX provides multiple communication patterns across various transport layers, such as inter-threaded, inter-process, TCP, UDP, and multicast. 
 
-Furthermore, to deal with the IMSS dynamic nature, a distributed metadata server, resembling CEPH model, was included in the design step. The metadata server is in charge of storing the structures representing each IMSS and dataset instances. Consequently, clients are able to join an already created IMSS as well as accessing an existing dataset among other operations. 
+Furthermore, to deal with the Hercules dynamic nature, a distributed metadata server, resembling CEPH model, was included in the design step. The metadata server is in charge of storing the structures representing each Hercules and dataset instances. Consequently, clients are able to join an already created Hercules as well as accessing an existing dataset among other operations. 
 
 # Use cases
 
 
-Two strategies were considered so as to adapt the storage system to the application's requirements. On the one hand, the *application-detached* strategy, consisting of deploying IMSS clients and servers as process entities on decoupled nodes. IMSS clients will be deployed in the same computing nodes as the application, using them to take advantage of all available computing resources within an HPC cluster, while IMSS servers will be in charge of storing the application datasets and enabling the storage's execution in application's offshore nodes. In this strategy, IMSS clients do not store data locally, as this deployment was thought to provide an application-detached possibility. In this way, persistent IMSS storage servers could be created by the system and would be executed longer than a specific application, so as to avoid additional storage initialisation overheads in execution time. Figure \ref{Deployments} (left) illustrates the topology of an IMSS application-detached deployment over a set of compute and/or storage nodes where the IMSS instance does not belong to the application context nor its nodes.
+Two strategies were considered so as to adapt the storage system to the application's requirements. On the one hand, the *application-detached* strategy, consisting of deploying Hercules clients and servers as process entities on decoupled nodes. Hercules clients will be deployed in the same computing nodes as the application, using them to take advantage of all available computing resources within an HPC cluster, while Hercules servers will be in charge of storing the application datasets and enabling the storage's execution in application's offshore nodes. In this strategy, Hercules clients do not store data locally, as this deployment was thought to provide an application-detached possibility. In this way, persistent Hercules storage servers could be created by the system and would be executed longer than a specific application, so as to avoid additional storage initialisation overheads in execution time. Figure \ref{Deployments} (left) illustrates the topology of an Hercules application-detached deployment over a set of compute and/or storage nodes where the Hercules instance does not belong to the application context nor its nodes.
 
 
-On the other hand, the *application-attached* deployment strategy seeks empowering locality exploitation constraining deployment possibilities to the set of nodes where the application is running, so that each application node will also include an IMSS client and an IMSS server, deployed as a thread within the application. Consequently, data could be forced to be sent and retrieved from the same node, thus maximising locality possibilities for data. In this approach each process conforming the application will invoke a method initialising certain in-memory store resources preparing for future deployments. However, as the attached deployment executes in the applications machine, the amount of memory used by the storage system turns into a matter of concern. Considering that unexpectedly bigger memory buffers may harm the applications performance, we took the decision of letting the application determine the memory space that a set of servers (storage and metadata) executing in the same machine shall use through a parameter in the previous method. This decision was made because the final user is the only one conscious about the execution environment as well as the applications memory requirements. Flexibility aside, as main memory will be used as storage device, an in-memory store will be implemented so as to achieve faster data-related request management. Figure \ref{Deployments} (right) displays the topology of an IMSS application-attached deployment where the IMSS instance is contained within the application.
+On the other hand, the *application-attached* deployment strategy seeks empowering locality exploitation constraining deployment possibilities to the set of nodes where the application is running, so that each application node will also include an Hercules client and an Hercules server, deployed as a thread within the application. Consequently, data could be forced to be sent and retrieved from the same node, thus maximising locality possibilities for data. In this approach each process conforming the application will invoke a method initialising certain in-memory store resources preparing for future deployments. However, as the attached deployment executes in the applications machine, the amount of memory used by the storage system turns into a matter of concern. Considering that unexpectedly bigger memory buffers may harm the applications performance, we took the decision of letting the application determine the memory space that a set of servers (storage and metadata) executing in the same machine shall use through a parameter in the previous method. This decision was made because the final user is the only one conscious about the execution environment as well as the applications memory requirements. Flexibility aside, as main memory will be used as storage device, an in-memory store will be implemented so as to achieve faster data-related request management. Figure \ref{Deployments} (right) displays the topology of an Hercules application-attached deployment where the Hercules instance is contained within the application.
 
 
 
 # Download and installation
 
-The following software packages are required for the compilation of Hercules IMSS:
+The following software packages are required for the compilation of Hercules:
 
 - CMake
-- ZeroMQ
+- UCX
 - Glib
 - tcmalloc
 - FUSE
@@ -33,23 +33,23 @@ The following software packages are required for the compilation of Hercules IMS
     
 ## Project build
 
-Hercules IMSS is a CMAKE-based project, so the compilation process is quite simple:  
+Hercules is a CMAKE-based project, so the compilation process is quite simple:  
 
 ```
-> mkdir build                          
-> cd build.                     
-> cmake ..                      
-> make                                    
-> make install                         
+mkdir build
+cd build
+cmake ..
+make
+make install                         
 ```
 
 As a result the project generates the following outputs:
-- mount.imss: run as daemons the necessary instances for Hercules IMSS. Later, it enables the usage of the interception library with execution persistency.
+- mount.imss: run as daemons the necessary instances for Hercules. Later, it enables the usage of the interception library with execution persistency.
 - umount.imss: umount the file system by killing the deployed processes.
-- libimss_posix.so: dynamic library of intercepting I/O calls.
+- libhercules_posix.so: dynamic library of intercepting I/O calls.
 - libimss_shared.so: dynamic library of IMSS's API.
 - libimss_static.a: static library of IMSS's API.
-- imfssfs: application for mounting HERCULES IMSS at user space by using FUSE engine.
+- imfssfs: application for mounting Hercules at user space by using FUSE engine.
     
 ## Spack module
 
@@ -78,8 +78,10 @@ We provide a script that launches a Hercules deployment (_scripts/hercules_). Th
 Custom configuration files can be specified launching Hercules in this manner, where "CONF_PATH" is the path to the configuration file:
 
 ```
-hercules start -f <CONF_PATH>
+source hercules start -f <CONF_PATH>
 ```
+
+If not configuration file is provided, Hercules looks for default files _/etc/hercules.conf_, _./hercules.conf_, _hercules.conf_, or _<PROJECT_PATH>/conf/hercules.conf_ in that order.
 
 Hercules can override I/O calls by using the LD_PRELOAD environment variable. Both data and metadata calls are currently intercepted by the implemented dynamic library.
 
@@ -91,6 +93,26 @@ To stop a Hercules deployment:
 ```
 hercules stop
 ```
+
+### Without Slurm
+To run Hercules in a non-Slurm environment, the script need additional parameters:
+
+```
+source hercules start -m <meta_server_hostfile> -d <data_server_hostfile> -c <client_hostfile> -f <CONF_PATH>
+
+meta_server_hostfile: file containing hostnames of metadata servers
+data_server_hostfile: file containing hostnames of data servers
+client_hostfile: file containing hostnames of clients
+```
+
+#### Hostfile Example
+
+```
+node1
+node2
+node3
+```
+
 
 ## Configuration File (_hercules.conf_)
 Here we briefly explain each field of the configuration file.
