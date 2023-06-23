@@ -5,16 +5,13 @@ URI = imss://
 BLOCK_SIZE = 512
 
 # Used mount point in the client side
-# To work with Nek5000 we need to add the last slash (/)
 MOUNT_POINT = /mnt/imss/
-# MOUNT_POINT = /home/genarog/Documents/UC3M/Codes/Apps/Nek5000/run/eddy_uv
-# MOUNT_POINT = /home/genarog/Documents/UC3M/Codes/UPDATED_IMSS/imss/bash
 
 # Port listening in the metadata node service
-METADATA_PORT = 75000
+METADATA_PORT = 7500
 
 # Port listening in the data node service
-DATA_PORT =     85000
+DATA_PORT =     8500
 
 # Total number of data nodes
 NUM_DATA_SERVERS = 1
@@ -36,15 +33,7 @@ LOWER_BOUND_MALLEABILITY = 0
 # File containing a list of nodes serving as data nodes
 DATA_HOSTFILE = data_hostfile 
 
-# File path of the persistence metadata
-### Tucan
-## METADA_PERSISTENCE_FILE = /home/gsanchez/IMSS/imss/bash/metadata
-### MN4
-## METADA_PERSISTENCE_FILE = /home/uc3m15/uc3m15006/Hercules/imss/bash/metadata
-### Unito
-## METADA_PERSISTENCE_FILE = /beegfs/home/javier.garciablas/imss/bash/metadata
-### Local
- METADA_PERSISTENCE_FILE = /home/genarog/Documents/UC3M/Codes/UPDATED_IMSS/imss/bash/metadata
+METADA_PERSISTENCE_FILE = metadata
 
 
 # Number of threads attending data requests
@@ -54,10 +43,10 @@ THREAD_POOL = 1
 STORAGE_SIZE = 0 # No limit
 
 # Main metadata node hostname
-METADATA_HOST = 
+# METADATA_HOST = 
 
 # File containing a list of nodes serving as metadata nodes
-METADATA_HOSTFILE = /home/genarog/Documents/UC3M/Codes/Apps/Nek5000/run/eddy_uv/hercules/my_meta_hostfile
+METADATA_HOSTFILE = hostfile
 
 # Debug mode (none or all)
 DEBUG_LEVEL = none
