@@ -607,7 +607,10 @@ int32_t main(int32_t argc, char **argv)
 			n_chars = getline(&((my_imss.ips)[i]), &l_size, svr_nodes);
 
 			// Erase the new line character ('') from the string.
-			((my_imss.ips)[i])[n_chars - 1] = '\0';
+			if (((my_imss.ips)[i])[n_chars - 1] == '\n')
+			{
+				((my_imss.ips)[i])[n_chars - 1] = '\0';
+			}
 		}
 
 		// Close the file.

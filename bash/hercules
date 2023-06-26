@@ -203,7 +203,7 @@ do
         echo "[+] Removing temporal files on $node"
         ( ssh $node "$RM" )
         echo "[+] Running metadata server $i in $node..."
-        ( ssh $node "cd $H_BASH_PATH && $COMMAND" ) &
+        ( ssh $node "cd $H_BASH_PATH && H_CONF=$FILE $COMMAND" ) &
     else
         ## Deletes the file that we use to make sure that the server has started.
         echo "[+] Removing temporal files on $node"
@@ -214,6 +214,8 @@ do
     fi
     i=$(($i+1))
 done
+
+# exit 1
 
 ## Wait until all metadata servers are up.
 WaitForServers "metadata" "m" "${meta_hosts[@]}"
@@ -257,7 +259,7 @@ do
         echo "[+] Removing temporal files on $node"
         ( ssh $node "$RM" )
         echo "[+] Running data server $i in $node..."
-        ( ssh $node "cd $H_BASH_PATH && $COMMAND" ) &
+        ( ssh $node "cd $H_BASH_PATH && H_CONF=$FILE $COMMAND" ) &
     else
         ## Deletes the file that we use to make sure that the server has started.
         echo "[+] Removing temporal files on $node"

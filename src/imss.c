@@ -374,10 +374,11 @@ int32_t stat_init(char *stat_hostfile,
 		ret = recv(oob_sock, &addr_len, sizeof(addr_len), MSG_WAITALL);
 		stat_addr[i] = (ucp_address *)malloc(addr_len);
 		ret = recv(oob_sock, stat_addr[i], addr_len, MSG_WAITALL);
+		// slog_debug("[IMSS][stat_init] stat_addr=%s, len=%d", stat_addr[i], addr_len);
 		close(oob_sock);
 
 		client_create_ep(ucp_worker_meta, &stat_eps[i], stat_addr[i]);
-		slog_debug("[IMSS] stat_int: created ep with %s:%ld", stat_node, port);
+		slog_debug("[IMSS][stat_init] created ep with %s:%ld", stat_node, port);
 	}
 	// Close the file.
 	if (fclose(stat_nodes) != 0)
@@ -716,10 +717,10 @@ int32_t open_imss(char *imss_uri)
 	ucp_config_t *config;
 	ucs_status_t status;
 
-	if (getenv("IMSS_DEBUG") != NULL)
-	{
-		IMSS_DEBUG = 1;
-	}
+	// if (getenv("IMSS_DEBUG") != NULL)
+	// {
+	// 	IMSS_DEBUG = 1;
+	// }
 
 	// if (IMSS_DEBUG)
 	// {

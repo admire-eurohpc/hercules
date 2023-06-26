@@ -419,6 +419,8 @@ void getConfiguration()
 		else
 		{
 			fprintf(stderr, "[CLIENT %d] Configuration file not found\n", rank);
+			perror("ERRIMSS_CONF_NOT_FOUND");
+			return -1;
 		}
 		free(conf_path);
 	}
