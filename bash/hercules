@@ -183,17 +183,14 @@ else
     readarray -t meta_hosts < $META_SERVER_FILE
 fi
 ## To create the default metadata hostfile.
-printf "%s\n" "${meta_hosts[@]}" > meta_hostfile
+printf "%s\n" ${meta_hosts[@]} > meta_hostfile
 
 ## The array is read to deploy the metadata servers.
 i=0
-# set -x
+
 start=`date +%s.%N`
-for node in "${meta_hosts[@]}"
-do
-    # COMMAND="{ rm /tmp/m-hercules-$i; }; { cd $H_BASH_PATH && $H_BUILD_PATH/hercules_server m $i 2> m_server.out; };"
-    # COMMAND="rm /tmp/m-hercules-$i"
-    
+for node in ${meta_hosts[@]}
+do    
     RM="rm /tmp/m-hercules-$i"
     COMMAND="$H_BUILD_PATH/hercules_server m $i"
     ## If slurm is not being used, we deploy the service by connecting
@@ -215,10 +212,9 @@ do
     i=$(($i+1))
 done
 
-# exit 1
 
 ## Wait until all metadata servers are up.
-WaitForServers "metadata" "m" "${meta_hosts[@]}"
+WaitForServers "metadata" "m" ${meta_hosts[@]}
 end=`date +%s.%N`
 runtime=$( echo "$end - $start" | bc -l )
 echo "[-] Metadata servers started in $runtime seconds, start=$start, end=$end"
@@ -246,10 +242,10 @@ else
 fi
 
 ## To create the default data hostfile.
-printf "%s\n" "${data_hosts[@]}" > data_hostfile
+printf "%s\n" ${data_hosts[@]} > data_hostfile
 i=0
 start=`date +%s.%N`
-for node in "${data_hosts[@]}"
+for node in ${data_hosts[@]}
 do
     echo "[+] Running data server $i in $node..-"
     RM="rm /tmp/d-hercules-$i"
@@ -272,7 +268,7 @@ do
 done
 
 ## Wait until all data servers are up.
-WaitForServers "data" "d" "${data_hosts[@]}"
+WaitForServers "data" "d" ${data_hosts[@]}
 end=`date +%s.%N`
 runtime=$( echo "$end - $start" | bc -l )
 echo "[-] Data servers started in $runtime seconds, start=$start, end=$end"
