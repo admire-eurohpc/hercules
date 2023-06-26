@@ -352,7 +352,11 @@ int32_t stat_init(char *stat_hostfile,
 		// Save IMSS metadata deployment.
 		n_chars = getline(&stat_node, &l_size, stat_nodes);
 		// Erase the new line character ('') from the string.
-		stat_node[n_chars - 1] = '\0';
+
+		if(stat_node[n_chars - 1]  == '\n') {
+			stat_node[n_chars - 1] = '\0';
+		}
+		
 		// slog_debug("[IMSS] stat_client=%s", stat_node);
 		slog_debug("[IMSS][stat_int] i=%d, stat_node=%s, port=%ld, rank=%" PRIu32 "", i, stat_node, port, rank);
 		slog_debug("[IMSS][stat_int] Contacting stat dispatcher at %s:%ld", stat_node, port);
@@ -783,7 +787,7 @@ int32_t open_imss(char *imss_uri)
 		sprintf(request, "%" PRIu32 " GET %s", process_rank, "HELLO!JOIN");
 
 		slog_debug("[open_imss] ip_address=%s:%d", new_imss.info.ips[i], new_imss.info.conn_port);
-		fprintf(stderr, "[open_imss] ip_address=%s:%d\n", new_imss.info.ips[i], new_imss.info.conn_port);
+		// fprintf(stderr, "[open_imss] ip_address=%s:%d\n", new_imss.info.ips[i], new_imss.info.conn_port);
 
 		if (send(oob_sock, request, REQUEST_SIZE, 0) < 0)
 		{

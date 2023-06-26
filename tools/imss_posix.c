@@ -371,7 +371,12 @@ void getConfiguration()
 	conf_path = getenv("H_CONF");
 	if (conf_path != NULL)
 	{
+		fprintf(stderr, "Loading %s\n", conf_path);
 		ret = cfg_load(cfg, conf_path);
+		if (ret)
+		{
+			fprintf(stderr, "%s has not been loaded\n", conf_path);
+		}
 	}
 	else
 	{

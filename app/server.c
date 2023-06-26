@@ -62,7 +62,7 @@ int32_t main(int32_t argc, char **argv)
 
 	uint64_t bind_port;
 	char *stat_add;
-	char *metadata_file;
+	// char *metadata_file;
 	char *deployfile;
 	int64_t buffer_size, stat_port, num_servers;
 	void *socket;
@@ -109,7 +109,12 @@ int32_t main(int32_t argc, char **argv)
 	conf_path = getenv("H_CONF");
 	if (conf_path != NULL)
 	{
+		fprintf(stderr, "Loading %s\n", conf_path);
 		ret = cfg_load(cfg, conf_path);
+		if (ret)
+		{
+			fprintf(stderr, "%s has not been loaded\n", conf_path);
+		}
 	}
 	else
 	{
@@ -152,6 +157,8 @@ int32_t main(int32_t argc, char **argv)
 		else
 		{
 			fprintf(stderr, "Configuration file not found\n");
+			perror("ERRIMSS_CONF_NOT_FOUND");
+			return -1;
 		}
 		free(conf_path);
 	}
@@ -437,7 +444,7 @@ int32_t main(int32_t argc, char **argv)
 	else
 	{
 		// metadata file.
-		metadata_file = args.stat_logfile;
+		// metadata_file = args.stat_logfile;
 
 		// Create the tree_root node.
 		char *root_data = (char *)calloc(8, sizeof(char));
@@ -474,8 +481,8 @@ int32_t main(int32_t argc, char **argv)
 
 	if (args.type == TYPE_METADATA_SERVER)
 	{
-		if ((buffer_address = metadata_read(metadata_file, map.get(), buffer, &bytes_written)) == NULL)
-			return -1;
+		// if ((buffer_address = metadata_read(metadata_file, map.get(), buffer, &bytes_written)) == NULL)
+		// 	return -1;
 
 		// Obtain the remaining free amount of data reserved to the buffer after the metadata read operation.
 		data_reserved -= bytes_written;
@@ -643,7 +650,7 @@ int32_t main(int32_t argc, char **argv)
 		time_taken = ((double)t) / (CLOCKS_PER_SEC);
 		// printf("[%c-server %d] Deployment time %f\n", args.type, args.id, time_taken);
 		if (!args.id)
-			printf("ServerID,'Deployment time (s)'\n");
+			fprintf(stderr, "ServerID,'Deployment time (s)'\n");
 
 		// fprintf(stderr, "tmp_file_path=%s\n", tmp_file_path);
 
@@ -670,9 +677,8 @@ int32_t main(int32_t argc, char **argv)
 	// Write the metadata structures retrieved by the metadata server threads.
 	if (args.type == TYPE_METADATA_SERVER)
 	{
-		if (metadata_write(metadata_file, buffer, map.get(), arguments, buffer_segment, bytes_written) == -1)
-
-			return -1;
+		// if (metadata_write(metadata_file, buffer, map.get(), arguments, buffer_segment, bytes_written) == -1)
+		// 	return -1;
 
 		// free(imss_uri);
 
