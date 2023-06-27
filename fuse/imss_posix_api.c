@@ -267,7 +267,7 @@ int imss_getattr(const char *path, struct stat *stbuf)
 		}
 		else
 		{
-			
+
 			fprintf(stderr, "[IMSS-FUSE]	Cannot get dataset metadata.");
 			return -ENOENT;
 		}
@@ -299,10 +299,21 @@ int imss_readdir(const char *path, void *buf, posix_fill_dir_t filler, off_t off
 
 	char *imss_path = calloc(MAX_PATH, sizeof(char));
 	get_iuri(path, imss_path);
+
+	// Add "/" at the end of the path if it does not have it.
+	// FIX: "ls" when there is more than one "/".
+	int len = strlen(imss_path)-1;
+	if (imss_path[len] != '/')
+	{
+		strcat(imss_path, "/");
+	}
+
+	slog_debug("[IMSS][imss_readdir] imss_path=%s", imss_path);
 	// Call IMSS to get metadata
 	if ((n_ent = get_dir((char *)imss_path, &buffer, &refs)) < 0)
 	{
 		strcat(imss_path, "/");
+		slog_debug("[IMSS][imss_readdir] imss_path=%s", imss_path);
 		// fprintf(stderr,"try again imss_path=%s\n",imss_path);
 		if ((n_ent = get_dir((char *)imss_path, &buffer, &refs)) < 0)
 		{
@@ -394,7 +405,8 @@ int imss_open(const char *path, uint64_t *fh)
 	{
 
 		file_desc = open_dataset(imss_path);
-		if(file_desc < 0){ // dataset was not found.
+		if (file_desc < 0)
+		{ // dataset was not found.
 			return -1;
 		}
 		aux = (char *)malloc(IMSS_DATA_BSIZE);
@@ -585,9 +597,9 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 
 			// byte_count += pending;
 		}
-		//slog_warn("[imss_read] curr_blk=%ld, reading %" PRIu64 " kilobytes, block_offset=%ld kilobytes, byte_count=%ld", curr_blk, to_read / 1024, block_offset / 1024, byte_count);
+		// slog_warn("[imss_read] curr_blk=%ld, reading %" PRIu64 " kilobytes, block_offset=%ld kilobytes, byte_count=%ld", curr_blk, to_read / 1024, block_offset / 1024, byte_count);
 		slog_warn("[imss_write] curr_blk=%ld, reading %ld bytes (%ld kilobytes) with an offset of %ld bytes (%ld kilobytes)", curr_blk, to_read, to_read / 1024, block_offset, block_offset / 1024);
-		
+
 		if (MALLEABILITY)
 		{
 			int32_t num_storages;

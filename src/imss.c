@@ -460,7 +460,7 @@ uint32_t get_dir(char *requested_uri, char **buffer, char ***items)
 	// GETDIR request.
 	char getdir_req[REQUEST_SIZE];
 	sprintf(getdir_req, "%" PRIu32 " GET %d %s", stat_ids[m_srv], GETDIR, requested_uri);
-
+	slog_debug("[IMSS][get_dir] Request - %s", getdir_req);
 	if (send_req(ucp_worker_meta, ep, local_addr_meta, local_addr_len_meta, getdir_req) < 0)
 	{
 		perror("ERRIMSS_RLSIMSS_SENDADDR");

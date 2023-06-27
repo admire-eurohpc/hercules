@@ -1,4 +1,6 @@
 #define _GNU_SOURCE
+
+
 #include "map.hpp"
 #include "mapfd.hpp"
 #include "cfg_parse.h"
@@ -21,13 +23,15 @@
 #include "imss.h"
 #include <imss_posix_api.h>
 #include <stdarg.h>
-#include <dirent.h>
+
 #include "mapprefetch.hpp"
 #include <math.h>
 #include <sys/utsname.h>
 
 #undef _FILE_OFFSET_BITS
-
+#undef __USE_LARGEFILE64 
+#undef __USE_FILE_OFFSET64
+#include <dirent.h>
 // #ifndef _STAT_VER
 // #define _STAT_VER 0
 // #endif
@@ -134,6 +138,9 @@ static int (*real_fchmodat)(int dirfd, const char *pathname, mode_t mode, int fl
 static int (*real_fchownat)(int dirfd, const char *pathname, uid_t owner, gid_t group, int flags) = NULL;
 static DIR *(*real_opendir)(const char *name) = NULL;
 static struct dirent *(*real_readdir)(DIR *dirp) = NULL;
+static struct dirent64 *(*real_readdir64)(DIR *dirp) = NULL;
+// static int (*real_readdir)(unsigned int fd, struct old_linux_dirent *dirp, unsigned int count);
+
 static int (*real_closedir)(DIR *dirp) = NULL;
 static int (*real_statvfs)(const char *restrict path, struct statvfs *restrict buf) = NULL;
 static int (*real_statfs)(const char *path, struct statfs *buf) = NULL;
@@ -664,19 +671,21 @@ int close(int fd)
 
 int __lxstat(int fd, const char *pathname, struct stat *buf)
 {
-	int ret = 0;
-	unsigned long p = 0;
-	char *workdir = getenv("PWD");
+
 	real__lxstat = dlsym(RTLD_NEXT, "__lxstat");
 
 	if (!init)
 	{
 		return real__lxstat(fd, pathname, buf);
 	}
+
+	int ret = 0;
+	unsigned long p = 0;
+	char *workdir = getenv("PWD");
 	if (!strncmp(pathname, MOUNT_POINT, strlen(MOUNT_POINT)) || !strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT)))
 	{
 
-		slog_debug("[POSIX %d]. Calling '__lxstat'.", rank);
+		slog_debug("[POSIX %d]. Calling Hercules '__lxstat', pathname=%s.", rank, pathname);
 
 		char *new_path;
 		new_path = convert_path(pathname, MOUNT_POINT);
@@ -689,7 +698,7 @@ int __lxstat(int fd, const char *pathname, struct stat *buf)
 			errno = -ret;
 			ret = -1;
 		}
-		slog_debug("[POSIX %d]. End '__lxstat'  %d %d.", rank, ret, errno);
+		slog_debug("[POSIX %d]. End Hercules '__lxstat'  %d %d.", rank, ret, errno);
 	}
 	else
 	{
@@ -1890,7 +1899,7 @@ DIR *opendir(const char *name)
 
 	if (!strncmp(name, MOUNT_POINT, strlen(MOUNT_POINT)) || !strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT)))
 	{
-		slog_debug("[POSIX %d]. Calling 'opendir'.", rank);
+		slog_debug("[POSIX %d]. Calling Hercules 'opendir', pathname=%s.", rank, name);
 		char *new_path;
 		new_path = convert_path(name, MOUNT_POINT);
 		int a = 1;
@@ -1903,12 +1912,15 @@ DIR *opendir(const char *name)
 		// if it exists then a file descriptor "fd" is going to point it.
 		if (map_fd_search(map_fd, new_path, &fd, &p) == 1)
 		{
+			slog_debug("[POSIX %d] map_fd_update_value, new_path=%s", rank, new_path);
 			map_fd_update_value(map_fd, new_path, dirfd(dirp), p);
 		}
 		else
 		{
+			slog_debug("[POSIX %d] map_fd_put, new_path=%s", rank, new_path);
 			map_fd_put(map_fd, new_path, dirfd(dirp), p);
 		}
+		slog_debug("[POSIX %d]. End Hercules 'opendir', pathname=%s.", rank, name);
 	}
 	else
 	{
@@ -1927,18 +1939,19 @@ int myfiller(void *buf, const char *name, const struct stat *stbuf, off_t off)
 struct dirent *readdir(DIR *dirp)
 {
 	real_readdir = dlsym(RTLD_NEXT, "readdir");
-	size_t ret;
 
 	if (!init)
 	{
 		return real_readdir(dirp);
 	}
+	// slog_debug("[POSIX %d]. 1 . Calling 'readdir'.", rank);
 
+	size_t ret;
 	struct dirent *entry = (struct dirent *)malloc(sizeof(struct dirent));
 	char *path = calloc(256, sizeof(char));
 	if (map_fd_search_by_val(map_fd, path, dirfd(dirp)) == 1)
 	{
-		slog_debug("[POSIX %d]. Calling 'readir'.", rank);
+		slog_debug("[POSIX %d]. Calling Hercules 'readdir', pathname=%s.", rank, path);
 		char buf[KB * KB] = {0};
 		char *token;
 		// slog_fatal("CUSTOM IMSS_READDIR\n");
@@ -2012,6 +2025,7 @@ struct dirent *readdir(DIR *dirp)
 	}
 	else
 	{
+		slog_debug("[POSIX %d]. Calling Real 'readdir'.", rank);
 		entry = real_readdir(dirp);
 	}
 	/* if(entry!=NULL){
@@ -2021,10 +2035,25 @@ struct dirent *readdir(DIR *dirp)
 	   printf("entry->d_type=%d\n",entry->d_type);
 	   printf("entry->d_name:%s\n",entry->d_name);
 	   }*/
+	slog_debug("[POSIX %d]. End 'readdir'.", rank);
 
 	free(path);
 	return entry;
 }
+
+
+struct dirent64 *readdir64(DIR *dirp)
+{
+	real_readdir64 = dlsym(RTLD_NEXT, "readdir64");
+
+	if (init)
+	{
+		slog_debug("[POSIX %d]. 1 . Calling 'readdir64'.", rank);
+	}
+
+	return real_readdir64(dirp);
+}
+
 
 int closedir(DIR *dirp)
 {
