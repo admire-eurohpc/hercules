@@ -35,6 +35,8 @@
 #define IMSS 0
 #define DATASET 1
 
+#define NO_LINK NULL
+
 extern int32_t IMSS_DEBUG;
 
 #ifdef __DEBUG__
@@ -139,6 +141,8 @@ typedef struct
 	// Actual blocks written by the client.
 	uint32_t *blocks_written;
 
+	char link[256];
+	int is_link;
 } dataset_info;
 
 //[SPLIT READV] Set of arguments passed to each server thread.
@@ -298,11 +302,12 @@ policy         - Data distribution policy assigned to the concerned dataset: RR,
 num_data_elem  - Number of data blocks conforming the concerned dataset.
 data_elem_size - Size in KILOBYTES of each data block conforming the dataset.
 repl_factor    - Replication factor assigned to the concerned dataset: NONE, DRM or TRM.
+link           - It is a link.
 
 RETURNS:	> 0 - Number identifying the created dataset among the client's session.
 -1 - In case of error.
 	 */
-	int32_t create_dataset(char *dataset_uri, char *policy, int32_t num_data_elem, int32_t data_elem_size, int32_t repl_factor, int32_t n_servers);
+	int32_t create_dataset(char *dataset_uri, char *policy, int32_t num_data_elem, int32_t data_elem_size, int32_t repl_factor, int32_t n_servers, char *link);
 
 	/* Method creating the required resources in order to READ and WRITE an existing dataset.
 

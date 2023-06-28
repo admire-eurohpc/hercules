@@ -106,7 +106,7 @@ int32_t main(int32_t argc, char **argv)
 	sprintf(tmp_file_path, "/tmp/%c-hercules-%d", args.type, args.id);
 
 	cfg = cfg_init();
-	conf_path = getenv("H_CONF");
+	conf_path = getenv("HERCULES_CONF");
 	if (conf_path != NULL)
 	{
 		fprintf(stderr, "Loading %s\n", conf_path);

@@ -59,7 +59,7 @@ int32_t main (int32_t argc, char **argv)
 
 	int32_t datasetd_;
 	t1 = clk::now();
-	if ((datasetd_ = create_dataset(dataset_uri, policy, 1, block_size, NONE)) < 0) exit(-1);
+	if ((datasetd_ = create_dataset(dataset_uri, policy, 1, block_size, NONE, NO_LINK)) < 0) exit(-1);
 	t2 = clk::now();
 	auto create_dataset_time = std::chrono::duration_cast<std::chrono::nanoseconds>(t2-t1);
 

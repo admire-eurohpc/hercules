@@ -302,7 +302,7 @@ int imss_readdir(const char *path, void *buf, posix_fill_dir_t filler, off_t off
 
 	// Add "/" at the end of the path if it does not have it.
 	// FIX: "ls" when there is more than one "/".
-	int len = strlen(imss_path)-1;
+	int len = strlen(imss_path) - 1;
 	if (imss_path[len] != '/')
 	{
 		strcat(imss_path, "/");
@@ -379,7 +379,7 @@ int imss_readdir(const char *path, void *buf, posix_fill_dir_t filler, off_t off
 	  return 0;*/
 }
 
-int imss_open(const char *path, uint64_t *fh)
+int imss_open(char *path, uint64_t *fh)
 {
 	// printf("imss_open=%s\n",path);
 	int ret;
@@ -407,6 +407,10 @@ int imss_open(const char *path, uint64_t *fh)
 		file_desc = open_dataset(imss_path);
 		if (file_desc < 0)
 		{ // dataset was not found.
+			slog_debug("[FUSE][imss_posix_api] imss_path=%s", imss_path);
+			*fh = file_desc;
+			// path = imss_path;
+			strcpy(path, imss_path);
 			return -1;
 		}
 		aux = (char *)malloc(IMSS_DATA_BSIZE);
@@ -1945,7 +1949,7 @@ int imss_create(const char *path, mode_t mode, uint64_t *fh)
 
 	int32_t n_servers = 0;
 
-	res = create_dataset((char *)rpath, POLICY, N_BLKS, IMSS_BLKSIZE, REPL_FACTOR, n_servers);
+	res = create_dataset((char *)rpath, POLICY, N_BLKS, IMSS_BLKSIZE, REPL_FACTOR, n_servers, NO_LINK);
 	slog_live("[imss_create] create_dataset((char*)rpath:%s, POLICY:%s,  N_BLKS:%ld, IMSS_BLKSIZE:%d, REPL_FACTOR:%ld, n_servers:%d), res:%d", (char *)rpath, POLICY, N_BLKS, IMSS_BLKSIZE, REPL_FACTOR, n_servers, res);
 	if (res < 0)
 	{
@@ -2167,6 +2171,97 @@ int imss_mkdir(const char *path, mode_t mode)
 	}
 	imss_create(rpath, mode | S_IFDIR, &fi);
 	free(rpath);
+	return 0;
+}
+
+int imss_symlinkat(char *new_path_1, char *new_path_2, int _case)
+{
+	int ret = 0;
+	struct timespec spec;
+	// TODO check mode
+	struct stat ds_stat;
+	char *rpath1 = (char *)calloc(MAX_PATH, sizeof(char));
+	char *rpath2 = (char *)calloc(MAX_PATH, sizeof(char));
+
+	int fd, file_desc;
+	struct stat stats;
+	char *aux;
+	int res = 0;
+	int32_t n_servers = 0;
+
+	switch (_case)
+	{
+	case 0:
+		slog_debug("[FUSE][imss_posix_api] Entering case 0 ");
+		get_iuri(new_path_1, rpath1);
+		get_iuri(new_path_2, rpath2);
+		fd_lookup(new_path_1, &fd, &stats, &aux);
+		if (fd >= 0)
+		{
+			file_desc = fd;
+		}
+		else if (fd == -2)
+			return -1;
+		else
+		{
+			file_desc = open_dataset(new_path_1);
+			if (file_desc < 0)
+			{ // dataset was not found.
+				return -1;
+			}
+			aux = (char *)malloc(IMSS_DATA_BSIZE);
+			ret = get_data(file_desc, 0, (char *)aux);
+			memcpy(&stats, aux, sizeof(struct stat));
+			pthread_mutex_lock(&lock_file);
+			map_put(map, new_path_1, file_desc, stats, aux);
+			if (PREFETCH != 0)
+			{
+				char *buff = (char *)malloc(PREFETCH * IMSS_DATA_BSIZE);
+				map_init_prefetch(map_prefetch, new_path_1, buff);
+			}
+			pthread_mutex_unlock(&lock_file);
+			// free(aux);
+		}
+		res = create_dataset((char *)rpath2, POLICY, N_BLKS, IMSS_BLKSIZE, REPL_FACTOR, n_servers, new_path_1);
+
+		break;
+	case 1:
+		slog_debug("[FUSE][imss_posix_api] Entering case 1 ");
+		// rpath1 = new_path_1;
+		get_iuri(new_path_2, rpath2);
+		res = create_dataset((char *)rpath2, POLICY, N_BLKS, IMSS_BLKSIZE, REPL_FACTOR, n_servers, new_path_1);
+		break;
+	default:
+		break;
+	}
+
+	slog_debug("[FUSE][imss_posix_api] rpath1=%s, rpath2=%s", rpath1, rpath2);
+
+	// Assing file handler and create dataset
+
+	if (res < 0)
+	{
+		fprintf(stderr, "[imss_create]	Cannot create new dataset.\n");
+		slog_error("[imss_create] Cannot create new dataset.\n");
+		free(rpath1);
+		free(rpath2);
+		return res;
+	}
+
+	map_erase(map, rpath2);
+	slog_live("[imss_create] map_erase(map, rpath:%s), ret:%d", rpath2, ret);
+	// if(ret < 1){
+	// 	slog_live("No elements erased by map_erase, ret:%d", ret);
+	// }
+
+	pthread_mutex_lock(&lock_file); // lock.
+	// map_put(map, rpath2, file_desc, ds_stat, aux);
+	// slog_live("[imss_create] map_put(map, rpath:%s, fh:%ld, ds_stat, buff:%s)", rpath, *fh, buff);
+	slog_live("[imss_create] map_put(map, rpath:%s, fh:%ld, ds_stat.st_blksize=%ld)", rpath2, file_desc, ds_stat.st_blksize);
+
+	pthread_mutex_unlock(&lock_file); // unlock.
+	free(rpath1);
+	free(rpath2);
 	return 0;
 }
 

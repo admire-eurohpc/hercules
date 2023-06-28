@@ -1,6 +1,5 @@
 #define _GNU_SOURCE
 
-
 #include "map.hpp"
 #include "mapfd.hpp"
 #include "cfg_parse.h"
@@ -29,7 +28,7 @@
 #include <sys/utsname.h>
 
 #undef _FILE_OFFSET_BITS
-#undef __USE_LARGEFILE64 
+#undef __USE_LARGEFILE64
 #undef __USE_FILE_OFFSET64
 #include <dirent.h>
 // #ifndef _STAT_VER
@@ -158,7 +157,11 @@ static size_t (*real_fwrite)(const void *buf, size_t size, size_t count, FILE *f
 static int (*real_ferror)(FILE *fp) = NULL;
 static int (*real_feof)(FILE *fp) = NULL;
 
-static void *(*real_mmap)(void *addr, size_t length, int prot, int flags, int fd, off_t offset);
+static void *(*real_mmap)(void *addr, size_t length, int prot, int flags, int fd, off_t offset) = NULL;
+
+static int (*real_symlink)(const char *name1, const char *name2) = NULL;
+
+static int (*real_symlinkat)(const char *name1, int fd, const char *name2) = NULL;
 
 // int _openat(int dirfd, const char *pathname, int flags, ...)
 // {
@@ -375,7 +378,7 @@ void getConfiguration()
 	char *aux;
 
 	cfg = cfg_init();
-	conf_path = getenv("H_CONF");
+	conf_path = getenv("HERCULES_CONF");
 	if (conf_path != NULL)
 	{
 		fprintf(stderr, "Loading %s\n", conf_path);
@@ -1021,13 +1024,17 @@ int __open_2(const char *pathname, int flags, ...)
 				int err_create = imss_create(new_path, mode, &ret_ds);
 				if (err_create == -EEXIST)
 				{
-					TIMING(imss_open(new_path, &ret_ds), "imss_open O_CREAT", int);
+					TIMING(ret = imss_open(new_path, &ret_ds), "imss_open O_CREAT", int);
 				}
 			}
 			else
 			{
 				slog_debug("[POSIX %d]. Not O_CREAT", rank);
-				TIMING(imss_open(new_path, &ret_ds), "imss_open Not O_CREAT", int);
+				TIMING(ret = imss_open(new_path, &ret_ds), "imss_open Not O_CREAT", int);
+				if (ret_ds == -2)
+				{
+					ret = real__open_2(new_path, flags);
+				}
 			}
 			// map_fd_search(map_fd, new_path, &ret, &p);
 		}
@@ -1418,6 +1425,11 @@ int open(const char *pathname, int flags, ...)
 			{
 				slog_debug("[POSIX %d] 2 - imss_open(%s, %ld)", rank, new_path, ret_ds);
 				TIMING(ret = imss_open(new_path, &ret_ds), "imss_open op2", int);
+				slog_debug("[POSIX %d] 2 - ret_ds=%d, new_path=%s", rank, ret_ds, new_path);
+				if (ret_ds == -2)
+				{
+					ret = real__open_2(new_path, flags);
+				}
 			}
 		}
 		// pthread_mutex_unlock(&lock2);
@@ -1432,7 +1444,7 @@ int open(const char *pathname, int flags, ...)
 			ret = real_open(pathname, flags, mode);
 		slog_debug("[POSIX %d]. Ending real 'open', flags=%d, mode=%d, pathname=%s, ret=%d.", rank, flags, mode, pathname, ret);
 	}
-	slog_debug("Ending Open, errno=%d", errno);
+	// slog_debug("Ending Open, errno=%d", errno);
 	return ret;
 }
 
@@ -1461,6 +1473,62 @@ int mkdir(const char *path, mode_t mode)
 		slog_debug("[POSIX %d]. Calling real 'mkdir', path=%s.", rank, path);
 		ret = real_mkdir(path, mode);
 		slog_debug("[POSIX %d]. Ending real 'mkdir', path=%s.", rank, path);
+	}
+	return ret;
+}
+
+int symlink(const char *name1, const char *name2)
+{
+
+	real_symlink = dlsym(RTLD_NEXT, "symlink");
+
+	fprintf(stderr, "Hola symlink \t ******");
+
+	return real_symlink(name1, name2);
+}
+
+int symlinkat(const char *name1, int fd, const char *name2)
+{
+
+	real_symlinkat = dlsym(RTLD_NEXT, "symlinkat");
+
+	if (!init)
+	{
+		return real_symlinkat(name1, fd, name2);
+	}
+
+	char *workdir = getenv("PWD");
+	int ret;
+	if (!strncmp(name1, MOUNT_POINT, strlen(MOUNT_POINT)) || !strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT)) ||
+		!strncmp(name2, MOUNT_POINT, strlen(MOUNT_POINT)))
+	{
+		slog_debug("[POSIX %d]. Calling hercules 'symlinkat', name1=%s, name2=%s.", rank, name1, name2);
+
+		char *new_path_1, *new_path_2;
+
+		if (!strncmp(name1, MOUNT_POINT, strlen(MOUNT_POINT)) && !strncmp(name2, MOUNT_POINT, strlen(MOUNT_POINT)))
+		{
+			slog_debug("[POSIX %d]. Both name1=%s, name2=%s.", rank, name1, name2);
+			new_path_1 = convert_path(name1, MOUNT_POINT);
+			new_path_2 = convert_path(name2, MOUNT_POINT);
+			ret = imss_symlinkat(new_path_1, new_path_2, 0);
+		}
+
+		if (!strncmp(name2, MOUNT_POINT, strlen(MOUNT_POINT)))
+		{
+			slog_debug("[POSIX %d]. Only second name2=%s.", rank, name2);
+			new_path_1 = name1;
+			new_path_2 = convert_path(name2, MOUNT_POINT);
+			ret = imss_symlinkat(new_path_1, new_path_2, 1);
+		}
+
+		slog_debug("[POSIX %d]. Ending hercules 'symlinkat', name1=%s, name2=%s.", rank, name1, name2);
+	}
+	else
+	{
+		slog_debug("[POSIX %d]. Calling real 'symlinkat', name1=%s, name2=%s.", rank, name1, name2);
+		ret = real_symlinkat(name1, fd, name2);
+		slog_debug("[POSIX %d]. Ending real 'symlinkat', name1=%s, name2=%s.", rank, name1, name2);
 	}
 	return ret;
 }
@@ -2041,7 +2109,6 @@ struct dirent *readdir(DIR *dirp)
 	return entry;
 }
 
-
 struct dirent64 *readdir64(DIR *dirp)
 {
 	real_readdir64 = dlsym(RTLD_NEXT, "readdir64");
@@ -2053,7 +2120,6 @@ struct dirent64 *readdir64(DIR *dirp)
 
 	return real_readdir64(dirp);
 }
-
 
 int closedir(DIR *dirp)
 {

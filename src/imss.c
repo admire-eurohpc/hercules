@@ -353,10 +353,11 @@ int32_t stat_init(char *stat_hostfile,
 		n_chars = getline(&stat_node, &l_size, stat_nodes);
 		// Erase the new line character ('') from the string.
 
-		if(stat_node[n_chars - 1]  == '\n') {
+		if (stat_node[n_chars - 1] == '\n')
+		{
 			stat_node[n_chars - 1] = '\0';
 		}
-		
+
 		// slog_debug("[IMSS] stat_client=%s", stat_node);
 		slog_debug("[IMSS][stat_int] i=%d, stat_node=%s, port=%ld, rank=%" PRIu32 "", i, stat_node, port, rank);
 		slog_debug("[IMSS][stat_int] Contacting stat dispatcher at %s:%ld", stat_node, port);
@@ -957,7 +958,8 @@ int32_t create_dataset(char *dataset_uri,
 					   int32_t num_data_elem,
 					   int32_t data_elem_size,
 					   int32_t repl_factor,
-					   int32_t n_servers)
+					   int32_t n_servers,
+					   char *link)
 {
 	int err = 0;
 	int ret = 0;
@@ -994,7 +996,8 @@ int32_t create_dataset(char *dataset_uri,
 	dataset_info new_dataset;
 
 	// Dataset metadata request.
-	if (stat_dataset(dataset_uri, &new_dataset)) {
+	if (stat_dataset(dataset_uri, &new_dataset))
+	{
 		slog_debug("[IMSS] create_dataset: ERRIMSS_CREATEDATASET_ALREADYEXISTS");
 		new_dataset.imss_d = associated_imss_indx;
 		new_dataset.local_conn = associated_imss.conns.matching_server;
@@ -1012,7 +1015,6 @@ int32_t create_dataset(char *dataset_uri,
 		return (GInsert(&datasetd_pos, &datasetd_max_size, (char *)&new_dataset, datasetd, free_datasetd));
 	}
 
-
 	// Save the associated metadata of the current dataset.
 	strcpy(new_dataset.uri_, dataset_uri);
 	strcpy(new_dataset.policy, policy);
@@ -1022,6 +1024,19 @@ int32_t create_dataset(char *dataset_uri,
 	new_dataset.local_conn = associated_imss.conns.matching_server;
 	new_dataset.repl_factor = repl_factor;
 	new_dataset.size = 0;
+	// new_dataset.is_link = 0; // Initially not linked
+	if (link != NO_LINK)
+	{
+		strcpy(new_dataset.link, link);
+		slog_debug("[IMSS][create_dataset] link=%s, new_dataset=%s", link, new_dataset.link);
+		new_dataset.is_link = 1;
+	}
+	else
+	{
+		slog_debug("[IMSS][create_dataset] link=%s", link);
+		new_dataset.is_link = 0;
+	}
+
 	if (n_servers > 0 && n_servers <= curr_imss.info.num_storages)
 	{
 		new_dataset.n_servers = n_servers;
@@ -1129,32 +1144,53 @@ int32_t open_dataset(char *dataset_uri)
 	dataset_info new_dataset;
 	// Dataset metadata request.
 	int32_t stat_dataset_res = stat_dataset(dataset_uri, &new_dataset);
+
+	if (new_dataset.is_link != 0)
+	{
+		slog_debug("[IMSS][open_dataset] is_link=%d, link name=%s", new_dataset.is_link, new_dataset.link);
+		stat_dataset_res = stat_dataset(new_dataset.link, &new_dataset);
+		// check if it comes from Hercules
+		if (strncmp(new_dataset.link, "imss://", strlen("imss://")))
+		{
+			// return open(new_dataset.link);
+
+			// map_put(map, imss_path, file_desc, stats, aux);
+			slog_debug("[IMSS][open_dataset] No Hercules link %s", new_dataset.link);
+
+			dataset_uri = new_dataset.link;
+			return -2;
+		}
+	}
+	else
+	{
+		slog_debug("[IMSS][open_dataset] is_link=%d", new_dataset.is_link);
+	}
 	int32_t not_initialized = 0;
 
 	// Check if the requested dataset did not exist or was already stored in the local vector.
 	switch (stat_dataset_res)
 	{
-		case 0:
-			{
-				slog_fatal("ERRIMSS_OPENDATASET_NOTEXISTS: %s", dataset_uri);
-				return -1;
-			}
-		case 2:
-			{
-				if (new_dataset.local_conn != -2)
-				{
-					slog_fatal("ERRIMSS_OPENDATASET_ALREADYSTORED");
-					return -1;
-				}
+	case 0:
+	{
+		slog_fatal("ERRIMSS_OPENDATASET_NOTEXISTS: %s", dataset_uri);
+		return -1;
+	}
+	case 2:
+	{
+		if (new_dataset.local_conn != -2)
+		{
+			slog_fatal("ERRIMSS_OPENDATASET_ALREADYSTORED");
+			return -1;
+		}
 
-				not_initialized = 1;
+		not_initialized = 1;
 
-				break;
-			}
-		case -1:
-			{
-				return -1;
-			}
+		break;
+	}
+	case -1:
+	{
+		return -1;
+	}
 	}
 
 	// Assign the associated IMSS descriptor to the new dataset structure.
@@ -1452,6 +1488,7 @@ int32_t stat_dataset(const char *dataset_uri, dataset_info *dataset_info_)
 	ep = stat_eps[m_srv];
 
 	sprintf(formated_uri, "%" PRIu32 " GET 0 %s", stat_ids[m_srv], dataset_uri);
+	slog_debug("[IMSS][stat_dataset] Request - %s", formated_uri);
 	// Send the request.
 	if (send_req(ucp_worker_meta, ep, local_addr_meta, local_addr_len_meta, formated_uri) < 0)
 	{
@@ -1464,7 +1501,7 @@ int32_t stat_dataset(const char *dataset_uri, dataset_info *dataset_info_)
 
 	if (ret < sizeof(dataset_info))
 	{
-		slog_debug("[IMSS] stat_dataset: dataset does not exist.");
+		slog_debug("[IMSS][stat_dataset] stat_dataset: dataset does not exist.");
 		// fprintf(stderr,"[IMSS] stat_dataset: dataset does not exist.\n");
 		// exit(0);
 		return 0;
@@ -1520,7 +1557,7 @@ int32_t get_data_location(int32_t dataset_id, int32_t data_id, int32_t op_type)
 
 // Method renaming a dir_dir
 int32_t rename_dataset_srv_worker_dir_dir(char *old_dir, char *rdir_dest,
-		int32_t dataset_id, int32_t data_id)
+										  int32_t dataset_id, int32_t data_id)
 {
 	int32_t n_server;
 	// Server containing the corresponding data to be retrieved.
@@ -1583,7 +1620,7 @@ int32_t rename_dataset_srv_worker_dir_dir(char *old_dir, char *rdir_dest,
 
 // Method renaming a dataset.
 int32_t rename_dataset_srv_worker(char *old_dataset_uri, char *new_dataset_uri,
-		int32_t dataset_id, int32_t data_id)
+								  int32_t dataset_id, int32_t data_id)
 {
 	int32_t n_server;
 	// Server containing the corresponding data to be retrieved.
@@ -1643,7 +1680,7 @@ int32_t rename_dataset_srv_worker(char *old_dataset_uri, char *new_dataset_uri,
 
 // Method storing a specific data element.
 int32_t writev_multiple(const char *buf, int32_t dataset_id, int64_t data_id,
-		int64_t end_blk, int64_t start_offset, int64_t end_offset, int64_t IMSS_DATA_BSIZE, int64_t size)
+						int64_t end_blk, int64_t start_offset, int64_t end_offset, int64_t IMSS_DATA_BSIZE, int64_t size)
 {
 
 	int32_t n_server;
@@ -1689,12 +1726,12 @@ int32_t writev_multiple(const char *buf, int32_t dataset_id, int64_t data_id,
 
 // Method retrieving multiple data
 int32_t readv_multiple(int32_t dataset_id,
-		int32_t curr_block,
-		int32_t end_block,
-		char *buffer,
-		uint64_t BLOCKSIZE,
-		int64_t start_offset,
-		int64_t size)
+					   int32_t curr_block,
+					   int32_t end_block,
+					   char *buffer,
+					   uint64_t BLOCKSIZE,
+					   int64_t start_offset,
+					   int64_t size)
 {
 	// printf("readv size=%d",size);
 	int32_t n_server;
@@ -2206,7 +2243,6 @@ int32_t get_data_mall(int32_t dataset_id, int32_t data_id, char *buffer, size_t 
 	// slog_fatal("Caller name: %pS", __builtin_return_address(0));
 	int32_t n_server;
 
-
 	curr_imss.info.num_storages = num_storages;
 
 	// Server containing the corresponding data to be retrieved.
@@ -2366,7 +2402,6 @@ int32_t set_data_mall(int32_t dataset_id, int32_t data_id, char *buffer, size_t 
 	// slog_debug("[IMSS][set_data]");
 	t = clock();
 
-
 	curr_imss.info.num_storages = num_storages;
 
 	// Server containing the corresponding data to be written.
@@ -2432,9 +2467,9 @@ int32_t set_data_mall(int32_t dataset_id, int32_t data_id, char *buffer, size_t 
 // Method storing a specific data element.
 int32_t
 set_ndata(int32_t dataset_id,
-		int32_t data_id,
-		char *buffer,
-		uint32_t size)
+		  int32_t data_id,
+		  char *buffer,
+		  uint32_t size)
 {
 	int32_t n_server;
 	// Server containing the corresponding data to be written.
@@ -2481,8 +2516,8 @@ set_ndata(int32_t dataset_id,
 
 // Method retrieving the location of a specific data object.
 char **get_dataloc(const char *dataset,
-		int32_t data_id,
-		int32_t *num_storages)
+				   int32_t data_id,
+				   int32_t *num_storages)
 {
 	// Dataset structure of the one requested.
 	dataset_info where_dataset;
@@ -2490,25 +2525,25 @@ char **get_dataloc(const char *dataset,
 	// Check which resource was used to retrieve the concerned dataset.
 	switch (stat_dataset(dataset, &where_dataset))
 	{
-		// No dataset was found with the requested name.
-		case 0:
-			{
-				slog_fatal("ERRIMSS_GETDATALOC_DATASETNOTEXISTS");
-				return NULL;
-			}
-			// The dataset was retrieved from the metadata server.
-		case 1:
-			{
-				// The dataset structure will not be stored if it is a LOCAL one as those are dynamically updated.
-				if (strcmp(where_dataset.policy, "LOCAL"))
-				{
-					// Hint specifying that the dataset was retrieved but not initialized.
-					where_dataset.local_conn = -2;
-					GInsert(&datasetd_pos, &datasetd_max_size, (char *)&where_dataset, datasetd, free_datasetd);
-				}
+	// No dataset was found with the requested name.
+	case 0:
+	{
+		slog_fatal("ERRIMSS_GETDATALOC_DATASETNOTEXISTS");
+		return NULL;
+	}
+		// The dataset was retrieved from the metadata server.
+	case 1:
+	{
+		// The dataset structure will not be stored if it is a LOCAL one as those are dynamically updated.
+		if (strcmp(where_dataset.policy, "LOCAL"))
+		{
+			// Hint specifying that the dataset was retrieved but not initialized.
+			where_dataset.local_conn = -2;
+			GInsert(&datasetd_pos, &datasetd_max_size, (char *)&where_dataset, datasetd, free_datasetd);
+		}
 
-				break;
-			}
+		break;
+	}
 	}
 
 	int32_t dataset_name_length = strlen(dataset);

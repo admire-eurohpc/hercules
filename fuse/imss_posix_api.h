@@ -33,7 +33,7 @@ int imss_getattr(const char *path, struct stat *stbuf);
 
 
 int imss_readdir(const char *path, void *buf, posix_fill_dir_t filler, off_t offset);
-int imss_open(const char *path, uint64_t *fh);
+int imss_open(char *path, uint64_t *fh);
 int imss_read(const char *path, char *buf, size_t size, off_t offset);
 int imss_sread(const char *path, char *buf, size_t size, off_t offset);
 int imss_split_readv(const char *path, char *buf, size_t size, off_t offset);
@@ -47,6 +47,8 @@ int imss_create(const char * path, mode_t mode, uint64_t * fh);
 int imss_opendir(const char * path);
 int imss_releasedir(const char * path);
 int imss_flush(const char * path);
+
+int imss_symlinkat(char *new_path_1, char *new_path_2, int _case);
 
 int imss_rmdir(const char * path);
 int imss_unlink(const char * path);

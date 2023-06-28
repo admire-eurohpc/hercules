@@ -108,11 +108,10 @@ extern "C" {
 			auto node = m->extract(*i);
 			node.key() = new_path;
 			m->insert(std::move(node));
-
 		}
-
-
 		return 1;
 	}
+
+	
 
 } // extern "C"

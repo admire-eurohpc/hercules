@@ -32,7 +32,7 @@ int32_t main (int32_t argc, char **argv)
 		char dataset_uri[32];
 		sprintf(dataset_uri, "imss://berries/%d", i);
 		//Create dataset, 1 Block of 1 Kbyte 
-		if ((datasetd_ = create_dataset(dataset_uri, "RR", 1, 1024, NONE)) < 0) exit(-1);
+		if ((datasetd_ = create_dataset(dataset_uri, "RR", 1, 1024, NONE, NO_LINK)) < 0) exit(-1);
 
 		char * buffer = (char *) malloc(1024 * 1024 * sizeof(char));
 		//Fill the buffer with \n
