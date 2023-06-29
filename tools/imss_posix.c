@@ -1428,7 +1428,8 @@ int open(const char *pathname, int flags, ...)
 				slog_debug("[POSIX %d] 2 - ret_ds=%d, new_path=%s", rank, ret_ds, new_path);
 				if (ret_ds == -2)
 				{
-					ret = real__open_2(new_path, flags);
+					slog_debug("[POSIX %d] Calling real_open(%s)", rank, new_path);
+					ret = real_open(new_path, flags);
 				}
 			}
 		}

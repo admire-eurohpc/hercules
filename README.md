@@ -69,40 +69,40 @@ spack load hercules
 
 # Usage
 
-The current prototype of Hercules enables the access to the storage infrastructure in three different ways: API library, FUSE, and LD_PRELOAD by overriding symbols. In the following subsection we describe the characteristics of the preferred option.
+The current prototype of Hercules enables the access to the storage infrastructure in three different ways: API library and LD_PRELOAD by overriding symbols. In the following subsection we describe the characteristics of the preferred option.
 
 
-## Running with LD_PRELOAD
+## With Slurm 
 We provide a script that launches a Hercules deployment (_scripts/hercules_). This script reads all initialization parameters from a provided configuration file (_hercules.conf_).
 
 Custom configuration files can be specified launching Hercules in this manner, where "CONF_PATH" is the path to the configuration file:
 
 ```
-source hercules start -f <CONF_PATH>
+hercules start -f <CONF_PATH>
 ```
 
 If not configuration file is provided, Hercules looks for default files _/etc/hercules.conf_, _./hercules.conf_, _hercules.conf_, or _<PROJECT_PATH>/conf/hercules.conf_ in that order.
 
-Hercules can override I/O calls by using the LD_PRELOAD environment variable. Both data and metadata calls are currently intercepted by the implemented dynamic library.
+Hercules can override I/O calls by using the LD_PRELOAD environment variable. Both data and metadata calls are currently intercepted by the implemented dynamic library. As example:
 
 ```
-export LD_PRELOAD=/beegfs/home/hercules/build/tools/libhercules_posix.so
+export LD_PRELOAD=libhercules_posix.so ls /mnt/hercules_mount_point
 ```
+
 To stop a Hercules deployment:
 
 ```
 hercules stop
 ```
 
-### Without Slurm
+## Without Slurm
 To run Hercules in a non-Slurm environment, the script need additional parameters:
 
 ```
-source hercules start -m <meta_server_hostfile> -d <data_server_hostfile> -c <client_hostfile> -f <CONF_PATH>
+hercules start -m <meta_server_hostfile> -d <data_server_hostfile> -f <CONF_PATH>
 
 meta_server_hostfile: file containing hostnames of metadata servers
 data_server_hostfile: file containing hostnames of data servers
-client_hostfile: file containing hostnames of clients
 ```
 
 #### Hostfile Example
@@ -129,13 +129,13 @@ Here we briefly explain each field of the configuration file.
 > MOUNT_POINT = /mnt/imss/
 
 ### Where the Hercules project is
-> HERCULES_PATH = /beegfs/home/hercules
+> HERCULES_PATH = /home/hercules
 
 ### Port listening in the metadata node service
-> METADATA_PORT = 75000
+> METADATA_PORT = 7500
 
 ### Port listening in the data node service
-> DATA_PORT = 85000
+> DATA_PORT = 8500
 
 ### Total number of data nodes
 > NUM_DATA_SERVERS = 1 
@@ -155,10 +155,10 @@ Here we briefly explain each field of the configuration file.
 > LOWER_BOUND_MALLEABILITY = 0   
 
 ### File containing a list of nodes serving as data nodes
-> DATA_HOSTFILE = /beegfs/home/hercules/bash/data_hostfile
+> DATA_HOSTFILE = /home/hercules/bash/data_hostfile
 
 ### File path of the persistence metadata
-> METADA_PERSISTENCE_FILE = /beegfs/home/hercules/bash/metadata
+> METADA_PERSISTENCE_FILE = /home/hercules/bash/metadata
 
 ### Number of threads attending data requests
 > THREAD_POOL = 1
@@ -167,7 +167,7 @@ Here we briefly explain each field of the configuration file.
 > STORAGE_SIZE = 0 # No limit
 
 ### File containing a list of nodes serving as metadata nodes
-> METADATA_HOSTFILE = /beegfs/home/hercules/bash/meta_hostfile
+> METADATA_HOSTFILE = /home/hercules/bash/meta_hostfile
 
 ### Debug mode (none or all)
 > DEBUG_LEVEL = all

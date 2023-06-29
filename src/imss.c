@@ -1157,7 +1157,8 @@ int32_t open_dataset(char *dataset_uri)
 			// map_put(map, imss_path, file_desc, stats, aux);
 			slog_debug("[IMSS][open_dataset] No Hercules link %s", new_dataset.link);
 
-			dataset_uri = new_dataset.link;
+			// dataset_uri = new_dataset.link;
+			strcpy(dataset_uri, new_dataset.link);
 			return -2;
 		}
 	}
