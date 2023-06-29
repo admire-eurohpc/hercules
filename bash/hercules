@@ -58,7 +58,7 @@ do
     case "${flag}" in
         m) META_SERVER_FILE=${OPTARG};;
         d) DATA_SERVER_FILE=${OPTARG};;
-        # c) H_MPI_HOSTFILE_NAME=${OPTARG};;
+        c) H_MPI_HOSTFILE_NAME=${OPTARG};;
         # Indicates whether slurm should be used when it is installed.
         s) SLURM=${OPTARG};;
         # Configuration file path.
@@ -77,9 +77,9 @@ fi
 if [ ! -z "$META_SERVER_FILE" ]; then
     echo "META SERVER FILE - $META_SERVER_FILE"
 fi
-# if [ ! -z "$H_MPI_HOSTFILE_NAME" ]; then
-#     echo "CLIENT FILE - $H_MPI_HOSTFILE_NAME"
-# fi
+if [ ! -z "$H_MPI_HOSTFILE_NAME" ]; then
+    echo "CLIENT FILE - $H_MPI_HOSTFILE_NAME"
+fi
 if [ ! -z "$SLURM" ]; then
     echo "SLURM - $SLURM"
 fi
@@ -162,16 +162,19 @@ NUM_CLIENTS_PER_NODE=$(cat $FILE | grep "NUM_CLIENTS_PER_NODE" | awk '{print $3}
 BLOCK_SIZE=$(cat $FILE | grep "BLOCK_SIZE" | awk '{print $3}')
 STORAGE_SIZE=$(cat $FILE | grep "STORAGE_SIZE" | awk '{print $3}')
 
-## If a client hostfile was not provided we set a default path.
-# if [ -z "$H_MPI_HOSTFILE_NAME" ]; then
-#     ## Error if slurm is not being used and no client hostfile was defined.
-#     if [[ "$SLURM" -eq "0" ]]; then
-#         echo "[Error] Client hostfile not specified, please set one using -c <filename> flag"
-#         exit 1
-#     fi
-#     H_MPI_HOSTFILE_NAME="$H_BASH_PATH/client_hostfile"
-#     tail -n +$((NUM_METADATA+NUM_DATA+1)) hostfile | head -n $NUM_NODES_FOR_CLIENTS > $H_MPI_HOSTFILE_NAME
-# fi
+# If a client hostfile was not provided we set a default path.
+if [ -z "$H_MPI_HOSTFILE_NAME" ]; then
+    ## Error if slurm is not being used and no client hostfile was defined.
+    if [[ $SLURM -eq "0" ]]; then
+        echo "[Error] Client hostfile not specified, you can specify it with -c <filename> flag"
+        # exit 1
+    fi
+
+    if [[ $SLURM -eq 1 ]]; then
+        H_MPI_HOSTFILE_NAME="$H_BASH_PATH/client_hostfile"
+        tail -n +$((NUM_METADATA+NUM_DATA+1)) hostfile | head -n $NUM_NODES_FOR_CLIENTS > $H_MPI_HOSTFILE_NAME
+    fi
+fi
 
 
 ## To run the metadata servers.
@@ -336,34 +339,36 @@ unset BLOCK_SIZE
 unset STORAGE_SIZE
 
 
-GREEN='\033[0;32m'  # Green
-RED='\033[0;31m'          # Red
-NC='\033[0m'    # No Color
+if [[ "$SLURM" -eq "0" ]]; then
+    GREEN='\033[0;32m'  # Green
+    RED='\033[0;31m'          # Red
+    NC='\033[0m'    # No Color
 
-echo -e "#############################################################################
-[!] 1. To export the path of the configuration file, run the following command:
-${GREEN}
-export HERCULES_CONF=$FILE
-${NC}
-#############################################################################"
+    echo -e "#############################################################################
+    [!] 1. To export the path of the configuration file, run the following command:
+    ${GREEN}
+    export HERCULES_CONF=$FILE
+    ${NC}
+    #############################################################################"
 
-echo -e "#############################################################################
-[!] 2. To load the client library:
-${GREEN}
-export $H_POSIX_PRELOAD
-${NC}
-#############################################################################"
+    echo -e "#############################################################################
+    [!] 2. To load the client library:
+    ${GREEN}
+    export $H_POSIX_PRELOAD
+    ${NC}
+    #############################################################################"
 
-echo -e "#############################################################################
-[!] 2. To unload the client library:
-${RED}
-unset $H_POSIX_PRELOAD
-${NC}
-#############################################################################"
+    echo -e "#############################################################################
+    [!] 2. To unload the client library:
+    ${RED}
+    unset $H_POSIX_PRELOAD
+    ${NC}
+    #############################################################################"
 
-echo -e "#############################################################################
-[!] To stop the services:
-${RED}
-hercules stop
-${NC}
-#############################################################################"
+    echo -e "#############################################################################
+    [!] To stop the services:
+    ${RED}
+    hercules stop
+    ${NC}
+    #############################################################################"
+fi
