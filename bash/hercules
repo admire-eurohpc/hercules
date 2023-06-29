@@ -54,11 +54,11 @@ fi
 ## Check if user pass arguments.
 while getopts :m:d:o:c:s:f: flag
 do
-    echo "Entra en getopts"
+    # echo "Entra en getopts"
     case "${flag}" in
         m) META_SERVER_FILE=${OPTARG};;
         d) DATA_SERVER_FILE=${OPTARG};;
-        c) H_MPI_HOSTFILE_NAME=${OPTARG};;
+        # c) H_MPI_HOSTFILE_NAME=${OPTARG};;
         # Indicates whether slurm should be used when it is installed.
         s) SLURM=${OPTARG};;
         # Configuration file path.
@@ -71,12 +71,24 @@ if [ -z "$SLURM" ]; then
     SLURM=$([ -z "$SLURM_CLUSTER_NAME" ] && echo 0 || echo 1)
 fi
 
-echo "DATA_SERVER_FILE=$DATA_SERVER_FILE"
-echo "META_SERVER_FILE=$META_SERVER_FILE"
-echo "CLIENT_FILE=$H_MPI_HOSTFILE_NAME"
-echo "SLURM=$SLURM"
-echo "STATUS=$STATUS"
-echo "FILE=$FILE"
+if [ ! -z "$DATA_SERVER_FILE" ]; then
+    echo "DATA SERVER FILE - $DATA_SERVER_FILE"
+fi
+if [ ! -z "$META_SERVER_FILE" ]; then
+    echo "META SERVER FILE - $META_SERVER_FILE"
+fi
+# if [ ! -z "$H_MPI_HOSTFILE_NAME" ]; then
+#     echo "CLIENT FILE - $H_MPI_HOSTFILE_NAME"
+# fi
+if [ ! -z "$SLURM" ]; then
+    echo "SLURM - $SLURM"
+fi
+if [ ! -z "$STATUS" ]; then
+    echo "STATUS - $STATUS"
+fi
+if [ ! -z "$FILE" ]; then
+    echo "FILE - $FILE"
+fi
 
 ## Checks if the user wants to stop the services.
 if [[ $STATUS = "stop" ]];
@@ -115,7 +127,7 @@ if [ -z "$FILE" ]; then
 fi
 
 echo "Reading configuration file at $FILE"
-export H_CONF="$FILE"
+export HERCULES_CONF="$FILE"
 
 
 ## If slurm is used, then we create a hostfile containing the allocated nodes.
@@ -130,6 +142,8 @@ else
 fi
 
 echo "Using $H_PATH"
+
+export HERCULES_PATH=$H_PATH
 
 H_BUILD_PATH=$H_PATH/build
 H_BASH_PATH=$H_PATH/bash
@@ -149,15 +163,15 @@ BLOCK_SIZE=$(cat $FILE | grep "BLOCK_SIZE" | awk '{print $3}')
 STORAGE_SIZE=$(cat $FILE | grep "STORAGE_SIZE" | awk '{print $3}')
 
 ## If a client hostfile was not provided we set a default path.
-if [ -z "$H_MPI_HOSTFILE_NAME" ]; then
-    ## Error if slurm is not being used and no client hostfile was defined.
-    if [[ "$SLURM" -eq "0" ]]; then
-        echo "[Error] Client hostfile not specified, please set one using -c <filename> flag"
-        exit 1
-    fi
-    H_MPI_HOSTFILE_NAME="$H_BASH_PATH/client_hostfile"
-    tail -n +$((NUM_METADATA+NUM_DATA+1)) hostfile | head -n $NUM_NODES_FOR_CLIENTS > $H_MPI_HOSTFILE_NAME
-fi
+# if [ -z "$H_MPI_HOSTFILE_NAME" ]; then
+#     ## Error if slurm is not being used and no client hostfile was defined.
+#     if [[ "$SLURM" -eq "0" ]]; then
+#         echo "[Error] Client hostfile not specified, please set one using -c <filename> flag"
+#         exit 1
+#     fi
+#     H_MPI_HOSTFILE_NAME="$H_BASH_PATH/client_hostfile"
+#     tail -n +$((NUM_METADATA+NUM_DATA+1)) hostfile | head -n $NUM_NODES_FOR_CLIENTS > $H_MPI_HOSTFILE_NAME
+# fi
 
 
 ## To run the metadata servers.
@@ -200,7 +214,7 @@ do
         echo "[+] Removing temporal files on $node"
         ( ssh $node "$RM" )
         echo "[+] Running metadata server $i in $node..."
-        ( ssh $node "cd $H_BASH_PATH && H_CONF=$FILE $COMMAND" ) &
+        ( ssh $node "cd $H_BASH_PATH && HERCULES_CONF=$FILE $COMMAND" ) &
     else
         ## Deletes the file that we use to make sure that the server has started.
         echo "[+] Removing temporal files on $node"
@@ -255,7 +269,7 @@ do
         echo "[+] Removing temporal files on $node"
         ( ssh $node "$RM" )
         echo "[+] Running data server $i in $node..."
-        ( ssh $node "cd $H_BASH_PATH && H_CONF=$FILE $COMMAND" ) &
+        ( ssh $node "cd $H_BASH_PATH && HERCULES_CONF=$FILE $COMMAND" ) &
     else
         ## Deletes the file that we use to make sure that the server has started.
         echo "[+] Removing temporal files on $node"
@@ -291,14 +305,14 @@ done
 
 case $MPI_DS in
     "open-mpi")
-        echo "[+] Option openmpi"
+        # echo "[+] Option openmpi"
         export H_MPI_ENV_DEF="-x"
         export H_MPI_HOSTFILE_DEF="-hostfile"
         export H_MPI_PPN="--npernode"
         #export H_MPI_NNFC=""
     ;;
     "mpich" | "impi")
-        echo "[+] Option mpich | impi"
+        # echo "[+] Option mpich | impi"
         export H_MPI_ENV_DEF="-env"
         export H_MPI_HOSTFILE_DEF="-f"
         export H_MPI_PPN="-ppn"
@@ -321,3 +335,35 @@ unset NUM_CLIENTS_PER_NODE
 unset BLOCK_SIZE
 unset STORAGE_SIZE
 
+
+GREEN='\033[0;32m'  # Green
+RED='\033[0;31m'          # Red
+NC='\033[0m'    # No Color
+
+echo -e "#############################################################################
+[!] 1. To export the path of the configuration file, run the following command:
+${GREEN}
+export HERCULES_CONF=$FILE
+${NC}
+#############################################################################"
+
+echo -e "#############################################################################
+[!] 2. To load the client library:
+${GREEN}
+export $H_POSIX_PRELOAD
+${NC}
+#############################################################################"
+
+echo -e "#############################################################################
+[!] 2. To unload the client library:
+${RED}
+unset $H_POSIX_PRELOAD
+${NC}
+#############################################################################"
+
+echo -e "#############################################################################
+[!] To stop the services:
+${RED}
+hercules stop
+${NC}
+#############################################################################"

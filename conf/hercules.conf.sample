@@ -20,10 +20,10 @@ NUM_DATA_SERVERS = 1
 NUM_META_SERVERS = 1
 
 # Total number of client nodes
-NUM_NODES_FOR_CLIENTS = 10 # FIX
+NUM_NODES_FOR_CLIENTS = 1
 
 # Total number of clients per node
-NUM_CLIENTS_PER_NODE = 10 # FIX
+NUM_CLIENTS_PER_NODE = 1
 
 # 1: enables malleability functions
 MALLEABILITY = 0
@@ -31,10 +31,7 @@ UPPER_BOUND_MALLEABILITY = 0
 LOWER_BOUND_MALLEABILITY = 0
 
 # File containing a list of nodes serving as data nodes
-DATA_HOSTFILE = data_hostfile 
-
-METADA_PERSISTENCE_FILE = metadata
-
+DATA_HOSTFILE = data_hostfile
 
 # Number of threads attending data requests
 THREAD_POOL = 1
@@ -47,6 +44,9 @@ STORAGE_SIZE = 0 # No limit
 
 # File containing a list of nodes serving as metadata nodes
 METADATA_HOSTFILE = hostfile
+
+# Replication factor
+REPL_FACTOR = 2
 
 # Debug mode (none or all)
 DEBUG_LEVEL = none

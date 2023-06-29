@@ -315,6 +315,8 @@ __attribute__((constructor)) void imss_posix_init(void)
 	slog_debug(" -- IMSS_MALLEABILITY: %d", MALLEABILITY);
 	slog_debug(" -- UPPER_BOUND_SERVERS: %d", UPPER_BOUND_SERVERS);
 	slog_debug(" -- LOWER_BOUND_SERVERS: %d", LOWER_BOUND_SERVERS);
+	slog_debug(" -- REPL_FACTOR: %d", REPL_FACTOR);
+
 
 	// Metadata server
 	if (stat_init(META_HOSTFILE, METADATA_PORT, N_META_SERVERS, rank) == -1)
@@ -474,6 +476,9 @@ void getConfiguration()
 
 	if (cfg_get(cfg, "LOWER_BOUND_MALLEABILITY"))
 		LOWER_BOUND_SERVERS = atoi(cfg_get(cfg, "LOWER_BOUND_MALLEABILITY"));
+
+	if (cfg_get(cfg, "REPL_FACTOR"))
+		REPL_FACTOR = atoi(cfg_get(cfg, "REPL_FACTOR"));
 
 	if (cfg_get(cfg, "METADATA_HOSTFILE"))
 	{
