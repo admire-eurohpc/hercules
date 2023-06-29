@@ -5,7 +5,10 @@ URI = imss://
 BLOCK_SIZE = 512
 
 # Used mount point in the client side
-MOUNT_POINT = /mnt/imss/
+MOUNT_POINT = /mnt/hercules/
+
+# Path where the Hercules project is located
+HERCULES_PATH = /home/hercules
 
 # Port listening in the metadata node service
 METADATA_PORT = 7500
