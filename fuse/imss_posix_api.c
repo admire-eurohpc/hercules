@@ -2358,7 +2358,8 @@ int imss_chmod(const char *path, mode_t mode)
 
 	memcpy(&ds_stat, buff, sizeof(struct stat));
 
-	ds_stat.st_mode = mode;
+	slog_debug("[imss_chmod] st_mode=%lu, new mode=%lu", ds_stat.st_mode, mode);
+	ds_stat.st_mode |= mode;
 
 	// Write initial block
 	memcpy(buff, &ds_stat, sizeof(struct stat));

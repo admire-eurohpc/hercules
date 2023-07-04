@@ -163,6 +163,49 @@ static int (*real_symlink)(const char *name1, const char *name2) = NULL;
 
 static int (*real_symlinkat)(const char *name1, int fd, const char *name2) = NULL;
 
+static int (*real_chdir)(const char *path) = NULL;
+static int (*real_fchdir)(int fd) = NULL;
+static int (*real___chdir)(const char *path) = NULL;
+
+static int (*real_chmod)(const char *pathname, mode_t mode) = NULL;
+static int (*real_fchmod)(int fd, mode_t mode) = NULL;
+
+int chdir(const char *path)
+{
+	real_chdir = dlsym(RTLD_NEXT, "chdir");
+
+	if (init)
+	{
+		slog_debug("Calling chdir, pathname=%s", path);
+	}
+
+	return real_chdir(path);
+}
+
+int fchdir(int fd)
+{
+	real_fchdir = dlsym(RTLD_NEXT, "fchdir");
+
+	if (init)
+	{
+		slog_debug("Calling fchdir");
+	}
+
+	return real_fchdir(fd);
+}
+
+int __chdir(const char *path)
+{
+	real___chdir = dlsym(RTLD_NEXT, "__chdir");
+
+	if (init)
+	{
+		slog_debug("Calling __chdir, pathname=%s", path);
+	}
+
+	return real___chdir(path);
+}
+
 // int _openat(int dirfd, const char *pathname, int flags, ...)
 // {
 // 	real__openat = dlsym(RTLD_NEXT, "_openat");
@@ -317,7 +360,6 @@ __attribute__((constructor)) void imss_posix_init(void)
 	slog_debug(" -- LOWER_BOUND_SERVERS: %d", LOWER_BOUND_SERVERS);
 	slog_debug(" -- REPL_FACTOR: %d", REPL_FACTOR);
 
-
 	// Metadata server
 	if (stat_init(META_HOSTFILE, METADATA_PORT, N_META_SERVERS, rank) == -1)
 	{
@@ -362,7 +404,7 @@ __attribute__((constructor)) void imss_posix_init(void)
 	}
 
 	slog_debug("[CLIENT %d] ready!\n", rank);
-	fprintf(stderr, "[CLIENT %d] ready!\n", rank);
+	// fprintf(stderr, "[CLIENT %d] ready!\n", rank);
 	init = 1;
 }
 
@@ -383,7 +425,8 @@ void getConfiguration()
 	conf_path = getenv("HERCULES_CONF");
 	if (conf_path != NULL)
 	{
-		fprintf(stderr, "Loading %s\n", conf_path);
+		slog_debug("Loading %s", conf_path);
+		// fprintf(stderr, "Loading %s\n", conf_path);
 		ret = cfg_load(cfg, conf_path);
 		if (ret)
 		{
@@ -404,7 +447,8 @@ void getConfiguration()
 
 		for (size_t i = 0; i < 3; i++)
 		{
-			fprintf(stderr, "Loading %s\n", default_paths[i]);
+			slog_debug("Loading %s\n", default_paths[i]);
+			// fprintf(stderr, "Loading %s\n", default_paths[i]);
 			if (cfg_load(cfg, default_paths[i]) == 0)
 			{
 				ret = 0;
@@ -426,7 +470,8 @@ void getConfiguration()
 
 		if (!ret)
 		{
-			fprintf(stderr, "[CLIENT %d] Configuration file loaded: %s\n", rank, conf_path);
+			slog_debug("[CLIENT] Configuration file loaded: %s\n", conf_path);
+			// fprintf(stderr, "[CLIENT %d] Configuration file loaded: %s\n", rank, conf_path);
 		}
 		else
 		{
@@ -438,7 +483,8 @@ void getConfiguration()
 	}
 	else
 	{
-		fprintf(stderr, "[CLIENT %d] Configuration file loaded: %s\n", rank, conf_path);
+		slog_debug("[CLIENT] Configuration file loaded: %s\n", conf_path);
+		// fprintf(stderr, "[CLIENT %d] Configuration file loaded: %s\n", rank, conf_path);
 	}
 
 	if (cfg_get(cfg, "URI"))
@@ -797,7 +843,7 @@ int __xstat(int fd, const char *pathname, struct stat *buf)
 		ret = real_xstat(fd, pathname, buf);
 		slog_debug("[POSIX %d] End Real '__xstat', pathname=%s, fd=%d, errno=%d, ret=%d.", rank, pathname, fd, errno, ret);
 	}
-	slog_debug("Stat->dev=%d, buf->st_ino=%d", buf->st_dev, buf->st_ino);
+	// slog_debug("Stat->dev=%d, buf->st_ino=%d", buf->st_dev, buf->st_ino);
 	return ret;
 }
 
@@ -1907,27 +1953,79 @@ int rename(const char *old, const char *new)
 
 int fchmodat(int dirfd, const char *pathname, mode_t mode, int flags)
 {
-	real_fchmodat = dlsym(RTLD_NEXT, "chmod");
-	int ret;
-	char *workdir = getenv("PWD");
+	real_fchmodat = dlsym(RTLD_NEXT, "fchmodat");
 
 	if (!init)
 	{
 		return real_fchmodat(dirfd, pathname, mode, flags);
 	}
 
+	int ret;
+	char *workdir = getenv("PWD");
 	if (!strncmp(pathname, MOUNT_POINT, strlen(MOUNT_POINT)) || !strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT)))
 	{
-		slog_debug("[POSIX %d]. Calling 'fchmodat'.", rank);
+		slog_debug("[POSIX %d]. Calling Hercules 'fchmodat', pathname=%s.", rank, pathname);
 		char *new_path;
 		new_path = convert_path(pathname, MOUNT_POINT);
 		ret = imss_chmod(new_path, mode);
+		slog_debug("[POSIX %d]. End Hercules 'fchmodat', pathname=%s, ret=%d.", rank, pathname, ret);
 	}
 	else
 	{
 		ret = real_fchmodat(dirfd, pathname, mode, flags);
 	}
 
+	return ret;
+}
+
+int chmod(const char *pathname, mode_t mode)
+{
+	real_chmod = dlsym(RTLD_NEXT, "chmod");
+
+	if (!init)
+	{
+		return real_chmod(pathname, mode);
+	}
+
+	int ret;
+	char *workdir = getenv("PWD");
+	if (!strncmp(pathname, MOUNT_POINT, strlen(MOUNT_POINT)) || !strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT)))
+	{
+		slog_debug("[POSIX %d]. Calling Hercules 'chmod', pathname=%s.", rank, pathname);
+		char *new_path;
+		new_path = convert_path(pathname, MOUNT_POINT);
+		ret = imss_chmod(new_path, mode);
+		slog_debug("[POSIX %d]. End Hercules 'chmod', pathname=%s, ret=%d.", rank, pathname, ret);
+	}
+	else
+	{
+		ret = real_chmod(pathname, mode);
+	}
+	return ret;
+}
+
+int fchmod(int fd, mode_t mode) {
+	real_fchmod = dlsym(RTLD_NEXT, "fchmod");
+
+	if (!init)
+	{
+		return real_fchmod(fd, mode);
+	}
+
+	int ret;
+	char *pathname = calloc(256, sizeof(char));
+	if (map_fd_search_by_val(map_fd, pathname, fd) == 1)
+	{
+		slog_debug("[POSIX %d]. Calling Hercules 'fchmod', pathname=%s.", rank, pathname);
+		// char *new_path;
+		// new_path = convert_path(pathname, MOUNT_POINT);
+		ret = imss_chmod(pathname, mode);
+		slog_debug("[POSIX %d]. End Hercules 'fchmod', pathname=%s, ret=%d.", rank, pathname, ret);
+	}
+	else
+	{
+		ret = real_fchmod(fd, mode);
+	}
 	return ret;
 }
 
@@ -2284,7 +2382,7 @@ int __fxstat(int ver, int fd, struct stat *buf)
 		// new_path = convert_path(pathname, MOUNT_POINT);
 		// int exist = map_fd_search(map_fd, new_path, &ret, &p);
 		imss_refresh(pathname);
-		slog_debug("[POSIX %d] Calling Hercules '__fxstat', new_path=%s, fd=%d.", rank, pathname, fd);
+		// slog_debug("[POSIX %d] Calling Hercules '__fxstat', new_path=%s, fd=%d.", rank, pathname, fd);
 		ret = imss_getattr(pathname, buf);
 		if (ret < 0)
 		{
@@ -2304,7 +2402,7 @@ int __fxstat(int ver, int fd, struct stat *buf)
 		ret = real__fxstat(ver, fd, buf);
 		slog_debug("[POSIX %d] End Real '__fxstat', pathname=%s, fd=%d, errno=%d, ret=%d.", rank, pathname, fd, errno, ret);
 	}
-	slog_debug("Stat->dev=%d, buf->st_ino=%d", buf->st_dev, buf->st_ino);
+	// slog_debug("Stat->dev=%d, buf->st_ino=%d", buf->st_dev, buf->st_ino);
 	free(pathname);
 	return ret;
 }
