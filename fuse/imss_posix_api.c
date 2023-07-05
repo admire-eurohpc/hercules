@@ -2359,7 +2359,10 @@ int imss_chmod(const char *path, mode_t mode)
 	memcpy(&ds_stat, buff, sizeof(struct stat));
 
 	slog_debug("[imss_chmod] st_mode=%lu, new mode=%lu", ds_stat.st_mode, mode);
-	ds_stat.st_mode |= mode;
+	mode_t type = ds_stat.st_mode & 0xFFFF000;
+	// fprintf(stderr, "Hola hola hola %d\n", type >> 3);
+	ds_stat.st_mode = mode | type;
+	slog_debug("[imss_chmod] After st_mode=%lu", ds_stat.st_mode);
 
 	// Write initial block
 	memcpy(buff, &ds_stat, sizeof(struct stat));

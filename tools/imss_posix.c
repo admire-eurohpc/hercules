@@ -973,11 +973,12 @@ int __xstat64(int ver, const char *pathname, struct stat64 *stat_buf)
 	int ret;
 	unsigned long p = 0;
 	char *workdir = getenv("PWD");
+
+	
+
 	if (!strncmp(pathname, MOUNT_POINT, strlen(MOUNT_POINT)) || !strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT)))
 	{
-
 		slog_debug("[POSIX %d]. Calling Hercules '__xstat64', pathname=%s.", rank, pathname);
-
 		char *new_path;
 		new_path = convert_path(pathname, MOUNT_POINT);
 		// int exist = map_fd_search(map_fd, new_path, &ret, &p);
@@ -2004,7 +2005,8 @@ int chmod(const char *pathname, mode_t mode)
 	return ret;
 }
 
-int fchmod(int fd, mode_t mode) {
+int fchmod(int fd, mode_t mode)
+{
 	real_fchmod = dlsym(RTLD_NEXT, "fchmod");
 
 	if (!init)
@@ -2026,6 +2028,9 @@ int fchmod(int fd, mode_t mode) {
 	{
 		ret = real_fchmod(fd, mode);
 	}
+
+	free(pathname);
+
 	return ret;
 }
 
@@ -2060,14 +2065,13 @@ DIR *opendir(const char *name)
 
 	real_opendir = dlsym(RTLD_NEXT, "opendir");
 
-	DIR *dirp;
-
-	char *workdir = getenv("PWD");
-
 	if (!init)
 	{
 		return real_opendir(name);
 	}
+
+	DIR *dirp;
+	char *workdir = getenv("PWD");
 
 	if (!strncmp(name, MOUNT_POINT, strlen(MOUNT_POINT)) || !strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT)))
 	{
@@ -2217,12 +2221,93 @@ struct dirent64 *readdir64(DIR *dirp)
 {
 	real_readdir64 = dlsym(RTLD_NEXT, "readdir64");
 
-	if (init)
+	if (!init)
 	{
-		slog_debug("[POSIX %d]. 1 . Calling 'readdir64'.", rank);
+		// slog_debug("[POSIX %d]. 1 . Calling 'readdir64'.", rank);
+		return real_readdir64(dirp);
 	}
 
-	return real_readdir64(dirp);
+	char *pathname = calloc(256, sizeof(char));
+	if (map_fd_search_by_val(map_fd, pathname, dirfd(dirp)) == 1)
+	{
+		slog_debug("[POSIX %d]. Calling Hercules 'readdir64', pathname=%s.", rank, pathname);
+		struct dirent *entry = (struct dirent *)malloc(sizeof(struct dirent));
+		char buf[KB * KB] = {0};
+		char *token;
+		// slog_fatal("CUSTOM IMSS_READDIR\n");
+		imss_readdir(pathname, buf, myfiller, 0);
+		unsigned long pos = telldir(dirp);
+
+		token = strtok(buf, "$");
+		// printf("readddir token=%s\n",token);
+		int i = 0;
+
+		while (token != NULL)
+		{
+			if (i == pos)
+			{
+				entry->d_ino = 0;
+				entry->d_off = pos;
+
+				// name of file
+				strcpy(entry->d_name, token);
+
+				char path_search[256] = {0};
+				sprintf(path_search, "imss://%s", token);
+				// type of file;
+				int32_t type = get_type(path_search);
+
+				if (!strncmp(token, ".", strlen(token)))
+				{
+					entry->d_type = DT_DIR;
+				}
+				else if (!strncmp(token, "..", strlen(token)))
+				{
+					entry->d_type = DT_DIR;
+				}
+				else if (type == 0)
+				{
+					strcat(path_search, "/");
+					type = get_type(path_search);
+					if (type == 2)
+					{
+						entry->d_type = DT_DIR;
+					}
+					else
+					{
+						entry->d_type = DT_REG;
+					}
+				}
+				else
+				{
+					entry->d_type = DT_REG;
+				}
+
+				// length of this record
+				if (strlen(token) < 5)
+				{
+					entry->d_reclen = 24;
+				}
+				else
+				{
+					entry->d_reclen = ceil((double)(strlen(token) - 4) / 8) * 8 + 24;
+				}
+				break;
+			}
+			token = strtok(NULL, "$");
+			i++;
+		}
+		seekdir(dirp, pos + 1);
+		if (token == NULL)
+		{
+			entry = NULL;
+		}
+		return entry;
+	}
+	else
+	{
+		return real_readdir64(dirp);
+	}
 }
 
 int closedir(DIR *dirp)
