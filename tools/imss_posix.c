@@ -2504,53 +2504,57 @@ int __fxstat(int ver, int fd, struct stat *buf)
 // 	return real__fxstat64(ver, fd, buf);
 // }
 
-// int access(const char *path, int mode)
-// {
-// 	int ret = 0;
-// 	unsigned long p = 0;
-// 	char *workdir = getenv("PWD");
-// 	real_access = dlsym(RTLD_NEXT, "access");
+int access(const char *path, int mode)
+{
+	int ret = 0;
+	int permissions = 0;
+	unsigned long p = 0;
+	char *workdir = getenv("PWD");
+	real_access = dlsym(RTLD_NEXT, "access");
 
-// 	// fprintf(stderr, "access\n");
-// 	if (!init)
-// 	{
-// 		return real_access(path, mode);
-// 	}
-// 	if (!strncmp(path, MOUNT_POINT, strlen(MOUNT_POINT)) || !strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT)))
-// 	{
-// 		struct stat stat_buf;
-// 		slog_debug("[POSIX %d]. Calling 'access' path=%s.", rank, path);
+	// fprintf(stderr, "access\n");
+	if (!init)
+	{
+		return real_access(path, mode);
+	}
+	if (!strncmp(path, MOUNT_POINT, strlen(MOUNT_POINT)) || !strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT)))
+	{
+		struct stat stat_buf;
+		slog_debug("[POSIX %d]. Calling 'access' path=%s.", rank, path);
 
-// 		char *new_path;
-// 		new_path = convert_path(path, MOUNT_POINT);
-// 		// int exist = map_fd_search(map_fd, new_path, &ret, &p);
-// 		imss_refresh(new_path);
-// 		ret = imss_getattr(new_path, &stat_buf);
-// 		errno = 0;
-// 		if (ret < 0)
-// 		{
-// 			errno = -ret;
-// 			ret = -1;
-// 		} else if (mode == F_OK)
-// 		{
-// 			ret = 0; /* The file exists. */
-// 		} else if ((mode & X_OK) == 0 || (stat_buf.st_mode & (S_IXUSR | S_IXGRP | S_IXOTH)))
-// 		{
-// 			ret = 0;
-// 		}
-// 		else
-// 		{
-// 			ret = -1;
-// 		}
-// 	}
-// 	else
-// 	{
-// 		ret = real_access(path, mode);
-// 	}
+		char *new_path;
+		new_path = convert_path(path, MOUNT_POINT);
+		// int exist = map_fd_search(map_fd, new_path, &ret, &p);
+		imss_refresh(new_path);
+		ret = imss_getattr(new_path, &stat_buf);
+		errno = 0;
+		if (ret < 0) {
+			errno = -ret;
+			ret = -1;
+		} else {
+			/* check permissions */
+			if ((mode & F_OK) == F_OK)
+				permissions |= F_OK; /* file exists */
+			if ((mode & R_OK) == R_OK && (stat_buf.st_mode & S_IRUSR))
+				permissions |= R_OK; /* read permissions granted */
+			if ((mode & W_OK) == W_OK && (stat_buf.st_mode & S_IWUSR))
+				permissions |= W_OK; /* write permissions granted */
+			if ((mode & X_OK) == X_OK && (stat_buf.st_mode & S_IXUSR))
+				permissions |= X_OK; /* execute permissions granted */
 
-// 	slog_debug("[POSIX %d]. End 'access'  %d %d.", rank, ret, errno);
-// 	return ret;
-// }
+			/* check if all the tested permissions are granted */
+			if (mode == permissions)
+				ret = 0;
+			else
+				ret = -1;
+		}
+	} else {
+		ret = real_access(path, mode);
+	}
+
+	slog_debug("[POSIX %d]. End 'access'  %d %d.", rank, ret, errno);
+	return ret;
+}
 
 // int fsync(int fd)
 // {
