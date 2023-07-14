@@ -31,9 +31,9 @@ static int size(StsHeader *header);
 static int size(StsHeader *header) {
   // Create new element
   int size = 0;
-//  pthread_mutex_lock(header->mutex);
+ pthread_mutex_lock(header->mutex);
   size = header->size;
-//  pthread_mutex_unlock(header->mutex);
+ pthread_mutex_unlock(header->mutex);
   return size;
 }
 
@@ -45,7 +45,7 @@ static void push(StsHeader *header, void *elem) {
   element->value = elem;
   element->next = NULL;
 
-//  pthread_mutex_lock(header->mutex);
+ pthread_mutex_lock(header->mutex);
   // Is list empty
   if (header->head == NULL) {
 	header->head = element;
@@ -58,17 +58,17 @@ static void push(StsHeader *header, void *elem) {
   }
 
   header->size++;
-//  pthread_mutex_unlock(header->mutex);
+ pthread_mutex_unlock(header->mutex);
 }
 
 static void* pop(StsHeader *header);
 static void* pop(StsHeader *header) {
-//  pthread_mutex_lock(header->mutex);
+ pthread_mutex_lock(header->mutex);
   StsElement *head = header->head;
 
   // Is empty?
   if (head == NULL) {
-//	pthread_mutex_unlock(header->mutex);
+	pthread_mutex_unlock(header->mutex);
 	return NULL;
   } else {
 	// Rewire
@@ -78,8 +78,8 @@ static void* pop(StsHeader *header) {
 	void *value = head->value;
 	free(head);
 	
-    header->size--;
-//	pthread_mutex_unlock(header->mutex);
+  header->size--;
+	pthread_mutex_unlock(header->mutex);
 	return value;
   }
 }
