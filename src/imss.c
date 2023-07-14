@@ -1021,8 +1021,7 @@ int32_t create_dataset(char *dataset_uri,
 	new_dataset.num_data_elem = num_data_elem;
 	new_dataset.data_entity_size = data_elem_size * 1024; // dataset in kilobytes
 	new_dataset.imss_d = associated_imss_indx;
-	new_dataset.local_conn = associated_imss.conns.matching_server;
-	new_dataset.repl_factor = repl_factor;
+	new_dataset.local_conn = associated_imss.conns.matching_server;	
 	new_dataset.size = 0;
 	// new_dataset.is_link = 0; // Initially not linked
 	if (link != NO_LINK)
@@ -1045,6 +1044,8 @@ int32_t create_dataset(char *dataset_uri,
 	{
 		new_dataset.n_servers = curr_imss.info.num_storages;
 	}
+
+	new_dataset.repl_factor = (repl_factor < new_dataset.n_servers) ? (repl_factor) : (new_dataset.n_servers);
 
 	// new_dataset.initial_node = 0;
 
