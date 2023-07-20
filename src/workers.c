@@ -12,7 +12,7 @@
 #include "records.hpp"
 #include "map_server_eps.hpp"
 #include <sys/time.h>
-#include <inttypes.h>
+// #include <inttypes.h>
 #include <sys/socket.h>
 #include <sys/ioctl.h>
 #include <netinet/in.h>
@@ -78,7 +78,7 @@ void *srv_worker(void *th_argv)
 						   UCP_EP_PARAM_FIELD_USER_DATA;
 	ep_params.err_mode = UCP_ERR_HANDLING_MODE_NONE;
 	ep_params.err_handler.cb = err_cb_server;
-	ep_params.err_handler.arg = NULL;
+	// ep_params.err_handler.arg = NULL;
 
 	map_server_eps = map_server_eps_create();
 
@@ -104,12 +104,12 @@ void *srv_worker(void *th_argv)
 		do
 		{
 			/* Progressing before probe to update the state */
-			TIMING(ucp_worker_progress(arguments->ucp_worker),"[srv_worker]ucp_worker_progress", unsigned int);
+			TIMING(ucp_worker_progress(arguments->ucp_worker), "[srv_worker]ucp_worker_progress", unsigned int);
 			/* Probing incoming events in non-block mode */
 			msg_tag = ucp_tag_probe_nb(arguments->ucp_worker, tag_req, tag_mask, 1, &info_tag);
 		} while (msg_tag == NULL);
 
-		slog_debug("[srv_worker_thread] Probe tag (%ld bytes).", info_tag.length);
+		slog_debug("[srv_worker] Message length=%ld bytes.", info_tag.length);
 		msg = (msg_req_t *)malloc(info_tag.length);
 
 		recv_param.op_attr_mask = UCP_OP_ATTR_FIELD_CALLBACK |
@@ -118,9 +118,9 @@ void *srv_worker(void *th_argv)
 		recv_param.datatype = ucp_dt_make_contig(1);
 		recv_param.cb.recv = recv_handler;
 
-		request = (struct ucx_context *)TIMING(ucp_tag_msg_recv_nbx(arguments->ucp_worker, msg, info_tag.length, msg_tag, &recv_param),"[srv_worker]ucp_tag_msg_recv_nbx", ucs_status_ptr_t);
+		request = (struct ucx_context *)TIMING(ucp_tag_msg_recv_nbx(arguments->ucp_worker, msg, info_tag.length, msg_tag, &recv_param), "[srv_worker]ucp_tag_msg_recv_nbx", ucs_status_ptr_t);
 
-		status = TIMING(ucx_wait(arguments->ucp_worker, request, "receive", "srv_worker"),"[srv_worker]ucx_wait", ucs_status_t);
+		status = TIMING(ucx_wait(arguments->ucp_worker, request, "receive", "srv_worker"), "[srv_worker]ucx_wait", ucs_status_t);
 
 		peer_addr_len = msg->addr_len;
 		peer_addr = (ucp_address *)malloc(peer_addr_len);
@@ -138,12 +138,22 @@ void *srv_worker(void *th_argv)
 		// create ep if it's not in the map
 		if (ret < 0)
 		{
-			ucp_ep_h new_ep;
+			// ucp_ep_h new_ep;
 			ep_params.address = peer_addr;
 			ep_params.user_data = &ep_status;
+			struct worker_info *worker_info = (struct worker_info*)malloc(sizeof(struct worker_info));
+			worker_info->worker_uid = attr.worker_uid;
+			worker_info->server_type = 'd';
+			ep_params.err_handler.arg = &worker_info;
+			// ep_params.err_handler.arg = &attr.worker_uid;
+
 			status = ucp_ep_create(arguments->ucp_worker, &ep_params, &ep);
 			// add ep to the map
-			map_server_eps_put(map_server_eps, attr.worker_uid, ep);
+			map_server_eps_put(map_server_eps, attr.worker_uid, ep, 'd');
+		}
+		else
+		{
+			fprintf(stderr, "\t[d]['%" PRIu64 "] Endpoint already exist'\n", attr.worker_uid);
 		}
 
 		arguments->peer_address = peer_addr;
@@ -151,7 +161,7 @@ void *srv_worker(void *th_argv)
 		arguments->worker_uid = attr.worker_uid;
 
 		char msg_[2024];
-		sprintf(msg_, "[srv_worker]srv_worker_helper req %s", req);
+		sprintf(msg_, "[srv_worker] srv_worker_helper req %s", req);
 		TIMING(srv_worker_helper(arguments, req), msg_, int);
 		t = clock() - t;
 
@@ -159,6 +169,8 @@ void *srv_worker(void *th_argv)
 		slog_info("[srv_worker] Serving time %f s", time_taken);
 
 		free(peer_addr);
+
+		fprintf(stderr, "\t[d]['%" PRIu64 "'] Ending srv worker\n", attr.worker_uid);
 
 		// flush_ep(arguments->ucp_worker, ep);
 	}
@@ -226,7 +238,7 @@ int srv_worker_helper(p_argv *arguments, const char *req)
 		{
 		case READ_OP:
 		{
-			int ret = TIMING(map->get(key, &address_, &block_size_rtvd),"[srv_worker_helper][READ_OP]map->get", int);
+			int ret = TIMING(map->get(key, &address_, &block_size_rtvd), "[srv_worker_helper][READ_OP]map->get", int);
 			// Check if there was an associated block to the key.
 			if (ret == 0)
 			{
@@ -247,7 +259,7 @@ int srv_worker_helper(p_argv *arguments, const char *req)
 					to_read = block_size_rtvd;
 				}
 				slog_debug("[srv_worker_thread][READ_OP][READ_OP] Send the requested block with key=%s, block_offset=%ld, block_size_rtvd=%ld kb, to_read=%ld kb", key.c_str(), block_offset, block_size_rtvd / 1024, to_read / 1024);
-				ret = TIMING(send_data(arguments->ucp_worker, arguments->server_ep, address_ + block_offset, to_read, arguments->worker_uid),"[srv_worker_helper][READ_OP]send_data",uint64_t);
+				ret = TIMING(send_data(arguments->ucp_worker, arguments->server_ep, address_ + block_offset, to_read, arguments->worker_uid), "[srv_worker_helper][READ_OP]send_data", uint64_t);
 				// fprintf(stderr,"\tblock_size_rtvd=%ld, address_=%s\n", block_size_rtvd, address_);
 				if (ret < 0)
 				{
@@ -259,9 +271,10 @@ int srv_worker_helper(p_argv *arguments, const char *req)
 		}
 		case RELEASE:
 		{
-			map_server_eps_erase(map_server_eps, arguments->worker_uid);
+			map_server_eps_erase(map_server_eps, arguments->worker_uid, 'd');
 			slog_debug("[srv_worker_thread][READ_OP][RELEASE]");
-			return 0;
+			// return 0;
+			break;
 		}
 		case RENAME_OP:
 		{
@@ -927,8 +940,8 @@ void *stat_worker(void *th_argv)
 		memset(msg, 0, info_tag.length);
 
 		recv_param.op_attr_mask = UCP_OP_ATTR_FIELD_CALLBACK |
-					  UCP_OP_ATTR_FIELD_DATATYPE |
-					  UCP_OP_ATTR_FLAG_NO_IMM_CMPL;
+								  UCP_OP_ATTR_FIELD_DATATYPE |
+								  UCP_OP_ATTR_FLAG_NO_IMM_CMPL;
 		recv_param.datatype = ucp_dt_make_contig(1);
 		recv_param.cb.recv = recv_handler;
 
@@ -952,30 +965,39 @@ void *stat_worker(void *th_argv)
 		// create ep if it's not in the map
 		if (ret < 0)
 		{
-			ucp_ep_params_t * ep_params;
+			ucp_ep_params_t *ep_params;
 
-			ep_params = (ucp_ep_params_t *) malloc(sizeof(ucp_ep_params_t));
+			ep_params = (ucp_ep_params_t *)malloc(sizeof(ucp_ep_params_t));
 			ep_params->field_mask = UCP_EP_PARAM_FIELD_REMOTE_ADDRESS |
-                                                UCP_EP_PARAM_FIELD_ERR_HANDLING_MODE |
-                                                UCP_EP_PARAM_FIELD_ERR_HANDLER |
-                                                UCP_EP_PARAM_FIELD_USER_DATA;
-        		ep_params->err_mode = UCP_ERR_HANDLING_MODE_NONE;
-        		ep_params->err_handler.cb = err_cb_server;
-        		ep_params->err_handler.arg = NULL;
+									UCP_EP_PARAM_FIELD_ERR_HANDLING_MODE |
+									UCP_EP_PARAM_FIELD_ERR_HANDLER |
+									UCP_EP_PARAM_FIELD_USER_DATA;
+			ep_params->err_mode = UCP_ERR_HANDLING_MODE_NONE;
+			ep_params->err_handler.cb = err_cb_server;
+			// ep_params->err_handler.arg = NULL;
 
-			ucp_ep_h new_ep;
+			struct worker_info *worker_info = (struct worker_info*)malloc(sizeof(struct worker_info));
+			worker_info->worker_uid = attr.worker_uid;
+			worker_info->server_type = 'm';
+			ep_params->err_handler.arg = &worker_info;
+
+			// ucp_ep_h new_ep;
 			ep_params->address = peer_addr;
 			ep_params->user_data = &ep_status;
 			status = ucp_ep_create(arguments->ucp_worker, ep_params, &ep);
-			//ucp_ep_print_info(ep, stderr);
-			// add ep to the map
-			map_server_eps_put(map_server_eps, attr.worker_uid, ep);
+			// ucp_ep_print_info(ep, stderr);
+			//  add ep to the map
+			map_server_eps_put(map_server_eps, attr.worker_uid, ep, 'm');
+		}
+		else
+		{
+			fprintf(stderr, "\t[m]['%" PRIu64 "'] Endpoint already exist\n", attr.worker_uid);
 		}
 
 		arguments->peer_address = peer_addr;
 		arguments->server_ep = ep;
 		arguments->worker_uid = attr.worker_uid;
-		arguments->worker_uid = attr.worker_uid;
+		// arguments->worker_uid = attr.worker_uid;
 		stat_worker_helper(arguments, req);
 
 		// ucp_ep_close_nb(ep, UCP_EP_CLOSE_MODE_FORCE);
@@ -1129,9 +1151,11 @@ int stat_worker_helper(p_argv *arguments, char *req)
 
 		case RELEASE:
 		{
-			slog_debug("[stat_worker_thread][READ_OP][RELEASE]");
-			map_server_eps_erase(map_server_eps, arguments->worker_uid);
-			return 0;
+			slog_debug("[stat_worker_thread][READ_OP][RELEASE] Deleting endpoint with %" PRIu64 "", arguments->worker_uid);
+			map_server_eps_erase(map_server_eps, arguments->worker_uid, 'm');
+			slog_debug("[stat_worker_thread][READ_OP][RELEASE] Endpoints deleted ");
+			break;
+			// return 0;
 		}
 		case DELETE_OP:
 		{

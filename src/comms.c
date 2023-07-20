@@ -206,6 +206,16 @@ size_t send_req(ucp_worker_h ucp_worker, ucp_ep_h ep, ucp_address_t *addr, size_
 
 	request = (struct ucx_context *)ucp_tag_send_nbx(ep, msg, msg_len, tag_req, &send_param);
 	status = ucx_wait(ucp_worker, request, "send", req);
+
+	if (status != UCS_OK)
+	{
+		// 	fprintf(stderr, "Connection error\n");
+		//     // free(msg);
+		//     // goto err_ep;
+		// 	ep_close(ucp_worker, ep, UCP_EP_CLOSE_FLAG_FORCE);
+		return -1;
+	}
+
 	free(msg);
 	return msg_len;
 }
@@ -271,6 +281,12 @@ size_t recv_data(ucp_worker_h ucp_worker, ucp_ep_h ep, char *msg, uint64_t dest,
 
 	// slog_debug("[COMM] Recv tag (%ld bytes).", info_tag.length);
 	// fprintf(stderr, "[COMM] Recv tag (%ld bytes).\n", info_tag.length);
+
+	if (status != UCS_OK)
+	{
+		return -1;
+	}
+
 	return info_tag.length;
 }
 
@@ -312,10 +328,12 @@ void request_init(void *request)
 void send_handler_req(void *request, ucs_status_t status, void *ctx)
 {
 	struct ucx_context *context = (struct ucx_context *)request;
+	send_req_t *data = (send_req_t *)ctx;
+
 	context->completed = 1;
 
-	send_req_t *data = (send_req_t *)ctx;
-	slog_info("[COMM] send_handler req");
+	// slog_info("[COMM] send_handler req");
+	slog_info("[COMM][send_handler_req][0x%x] send handler called with status %d (%s)\n", (unsigned int)pthread_self(), status, ucs_status_string(status));
 	// ucp_request_free(request);
 }
 
@@ -355,14 +373,23 @@ void send_cb(void *request, ucs_status_t status, void *user_data)
 void err_cb_client(void *arg, ucp_ep_h ep, ucs_status_t status)
 {
 	if (status != UCS_ERR_CONNECTION_RESET && status != UCS_ERR_ENDPOINT_TIMEOUT)
-		fprintf(stderr, "client error handling callback was invoked with status %d (%s)", status, ucs_status_string(status));
-	slog_debug("[COMM] Client error handling callback was invoked with status %d (%s)", status, ucs_status_string(status));
+	{
+		slog_error("[COMM] Client error handling callback was invoked with status %d (%s)", status, ucs_status_string(status));
+	}
+	fprintf(stderr, "client error handling callback was invoked with status %d (%s)", status, ucs_status_string(status));
 }
 
 void err_cb_server(void *arg, ucp_ep_h ep, ucs_status_t status)
 {
-	if (status != UCS_ERR_CONNECTION_RESET && status != UCS_ERR_ENDPOINT_TIMEOUT)
-		printf("server error handling callback was invoked with status %d (%s)", status, ucs_status_string(status));
+
+	// uint64_t worker_uid = (uint64_t)arg;
+	struct worker_info *worker_info = (struct worker_info *)arg;
+
+	// if (status != UCS_ERR_CONNECTION_RESET && status != UCS_ERR_ENDPOINT_TIMEOUT)
+	// {
+	// }
+	slog_error("[COMM] server error handling callback was invoked with status %d (%s)", status, ucs_status_string(status));
+	fprintf(stderr, "\t [COMM]['%" PRIu64 "'][%c] Server error handling callback was invoked with status %d (%s)\n", worker_info->worker_uid, worker_info->server_type, status, ucs_status_string(status));
 }
 
 void common_cb(void *user_data, const char *type_str)
@@ -423,7 +450,7 @@ ucs_status_t server_create_ep(ucp_worker_h data_worker,
 	status = ucp_ep_create(data_worker, &ep_params, server_ep);
 	if (status != UCS_OK)
 	{
-		fprintf(stderr, "failed to create an endpoint on the server: (%s)", ucs_status_string(status));
+		fprintf(stderr, "\t[COMM] Failed to create an endpoint on the server: (%s)", ucs_status_string(status));
 	}
 
 	slog_debug("[COMM] Created server endpoint");
@@ -654,40 +681,75 @@ int32_t recv_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, void *data_str
 	return length;
 }
 
-void ep_close(ucp_worker_h ucp_worker, ucp_ep_h ep, uint64_t flags)
-{
-	ucp_request_param_t param;
-	ucs_status_t status;
-	void *close_req;
+// void ep_close(ucp_worker_h ucp_worker, ucp_ep_h ep, uint64_t flags)
+// {
+// 	ucp_request_param_t param;
+// 	ucs_status_t status;
+// 	void *close_req;
 
-	param.op_attr_mask = UCP_OP_ATTR_FIELD_FLAGS;
-	param.flags = flags;
-	close_req = ucp_ep_close_nbx(ep, &param);
-	if (UCS_PTR_IS_PTR(close_req))
-	{
-		do
-		{
-			ucp_worker_progress(ucp_worker);
-			status = ucp_request_check_status(close_req);
-		} while (status == UCS_INPROGRESS);
-		ucp_request_free(close_req);
-	}
-	else
-	{
-		status = UCS_PTR_STATUS(close_req);
-	}
+// 	param.op_attr_mask = UCP_OP_ATTR_FIELD_FLAGS;
+// 	param.flags = flags;
+// 	close_req = ucp_ep_close_nbx(ep, &param);
+// 	if (UCS_PTR_IS_PTR(close_req))
+// 	{
+// 		do
+// 		{
+// 			ucp_worker_progress(ucp_worker);
+// 			status = ucp_request_check_status(close_req);
+// 		} while (status == UCS_INPROGRESS);
+// 		ucp_request_free(close_req);
+// 	}
+// 	else
+// 	{
+// 		status = UCS_PTR_STATUS(close_req);
+// 	}
 
-	if (status != UCS_OK)
-	{
-		fprintf(stderr, "failed to close ep %p", (void *)ep);
-	}
+// 	if (status != UCS_OK)
+// 	{
+// 		fprintf(stderr, "[COMM] failed to close ep %p", (void *)ep);
+// 		slog_error("[COMM] failed to close ep %p", (void *)ep);
+// 	}
 
-	slog_debug("[COMM] Closed endpoint");
-}
+// 	slog_debug("[COMM] Closed endpoint");
+// }
 
 void empty_function(void *request, ucs_status_t status)
 {
 }
+
+/**
+ * Close UCP endpoint.
+ *
+ * @param [in]  worker  Handle to the worker that the endpoint is associated
+ *                      with.
+ * @param [in]  ep      Handle to the endpoint to close.
+ * @param [in]  flags   Close UCP endpoint mode. Please see
+ *                      @a ucp_ep_close_flags_t for details.
+ */
+void ep_close(ucp_worker_h ucp_worker, ucp_ep_h ep, uint64_t flags)
+{
+    ucp_request_param_t param;
+    ucs_status_t status;
+    void *close_req;
+
+    param.op_attr_mask = UCP_OP_ATTR_FIELD_FLAGS;
+    param.flags        = flags;
+    close_req          = ucp_ep_close_nbx(ep, &param);
+    if (UCS_PTR_IS_PTR(close_req)) {
+        do {
+            ucp_worker_progress(ucp_worker);
+            status = ucp_request_check_status(close_req);
+        } while (status == UCS_INPROGRESS);
+        ucp_request_free(close_req);
+    } else {
+        status = UCS_PTR_STATUS(close_req);
+    }
+
+    if (status != UCS_OK) {
+        fprintf(stderr, "failed to close ep %p\n", (void*)ep);
+    }
+}
+
 
 ucs_status_t ep_flush(ucp_ep_h ep, ucp_worker_h worker)
 {
@@ -831,11 +893,13 @@ ucs_status_t ucx_wait(ucp_worker_h ucp_worker, struct ucx_context *request, cons
 	{
 		while (!request->completed)
 		{
+			// fprintf(stderr,"Waiting for completed\n");
 			ucp_worker_progress(ucp_worker);
 		}
 
 		request->completed = 0;
 		status = ucp_request_check_status(request);
+		// fprintf(stderr,"Final status = %s\n", ucs_status_string(status));
 		ucp_request_free(request);
 	}
 	else

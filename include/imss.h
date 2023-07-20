@@ -517,6 +517,8 @@ RETURNS:	0 - Resources were released successfully.
 
 	int32_t imss_flush_data();
 
+	int32_t imss_comm_cleanup();
+
 #ifdef __cplusplus
 }
 #endif

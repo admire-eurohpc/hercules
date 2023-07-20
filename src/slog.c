@@ -107,9 +107,11 @@ void slog_to_file(char *out, const char *fname, SlogDate *sdate)
         snprintf(filename, sizeof(filename), "%s.log", fname);
     }
 
+    // fprintf(stderr, "[SLOG] filename='%s'\n", filename);
     FILE *fp = fopen(filename, "a");
     if (fp == NULL)
     {
+        fprintf(stderr, "[SLOG] Error opening file='%s'\n", filename);
         return;
     }
 
