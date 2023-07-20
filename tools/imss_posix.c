@@ -98,6 +98,7 @@ void *map;
 void *map_prefetch;
 
 char MOUNT_POINT[32];
+char HERCULES_PATH[256];
 void *map_fd;
 
 uint32_t rank = -1;
@@ -106,7 +107,8 @@ int release = 1;
 
 // log path.
 char log_path[1000];
-char pwd_init[1000];
+// char pwd_init[1000];
+pid_t g_pid = -1;
 
 void getConfiguration();
 char *checkHerculesPath(const char *pathname);
@@ -332,9 +334,16 @@ char *checkHerculesPath(const char *pathname)
 	// fprintf(stderr,"\t[IMSS] Checking %s\n", pathname);
 	if (!strncmp(pathname, MOUNT_POINT, strlen(MOUNT_POINT) - 1) || (pathname[0] != '/' && !strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT) - 1)))
 	{
-		if (pathname[0] != '/')
+		// if (pathname[0] == '.')
+		if (!strncmp(pathname, ".", strlen(pathname)))
 		{
+			slog_debug("[IMSS][checkHerculesPath] workdir=%s", workdir);
 			new_path = convert_path(workdir, MOUNT_POINT);
+		}
+		else if (!strncmp(pathname, "./", strlen("./")))
+		{
+			slog_debug("[IMSS][checkHerculesPath] ./ case=%s", pathname);
+			new_path = convert_path(pathname+strlen("./"), MOUNT_POINT);
 		}
 		else
 		{
@@ -432,6 +441,7 @@ __attribute__((constructor)) void imss_posix_init(void)
 		exit(EXIT_FAILURE);
 	}
 	sprintf(hostname, "%s:%d", hostname, getpid());
+	g_pid = getpid();
 
 	rank = MurmurOAAT32(hostname);
 
@@ -462,11 +472,11 @@ __attribute__((constructor)) void imss_posix_init(void)
 
 	// strcpy(pwd_init, workdir);
 
-	strcpy(pwd_init, "/tmp");
+	// strcpy(pwd_init, "/tmp");
 
-	fprintf(stderr, "[%d] ************ Calling constructor, pwd_init=%s, pid=%d, init=%d ************\n", rank, pwd_init, getpid(), init);
+	fprintf(stderr, "[%d] ************ Calling constructor, HERCULES_PATH=%s, pid=%d, init=%d ************\n", rank, HERCULES_PATH, getpid(), init);
 
-	sprintf(log_path, "%s/client.%02d-%02d.%d", pwd_init, tm.tm_hour, tm.tm_min, rank);
+	sprintf(log_path, "%s/client.%02d-%02d.%d", HERCULES_PATH, tm.tm_hour, tm.tm_min, rank);
 	// sprintf(log_path, "./client.%02d-%02d-%02d.%d", tm.tm_hour, tm.tm_min, tm.tm_sec, rank);
 	slog_init(log_path, IMSS_DEBUG_LEVEL, IMSS_DEBUG_FILE, IMSS_DEBUG_SCREEN, 1, 1, 1, rank);
 	slog_info(",Time(msec), Comment, RetCode");
@@ -554,7 +564,7 @@ void getConfiguration()
 	conf_path = getenv("HERCULES_CONF");
 	if (conf_path != NULL)
 	{
-		slog_debug("Loading %s", conf_path);
+		// slog_debug("Loading %s", conf_path);
 		// fprintf(stderr, "Loading %s\n", conf_path);
 		ret = cfg_load(cfg, conf_path);
 		if (ret)
@@ -576,7 +586,7 @@ void getConfiguration()
 
 		for (size_t i = 0; i < 3; i++)
 		{
-			slog_debug("Loading %s\n", default_paths[i]);
+			// slog_debug("Loading %s\n", default_paths[i]);
 			// fprintf(stderr, "Loading %s\n", default_paths[i]);
 			if (cfg_load(cfg, default_paths[i]) == 0)
 			{
@@ -597,12 +607,13 @@ void getConfiguration()
 			}
 		}
 
-		if (!ret)
-		{
-			slog_debug("[CLIENT] Configuration file loaded: %s\n", conf_path);
-			// fprintf(stderr, "[CLIENT %d] Configuration file loaded: %s\n", rank, conf_path);
-		}
-		else
+		// if (!ret)
+		// {
+		// 	// slog_debug("[CLIENT] Configuration file loaded: %s\n", conf_path);
+		// 	// fprintf(stderr, "[CLIENT %d] Configuration file loaded: %s\n", rank, conf_path);
+		// }
+		// else
+		if (ret)
 		{
 			fprintf(stderr, "[CLIENT %d] Configuration file not found\n", rank);
 			perror("ERRIMSS_CONF_NOT_FOUND");
@@ -610,11 +621,11 @@ void getConfiguration()
 		}
 		free(conf_path);
 	}
-	else
-	{
-		slog_debug("[CLIENT] Configuration file loaded: %s\n", conf_path);
-		// fprintf(stderr, "[CLIENT %d] Configuration file loaded: %s\n", rank, conf_path);
-	}
+	// else
+	// {
+	// 	slog_debug("[CLIENT] Configuration file loaded: %s\n", conf_path);
+	// 	// fprintf(stderr, "[CLIENT %d] Configuration file loaded: %s\n", rank, conf_path);
+	// }
 
 	if (cfg_get(cfg, "URI"))
 	{
@@ -629,6 +640,12 @@ void getConfiguration()
 	{
 		aux = cfg_get(cfg, "MOUNT_POINT");
 		strcpy(MOUNT_POINT, aux);
+	}
+
+	if (cfg_get(cfg, "HERCULES_PATH"))
+	{
+		aux = cfg_get(cfg, "HERCULES_PATH");
+		strcpy(HERCULES_PATH, aux);
 	}
 
 	if (cfg_get(cfg, "METADATA_PORT"))
@@ -802,12 +819,15 @@ void getConfiguration()
 
 void __attribute__((destructor)) run_me_last()
 {
-	fprintf(stderr, "\tRun me last...\n");
+	fprintf(stderr, "\t[%ld] Run me last..., pid=%d, release=%d\n", rank, g_pid, release);
+	slog_live("[%ld] Calling 'run_me_last', pid=%d, release=%d", rank, g_pid, release);
 	if (release)
 	{
-		release = 0;
+		// fprintf(stderr, "\t[%ld] Release..., pid=%d\n", rank, g_pid);
+
+		release = -1;
 		// char *workdir = getenv("PWD");
-		slog_live("********************** Calling 'run_me_last' **********************\n");
+		// slog_live("[%ld]********************** Calling 'run_me_last', pid=%d **********************\n", rank, g_pid);
 
 		// if (!strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT)))
 		// {
@@ -821,8 +841,9 @@ void __attribute__((destructor)) run_me_last()
 		// fprintf(stderr, "\tFinish...\n");
 		imss_comm_cleanup();
 
-		slog_live("********************** End 'run_me_last' **********************\n");
+		// slog_live("********************** End 'run_me_last' **********************\n");
 	}
+	slog_live("[%ld] End 'run_me_last', pid=%d, release=%d", rank, g_pid, release);
 }
 
 void check_ld_preload(void)
@@ -1026,6 +1047,7 @@ pid_t fork(void)
 	real_fork = dlsym(RTLD_NEXT, "fork");
 
 	pid_t pid = real_fork();
+	g_pid = pid;
 
 	if (pid != 0)
 	{
@@ -1049,7 +1071,7 @@ pid_t fork(void)
 		time_t t = time(NULL);
 		struct tm tm = *localtime(&t);
 		// char *workdir = getenv("PWD");
-		sprintf(log_path, "%s/client.%02d-%02d.%d", pwd_init, tm.tm_hour, tm.tm_min, new_rank);
+		sprintf(log_path, "%s/client.%02d-%02d.%d", HERCULES_PATH, tm.tm_hour, tm.tm_min, new_rank);
 		// sprintf(log_path, "./client.%02d-%02d-%02d.%d", tm.tm_hour, tm.tm_min, tm.tm_sec, rank);
 
 		slog_init(log_path, IMSS_DEBUG_LEVEL, IMSS_DEBUG_FILE, IMSS_DEBUG_SCREEN, 1, 1, 1, rank);
@@ -1757,7 +1779,7 @@ int open(const char *pathname, int flags, ...)
 	char *new_path = checkHerculesPath(pathname);
 	if (new_path != NULL)
 	{
-		slog_debug("[POSIX %d]. Calling Hercules 'open' flags=%d, mode=%d, pathname=%s.", rank, flags, mode, pathname);
+		slog_debug("[POSIX %d]. Calling Hercules 'open' flags=%d, mode=%d, pathname=%s, new_path=%s", rank, flags, mode, pathname, new_path);
 		// pthread_mutex_lock(&lock2);
 		// slog_debug("Loked by %ld", rank);
 
@@ -2471,7 +2493,7 @@ DIR *opendir(const char *name)
 			slog_debug("[POSIX %d] map_fd_put, new_path=%s", rank, new_path);
 			map_fd_put(map_fd, new_path, dirfd(dirp), p);
 		}
-		slog_debug("[POSIX %d]. End Hercules 'opendir', pathname=%s.", rank, name);
+		slog_debug("[POSIX %d]. End Hercules 'opendir', pathname=%s", rank, name);
 		free(new_path);
 	}
 	else
