@@ -141,19 +141,20 @@ void *srv_worker(void *th_argv)
 			// ucp_ep_h new_ep;
 			ep_params.address = peer_addr;
 			ep_params.user_data = &ep_status;
-			struct worker_info *worker_info = (struct worker_info*)malloc(sizeof(struct worker_info));
-			worker_info->worker_uid = attr.worker_uid;
-			worker_info->server_type = 'd';
-			ep_params.err_handler.arg = &worker_info;
-			// ep_params.err_handler.arg = &attr.worker_uid;
+			// struct worker_info *worker_info = (struct worker_info*)malloc(sizeof(struct worker_info));
+			// worker_info->worker_uid = attr.worker_uid;
+			// worker_info->server_type = 'd';
+			// ep_params.err_handler.arg = &worker_info;
+			ep_params.err_handler.arg = &attr.worker_uid;
 
 			status = ucp_ep_create(arguments->ucp_worker, &ep_params, &ep);
 			// add ep to the map
-			map_server_eps_put(map_server_eps, attr.worker_uid, ep, 'd');
+			map_server_eps_put(map_server_eps, attr.worker_uid, ep);
 		}
 		else
 		{
-			fprintf(stderr, "\t[d]['%" PRIu64 "] Endpoint already exist'\n", attr.worker_uid);
+			slog_debug("\t[srv_worker]['%" PRIu64 "] Endpoint already exist'\n", attr.worker_uid);
+			// fprintf(stderr, "\t[d]['%" PRIu64 "] Endpoint already exist'\n", attr.worker_uid);
 		}
 
 		arguments->peer_address = peer_addr;
@@ -170,9 +171,10 @@ void *srv_worker(void *th_argv)
 
 		free(peer_addr);
 
-		fprintf(stderr, "\t[d]['%" PRIu64 "'] Ending srv worker\n", attr.worker_uid);
+		// fprintf(stderr, "\t[d]['%" PRIu64 "'] Ending srv worker\n", attr.worker_uid);
 
 		// flush_ep(arguments->ucp_worker, ep);
+		// ep_close(arguments->ucp_worker, arguments->server_ep, UCP_EP_CLOSE_MODE_FLUSH);
 	}
 }
 
@@ -271,7 +273,7 @@ int srv_worker_helper(p_argv *arguments, const char *req)
 		}
 		case RELEASE:
 		{
-			map_server_eps_erase(map_server_eps, arguments->worker_uid, 'd');
+			map_server_eps_erase(map_server_eps, arguments->worker_uid);
 			slog_debug("[srv_worker_thread][READ_OP][RELEASE]");
 			// return 0;
 			break;
@@ -958,7 +960,7 @@ void *stat_worker(void *th_argv)
 		ucp_worker_address_attr_t attr;
 		attr.field_mask = UCP_WORKER_ADDRESS_ATTR_FIELD_UID;
 		ucp_worker_address_query(peer_addr, &attr);
-		slog_debug("[stat_worker_thread] Receiving request from %" PRIu64 ".", attr.worker_uid);
+		slog_debug("[stat_worker] Receiving request from %" PRIu64 ".", attr.worker_uid);
 
 		//  look for this peer_addr in the map and get the ep
 		ret = map_server_eps_search(map_server_eps, attr.worker_uid, &ep);
@@ -976,10 +978,11 @@ void *stat_worker(void *th_argv)
 			ep_params->err_handler.cb = err_cb_server;
 			// ep_params->err_handler.arg = NULL;
 
-			struct worker_info *worker_info = (struct worker_info*)malloc(sizeof(struct worker_info));
-			worker_info->worker_uid = attr.worker_uid;
-			worker_info->server_type = 'm';
-			ep_params->err_handler.arg = &worker_info;
+			// struct worker_info *worker_info = (struct worker_info*)malloc(sizeof(struct worker_info));
+			// worker_info->worker_uid = attr.worker_uid;
+			// worker_info->server_type = 'm';
+			// ep_params->err_handler.arg = &worker_info;
+			ep_params->err_handler.arg = &attr.worker_uid;
 
 			// ucp_ep_h new_ep;
 			ep_params->address = peer_addr;
@@ -987,11 +990,12 @@ void *stat_worker(void *th_argv)
 			status = ucp_ep_create(arguments->ucp_worker, ep_params, &ep);
 			// ucp_ep_print_info(ep, stderr);
 			//  add ep to the map
-			map_server_eps_put(map_server_eps, attr.worker_uid, ep, 'm');
+			map_server_eps_put(map_server_eps, attr.worker_uid, ep);
 		}
 		else
 		{
-			fprintf(stderr, "\t[m]['%" PRIu64 "'] Endpoint already exist\n", attr.worker_uid);
+			// fprintf(stderr, "\t[m]['%" PRIu64 "'] Endpoint already exist\n", attr.worker_uid);
+			slog_debug("\t[stat_worker]['%" PRIu64 "'] Endpoint already exist", attr.worker_uid);
 		}
 
 		arguments->peer_address = peer_addr;
@@ -1002,6 +1006,8 @@ void *stat_worker(void *th_argv)
 
 		// ucp_ep_close_nb(ep, UCP_EP_CLOSE_MODE_FORCE);
 		free(peer_addr);
+
+		// ep_close(arguments->ucp_worker, arguments->server_ep, UCP_EP_CLOSE_MODE_FLUSH);
 	}
 }
 
@@ -1152,7 +1158,7 @@ int stat_worker_helper(p_argv *arguments, char *req)
 		case RELEASE:
 		{
 			slog_debug("[stat_worker_thread][READ_OP][RELEASE] Deleting endpoint with %" PRIu64 "", arguments->worker_uid);
-			map_server_eps_erase(map_server_eps, arguments->worker_uid, 'm');
+			map_server_eps_erase(map_server_eps, arguments->worker_uid);
 			slog_debug("[stat_worker_thread][READ_OP][RELEASE] Endpoints deleted ");
 			break;
 			// return 0;
@@ -1180,16 +1186,20 @@ int stat_worker_helper(p_argv *arguments, char *req)
 				std::string old_key = key.substr(0, found);
 				std::string new_key = key.substr(found + 1, key.length());
 
+				slog_debug("[stat_worker_helper][RENAME] old_key=%s, new_key=%s\n", old_key.c_str(), new_key.c_str());
+
 				// RENAME MAP
 				int32_t result = map->rename_metadata_stat_worker(old_key, new_key);
 				if (result == 0)
 				{
 					// printf("0 elements rename from stat_worker");
+					slog_debug("[stat_worker_helper][RENAME] 0 elements rename from stat_worker");
 					break;
 				}
 
 				// RENAME TREE
-				GTree_rename((char *)old_key.c_str(), (char *)new_key.c_str());
+				int ret = GTree_rename((char *)old_key.c_str(), (char *)new_key.c_str());
+				slog_debug("[stat_worker_helper][RENAME] GTree_rename=%d", ret);
 			}
 
 			char release_msg[] = "RENAME\0";
@@ -1258,17 +1268,19 @@ int stat_worker_helper(p_argv *arguments, char *req)
 
 			// Insert the received uri into the directory tree.
 			pthread_mutex_lock(&tree_mut);
+			// slog_debug("[STAT WORKER] Inserting %s into directory tree", key.c_str());
 			insert_successful = GTree_insert((char *)key.c_str());
 			pthread_mutex_unlock(&tree_mut);
 
 			if (insert_successful == -1)
 			{
 				perror("ERRIMSS_STATWORKER_GTREEINSERT");
+				
 				return -1;
 			}
 			// Update the pointer.
 			arguments->pt += block_size_recv;
-			slog_debug("[STAT WORKER] Created dataset %s.", key.c_str());
+			slog_debug("[STAT WORKER] Dataset %s has been created.", key.c_str());
 		}
 		// If was already stored:
 		else

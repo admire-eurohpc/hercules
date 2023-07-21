@@ -474,7 +474,7 @@ __attribute__((constructor)) void imss_posix_init(void)
 
 	// strcpy(pwd_init, "/tmp");
 
-	fprintf(stderr, "[%d] ************ Calling constructor, HERCULES_PATH=%s, pid=%d, init=%d ************\n", rank, HERCULES_PATH, getpid(), init);
+	// fprintf(stderr, "[%d] ************ Calling constructor, HERCULES_PATH=%s, pid=%d, init=%d ************\n", rank, HERCULES_PATH, getpid(), init);
 
 	sprintf(log_path, "%s/client.%02d-%02d.%d", HERCULES_PATH, tm.tm_hour, tm.tm_min, rank);
 	// sprintf(log_path, "./client.%02d-%02d-%02d.%d", tm.tm_hour, tm.tm_min, tm.tm_sec, rank);
@@ -920,7 +920,7 @@ int __lxstat(int fd, const char *pathname, struct stat *buf)
 			errno = -ret;
 			ret = -1;
 		}
-		slog_debug("[POSIX %d]. End Hercules '__lxstat'  %d %d.", rank, ret, errno);
+		slog_debug("[POSIX %d]. End Hercules '__lxstat', ret=%d, errno=%d.", rank, ret, errno);
 		free(new_path);
 	}
 	else
@@ -962,7 +962,7 @@ int __lxstat64(int fd, const char *pathname, struct stat64 *buf)
 		if (ret < 0)
 		{
 			errno = -ret;
-			ret = -1;
+			// ret = -1;
 		}
 		slog_debug("[POSIX %d]. End Hercules '__lxstat64', ret=%d, errno=%d.", rank, ret, errno);
 		free(new_path);
@@ -1052,7 +1052,7 @@ pid_t fork(void)
 	if (pid != 0)
 	{
 		release = 0;
-		fprintf(stderr, "[%d] Calling Real 'fork', pid=%d\n", rank, pid);
+		// fprintf(stderr, "[%d] Calling Real 'fork', pid=%d\n", rank, pid);
 
 		char hostname[1024];
 		int ret = gethostname(&hostname[0], 512);
@@ -1076,7 +1076,7 @@ pid_t fork(void)
 
 		slog_init(log_path, IMSS_DEBUG_LEVEL, IMSS_DEBUG_FILE, IMSS_DEBUG_SCREEN, 1, 1, 1, rank);
 
-		fprintf(stderr, "[%d] End Real 'fork', pid=%d, new_rank=%d, log_path=%s\n", rank, pid, new_rank, log_path);
+		// fprintf(stderr, "[%d] End Real 'fork', pid=%d, new_rank=%d, log_path=%s\n", rank, pid, new_rank, log_path);
 	}
 
 	return pid;

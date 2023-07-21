@@ -140,6 +140,8 @@ GInsert(int32_t *pos,
 		inserted_pos = *pos;
 	}
 
+	slog_debug("[IMSS][GTree] inserted_pos=%d", inserted_pos);
+
 	return inserted_pos;
 }
 
@@ -873,7 +875,6 @@ int32_t release_imss(char *imss_uri, uint32_t release_op)
 			// 	return -1;
 			// }
 
-
 			ep_close(ucp_worker_data, ep, 0);
 		}
 		// ep_flush(ep, ucp_worker_data);
@@ -1179,7 +1180,7 @@ int32_t open_dataset(char *dataset_uri)
 	}
 	else
 	{
-		slog_debug("[IMSS][open_dataset] is_link=%d", new_dataset.is_link);
+		slog_debug("[IMSS][open_dataset] is_link=%d, stat_dataset_res=%d", new_dataset.is_link, stat_dataset_res);
 	}
 	int32_t not_initialized = 0;
 
@@ -1465,6 +1466,7 @@ rename_dataset_metadata(char *old_dataset_uri, char *new_dataset_uri)
 
 	// Send the request.
 	sprintf(formated_uri, "%" PRIu32 " GET 5 %s %s", stat_ids[m_srv], old_dataset_uri, new_dataset_uri);
+	fprintf(stderr, "Request - %s\n", formated_uri);
 	if (send_req(ucp_worker_meta, ep, local_addr_meta, local_addr_len_meta, formated_uri) < 0)
 	{
 		perror("ERRIMSS_RLSIMSS_SENDADDR");
@@ -1673,6 +1675,7 @@ int32_t rename_dataset_srv_worker(char *old_dataset_uri, char *new_dataset_uri,
 
 		// Key related to the requested data element.
 		sprintf(key_, "GET 5 0 %s %s", old_dataset_uri, new_dataset_uri);
+		fprintf(stderr, "Request - %s\n", key_);
 		// printf("BLOCK %d ASKED TO %d SERVER with key: %s (%d)", data_id, repl_servers[i], key, key_length);
 		if (send_req(ucp_worker_data, ep, local_addr_data, local_addr_len_data, key_) < 0)
 		{

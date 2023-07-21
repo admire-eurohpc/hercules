@@ -284,6 +284,7 @@ size_t recv_data(ucp_worker_h ucp_worker, ucp_ep_h ep, char *msg, uint64_t dest,
 
 	if (status != UCS_OK)
 	{
+		slog_error("[COMM] IMSS_RECV_DATA_ERRR");
 		return -1;
 	}
 
@@ -333,7 +334,7 @@ void send_handler_req(void *request, ucs_status_t status, void *ctx)
 	context->completed = 1;
 
 	// slog_info("[COMM] send_handler req");
-	slog_info("[COMM][send_handler_req][0x%x] send handler called with status %d (%s)\n", (unsigned int)pthread_self(), status, ucs_status_string(status));
+	// slog_info("[COMM][send_handler_req][0x%x] send handler called with status %d (%s)\n", (unsigned int)pthread_self(), status, ucs_status_string(status));
 	// ucp_request_free(request);
 }
 
@@ -382,14 +383,14 @@ void err_cb_client(void *arg, ucp_ep_h ep, ucs_status_t status)
 void err_cb_server(void *arg, ucp_ep_h ep, ucs_status_t status)
 {
 
-	// uint64_t worker_uid = (uint64_t)arg;
-	struct worker_info *worker_info = (struct worker_info *)arg;
+	uint64_t worker_uid = (uint64_t)arg;
+	// struct worker_info *worker_info = (struct worker_info *)arg;
 
 	// if (status != UCS_ERR_CONNECTION_RESET && status != UCS_ERR_ENDPOINT_TIMEOUT)
 	// {
 	// }
-	slog_error("[COMM] server error handling callback was invoked with status %d (%s)", status, ucs_status_string(status));
-	fprintf(stderr, "\t [COMM]['%" PRIu64 "'][%c] Server error handling callback was invoked with status %d (%s)\n", worker_info->worker_uid, worker_info->server_type, status, ucs_status_string(status));
+	// slog_error("[COMM]['%" PRIu64 "'] server error handling callback was invoked with status %d (%s)", worker_uid, status, ucs_status_string(status));
+	fprintf(stderr, "\t [COMM]['%" PRIu64 "'] Server error handling callback was invoked with status %d (%s)\n", worker_uid, status, ucs_status_string(status));
 }
 
 void common_cb(void *user_data, const char *type_str)
@@ -746,6 +747,7 @@ void ep_close(ucp_worker_h ucp_worker, ucp_ep_h ep, uint64_t flags)
     }
 
     if (status != UCS_OK) {
+		slog_error("Failed to close ep %p", (void*)ep);
         fprintf(stderr, "failed to close ep %p\n", (void*)ep);
     }
 }

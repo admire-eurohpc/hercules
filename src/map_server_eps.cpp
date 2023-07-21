@@ -8,21 +8,24 @@
 
 #include <ucp/api/ucp.h>
 #include "map_server_eps.hpp"
+// to manage logs.
+#include "slog.h"
 
 void *map_server_eps_create()
 {
 	return reinterpret_cast<void *>(new map_server_eps_t);
 }
 
-void map_server_eps_put(void *map, uint64_t uuid, ucp_ep_h ep, char server_type)
+void map_server_eps_put(void *map, uint64_t uuid, ucp_ep_h ep)
 {
 	map_server_eps_t *m = reinterpret_cast<map_server_eps_t *>(map);
 	m->insert(std::pair<uint64_t, ucp_ep_h>(uuid, ep));
 
-	fprintf(stderr, "\t[%c]['%" PRIu64 "'] Adding new connection, #%ld\n", server_type, uuid, m->size());
+	slog_debug("\t[map_server_eps]['%" PRIu64 "'] Adding new connection, #%ld", uuid, m->size());
+	// fprintf(stderr, "\t[%c]['%" PRIu64 "'] Adding new connection, #%ld\n", server_type, uuid, m->size());
 }
 
-void map_server_eps_erase(void *map, uint64_t uuid, char server_type)
+void map_server_eps_erase(void *map, uint64_t uuid)
 {
 	map_server_eps_t *m = reinterpret_cast<map_server_eps_t *>(map);
 	// Count the number of elements in the map
@@ -40,7 +43,8 @@ void map_server_eps_erase(void *map, uint64_t uuid, char server_type)
 	m->erase(uuid);
 	size_t after_elements = m->size();
 
-	fprintf(stderr, "\t[%c]['%" PRIu64 "'] Deleting connection, from %ld to %ld\n", server_type, uuid, prev_elements, after_elements);
+	slog_debug("\t[map_server_eps]['%" PRIu64 "'] Deleting connection, from %ld to %ld", uuid, prev_elements, after_elements);
+	// fprintf(stderr, "\t[%c]['%" PRIu64 "'] Deleting connection, from %ld to %ld\n", server_type, uuid, prev_elements, after_elements);
 }
 
 int map_server_eps_search(void *map, uint64_t uuid, ucp_ep_h *ep)

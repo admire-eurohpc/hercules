@@ -209,7 +209,6 @@ int imss_getattr(const char *path, struct stat *stbuf)
 	char *aux;
 	switch (type)
 	{
-
 	case 0:
 		return -ENOENT;
 	case 1:
@@ -229,7 +228,7 @@ int imss_getattr(const char *path, struct stat *stbuf)
 			return -ENOENT;
 		}
 	case 2: // Case file
-
+		slog_debug("[imss_getattr] type=%d, imss_path=%s", type, imss_path);
 		/*if(stat_dataset(imss_path, &metadata) == -1){
 		  fprintf(stderr, "[IMSS-FUSE]	Cannot get dataset metadata.");
 		  return -ENOENT;
@@ -257,7 +256,7 @@ int imss_getattr(const char *path, struct stat *stbuf)
 			}
 			else
 			{
-				fprintf(stderr, "[IMSS-FUSE]	Cannot get dataset metadata.");
+				// fprintf(stderr, "[IMSS-FUSE]	Cannot get dataset metadata.");
 				return -ENOENT;
 			}
 		}
@@ -268,7 +267,7 @@ int imss_getattr(const char *path, struct stat *stbuf)
 		else
 		{
 
-			fprintf(stderr, "[IMSS-FUSE]	Cannot get dataset metadata.");
+			// fprintf(stderr, "[IMSS-FUSE]	Cannot get dataset metadata.");
 			return -ENOENT;
 		}
 		return 0;
@@ -2534,7 +2533,7 @@ int imss_rename(const char *old_path, const char *new_path)
 
 	if (res == 0)
 	{
-		// printf("**************EXISTE EL DESTINO=%s\n",new_path);
+		fprintf(stderr, "**************EXISTE EL DESTINO=%s\n", new_path);
 		// printf("new_path[last]=%c\n",new_path[strlen(new_path) -1]);
 		if (S_ISDIR(ds_stat_n.st_mode))
 		{
@@ -2548,7 +2547,7 @@ int imss_rename(const char *old_path, const char *new_path)
 	}
 	else
 	{
-		// printf("**************NO EXISTE EL DESTINO=%s\n",new_path);
+		fprintf(stderr, "**************NO EXISTE EL DESTINO=%s\n", new_path);
 	}
 
 	// printf("old_rpath=%s, new_rpath=%s\n",old_rpath, new_rpath);
