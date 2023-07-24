@@ -219,8 +219,7 @@ int srv_worker_helper(p_argv *arguments, const char *req)
 	else
 		more = SET_OP;
 
-	slog_debug("[srv_worker_thread] Request - mode '%s', block_size_recv '%" PRIu32 "', block_offset '%" PRIu32 "', uri_ '%s', more %ld",
-			   mode, block_size_recv, block_offset, uri_, more);
+	slog_debug("[srv_worker_thread] Request - mode '%s', block_size_recv '%" PRIu32 "', block_offset '%" PRIu32 "', uri_ '%s', more %ld", mode, block_size_recv, block_offset, uri_, more);
 
 	// Create an std::string in order to be managed by the map structure.
 	std::string key;
@@ -280,12 +279,14 @@ int srv_worker_helper(p_argv *arguments, const char *req)
 		}
 		case RENAME_OP:
 		{
-			slog_debug("[srv_worker_thread][RENAME_OP]");
-			std::size_t found = key.find(' ');
+			std::size_t found = key.find(',');
+			slog_debug("[srv_worker_thread][RENAME_OP], key=%s, found=%d", key.c_str(), found);
 			if (found != std::string::npos)
 			{
+				slog_debug("[srv_worker_thread][RENAME_OP], found != npos");
 				std::string old_key = key.substr(0, found);
 				std::string new_key = key.substr(found + 1, key.length());
+				slog_debug("[srv_worker_thread][RENAME_OP], old_key=%s, new_key=%s", old_key.c_str(), new_key.c_str());
 				// RENAME MAP
 				map->cleaning_specific(new_key);
 				int32_t result = map->rename_data_srv_worker(old_key, new_key);
@@ -293,6 +294,10 @@ int srv_worker_helper(p_argv *arguments, const char *req)
 				{
 					break;
 				}
+			}
+			else
+			{
+				slog_debug("[srv_worker_thread][RENAME_OP], found == npos");
 			}
 
 			char release_msg[] = "RENAME\0";
@@ -560,9 +565,10 @@ int srv_worker_helper(p_argv *arguments, const char *req)
 		int op;
 		std::size_t found = key.find(' ');
 		std::size_t found2 = key.find("[OP]=");
-		slog_debug("found=%d, found2=%d", found, found2);
+		slog_debug("[srv_worker_thread][WRITE_OP] found=%d, found2=%d", found, found2);
 		if (found2 != std::string::npos)
 		{
+			slog_debug("[srv_worker_thread][WRITE_OP] Entra en found2");
 			op = stoi(key.substr(found2 + 5, (found - (found2 + 5))));
 			key.erase(0, found + 1);
 		}
@@ -831,6 +837,7 @@ int srv_worker_helper(p_argv *arguments, const char *req)
 				// Include the new record in the tracking structure.
 				if (insert_successful != 0)
 				{
+					slog_error("[srv_worker_thread][WRITE_OP] ERRIMSS_WORKER_MAPPUT");
 					perror("ERRIMSS_WORKER_MAPPUT");
 					return -1;
 				}
@@ -1275,7 +1282,7 @@ int stat_worker_helper(p_argv *arguments, char *req)
 			if (insert_successful == -1)
 			{
 				perror("ERRIMSS_STATWORKER_GTREEINSERT");
-				
+
 				return -1;
 			}
 			// Update the pointer.

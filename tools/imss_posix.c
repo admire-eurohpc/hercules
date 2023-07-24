@@ -343,7 +343,7 @@ char *checkHerculesPath(const char *pathname)
 		else if (!strncmp(pathname, "./", strlen("./")))
 		{
 			slog_debug("[IMSS][checkHerculesPath] ./ case=%s", pathname);
-			new_path = convert_path(pathname+strlen("./"), MOUNT_POINT);
+			new_path = convert_path(pathname + strlen("./"), MOUNT_POINT);
 		}
 		else
 		{
@@ -2291,14 +2291,14 @@ int rename(const char *old, const char *new)
 {
 
 	real_rename = dlsym(RTLD_NEXT, "rename");
-	int ret;
-	char *workdir = getenv("PWD");
+	// char *workdir = getenv("PWD");
 
 	if (!init)
 	{
 		return real_rename(old, new);
 	}
 
+	int ret;
 	// if ((!strncmp(old, MOUNT_POINT, strlen(MOUNT_POINT)) && !strncmp(new, MOUNT_POINT, strlen(MOUNT_POINT))))
 	// if ((!strncmp(old, MOUNT_POINT, strlen(MOUNT_POINT)) && !strncmp(new, MOUNT_POINT, strlen(MOUNT_POINT))) || !strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT)))
 	char *old_path = checkHerculesPath(old);
@@ -2310,8 +2310,8 @@ int rename(const char *old, const char *new)
 		// old_path = convert_path(old, MOUNT_POINT);
 		// char *new_path;
 		// new_path = convert_path(new, MOUNT_POINT);
-		imss_rename(old_path, new_path);
-		slog_debug("[POSIX %d]. End Hercules 'rename', old path=%s, new path=%s", rank, old_path, new_path);
+		ret = imss_rename(old_path, new_path);
+		slog_debug("[POSIX %d]. End Hercules 'rename', old path=%s, new path=%s, ret=%d", rank, old_path, new_path, ret);
 		free(old_path);
 		free(new_path);
 	}

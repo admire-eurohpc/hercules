@@ -1674,7 +1674,7 @@ int32_t rename_dataset_srv_worker(char *old_dataset_uri, char *new_dataset_uri,
 		ucp_ep_h ep = curr_imss.conns.eps[repl_servers[i]];
 
 		// Key related to the requested data element.
-		sprintf(key_, "GET 5 0 %s %s", old_dataset_uri, new_dataset_uri);
+		sprintf(key_, "GET 5 0 %s,%s", old_dataset_uri, new_dataset_uri);
 		fprintf(stderr, "Request - %s\n", key_);
 		// printf("BLOCK %d ASKED TO %d SERVER with key: %s (%d)", data_id, repl_servers[i], key, key_length);
 		if (send_req(ucp_worker_data, ep, local_addr_data, local_addr_len_data, key_) < 0)
