@@ -16,6 +16,9 @@ add_executable(umount.hercules
 set(CMAKE_C_FLAGS "-fPIC")
 set(CMAKE_CXX_FLAGS "-fPIC")
 
+# set(CMAKE_BUILD_TYPE Debug)
+# set(CMAKE_BUILD_TYPE RelWithDebInfo)
+
 add_library(hercules_posix_api STATIC ../fuse/imss_posix_api.c ../fuse/map.cpp ../fuse/mapprefetch.cpp ../src/slog.c)
 
 add_library (hercules_posix SHARED imss_posix.c mapfd.cpp ../fuse/map.cpp ../src/slog.c ../src/cfg_parse.c ) 

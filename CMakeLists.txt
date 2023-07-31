@@ -20,8 +20,12 @@ include_directories(${GLIB_INCLUDE_DIRS})
 
 LINK_DIRECTORIES(${GLIB_LIBRARY_DIRS})
 
-find_package(Jemalloc)
-set(WITH_JEMALLOC_DEFAULT   ${JEMALLOC_FOUND})
+# find_package(Jemalloc)
+# set(WITH_JEMALLOC_DEFAULT   ${JEMALLOC_FOUND})
+
+# Set CMake to enable debug symbols and disable optimizations
+set(CMAKE_BUILD_TYPE Debug)
+
 
 FIND_PACKAGE(Threads REQUIRED)
 
@@ -48,12 +52,12 @@ if (${IS_DEBUG_BUILD})
 endif ()
 
 
-find_package(FUSE)
+# find_package(FUSE)
 
 ADD_SUBDIRECTORY(app)
 
-if(FUSE_FOUND)
-   ADD_SUBDIRECTORY(fuse)
-endif(FUSE_FOUND)
+# if(FUSE_FOUND)
+#    ADD_SUBDIRECTORY(fuse)
+# endif(FUSE_FOUND)
 
 ADD_SUBDIRECTORY(tools)

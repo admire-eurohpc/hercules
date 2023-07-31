@@ -1166,6 +1166,7 @@ int stat_worker_helper(p_argv *arguments, char *req)
 		{
 			slog_debug("[stat_worker_thread][READ_OP][RELEASE] Deleting endpoint with %" PRIu64 "", arguments->worker_uid);
 			map_server_eps_erase(map_server_eps, arguments->worker_uid);
+			// ucp_destroy(arguments->ucp_context);
 			slog_debug("[stat_worker_thread][READ_OP][RELEASE] Endpoints deleted ");
 			break;
 			// return 0;

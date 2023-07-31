@@ -7,6 +7,7 @@
 #include <map>
 
 #include <ucp/api/ucp.h>
+// #include <ucx/ucx.h>
 #include "map_server_eps.hpp"
 // to manage logs.
 #include "slog.h"
@@ -38,7 +39,8 @@ void map_server_eps_erase(void *map, uint64_t uuid)
 	if (search != m->end())
 	{
 		// ucp_ep_flush(search->second);
-		ucp_ep_close_nb(search->second, UCP_EP_CLOSE_MODE_FLUSH);
+		// ucp_ep_close_nb(search->second, UCP_EP_CLOSE_MODE_FLUSH);
+		ucp_ep_destroy(search->second);
 	}
 	m->erase(uuid);
 	size_t after_elements = m->size();

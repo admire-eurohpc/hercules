@@ -435,13 +435,15 @@ int32_t stat_release()
 
 		sprintf(release_msg, "%" PRIu32 " GET 2 RELEASE", process_rank);
 
-		// if (send_req(ucp_worker_meta, ep, local_addr_meta, local_addr_len_meta, release_msg) < 0)
-		// {
-		// 	perror("ERRIMSS_RLSIMSS_SENDADDR");
-		// 	return -1;
-		// }
+		if (send_req(ucp_worker_meta, ep, local_addr_meta, local_addr_len_meta, release_msg) < 0)
+		{
+			perror("ERRIMSS_RLSIMSS_SENDADDR");
+			return -1;
+		}
 
-		ep_close(ucp_worker_meta, ep, 0);
+		ucp_ep_destroy(ep);
+		// ucp_context_destroy(ucp_worker_meta);
+		// ep_close(ucp_worker_meta, ep, 0);
 		free(stat_addr[i]);
 	}
 
@@ -869,13 +871,16 @@ int32_t release_imss(char *imss_uri, uint32_t release_op)
 
 			sprintf(release_msg, "GET 2 0 RELEASE");
 
-			// if (send_req(ucp_worker_data, ep, local_addr_data, local_addr_len_data, release_msg) < 0)
-			// {
-			// 	perror("ERRIMSS_RLSIMSS_SENDADDR");
-			// 	return -1;
-			// }
+			if (send_req(ucp_worker_data, ep, local_addr_data, local_addr_len_data, release_msg) < 0)
+			{
+				perror("ERRIMSS_RLSIMSS_SENDADDR");
+				return -1;
+			}
 
-			ep_close(ucp_worker_data, ep, 0);
+			// ep_close(ucp_worker_data, ep, 0);
+
+			ucp_ep_destroy(ep);
+			// ucp_context_destroy(ucp_worker_data);
 		}
 		// ep_flush(ep, ucp_worker_data);
 		// ep_flush(imss_.conns.eps_[i], ucp_worker_data);
@@ -2163,7 +2168,7 @@ int32_t get_data(int32_t dataset_id, int32_t data_id, char *buffer)
 		}
 		else
 		{
-			slog_debug("[IMSS][get_data]ERRIMSS_NO_KEY_AVAIL");
+			slog_error("[IMSS][get_data]ERRIMSS_NO_KEY_AVAIL");
 		}
 	}
 

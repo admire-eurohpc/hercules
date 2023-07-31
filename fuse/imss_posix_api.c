@@ -137,7 +137,7 @@ int imss_access(const char *path, int permission)
 
 int imss_refresh(const char *path)
 {
-	slog_debug("\t[imss_refresh]");
+	// slog_debug("\t[imss_refresh]");
 	struct stat *stats;
 	struct stat old_stats;
 	uint32_t ds;
@@ -394,19 +394,22 @@ int imss_open(char *path, uint64_t *fh)
 	struct stat stats;
 	char *aux;
 	fd_lookup(imss_path, &fd, &stats, &aux);
+	slog_info("[FUSE][imss_posix_api] File descriptor is %d", fd);
 	if (fd >= 0)
 	{
 		file_desc = fd;
 	}
 	else if (fd == -2)
+	{
 		return -1;
+	}
 	else
 	{
 
 		file_desc = open_dataset(imss_path);
 		if (file_desc < 0)
 		{ // dataset was not found.
-			slog_debug("[FUSE][imss_posix_api] imss_path=%s", imss_path);
+			slog_debug("[FUSE][imss_posix_api] dataset was not found, imss_path=%s", imss_path);
 			*fh = file_desc;
 			// path = imss_path;
 			strcpy(path, imss_path);
@@ -431,7 +434,10 @@ int imss_open(char *path, uint64_t *fh)
 
 	// File does not exist
 	if (file_desc < 0)
+	{
+		slog_error("[FUSE][imss_posix_api] file descriptor: %d", file_desc);
 		return -1;
+	}
 
 	// Assign file descriptor
 	*fh = file_desc;
@@ -1917,6 +1923,7 @@ int imss_close(const char *path)
 	// clock_t t;
 	// t = clock();
 	// TIMING(flush_data(), "[imss_close]flush_data", int32_t);
+	slog_debug("[imss_close] Calling imss_flush_data");
 	TIMING(imss_flush_data(), "[imss_close]flush_data", int32_t);
 	slog_debug("[imss_close] Ending imss_flush_data");
 	TIMING(imss_release(path), "[imss_close]imss_release", int);
@@ -2074,6 +2081,8 @@ int imss_unlink(const char *path)
 	int fd;
 	struct stat stats;
 	char *buff;
+	int ret = 0;
+
 	fd_lookup(imss_path, &fd, &stats, &buff);
 	if (fd >= 0)
 		ds = fd;
@@ -2104,7 +2113,8 @@ int imss_unlink(const char *path)
 
 	map_release_prefetch(map_prefetch, path);
 
-	delete_dataset(imss_path);
+	ret = delete_dataset(imss_path);
+	slog_debug("[FUSE][imss_posix_api] delete_dataset, ret=%d", ret);
 
 	release_dataset(ds);
 	free(imss_path);
