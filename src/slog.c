@@ -75,7 +75,7 @@ const char *slog_version(int min)
  */
 char *strclr(const char *clr, char *str, ...)
 {
-    static char output[MAXMSG];
+    static char output[MAXMSG+120];
     char string[MAXMSG];
 
     /* Read args. */
@@ -193,7 +193,7 @@ int parse_config(const char *cfg_name)
  */
 char *slog_get(SlogDate *pDate, char *msg, ...)
 {
-    static char output[MAXMSG];
+    static char output[MAXMSG+120];
     char string[MAXMSG];
 
     /* Read args. */
@@ -227,16 +227,16 @@ void slog(int flag, const char *msg, ...)
         int rc;
         if ((rc = pthread_mutex_lock(&slog_mutex)))
         {
-            printf("[ERROR] <%s:%d> inside %s(): Can not lock mutex: %s\n",
+            fprintf(stderr, "[ERROR] <%s:%d> inside %s(): Can not lock mutex: %s\n",
                    __FILE__, __LINE__, __func__, strerror(rc));
             exit(EXIT_FAILURE);
         }
     }
 
     SlogDate mdate;
-    char string[MAXMSG];
+    char string[MAXMSG+120];
     char in_string[MAXMSG];
-    char prints[MAXMSG];
+    char prints[MAXMSG+240];
     char color[32], alarm[32];
     char *output;
 

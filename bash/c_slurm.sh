@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=hercules    # Job name
-#SBATCH --time=00:30:00               # Time limit hrs:min:sec
+#SBATCH --time=00:03:00               # Time limit hrs:min:sec
 #SBATCH --output=logs/hercules/%j_hercules.log   # Standard output and error log
 ##SBATCH --mem=0
 #SBATCH --overcommit
@@ -60,7 +60,7 @@ echo "Hercules started in $runtime seconds, start=$start_, end=$end_"
 
 echo "Running clients"
 TRANSFER_SIZE=$((1024*16))
-# COMMAND="$IOR_PATH/ior -t ${TRANSFER_SIZE}kb -b ${FILE_SIZE_PER_CLIENT}kb -s 1 -i 5 -F -o /mnt/imss/data.out"
+COMMAND="$IOR_PATH/ior -t ${TRANSFER_SIZE}kb -b ${FILE_SIZE_PER_CLIENT}kb -s 1 -i 2 -F -o /mnt/hercules/data.out"
 #COMMAND="../../bin/nekbmpi eddy_uv 2"
 #COMMAND="/beegfs/home/javier.garciablas/nek5000/run/eddy_uv/nek5000"
 # COMMAND="./exe_WRITE_AND_READ-TEST /mnt/imss/eddy hola.txt 1024"
@@ -72,10 +72,9 @@ set -x
 #	$COMMAND"
 
 # : ' # this is a multi-line comment
-# mpiexec $H_MPI_HOSTFILE_DEF ./client_hostfile $H_MPI_PPN $H_NCPN \
-# 	$H_MPI_ENV_DEF $H_POSIX_PRELOAD \
-#    	$H_MPI_ENV_DEF IMSS_CONF=$CONFIG_PATH \
-# 	$COMMAND > output
+mpiexec $H_MPI_HOSTFILE_DEF ./client_hostfile $H_MPI_PPN $H_NCPN \
+ 	$H_MPI_ENV_DEF $H_POSIX_PRELOAD \
+ 	$COMMAND
 # '
 
 
@@ -86,12 +85,12 @@ set -x
 
 # LD_PRELOAD=/beegfs/home/javier.garciablas/imss/build/tools/libhercules_posix.so touch /mnt/imss/example.wps
 
-echo "Running the client"
-export LD_PRELOAD=/beegfs/home/javier.garciablas/imss/build/tools/libhercules_posix.so
+#echo "Running the client"
+#export LD_PRELOAD=/beegfs/home/javier.garciablas/imss/build/tools/libhercules_posix.so
 ######################## Write, get size and read a File with Python #############################################
-python writeFile.py /mnt/imss/example.txt
-python getSizeFile.py /mnt/imss/example.txt
-python readFile.py /mnt/imss/example.txt
+#python writeFile.py /mnt/imss/example.txt
+#python getSizeFile.py /mnt/imss/example.txt
+#python readFile.py /mnt/imss/example.txt
 # ltrace -S -o readFile.ltrace 
 ##################################################################################################################
 
