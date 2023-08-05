@@ -2673,7 +2673,7 @@ int32_t get_type(char *uri)
 	}
 
 	slog_info("[IMSS][get_type] Request - '%s'", formated_uri);
-	fprintf(stderr, "[IMSS] Request - '%s'\n", formated_uri);
+	// fprintf(stderr, "[IMSS] Request - '%s'\n", formated_uri);
 
 	imss_info *data;
 
@@ -2687,8 +2687,6 @@ int32_t get_type(char *uri)
 	}
 
 	data = (imss_info *)result;
-
-	fprintf(stderr,"[IMSS] uri=%s,  data->type='%c'\n", uri, data->type);
 
 	// Determine what was retrieved from the metadata server.
 	if (data->type == 'I')
