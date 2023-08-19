@@ -412,9 +412,10 @@ int imss_open(char *path, uint64_t *fh)
 		{ // dataset was not found.
 			slog_debug("[FUSE][imss_posix_api] dataset was not found, imss_path=%s", imss_path);
 			*fh = file_desc;
+			// errno = 2;
 			// path = imss_path;
 			strcpy(path, imss_path);
-			return -1;
+			return -2;
 		}
 		aux = (char *)malloc(IMSS_DATA_BSIZE);
 		ret = get_data(file_desc, 0, (char *)aux);
@@ -1381,7 +1382,7 @@ int imss_write(const char *path, const char *buf, size_t size, off_t off)
 		}
 
 		// store block
-		slog_live("[imss_write] writting %" PRIu64 " kilobytes with an offset of %" PRIu64 "", bytes_to_copy / 1024, block_offset / 1024);
+		slog_live("[imss_write] writting %" PRIu64 " kilobytes (%" PRIu64 " bytes) with an offset of %" PRIu64 "", bytes_to_copy / 1024, bytes_to_copy, block_offset / 1024);
 
 		if (MALLEABILITY)
 		{

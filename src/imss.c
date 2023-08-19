@@ -1558,6 +1558,7 @@ int32_t get_data_location(int32_t dataset_id, int32_t data_id, int32_t op_type)
 		// Retrieve the corresponding dataset_info structure and the associated IMSS.
 		curr_dataset = g_array_index(datasetd, dataset_info, dataset_id);
 		curr_imss = g_array_index(imssd, imss, curr_dataset.imss_d);
+		slog_debug("[get_data_location] curr_dataset=%ld, dataset_id=%ld", curr_dataset, dataset_id);
 
 		// Set the corresponding.
 		if (set_policy(&curr_dataset) == -1)
@@ -2088,7 +2089,7 @@ int32_t get_data(int32_t dataset_id, int32_t data_id, char *buffer)
 	int32_t curr_imss_storages = curr_imss.info.num_storages;
 
 	// Retrieve the corresponding connections to the previous servers.
-	slog_debug("curr_dataset.repl_factor=%d", curr_dataset.repl_factor);
+	slog_debug("[IMSS][get_data] curr_dataset.repl_factor=%d", curr_dataset.repl_factor);
 	for (int32_t i = 0; i < curr_dataset.repl_factor; i++)
 	{
 		// Server storing the current data block.
