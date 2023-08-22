@@ -93,8 +93,8 @@ int32_t imss_comm_cleanup()
 	ucp_worker_release_address(ucp_worker_meta, local_addr_meta);
 	ucp_worker_release_address(ucp_worker_data, local_addr_data);
 
-	ucp_worker_destroy(ucp_worker_meta);
-	ucp_worker_destroy(ucp_worker_data);
+	// ucp_worker_destroy(ucp_worker_meta);
+	// ucp_worker_destroy(ucp_worker_data);
 
 	ucp_cleanup(ucp_context_client);
 
