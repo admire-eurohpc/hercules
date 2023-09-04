@@ -1416,7 +1416,7 @@ int imss_write(const char *path, const char *buf, size_t size, off_t off)
 		{
 			if (set_data(ds, curr_blk, data_pointer, bytes_to_copy, block_offset) < 0)
 			{
-				slog_error("[IMSS-FUSE]	Error writing to imss.\n");
+				slog_error("[imss_write] Error writing to imss.\n");
 				error_print = -ENOENT;
 				return -ENOENT;
 			}
@@ -1434,6 +1434,7 @@ int imss_write(const char *path, const char *buf, size_t size, off_t off)
 		// if(size + off != stats.st_size){
 		stats.st_size = size + off;
 		stats.st_blocks = curr_blk - 1;
+		slog_debug("[imss_write] Updating stat, st_size=%ld", stats.st_size);
 		map_update(map, rpath, ds, stats);
 	}
 	free(rpath);
