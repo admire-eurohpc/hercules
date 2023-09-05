@@ -209,6 +209,8 @@ static ssize_t (*real_pwrite)(int fd, const void *buf, size_t count, off_t offse
 static int (*real_truncate)(const char *path, off_t length) = NULL;
 static int (*real_ftruncate)(int fd, off_t length) = NULL;
 
+static int (*real_flock)(int fd, int operation) = NULL; 
+
 int epoll_ctl(int epfd, int op, int fd, struct epoll_event *event)
 {
 	real_epoll_ctl = dlsym(RTLD_NEXT, "epoll_ctl");
@@ -1539,6 +1541,30 @@ int open64(const char *pathname, int flags, ...)
 	return ret;
 }
 
+int flock(int fd, int operation) {
+	real_flock = dlsym(RTLD_NEXT, "flock");
+	if (!init)
+	{
+		return real_flock(fd, operation);
+	}
+
+	int ret = 0;
+	char *pathname = (char *)calloc(256, sizeof(char));
+	if (map_fd_search_by_val(map_fd, pathname, fd) == 1)
+	{
+		fprintf(stderr, "[POSIX]. Calling Hercules 'flock', pathname=%s\n", pathname);
+		// imss_close(pathname);
+		fprintf(stderr,"[POSIX]. Ending Hercules 'flock', pathname=%s\n", pathname);
+	}
+	else
+	{
+		ret = real_flock(fd, operation);
+	}
+
+	free(pathname);
+	return ret;
+}
+
 int fclose(FILE *fp)
 {
 	real_fclose = dlsym(RTLD_NEXT, "fclose");
@@ -1551,9 +1577,9 @@ int fclose(FILE *fp)
 	char *pathname = (char *)calloc(256, sizeof(char));
 	if (map_fd_search_by_val(map_fd, pathname, fp->_fileno) == 1)
 	{
-		slog_debug("[POSIX %d]. Calling Hercules 'fclose' %s.\n", rank, pathname);
+		slog_debug("[POSIX]. Calling Hercules 'fclose', pathname=%s", pathname);
 		imss_close(pathname);
-		slog_debug("[POSIX %d]. Ending Hercules 'fclose' %s.\n", rank, pathname);
+		slog_debug("[POSIX]. Ending Hercules 'fclose' pathname=%s",  pathname);
 		free(fp);
 	}
 	else
@@ -2808,7 +2834,7 @@ struct dirent *readdir(DIR *dirp)
 					entry->d_reclen = ceil((double)(strlen(token) - 4) / 8) * 8 + 24;
 				}
 
-				fprintf(stderr, "[POSIX] token=%s, d_reclen=%d\n", token, entry->d_reclen);
+				// fprintf(stderr, "[POSIX] token=%s, d_reclen=%d\n", token, entry->d_reclen);
 				break;
 			}
 			token = strtok(NULL, "$");
