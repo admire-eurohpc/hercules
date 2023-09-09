@@ -171,7 +171,8 @@ if [ -z "$H_MPI_HOSTFILE_NAME" ]; then
     fi
 
     if [[ $SLURM -eq 1 ]]; then
-        H_MPI_HOSTFILE_NAME="$H_BASH_PATH/client_hostfile"
+        #H_MPI_HOSTFILE_NAME="$H_BASH_PATH/client_hostfile"
+	H_MPI_HOSTFILE_NAME="./client_hostfile"
         tail -n +$((NUM_METADATA+NUM_DATA+1)) hostfile | head -n $NUM_NODES_FOR_CLIENTS > $H_MPI_HOSTFILE_NAME
     fi
 fi

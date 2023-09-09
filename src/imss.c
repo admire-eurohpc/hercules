@@ -443,6 +443,7 @@ int32_t stat_release()
 			return -1;
 		}
 
+		// ep_flush(ep, ucp_worker_meta);
 		ucp_ep_destroy(ep);
 		// ucp_context_destroy(ucp_worker_meta);
 		// ep_close(ucp_worker_meta, ep, 0);
@@ -880,6 +881,7 @@ int32_t release_imss(char *imss_uri, uint32_t release_op)
 			}
 
 			// ep_close(ucp_worker_data, ep, 0);
+			// ep_flush(ep, ucp_worker_data);
 
 			ucp_ep_destroy(ep);
 			// ucp_context_destroy(ucp_worker_data);
