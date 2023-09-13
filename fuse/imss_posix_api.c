@@ -378,7 +378,7 @@ int imss_readdir(const char *path, void *buf, posix_fill_dir_t filler, off_t off
 	  return 0;*/
 }
 
-int imss_open(char *path, uint64_t *fh)
+int imss_open(const char *path, uint64_t *fh)
 {
 	// printf("imss_open=%s\n",path);
 	int ret;

@@ -35,7 +35,7 @@ extern "C" {
 		m->insert(std::pair<std::string, struct elements>(std::string(k),p));
 	}
 
-	void map_update(void* map, char* k, int v, struct stat stat) {
+	void map_update(void* map, const char* k, int v, struct stat stat) {
 		Map* m = reinterpret_cast<Map*> (map);
 		auto search = m->find(std::string(k));
 		search->second.stat  = stat;

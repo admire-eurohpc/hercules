@@ -123,7 +123,8 @@ pid_t g_pid = -1;
 
 void getConfiguration();
 char *checkHerculesPath(const char *pathname);
-char *convert_path(const char *name, char *replace);
+char *convert_path(const char *name);
+int generalOpen(const char *new_path, int flags, mode_t mode);
 static off_t (*real_lseek)(int fd, off_t offset, int whence) = NULL;
 static int (*real__lxstat)(int fd, const char *pathname, struct stat *buf) = NULL;
 static int (*real__lxstat64)(int ver, const char *pathname, struct stat64 *buf) = NULL;
@@ -175,6 +176,7 @@ static size_t (*real_fread)(void *buf, size_t size, size_t count, FILE *fp) = NU
 static size_t (*real_fwrite)(const void *buf, size_t size, size_t count, FILE *fp) = NULL;
 static int (*real_ferror)(FILE *fp) = NULL;
 static int (*real_feof)(FILE *fp) = NULL;
+static long int (*real_ftell)(FILE *fp) = NULL;
 
 static void *(*real_mmap)(void *addr, size_t length, int prot, int flags, int fd, off_t offset) = NULL;
 
@@ -282,16 +284,16 @@ char *checkHerculesPath(const char *pathname)
 		if (!strncmp(pathname, ".", strlen(pathname)))
 		{
 			// slog_debug("[IMSS][checkHerculesPath] workdir=%s", workdir);
-			new_path = convert_path(workdir, MOUNT_POINT);
+			new_path = convert_path(workdir);
 		}
 		else if (!strncmp(pathname, "./", strlen("./")))
 		{
 			// slog_debug("[IMSS][checkHerculesPath] ./ case=%s", pathname);
-			new_path = convert_path(pathname + strlen("./"), MOUNT_POINT);
+			new_path = convert_path(pathname + strlen("./"));
 		}
 		else
 		{
-			new_path = convert_path(pathname, MOUNT_POINT);
+			new_path = convert_path(pathname);
 		}
 		// fprintf(stderr, "[POSIX][checkHerculesPath]. workdir=%s, pathname=%s, new_path=%s\n", workdir, pathname, new_path);
 	}
@@ -343,11 +345,10 @@ prefetch_function(void *th_argv)
 	pthread_exit(NULL);
 }
 
-char *convert_path(const char *name, char *replace)
+char *convert_path(const char *name)
 {
 	char *path = calloc(256, sizeof(char));
 	strcpy(path, name);
-	// printf("path=%s\n",path);
 	size_t len = strlen(MOUNT_POINT);
 	if (len > 0)
 	{
@@ -360,16 +361,48 @@ char *convert_path(const char *name, char *replace)
 
 	char *new_path = calloc(256, sizeof(char));
 
-	if (!strncmp(path, "/", strlen("/")))
+	len = strlen(path);
+	size_t desplacements = 0;
+	// fprintf(stderr, "path=%s, len=%ld, strncmp=%d\n", path, len, !strncmp(path, "/", strlen("/")));
+
+	for (size_t i = 0; i < len; i++)
 	{
-		strcat(new_path, "imss:/");
-	}
-	else
-	{
-		strcat(new_path, "imss://");
+		if (!strncmp(path + i, "/", strlen("/")))
+		{
+			// fprintf(stderr,"Increasing desplacements\n");
+			desplacements++;
+		}
+		else
+		{
+			// path += desplacements;
+			// strcat(new_path, "imss://");
+			break;
+		}
 	}
 
-	strcat(new_path, path);
+	// fprintf(stderr, "path=%s, desplacements=%ld\n", path, desplacements);
+
+	if (desplacements > 0)
+	{
+		path += desplacements;
+	}
+	strcat(new_path, "imss://");
+
+	// fprintf(stderr, "updated path=%s, desplacements=%ld\n", path, desplacements);
+	// if (!strncmp(path, "/", strlen("/")))
+	// {
+	// 	strcat(new_path, "imss:/");
+	// }
+	// else
+	// {
+	// 	strcat(new_path, "imss://");
+	// }
+	if (desplacements < len)
+	{
+		strcat(new_path, path);
+	}
+	fprintf(stderr, "updated path=%s, desplacements=%ld, new_path=%s\n", path, desplacements, new_path);
+
 	return new_path;
 }
 
@@ -432,6 +465,10 @@ __attribute__((constructor)) void imss_posix_init(void)
 	// fprintf(stderr, "[%d] ************ Calling constructor, HERCULES_PATH=%s, pid=%d, init=%d ************\n", rank, HERCULES_PATH, getpid(), init);
 
 	sprintf(log_path, "%s/client.%02d-%02d.%d", HERCULES_PATH, tm.tm_hour, tm.tm_min, rank);
+	if (IMSS_DEBUG_FILE)
+	{
+		fprintf(stderr, "LOG PATH=%s\n", log_path);
+	}
 	// sprintf(log_path, "./client.%02d-%02d-%02d.%d", tm.tm_hour, tm.tm_min, tm.tm_sec, rank);
 	slog_init(log_path, IMSS_DEBUG_LEVEL, IMSS_DEBUG_FILE, IMSS_DEBUG_SCREEN, 1, 1, 1, rank);
 	slog_info(",Time(msec), Comment, RetCode");
@@ -498,7 +535,7 @@ __attribute__((constructor)) void imss_posix_init(void)
 	}
 
 	slog_debug("[CLIENT %d] ready!\n", rank);
-	fprintf(stderr, "[CLIENT %d] ready!\n", rank);
+	// fprintf(stderr, "[CLIENT %d] ready!\n", rank);
 
 	// sleep(10);
 
@@ -509,7 +546,7 @@ __attribute__((constructor)) void imss_posix_init(void)
 	gettimeofday(&tv, NULL);
 	double end = (tv.tv_sec) * 1000 + (tv.tv_usec) / 1000;
 
-	fprintf(stderr, "CLIENT_CONSTRUCTOR_TIME %f, finish %f, init %f\n", end - begin, end, begin);
+	// fprintf(stderr, "CLIENT_CONSTRUCTOR_TIME %f, finish %f, init %f\n", end - begin, end, begin);
 
 	init = 1;
 }
@@ -813,7 +850,7 @@ void __attribute__((destructor)) run_me_last()
 		// slog_live("********************** End 'run_me_last' **********************\n");
 		t_s = clock() - t_s;
 		time_taken = ((double)t_s) / (CLOCKS_PER_SEC);
-		fprintf(stderr, "CLIENT_DESTRUCTOR_TIME %f\n", time_taken);
+		// fprintf(stderr, "CLIENT_DESTRUCTOR_TIME %f\n", time_taken);
 	}
 	slog_live("End 'run_me_last', pid=%d, release=%d", g_pid, release);
 }
@@ -840,11 +877,8 @@ int close(int fd)
 		return real_close(fd);
 	}
 
-	// clock_t t;
-	// t = clock();
-	int ret = 0;
 	errno = 0;
-
+	int ret = 0;
 	char *path = (char *)calloc(256, sizeof(char));
 	if (TIMING(map_fd_search_by_val(map_fd, path, fd), "[POSIX] Searching path by fd", int) == 1)
 	{
@@ -853,11 +887,6 @@ int close(int fd)
 		slog_debug("[POSIX]. Ending Hercules 'close', pathname=%s, ret=%d, errno=%d:%s", path, ret, errno, strerror(errno));
 
 		map_fd_update_value(map_fd, path, fd, 0);
-		// fprintf(stderr, "[POSIX] Closing %s in Hercules, ret=%d, fd=%d, errno=%d:%s\n", path, ret, fd, errno, strerror(errno));
-		// fprintf(stderr,"*** CLOSE ***\n");
-		//  t = clock() - t;
-		//  double time_taken = ((double)t) / CLOCKS_PER_SEC; // in seconds
-		//  slog_info("[POSIX %d] close time total %f s", rank, time_taken);
 	}
 	else
 	{
@@ -866,7 +895,6 @@ int close(int fd)
 		slog_debug("[POSIX]. Ending Real 'close', ret=%d", ret);
 	}
 	free(path);
-	// fprintf(stderr, "[POSIX] ret=%d, fd=%d, errno=%d:%s\n", ret, fd, errno, strerror(errno));
 	return ret;
 }
 
@@ -919,19 +947,11 @@ int __lxstat64(int fd, const char *pathname, struct stat64 *buf)
 
 	errno = 0;
 	int ret = 0;
-	unsigned long p = 0;
-	// char *workdir = getenv("PWD");
-	// if (!strncmp(pathname, MOUNT_POINT, strlen(MOUNT_POINT)))
-	// // if (!strncmp(pathname, MOUNT_POINT, strlen(MOUNT_POINT)) || !strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT)))
-	// {
 	char *new_path = checkHerculesPath(pathname);
 	if (new_path != NULL)
 	{
 		slog_debug("[POSIX %d]. Calling Hercules '__lxstat64', pathname=%s.", rank, pathname);
 
-		// char *new_path;
-		// new_path = convert_path(pathname, MOUNT_POINT);
-		// int exist = map_fd_search(map_fd, new_path, &ret, &p);
 		imss_refresh(new_path);
 		ret = imss_getattr(new_path, buf);
 		if (ret < 0)
@@ -964,21 +984,17 @@ int __xstat(int fd, const char *pathname, struct stat *buf)
 
 	errno = 0;
 	int ret = -1;
-	unsigned long p = 0;
 	char *new_path = checkHerculesPath(pathname);
 	if (new_path != NULL)
 	{
-
 		slog_debug("[POSIX] Calling Hercules '__xstat', pathname=%s, fd=%d, new_path=%s", pathname, fd, new_path);
-		// slog_debug("[_xstat] new_path=%s", new_path);
-		// int exist = map_fd_search(map_fd, new_path, &ret, &p);
 		imss_refresh(new_path);
 		ret = imss_getattr(new_path, buf);
 		if (ret < 0)
 		{
 			errno = -ret;
 			ret = -1;
-			slog_error("[POSIX] Error Hercules '__xstat': %s", strerror(errno));
+			slog_error("[POSIX] Error Hercules '__xstat': %d:%s", errno, strerror(errno));
 		}
 
 		slog_debug("[POSIX] End Hercules '__xstat', pathname=%s, fd=%d, new_path=%s, errno=%d:%s, ret=%d", pathname, fd, new_path, errno, strerror(errno), ret);
@@ -998,9 +1014,16 @@ pid_t fork(void)
 	if (!real_fork)
 		real_fork = dlsym(RTLD_NEXT, "fork");
 
+	errno = 0;
 	pid_t pid = real_fork();
-	g_pid = pid;
 
+	if (pid == -1)
+	{
+		slog_error("[POSIX] Error 'real fork': %d:%s", errno, strerror(errno));
+		exit(EXIT_FAILURE);
+	}
+
+	g_pid = pid;
 	if (pid != 0)
 	{
 		release = 0;
@@ -1039,6 +1062,7 @@ int lstat(const char *pathname, struct stat *buf)
 		return real_lstat(pathname, buf);
 	}
 
+	errno = 0;
 	int ret;
 	char *new_path = checkHerculesPath(pathname);
 	if (new_path != NULL)
@@ -1072,12 +1096,12 @@ int stat(const char *pathname, struct stat *buf)
 		return real_stat(pathname, buf);
 	}
 
+	errno = 0;
 	int ret;
 	char *new_path = checkHerculesPath(pathname);
 	if (new_path != NULL)
 	{
 		slog_debug("[POSIX %d]. Calling Hercules 'stat', new_path=%s.", rank, new_path);
-		// int exist = map_fd_search(map_fd, new_path, &ret, &p);
 		imss_refresh(new_path);
 		ret = imss_getattr(new_path, buf);
 		if (ret < 0)
@@ -1108,6 +1132,8 @@ int statvfs(const char *restrict path, struct statvfs *restrict buf)
 		return real_statvfs(path, buf);
 	}
 
+	errno = 0;
+	int ret = 0;
 	char *new_path = checkHerculesPath(path);
 	if (new_path != NULL)
 	{
@@ -1119,14 +1145,16 @@ int statvfs(const char *restrict path, struct statvfs *restrict buf)
 		buf->f_namemax = URI_;
 		slog_debug("[POSIX %d]. End Hercules 'statvfs', path=%s.", rank, path);
 		free(new_path);
-		return 0;
+		// return 0;
 	}
 	else
 	{
 		slog_debug("[POSIX %d]. Calling Real 'statvfs', path=%s.", rank, path);
-		return real_statvfs(path, buf);
+		ret = real_statvfs(path, buf);
 		slog_debug("[POSIX %d]. Ending Real 'statvfs', path=%s.", rank, path);
 	}
+
+	return ret;
 }
 
 int statfs(const char *restrict path, struct statfs *restrict buf)
@@ -1139,6 +1167,7 @@ int statfs(const char *restrict path, struct statfs *restrict buf)
 		return real_statfs(path, buf);
 	}
 
+	errno = 0;
 	int ret = 0;
 	char *new_path = checkHerculesPath(path);
 	if (new_path != NULL)
@@ -1168,20 +1197,12 @@ int __xstat64(int ver, const char *pathname, struct stat64 *stat_buf)
 		return real__xstat64(ver, pathname, stat_buf);
 	}
 
-	int ret;
-	unsigned long p = 0;
-	// char *workdir = getenv("PWD");
-
-	// if (!strncmp(pathname, MOUNT_POINT, strlen(MOUNT_POINT)))
-	// // if (!strncmp(pathname, MOUNT_POINT, strlen(MOUNT_POINT)) || !strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT)))
-	// {
+	errno = 0;
+	int ret = 0;
 	char *new_path = checkHerculesPath(pathname);
 	if (new_path != NULL)
 	{
 		slog_debug("[POSIX]. Calling Hercules '__xstat64', pathname=%s, new_path=%s", pathname, new_path);
-		// char *new_path;
-		// new_path = convert_path(pathname, MOUNT_POINT);
-		// int exist = map_fd_search(map_fd, new_path, &ret, &p);
 		imss_refresh(new_path);
 		ret = imss_getattr(new_path, stat_buf);
 		if (ret < 0)
@@ -1221,6 +1242,7 @@ int __open_2(const char *pathname, int flags, ...)
 	if (!real__open_2)
 		real__open_2 = dlsym(RTLD_NEXT, "__open_2");
 
+	// Access additional arguments when O_CREAT flag is set.
 	mode_t mode = 0;
 	if (flags & O_CREAT)
 	{
@@ -1238,62 +1260,17 @@ int __open_2(const char *pathname, int flags, ...)
 			return real__open_2(pathname, flags, mode);
 	}
 
-	int ret = 0;
 	errno = 0;
-
+	int ret = 0;
 	char *new_path = checkHerculesPath(pathname);
 	if (new_path != NULL)
 	{
-		uint64_t ret_ds = 0;
-		unsigned long p = 0;
 		slog_debug("[POSIX]. Calling Hercules '__open_2', new_path=%s.", new_path);
 
-		checkOpenFlags(pathname, flags);
+		// checkOpenFlags(pathname, flags);
 
-		int exist = map_fd_search(map_fd, new_path, &ret, &p);
-		if (exist == -1)
-		{
-			int create_flag = (flags & O_CREAT);
-			if (create_flag == O_CREAT)
-			{
-				slog_debug("[POSIX %d]. O_CREAT", rank);
-				int err_create = imss_create(new_path, mode, &ret_ds);
-				if (err_create == -EEXIST)
-				{
-					ret = TIMING(imss_open(new_path, &ret_ds), "imss_open O_CREAT", int);
-				}
-			}
-			else
-			{
-				slog_debug("[POSIX %d]. Not O_CREAT", rank);
-				ret = TIMING(imss_open(new_path, &ret_ds), "imss_open Not O_CREAT", int);
+		ret = generalOpen(new_path, flags, mode);
 
-				if (ret < 0)
-				{
-					errno = -ret;
-					ret = -1;
-				}
-				// If we get a "ret_ds" equal to "-2", we are in the case of symbolic link pointing to a file stored in the system.
-				if (ret_ds == -2)
-				{
-					// Calling the real open.
-					if (!mode)
-						ret = real__open_2(new_path, flags);
-					else
-						ret = real__open_2(new_path, flags, mode);
-					// stores the file descriptor "ret" into the map "map_fd".
-					map_fd_put(map_fd, new_path, ret, p); // TO CHECK!
-														  // free(new_path);
-														  // return ret;
-				}
-			}
-			if (ret > -1)
-			{
-				ret = real__open_2("/dev/null", 0); // Get a file descriptor
-				// stores the file descriptor "ret" into the map "map_fd".
-				map_fd_put(map_fd, new_path, ret, p); // TO CHECK!
-			}
-		}
 		slog_debug("[POSIX]. Ending Hercules '__open_2', new_path=%s, ret=%d, errno=%d:%s", new_path, ret, errno, strerror(errno));
 		free(new_path);
 	}
@@ -1313,6 +1290,7 @@ int open64(const char *pathname, int flags, ...)
 	if (!real_open64)
 		real_open64 = dlsym(RTLD_NEXT, "open64");
 
+	// Access additional arguments when O_CREAT flag is set.
 	mode_t mode = 0;
 	if (flags & O_CREAT)
 	{
@@ -1330,61 +1308,17 @@ int open64(const char *pathname, int flags, ...)
 			return real_open64(pathname, flags, mode);
 	}
 
-	int ret;
 	errno = 0;
-
+	int ret;
 	char *new_path = checkHerculesPath(pathname);
 	if (new_path != NULL)
 	{
-		uint64_t ret_ds;
-		unsigned long p = 0;
 		slog_debug("[POSIX]. Calling Hercules 'open64', pathname=%s, new_path=%s", pathname, new_path);
 
-		checkOpenFlags(pathname, flags);
+		// checkOpenFlags(pathname, flags);
 
-		int exist = map_fd_search(map_fd, new_path, &ret, &p);
-		if (exist == -1) // if the "new_path" was not find in the local map:
-		{
-			int create_flag = (flags & O_CREAT);
-			if (create_flag == O_CREAT) // if the file does not exist, then we create it.
-			{
-				int err_create = imss_create(new_path, mode, &ret_ds);
-				if (err_create == -EEXIST)
-				{
-					ret = imss_open(new_path, &ret_ds);
-				}
-			}
-			else // the file must exist.
-			{
-				ret = imss_open(new_path, &ret_ds);
-				if (ret < 0)
-				{
-					errno = -ret;
-					ret = -1;
-				}
+		ret = generalOpen(new_path, flags, mode);
 
-				// If we get a "ret_ds" equal to "-2", we are in the case of symbolic link pointing to a file stored in the system.
-				if (ret_ds == -2)
-				{
-					slog_debug("[POSIX] Calling real_open(%s)", new_path);
-					// Calling the real open.
-					if (!mode)
-						ret = real_open64(new_path, flags);
-					else
-						ret = real_open64(new_path, flags, mode);
-					// stores the file descriptor "ret" into the map "map_fd".
-					map_fd_put(map_fd, new_path, ret, p); // TO CHECK!
-														  // free(new_path);
-														  // return ret;
-				}
-			}
-			if (ret > -1)
-			{
-				ret = real_open64("/dev/null", 0); // Get a file descriptor.
-				// stores the file descriptor "ret" into the map "map_fd".
-				map_fd_put(map_fd, new_path, ret, p); // TO CHECK!
-			}
-		}
 		slog_debug("[POSIX]. Ending Hercules 'open64', pathname=%s, fd=%ld.", pathname, ret);
 		free(new_path);
 	}
@@ -1409,6 +1343,7 @@ int flock(int fd, int operation)
 		return real_flock(fd, operation);
 	}
 
+	errno = 0;
 	int ret = 0;
 	char *pathname = (char *)calloc(256, sizeof(char));
 	if (map_fd_search_by_val(map_fd, pathname, fd) == 1)
@@ -1421,7 +1356,6 @@ int flock(int fd, int operation)
 	{
 		ret = real_flock(fd, operation);
 	}
-
 	free(pathname);
 	return ret;
 }
@@ -1430,27 +1364,28 @@ int fclose(FILE *fp)
 {
 	if (!real_fclose)
 		real_fclose = dlsym(RTLD_NEXT, "fclose");
+
 	if (!init)
 	{
 		return real_fclose(fp);
 	}
 
+	errno = 0;
 	int ret = 0;
-	char *pathname = (char *)calloc(256, sizeof(char));
-	if (map_fd_search_by_val(map_fd, pathname, fp->_fileno) == 1)
+	char *path = (char *)calloc(256, sizeof(char));
+	if (map_fd_search_by_val(map_fd, path, fp->_fileno) == 1)
 	{
-		slog_debug("[POSIX]. Calling Hercules 'fclose', pathname=%s", pathname);
-		imss_close(pathname);
-		slog_debug("[POSIX]. Ending Hercules 'fclose' pathname=%s", pathname);
+		slog_debug("[POSIX]. Calling Hercules 'fclose', path=%s", path);
+		ret = imss_close(path);
+		slog_debug("[POSIX]. Ending Hercules 'fclose' path=%s", path);
+		map_fd_update_value(map_fd, path, fp->_fileno, 0);
 		free(fp);
 	}
 	else
 	{
 		ret = real_fclose(fp);
 	}
-
-	free(pathname);
-
+	free(path);
 	return ret;
 }
 
@@ -1464,18 +1399,36 @@ size_t fread(void *buf, size_t size, size_t count, FILE *fp)
 		return real_fread(buf, size, count, fp);
 	}
 
+	errno = 0;
 	size_t ret;
-	unsigned long p = 0;
 	char *path = (char *)calloc(256, sizeof(char));
-
 	if (map_fd_search_by_val(map_fd, path, fp->_fileno) == 1)
 	{
+		unsigned long p = 0;
 		slog_debug("[POSIX]. Calling Hercules 'fread', path=%s", path);
 		map_fd_search(map_fd, path, &fp->_fileno, &p);
-		ret = imss_read(path, buf, count, p);
-		slog_debug("[POSIX]. End Hercules 'fread'  %ld", ret);
-		if (ret < count - 1) // FIX: Python read.
+
+		struct stat ds_stat_n;
+		ret = imss_getattr(path, &ds_stat_n);
+		slog_debug("[POSIX]. pathname=%s, stat.size=%ld.", path, ds_stat_n.st_size);
+		if (ret < 0)
+		{
+			errno = -ret;
+			ret = -1;
+			slog_error("[POSIX] Error Hercules 'fread'	: %s", strerror(errno));
+		}
+		else if (p >= ds_stat_n.st_size)
+		{
 			ret = 0;
+		}
+		else
+		{
+			ret = imss_read(path, buf, count, p);
+			p += ret;
+			slog_debug("[POSIX] Updating map_fd, offset=%d", p);
+			map_fd_update_value(map_fd, path, fp->_fileno, p);
+		}
+		slog_debug("[POSIX]. End Hercules 'fread'  %ld", ret);
 	}
 	else
 	{
@@ -1496,21 +1449,33 @@ size_t fwrite(const void *buf, size_t size, size_t count, FILE *fp)
 		return real_fwrite(buf, size, count, fp);
 	}
 
+	errno = 0;
 	size_t ret = -1;
 	unsigned long p = 0;
-	char *path = (char *)calloc(256, sizeof(char));
-	if (map_fd_search_by_val(map_fd, path, fp->_fileno) == 1)
+
+	struct timeval tv;
+	gettimeofday(&tv, NULL);
+
+	double begin = (tv.tv_sec) * 1000 + (tv.tv_usec) / 1000;
+
+	char *pathname = (char *)calloc(256, sizeof(char));
+	// if ((pathname = map_fd_search_by_val_2(map_fd, pathname, fp->_fileno)) != NULL)
+	if (map_fd_search_by_val(map_fd, pathname, fp->_fileno) == 1)
 	{
-		slog_debug("[POSIX]. Calling Hercules 'fwrite', path=%s", path);
-		map_fd_search(map_fd, path, &fp->_fileno, &p);
-		ret = imss_write(path, buf, count, p);
-		slog_debug("[POSIX %d]. Ending Hercules 'fwrite', ret=%ld,  errno=%d:%s", ret, path, errno, strerror(errno));
+		gettimeofday(&tv, NULL);
+		double end = (tv.tv_sec) * 1000 + (tv.tv_usec) / 1000;
+		double time_taken = end - begin;
+
+		slog_debug("[POSIX]. Calling Hercules 'fwrite', path=%s, time taken=%f", pathname, time_taken);
+		map_fd_search(map_fd, pathname, &fp->_fileno, &p);
+		ret = imss_write(pathname, buf, count, p);
+		slog_debug("[POSIX %d]. Ending Hercules 'fwrite', ret=%ld,  errno=%d:%s", ret, pathname, errno, strerror(errno));
+		free(pathname);
 	}
 	else
 	{
 		ret = real_fwrite(buf, size, count, fp);
 	}
-	free(path);
 
 	return ret;
 }
@@ -1519,11 +1484,13 @@ int ferror(FILE *fp)
 {
 	if (!real_ferror)
 		real_ferror = dlsym(RTLD_NEXT, "ferror");
+
 	if (!init)
 	{
 		return real_ferror(fp);
 	}
 
+	errno = 0;
 	int ret = 0;
 	char *pathname = (char *)calloc(256, sizeof(char));
 	if (map_fd_search_by_val(map_fd, pathname, fp->_fileno) == 1)
@@ -1545,11 +1512,13 @@ int feof(FILE *fp)
 {
 	if (!real_feof)
 		real_feof = dlsym(RTLD_NEXT, "feof");
+
 	if (!init)
 	{
 		return real_feof(fp);
 	}
 
+	errno = 0;
 	int ret = 0;
 	char *pathname = (char *)calloc(256, sizeof(char));
 	if (map_fd_search_by_val(map_fd, pathname, fp->_fileno) == 1)
@@ -1561,8 +1530,48 @@ int feof(FILE *fp)
 	{
 		ret = real_feof(fp);
 	}
-
 	free(pathname);
+
+	return ret;
+}
+
+long int ftell(FILE *fp)
+{
+	if (!real_ftell)
+		real_ftell = dlsym(RTLD_NEXT, "ftell");
+
+	if (!init)
+	{
+		return real_ftell(fp);
+	}
+
+	errno = 0;
+	long int ret;
+	char *path = (char *)calloc(256, sizeof(char));
+	if (map_fd_search_by_val(map_fd, path, fp->_fileno) == 1)
+	{
+		unsigned long p = 0;
+		slog_debug("[POSIX]. Calling Hercules 'ftell', path=%s, fd=%d, errno=%d:%s", path, fp->_fileno, errno, strerror(errno));
+
+		ret = map_fd_search(map_fd, path, &fp->_fileno, &p);
+		slog_debug("[POSIX]. ret=%ld, p=%ld", ret, p);
+		if (ret < 0)
+		{
+			errno = -ret;
+			ret = -1;
+			free(path);
+			slog_debug("[POSIX]. Error in 'ftell', ret=%ld, errno=%d:%s", ret, errno, strerror(errno));
+			return ret;
+		}
+		ret = p;
+		// map_fd_update_value(map_fd, path, fd, ret);
+		slog_debug("[POSIX]. Ending Hercules 'ftell', ret=%ld, errno=%d:%s", ret, errno, strerror(errno));
+	}
+	else
+	{
+		ret = real_ftell(fp);
+	}
+	free(path);
 
 	return ret;
 }
@@ -1577,57 +1586,34 @@ FILE *fopen(const char *restrict pathname, const char *restrict mode)
 		return real_fopen(pathname, mode);
 	}
 
+	errno = 0;
 	FILE *file = NULL;
 	int ret = 0;
-
 	char *new_path = checkHerculesPath(pathname);
 	if (new_path != NULL)
 	{
 		uint64_t ret_ds;
 		unsigned long p = 0;
-		slog_debug("Calling Hercules 'fopen', pathname=%s", pathname);
+		mode_t new_mode = 0;
+		int flags = 0;
 
-		// Search for the path "new_path" on the map "map_fd".
-		slog_debug("[POSIX %d]. Searching for the %s on the map", rank, new_path);
-		int exist = map_fd_search(map_fd, new_path, &ret, &p);
-		if (exist == -1) // if the "new_path" was not find:
+		// To interpret the mode recived:
+		// Opening a file in append mode (a as the first character of mode)
+		// causes all subsequent write operations to this stream to occur at
+		// end-of-file, as if preceded by the call:
+		//   fseek(stream, 0, SEEK_END);
+		if (strstr(mode, "w"))
 		{
-			ret = real_open("/dev/null", 0); // Get a file descriptor
-			// stores the file descriptor "ret" into the map "map_fd".
-			if (strstr(mode, "+"))
-			{
-				p = 0; // TODO
-			}
-			else
-			{
-				p = 0;
-			}
-
-			int create_flag = 0;
-			if (strstr(mode, "w"))
-				create_flag = O_CREAT;
-
-			slog_debug("[POSIX %d] new_path:%s, exist: %d, create_flag: %d", rank, new_path, exist, create_flag);
-			if (create_flag == O_CREAT)
-			{
-				slog_debug("[POSIX %d] map_fd_put", rank);
-				map_fd_put(map_fd, new_path, ret, p);
-				slog_debug("[POSIX %d]. New file %s", rank, new_path);
-				int err_create = imss_create(new_path, mode, &ret_ds);
-				slog_debug("[POSIX %d] imss_create(%s, %s, %ld), err_create: %d\n", rank, new_path, mode, ret_ds, err_create);
-				if (err_create == -EEXIST)
-				{
-					slog_debug("[POSIX %d] dataset already exists.\n", rank);
-					slog_debug("[POSIX %d] 1 - imss_fopen(%s, %ld)\n", rank, new_path, ret_ds);
-					ret = TIMING(imss_open(new_path, &ret_ds), "imss_open op1", int);
-				}
-			}
-			else
-			{
-				slog_debug("[POSIX %d] 2 - imss_fopen(%s, %ld)\n", rank, new_path, ret_ds);
-				ret = TIMING(imss_open(new_path, &ret_ds), "imss_open op2", int);
-			}
+			new_mode |= S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH;
+			flags = O_WRONLY | O_CREAT | O_TRUNC;
 		}
+
+		slog_debug("Calling Hercules 'fopen', pathname=%s, mode=%s, new_mode=%o", new_path, mode, new_mode);
+
+		// if (strstr(mode, "w"))
+		// 	flags = O_CREAT;
+
+		ret = generalOpen(new_path, flags, new_mode);
 
 		slog_debug("File descriptor=%d", ret);
 
@@ -1648,22 +1634,101 @@ FILE *fopen(const char *restrict pathname, const char *restrict mode)
 			slog_debug("File %s was not found\n", pathname);
 		}
 
-		slog_debug("Ending Hercules 'fopen', pathname=%s\n", pathname);
+		slog_debug("Ending Hercules 'fopen', new_path=%s\n", new_path);
 		free(new_path);
 	}
 	else /* Do not try to use slog_ here! This function uses 'fopen' internally. */
 	{
-		// fprintf(stderr, "pathname=%s, pathname+%d-3=%s, strlen=%d, strlen-4=%d\n", pathname, strlen(pathname), pathname+strlen(pathname)-3, strlen(pathname), strlen(pathname) - 3);
-		if (strncmp(pathname + strlen(pathname) - 3, "log", strlen("log")))
-		{
-			// fprintf(stderr, "Calling Real 'fopen', pathname=%s\n", pathname);
-		}
-		// slog_debug("Calling Real 'fopen', pathname=%s\n", pathname);
+		// if (strncmp(pathname + strlen(pathname) - 3, "log", strlen("log")))
+		// {
+		// 	// fprintf(stderr, "Calling Real 'fopen', pathname=%s\n", pathname);
+		// }
 		file = real_fopen(pathname, mode);
-		// fprintf(stderr,"Ending Real 'fopen', pathname=%s\n", pathname);
 	}
 
 	return file;
+}
+
+int generalOpen(const char *new_path, int flags, mode_t mode)
+{
+	int ret = 0;
+	uint64_t ret_ds = 0;
+	unsigned long p = 0;
+	// Search for the path "new_path" on the map "map_fd".
+	slog_debug("[POSIX]. Searching for the %s on the map", new_path);
+	int exist = map_fd_search(map_fd, new_path, &ret, &p);
+	if (exist == -1) // if the "new_path" was not find:
+	{
+		int create_flag = (flags & O_CREAT);
+		slog_debug("[POSIX] new_path:%s, exist: %d, create_flag: %d", new_path, exist, create_flag);
+		if (create_flag == O_CREAT) // if the file does not exist, then we create it.
+		{
+			slog_debug("[POSIX]. New file %s, ret=%d", new_path, ret);
+			int err_create = imss_create(new_path, mode, &ret_ds);
+			slog_debug("[POSIX] imss_create(%s, %d, %ld), err_create: %d", new_path, mode, ret_ds, err_create);
+			if (err_create == -EEXIST)
+			{
+				// slog_debug("[POSIX] dataset already exists.");
+				slog_debug("[POSIX] 1 - Dataset already exists, imss_open(%s, %ld)", new_path, ret_ds);
+				ret = TIMING(imss_open(new_path, &ret_ds), "imss_open op1", int);
+			}
+		}
+		else // the file must exist.
+		{
+			slog_debug("[POSIX] File must exists - imss_open(%s, %ld)", new_path, ret_ds);
+			ret = TIMING(imss_open(new_path, &ret_ds), "imss_open op2", int);
+			slog_debug("[POSIX] 2 - ret_ds=%d, ret=%d, new_path=%s", ret_ds, ret, new_path);
+
+			if (ret < 0)
+			{
+				errno = -ret;
+				ret = -1;
+			}
+
+			// If we get a "ret_ds" equal to "-2", we are in the case of symbolic link pointing to a file stored in the system.
+			if (ret_ds == -2)
+			{
+				slog_debug("[POSIX] Calling real_open(%s)", new_path);
+				// Calling the real open.
+				if (!mode)
+					ret = real_open(new_path, flags);
+				else
+					ret = real_open(new_path, flags, mode);
+				// stores the file descriptor "ret" into the map "map_fd".
+				map_fd_put(map_fd, new_path, ret, p); // TO CHECK!
+			}
+		}
+		if (ret > -1)
+		{
+			ret = real_open("/dev/null", 0); // Get a file descriptor
+			// stores the file descriptor "ret" into the map "map_fd".
+			slog_debug("[POSIX] Puting fd %d into map", ret);
+			map_fd_put(map_fd, new_path, ret, p); // TO CHECK!
+		}
+	}
+	else
+	{
+		slog_debug("[POSIX]. exist=%d, O_TRUNC=%d, fd=%d", exist, flags & O_TRUNC, ret);
+		if (flags & O_TRUNC)
+		{
+			map_fd_update_value(map_fd, new_path, ret, 0);
+			int ret_aux = 0;
+			struct stat stats;
+			ret_aux = imss_getattr(new_path, &stats);
+			if (ret_aux < 0)
+			{
+				errno = -ret_aux;
+				ret = -1;
+				slog_error("[POSIX] Error Hercules 'open', errno=%d:%s", errno, strerror(errno));
+				// free(new_path);
+				return ret;
+			}
+			stats.st_size = 0;
+			stats.st_blocks = 0;
+			map_update(map, new_path, ret, stats);
+		}
+	}
+	return ret;
 }
 
 int open(const char *pathname, int flags, ...)
@@ -1689,106 +1754,30 @@ int open(const char *pathname, int flags, ...)
 			return real_open(pathname, flags, mode);
 	}
 
-	int ret = 0;
 	errno = 0;
-
+	int ret = 0;
 	char *new_path = checkHerculesPath(pathname);
 	if (new_path != NULL)
 	{
-		uint64_t ret_ds = 0;
-		unsigned long p = 0;
-
 		slog_debug("[POSIX]. Calling Hercules 'open' flags=%d, mode=%o, pathname=%s, new_path=%s", flags, mode, pathname, new_path);
 
 		checkOpenFlags(pathname, flags);
 
-		// Search for the path "new_path" on the map "map_fd".
-		slog_debug("[POSIX]. Searching for the %s on the map", new_path);
-		int exist = map_fd_search(map_fd, new_path, &ret, &p);
-		if (exist == -1) // if the "new_path" was not find:
-		{
-			// slog_debug("Map add=%x", &map_fd);
-			int create_flag = (flags & O_CREAT);
-			slog_debug("[POSIX] new_path:%s, exist: %d, create_flag: %d", new_path, exist, create_flag);
-			if (create_flag == O_CREAT) // if the file does not exist, then we create it.
-			{
-				slog_debug("[POSIX]. New file %s, ret=%d", new_path, ret);
-				int err_create = imss_create(new_path, mode, &ret_ds);
-				slog_debug("[POSIX] imss_create(%s, %d, %ld), err_create: %d", new_path, mode, ret_ds, err_create);
-				// ret = ret_ds;
-				if (err_create == -EEXIST)
-				{
-					slog_debug("[POSIX] dataset already exists.");
-					slog_debug("[POSIX] 1 - imss_open(%s, %ld)", new_path, ret_ds);
-					ret = TIMING(imss_open(new_path, &ret_ds), "imss_open op1", int);
-				}
-			}
-			else // the file must exist.
-			{
-				slog_debug("[POSIX] File must exists - imss_open(%s, %ld)", new_path, ret_ds);
-				ret = TIMING(imss_open(new_path, &ret_ds), "imss_open op2", int);
-				slog_debug("[POSIX] 2 - ret_ds=%d, ret=%d, new_path=%s", ret_ds, ret, new_path);
+		ret = generalOpen(new_path, flags, mode);
 
-				if (ret < 0)
-				{
-					errno = -ret;
-					ret = -1;
-				}
-
-				// If we get a "ret_ds" equal to "-2", we are in the case of symbolic link pointing to a file stored in the system.
-				if (ret_ds == -2)
-				{
-					slog_debug("[POSIX] Calling real_open(%s)", new_path);
-					// Calling the real open.
-					if (!mode)
-						ret = real_open(new_path, flags);
-					else
-						ret = real_open(new_path, flags, mode);
-					// stores the file descriptor "ret" into the map "map_fd".
-					map_fd_put(map_fd, new_path, ret, p); // TO CHECK!
-				}
-			}
-			if (ret > -1)
-			{
-				ret = real_open("/dev/null", 0); // Get a file descriptor
-				// stores the file descriptor "ret" into the map "map_fd".
-				slog_debug("[POSIX] Puting fd %d into map", ret);
-				map_fd_put(map_fd, new_path, ret, p); // TO CHECK!
-			}
-		}
-		else
-		{
-			if (flags & O_TRUNC)
-			{
-				map_fd_update_value(map_fd, new_path, ret, 0);
-				struct stat stats;
-				ret = imss_getattr(new_path, &stats);
-				if (ret < 0)
-				{
-					errno = -ret;
-					ret = -1;
-					slog_error("[POSIX] Error Hercules '__fxstat', errno=%d:%s", errno, strerror(errno));
-					free(new_path);
-					return ret;
-				}
-				stats.st_size = 0;
-				stats.st_blocks = 0;
-				map_update(map, new_path, ret, stats);
-			}
-		}
-		slog_debug("[POSIX] Ending Hercules 'open', exist=%d, mode=%d, ret=%d, errno=%d:%s", exist, mode, ret, errno, strerror(errno));
+		slog_debug("[POSIX] Ending Hercules 'open', mode=%o, ret=%d, errno=%d:%s", mode, ret, errno, strerror(errno));
 		free(new_path);
 	}
 	else
 	{
-		slog_debug("[POSIX]. Calling real 'open', mode=%d, pathname=%s.", mode, pathname);
+		slog_debug("[POSIX]. Calling real 'open', mode=%o, pathname=%s.", mode, pathname);
 		if (!mode)
 			ret = real_open(pathname, flags);
 		else
 			ret = real_open(pathname, flags, mode);
-		slog_debug("[POSIX]. Ending real 'open', mode=%d, pathname=%s, ret=%d, errno=%d:%s", mode, pathname, ret, errno, strerror(errno));
+		slog_debug("[POSIX]. Ending real 'open', mode=%o, pathname=%s, ret=%d, errno=%d:%s", mode, pathname, ret, errno, strerror(errno));
 	}
-	// slog_debug("Ending Open, errno=%d", errno);
+
 	return ret;
 }
 
@@ -1802,6 +1791,7 @@ int mkdir(const char *path, mode_t mode)
 		return real_mkdir(path, mode);
 	}
 
+	errno = 0;
 	size_t ret;
 	char *new_path = checkHerculesPath(path);
 	if (new_path != NULL)
@@ -1829,7 +1819,7 @@ int symlink(const char *name1, const char *name2)
 	if (!real_symlink)
 		real_symlink = dlsym(RTLD_NEXT, "symlink");
 
-	fprintf(stderr, "Hola symlink \t ******");
+	fprintf(stderr, "Calling symlink \t ******");
 
 	return real_symlink(name1, name2);
 }
@@ -1845,6 +1835,7 @@ int symlinkat(const char *name1, int fd, const char *name2)
 		return real_symlinkat(name1, fd, name2);
 	}
 
+	errno = 0;
 	int ret;
 
 	char *new_path_1 = checkHerculesPath(name1);
@@ -1894,8 +1885,8 @@ off_t lseek(int fd, off_t offset, int whence)
 		return real_lseek(fd, offset, whence);
 	}
 
-	off_t ret;
 	errno = 0;
+	off_t ret;
 	char *path = (char *)calloc(256, sizeof(char));
 	if (map_fd_search_by_val(map_fd, path, fd) == 1)
 	{
@@ -1945,6 +1936,7 @@ off_t lseek(int fd, off_t offset, int whence)
 	}
 	else
 	{
+		slog_debug("[POSIX]. Calling Real 'lseek', fd=%d, errno=%d:%s", fd, errno, strerror(errno));
 		ret = real_lseek(fd, offset, whence);
 	}
 	free(path);
@@ -1975,6 +1967,7 @@ int ftruncate(int fd, off_t length)
 		return real_ftruncate(fd, length);
 	}
 
+	errno = 0;
 	int ret;
 	char *path = (char *)calloc(256, sizeof(char));
 	if (TIMING(map_fd_search_by_val(map_fd, path, fd), "[POSIX] Searching path by fd", int) == 1)
@@ -2003,6 +1996,7 @@ ssize_t pwrite(int fd, const void *buf, size_t count, off_t offset)
 		return real_pwrite(fd, buf, count, offset);
 	}
 
+	errno = 0;
 	ssize_t ret;
 	// errno = 0;
 	char *path = (char *)calloc(256, sizeof(char));
@@ -2030,12 +2024,21 @@ ssize_t write(int fd, const void *buf, size_t size)
 		return real_write(fd, buf, size);
 	}
 
+	errno = 0;
 	size_t ret = -1;
+	struct timeval tv;
+	gettimeofday(&tv, NULL);
+	double begin = (tv.tv_sec) * 1000 + (tv.tv_usec) / 1000;
+
 	char *path = (char *)calloc(256, sizeof(char));
 	if (map_fd_search_by_val(map_fd, path, fd) == 1)
 	{
+		gettimeofday(&tv, NULL);
+		double end = (tv.tv_sec) * 1000 + (tv.tv_usec) / 1000;
+		double time_taken = end - begin;
+
 		unsigned long p = -1;
-		slog_debug("[POSIX]. Calling Hercules 'write', path=%s, size=%lu", path, size);
+		slog_debug("[POSIX]. Calling Hercules 'write', path=%s, size=%lu, time taken=%f", path, size, time_taken);
 
 		struct stat ds_stat_n;
 		imss_getattr(path, &ds_stat_n);
@@ -2091,6 +2094,7 @@ ssize_t read(int fd, void *buf, size_t size)
 		return real_read(fd, buf, size);
 	}
 
+	errno = 0;
 	size_t ret;
 	char *path = (char *)calloc(256, sizeof(char));
 
@@ -2140,6 +2144,7 @@ int unlink(const char *name)
 		return real_unlink(name);
 	}
 
+	errno = 0;
 	int ret = 0;
 	char *new_path = checkHerculesPath(name);
 	if (new_path != NULL)
@@ -2222,6 +2227,7 @@ int rmdir(const char *path)
 		return real_rmdir(path);
 	}
 
+	errno = 0;
 	int ret;
 	char *new_path = checkHerculesPath(path);
 	if (new_path != NULL)
@@ -2255,6 +2261,7 @@ int unlinkat(int fd, const char *name, int flag)
 		return real_unlinkat(fd, name, flag);
 	}
 
+	errno = 0;
 	int ret = 0;
 	char *new_path = checkHerculesPath(name);
 	if (new_path != NULL)
@@ -2309,6 +2316,7 @@ int rename(const char *old, const char *new)
 		return real_rename(old, new);
 	}
 
+	errno = 0;
 	int ret;
 	char *old_path = checkHerculesPath(old);
 	char *new_path = checkHerculesPath(new);
@@ -2339,16 +2347,12 @@ int fchmodat(int dirfd, const char *pathname, mode_t mode, int flags)
 		return real_fchmodat(dirfd, pathname, mode, flags);
 	}
 
+	errno = 0;
 	int ret;
-	char *workdir = getenv("PWD");
-	// if (!strncmp(pathname, MOUNT_POINT, strlen(MOUNT_POINT)))
-	// if (!strncmp(pathname, MOUNT_POINT, strlen(MOUNT_POINT)) || !strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT)))
 	char *new_path = checkHerculesPath(pathname);
 	if (new_path != NULL)
 	{
 		slog_debug("[POSIX]. Calling Hercules 'fchmodat', pathname=%s", pathname);
-		// char *new_path;
-		// new_path = convert_path(pathname, MOUNT_POINT);
 		ret = imss_chmod(new_path, mode);
 		slog_debug("[POSIX]. End Hercules 'fchmodat', pathname=%s, ret=%d", pathname, ret);
 		free(new_path);
@@ -2371,6 +2375,7 @@ int chmod(const char *pathname, mode_t mode)
 		return real_chmod(pathname, mode);
 	}
 
+	errno = 0;
 	int ret;
 	char *new_path = checkHerculesPath(pathname);
 	if (new_path != NULL)
@@ -2454,6 +2459,7 @@ int fchmod(int fd, mode_t mode)
 		return real_fchmod(fd, mode);
 	}
 
+	errno = 0;
 	int ret;
 	char *pathname = calloc(256, sizeof(char));
 	if (map_fd_search_by_val(map_fd, pathname, fd) == 1)
@@ -2482,6 +2488,7 @@ int fchownat(int dirfd, const char *pathname, uid_t owner, gid_t group, int flag
 		return real_fchownat(dirfd, pathname, owner, group, flags);
 	}
 
+	errno = 0;
 	int ret;
 	char *new_path = checkHerculesPath(pathname);
 	if (new_path != NULL)
@@ -2507,6 +2514,7 @@ DIR *opendir(const char *name)
 		return real_opendir(name);
 	}
 
+	errno = 0;
 	DIR *dirp;
 	char *new_path = checkHerculesPath(name);
 	if (new_path != NULL)
@@ -2559,6 +2567,7 @@ struct dirent *readdir(DIR *dirp)
 		return real_readdir(dirp);
 	}
 
+	errno = 0;
 	size_t ret;
 	struct dirent *entry = (struct dirent *)malloc(sizeof(struct dirent));
 	char *path = calloc(256, sizeof(char));
@@ -2659,6 +2668,7 @@ struct dirent64 *readdir64(DIR *dirp)
 		return real_readdir64(dirp);
 	}
 
+	errno = 0;
 	char *pathname = calloc(256, sizeof(char));
 	if (map_fd_search_by_val(map_fd, pathname, dirfd(dirp)) == 1)
 	{
@@ -3062,20 +3072,21 @@ int chdir(const char *path)
 		return real_chdir(path);
 	}
 
+	errno = 0;
 	int ret = 0;
 	if (!strncmp(path, MOUNT_POINT, strlen(MOUNT_POINT)))
 	{
-		fprintf(stderr, "[%d] Calling Hercules 'chdir', pathname=%s\n", rank, path);
+		// fprintf(stderr, "[%d] Calling Hercules 'chdir', pathname=%s\n", rank, path);
 		slog_debug("Calling Hercules 'chdir', pathname=%s", path);
 		setenv("PWD", path, 1);
 		slog_debug("End Hercules 'chdir', pathname=%s, ret=%d", path, ret);
-		fprintf(stderr, "[%d] End Hercules 'chdir', pathname=%s\n", rank, path);
+		// fprintf(stderr, "[%d] End Hercules 'chdir', pathname=%s\n", rank, path);
 	}
 	else
 	{
-		fprintf(stderr, "Calling Real 'chdir', pathname=%s\n", path);
+		// fprintf(stderr, "Calling Real 'chdir', pathname=%s\n", path);
 		ret = real_chdir(path);
-		fprintf(stderr, "End Real 'chdir', pathname=%s, ret=%d\n", path, ret);
+		// fprintf(stderr, "End Real 'chdir', pathname=%s, ret=%d\n", path, ret);
 	}
 
 	return ret;
@@ -3109,7 +3120,8 @@ int __chdir(const char *path)
 
 int _chdir(const char *path)
 {
-	if(!real__chdir) real__chdir = dlsym(RTLD_NEXT, "_chdir");
+	if (!real__chdir)
+		real__chdir = dlsym(RTLD_NEXT, "_chdir");
 	fprintf(stderr, "Calling _chdir, pathname=%s", path);
 
 	if (init)

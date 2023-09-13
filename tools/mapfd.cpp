@@ -22,7 +22,7 @@ extern "C"
 		return reinterpret_cast<void *>(new Map);
 	}
 
-	void map_fd_put(void *map, char *k, int v, unsigned long p)
+	void map_fd_put(void *map, const char *k, int v, unsigned long p)
 	{
 		std::unique_lock<std::mutex> lck(fdlock);
 		Map *m = reinterpret_cast<Map *>(map);
@@ -30,7 +30,7 @@ extern "C"
 		m->insert({k, value});
 	}
 
-	void map_fd_update_value(void *map, char *k, int v, unsigned long p)
+	void map_fd_update_value(void *map, const char *k, int v, unsigned long p)
 	{
 		std::unique_lock<std::mutex> lck(fdlock);
 		Map *m = reinterpret_cast<Map *>(map);
@@ -94,6 +94,25 @@ extern "C"
 			}
 		}
 		return 0;
+	}
+
+	char *map_fd_search_by_val_2(void *map, char *path, int v)
+	{
+		std::unique_lock<std::mutex> lck(fdlock);
+		Map *m = reinterpret_cast<Map *>(map);
+		// Traverse the map
+		for (auto &it : *m)
+		{
+			// If mapped value is K,
+			// then print the key value
+			if (it.second.first == v)
+			{
+				// strcpy(path, (char *)it.first.c_str());
+				return (char *)it.first.c_str();
+				// return 1;
+			}
+		}
+		return NULL;
 	}
 
 	int map_fd_search_by_val_close(void *map, int v)

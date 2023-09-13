@@ -8,7 +8,8 @@ StopServers() {
     echo "# Hercules: Stopping $NAME servers in $hosts"
     for node in "${hosts[@]}"
     do
-        ssh $node "pkill hercules_server"
+        echo "ssh $node pkill hercules_server"
+        ( ssh $node "pkill hercules_server" )
     done
 }
 
@@ -112,7 +113,7 @@ fi
 ## If a configuration file was not provided.
 if [ -z "$FILE" ]; then
     ## To know if a configuration file exists in the default paths.
-    for FILE in {"/etc/hercules.conf","./hercules.conf","hercules.conf","$H_PATH/conf/hercules.conf"}
+    for FILE in {"/etc/hercules.conf","./hercules.conf","hercules.conf","../conf/hercules.conf"}
     do
         echo $FILE
         if [ -f "$FILE" ]; then
@@ -147,7 +148,8 @@ export HERCULES_PATH=$H_PATH
 
 H_BUILD_PATH=$H_PATH/build
 H_BASH_PATH=$H_PATH/bash
-H_POSIX_PRELOAD="LD_PRELOAD=$H_PATH/build/tools/libhercules_posix.so"
+#H_POSIX_PRELOAD="LD_PRELOAD=$H_PATH/build/tools/libhercules_posix.so"
+
 
 ## Read configuration file.
 export MOUNT_POINT=$(cat $FILE | grep "MOUNT_POINT" | head -1 | awk '{print $3}')
@@ -170,9 +172,8 @@ if [ -z "$H_MPI_HOSTFILE_NAME" ]; then
         # exit 1
     fi
 
-    if [[ $SLURM -eq 1 ]]; then
-        #H_MPI_HOSTFILE_NAME="$H_BASH_PATH/client_hostfile"
-	H_MPI_HOSTFILE_NAME="./client_hostfile"
+    if [[ $SLURM -eq "1" ]]; then
+        H_MPI_HOSTFILE_NAME="$H_BASH_PATH/client_hostfile"
         tail -n +$((NUM_METADATA+NUM_DATA+1)) hostfile | head -n $NUM_NODES_FOR_CLIENTS > $H_MPI_HOSTFILE_NAME
     fi
 fi
@@ -373,3 +374,5 @@ if [[ "$SLURM" -eq "0" ]]; then
     ${NC}
     #############################################################################"
 fi
+
+export LD_PRELOAD=$H_PATH/build/tools/libhercules_posix.so
