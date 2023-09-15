@@ -2161,7 +2161,8 @@ int unlink(const char *name)
 		}
 
 		// remove the file descriptor from the local map.
-		if(map_fd_erase_by_pathname(map_fd, new_path)) {
+		if (map_fd_erase_by_pathname(map_fd, new_path) == -1)
+		{
 			slog_error("[POSIX]. Error Hercules no file descriptor found for the pathname=%s", new_path);
 		}
 
@@ -2423,37 +2424,40 @@ int execve(const char *pathname, char *const argv[], char *const envp[])
 
 	real_execve = dlsym(RTLD_NEXT, "execve");
 
-	fprintf(stderr, "*********** Running execve, pathname=%s\n", pathname);
+	// fprintf(stderr, "*********** Running execve, pathname=%s\n", pathname);
 
 	return real_execve(pathname, argv, envp);
-	// return dlsym(RTLD_NEXT, "execve");
-
-	// int ret;
-
-	// return ret;
 }
 
 int dup2(int oldfd, int newfd)
 {
-	real_dup2 = dlsym(RTLD_NEXT, "dup2");
+	if (!real_dup2)
+		real_dup2 = dlsym(RTLD_NEXT, "dup2");
 
 	if (!init)
 	{
-		// fprintf(stderr, "**** Running dup2, oldfd=%d, newfd=%d\n", oldfd, newfd);
 		return real_dup2(oldfd, newfd);
 	}
 
 	errno = 0;
 	int ret;
 	char *pathname;
-	if (pathname = map_fd_search_by_val(map_fd, oldfd)) {
+	if (pathname = map_fd_search_by_val(map_fd, oldfd))
+	{
 		slog_debug("[POSIX]. Calling Hercules 'dup2', pathname=%s, oldfd=%d, newfd=%d.", pathname, oldfd, newfd);
-		// char *pathname_2 = malloc(sizeof(char)*255);
-		// strcpy(pathname_2, "test_script2.sh");
-		map_fd_put(map_fd, pathname, newfd, 0);
-		ret = newfd; // -1 when error, and errno is set .
+		ret = map_fd_put(map_fd, pathname, newfd, 0);
+		if (ret == -1)
+		{
+			slog_error("[POSIX] Error Hercules in 'dup2', newfd=%d already exist.", newfd); // -1 when error, and errno is set.
+		}
+		else
+		{
+			ret = newfd;
+		}
 		slog_debug("[POSIX]. End Hercules 'dup2', pathname=%s, ret=%d.", pathname, ret);
-	} else {
+	}
+	else
+	{
 		slog_debug("[POSIX]. Calling real 'dup2', oldfd=%d, newfd=%d.", oldfd, newfd);
 		ret = real_dup2(oldfd, newfd);
 	}
@@ -2540,7 +2544,7 @@ DIR *opendir(const char *name)
 		// if it exists then a file descriptor "fd" is going to point it.
 		// if (map_fd_search(map_fd, new_path, fd, &p) == 1)
 		ret = map_fd_search_by_pathname(map_fd, new_path, &fd, &p);
-		if(ret != -1)
+		if (ret != -1)
 		{
 			slog_debug("[POSIX] map_fd_update_value, new_path=%s, fd=%d, ret=%d", new_path, fd, ret);
 			// map_fd_update_value(map_fd, new_path, fd, dirfd(dirp), p);

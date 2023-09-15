@@ -24,12 +24,18 @@ extern "C"
 		return reinterpret_cast<void *>(new Map);
 	}
 
-	void map_fd_put(void *map, const char *pathname, const int fd, unsigned long offset)
+	int map_fd_put(void *map, const char *pathname, const int fd, unsigned long offset)
 	{
 		std::unique_lock<std::mutex> lck(fdlock);
 		Map *m = reinterpret_cast<Map *>(map);
 		std::pair<std::string, int> value(pathname, offset);
-		m->insert({fd, value});
+		std::pair<std::map<int, std::pair<std::string, long>>::iterator, bool> ret;
+		ret = m->insert({fd, value});
+		if(ret.second==false) {
+			return -1;
+		} else {
+			return 1;
+		}
 	}
 
 	void map_fd_update_value(void *map, const char *pathname, const int fd, unsigned long offset)
@@ -43,21 +49,20 @@ extern "C"
 			search->second.first = pathname;
 			search->second.second = offset;
 		}
-		else
-		{
-			fprintf(stderr, "Map not updated, fd=%d", fd);
-		}
+		// else
+		// {
+		// 	fprintf(stderr, "Map not updated, fd=%d", fd);
+		// }
 	}
 
 	void map_fd_update_fd(void *map, const char *pathname, const int fd, const int new_fd, unsigned long offset)
 	{
-		
+
 		std::unique_lock<std::mutex> lck(fdlock);
 		Map *m = reinterpret_cast<Map *>(map);
 		auto node = m->extract(fd);
 		node.key() = new_fd;
 		m->insert(std::move(node));
-
 	}
 
 	void map_fd_erase(void *map, const int fd)
@@ -73,8 +78,7 @@ extern "C"
 	{
 		std::unique_lock<std::mutex> lck(fdlock);
 		Map *m = reinterpret_cast<Map *>(map);
-		
-		
+
 		for (auto &it : *m)
 		{
 			const char *val = it.second.first.c_str();
@@ -86,7 +90,6 @@ extern "C"
 			}
 		}
 		return -1;
-
 	}
 
 	int map_fd_search(void *map, char *pathname, const int fd, unsigned long *offset)

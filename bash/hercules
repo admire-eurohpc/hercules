@@ -24,7 +24,7 @@ WaitForServers() {
     echo "hostnames=${hosts[@]}"
     for node in "${hosts[@]}"
     do
-        COMMAND="$H_BASH_PATH/check-servers.sh $SERVER_TYPE $i"
+        COMMAND="$HERCULES_BASH_PATH/check-servers.sh $SERVER_TYPE $i"
         echo "[+] Running comprobation $i in $node... $COMMAND"
         if [[ "$SLURM" -eq "0" ]]; then
             if [ -z "$(ssh-keygen -F $node)" ]; then
@@ -74,12 +74,24 @@ fi
 
 if [ ! -z "$DATA_SERVER_FILE" ]; then
     echo "DATA SERVER FILE - $DATA_SERVER_FILE"
+    if [ ! -f "$DATA_SERVER_FILE" ]; then
+        echo "Data server file " $DATA_SERVER_FILE " does not exists"
+        exit 0
+    fi
 fi
 if [ ! -z "$META_SERVER_FILE" ]; then
     echo "META SERVER FILE - $META_SERVER_FILE"
+    if [ ! -f "$META_SERVER_FILE" ]; then
+        echo "Meta server file " $META_SERVER_FILE " does not exists"
+        exit 0
+    fi
 fi
 if [ ! -z "$H_MPI_HOSTFILE_NAME" ]; then
     echo "CLIENT FILE - $H_MPI_HOSTFILE_NAME"
+    if [ ! -f "$H_MPI_HOSTFILE_NAME" ]; then
+        echo "Client deployment file " $H_MPI_HOSTFILE_NAME " does not exists"
+        exit 0
+    fi
 fi
 if [ ! -z "$SLURM" ]; then
     echo "SLURM - $SLURM"
@@ -89,6 +101,10 @@ if [ ! -z "$STATUS" ]; then
 fi
 if [ ! -z "$FILE" ]; then
     echo "FILE - $FILE"
+    if [ ! -f "$FILE" ]; then
+        echo "Configuration file " $FILE " does not exists"
+        exit 0
+    fi
 fi
 
 ## Checks if the user wants to stop the services.
@@ -115,10 +131,11 @@ if [ -z "$FILE" ]; then
     ## To know if a configuration file exists in the default paths.
     for FILE in {"/etc/hercules.conf","./hercules.conf","hercules.conf","../conf/hercules.conf"}
     do
-        echo $FILE
+        echo "Checking configuration file in " $FILE
         if [ -f "$FILE" ]; then
             break
         fi
+        FILE=""
     done
 fi
 
@@ -137,18 +154,18 @@ if [[ $SLURM -eq 1 ]]; then
 fi
 
 if [ -z "$FILE" ]; then
-    H_PATH=$(dirname `pwd`)
+    HERCULES_PATH=$(dirname `pwd`)
 else
-    H_PATH=$(cat $FILE | grep "HERCULES_PATH" | awk '{print $3}')
+    HERCULES_PATH=$(cat $FILE | grep "HERCULES_PATH" | awk '{print $3}')
 fi
 
-echo "Using $H_PATH"
+echo "Hercules path $HERCULES_PATH"
 
-export HERCULES_PATH=$H_PATH
+export HERCULES_PATH=$HERCULES_PATH
 
-H_BUILD_PATH=$H_PATH/build
-H_BASH_PATH=$H_PATH/bash
-#H_POSIX_PRELOAD="LD_PRELOAD=$H_PATH/build/tools/libhercules_posix.so"
+HERCULES_BUILD_PATH=$HERCULES_PATH/build
+HERCULES_BASH_PATH=$HERCULES_PATH/bash
+HERCULES_POSIX_PRELOAD="$HERCULES_PATH/build/tools/libhercules_posix.so"
 
 
 ## Read configuration file.
@@ -173,7 +190,7 @@ if [ -z "$H_MPI_HOSTFILE_NAME" ]; then
     fi
 
     if [[ $SLURM -eq "1" ]]; then
-        H_MPI_HOSTFILE_NAME="$H_BASH_PATH/client_hostfile"
+        H_MPI_HOSTFILE_NAME="$HERCULES_BASH_PATH/client_hostfile"
         tail -n +$((NUM_METADATA+NUM_DATA+1)) hostfile | head -n $NUM_NODES_FOR_CLIENTS > $H_MPI_HOSTFILE_NAME
     fi
 fi
@@ -211,15 +228,15 @@ start=`date +%s.%N`
 for node in ${meta_hosts[@]}
 do    
     RM="rm /tmp/m-hercules-$i"
-    COMMAND="$H_BUILD_PATH/hercules_server m $i"
+    COMMAND="$HERCULES_BUILD_PATH/hercules_server m $i"
     ## If slurm is not being used, we deploy the service by connecting
     ## to the node via ssh.
     if [[ "$SLURM" -eq "0" ]]; then
-        #{ ssh $node "$RM; cd $H_BASH_PATH && $COMMAND"; } &
+        #{ ssh $node "$RM; cd $HERCULES_BASH_PATH && $COMMAND"; } &
         echo "[+] Removing temporal files on $node"
         ( ssh $node "$RM" )
         echo "[+] Running metadata server $i in $node..."
-        ( ssh $node "cd $H_BASH_PATH && HERCULES_CONF=$FILE $COMMAND" ) &
+        ( ssh $node "cd $HERCULES_BASH_PATH && HERCULES_CONF=$FILE $COMMAND" ) &
     else
         ## Deletes the file that we use to make sure that the server has started.
         echo "[+] Removing temporal files on $node"
@@ -268,13 +285,13 @@ for node in ${data_hosts[@]}
 do
     echo "[+] Running data server $i in $node..-"
     RM="rm /tmp/d-hercules-$i"
-    COMMAND="$H_BUILD_PATH/hercules_server d $i ${meta_hosts[0]}"
+    COMMAND="$HERCULES_BUILD_PATH/hercules_server d $i ${meta_hosts[0]}"
     if [[ "$SLURM" -eq "0" ]]; then
-        # ssh $node "$RM; cd $H_BASH_PATH &&  $COMMAND &"
+        # ssh $node "$RM; cd $HERCULES_BASH_PATH &&  $COMMAND &"
         echo "[+] Removing temporal files on $node"
         ( ssh $node "$RM" )
         echo "[+] Running data server $i in $node..."
-        ( ssh $node "cd $H_BASH_PATH && HERCULES_CONF=$FILE $COMMAND" ) &
+        ( ssh $node "cd $HERCULES_BASH_PATH && HERCULES_CONF=$FILE $COMMAND" ) &
     else
         ## Deletes the file that we use to make sure that the server has started.
         echo "[+] Removing temporal files on $node"
@@ -375,4 +392,4 @@ if [[ "$SLURM" -eq "0" ]]; then
     #############################################################################"
 fi
 
-export LD_PRELOAD=$H_PATH/build/tools/libhercules_posix.so
+# export LD_PRELOAD=$HERCULES_PATH/build/tools/libhercules_posix.so

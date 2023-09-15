@@ -49,7 +49,7 @@ STORAGE_SIZE = 0 # No limit
 METADATA_HOSTFILE = hostfile
 
 # Replication factor
-REPL_FACTOR = 2
+REPL_FACTOR = 1
 
 # Debug mode (none or all)
 DEBUG_LEVEL = none

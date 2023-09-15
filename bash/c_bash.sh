@@ -16,29 +16,29 @@
 #     jemalloc
 
 ## Local
- IOR_PATH=/usr/local/bin
+IOR_PATH=/usr/local/bin
 
-# source ./hercules start -m meta_hostfile -d data_hostfile -o /mnt/imss/data.out -s 0
+# source ./hercules start -m meta_hostfile -d data_hostfile -o /mnt/hercules/data.out -s 0
 source ./hercules start \
-   -m /home/genarog/Documents/UC3M/Codes/Apps/Nek5000/run/eddy_uv/hercules/my_meta_hostfile \
-   -d /home/genarog/Documents/UC3M/Codes/Apps/Nek5000/run/eddy_uv/hercules/my_data_hostfile \
-   -c /home/genarog/Documents/UC3M/Codes/Apps/Nek5000/run/eddy_uv/hercules/my_client_hostfile
+   -m /home/genarog/Documents/UC3M/Codes/UPDATED_IMSS/hercules/bash/my_meta_hostfile \
+   -d /home/genarog/Documents/UC3M/Codes/UPDATED_IMSS/hercules/bash/my_data_hostfile \
+   -c /home/genarog/Documents/UC3M/Codes/UPDATED_IMSS/hercules/bash/my_client_hostfile \
+   -f /home/genarog/Documents/UC3M/Codes/UPDATED_IMSS/hercules/conf/genaro-hercules.conf
 
 echo "[+] Running clients"
 
-
 set -x
 
-# COMMAND="$IOR_PATH/ior -t 1M -b 10M -s 1 -i 5 -F -o /mnt/imss/data.out"
-# COMMAND="$IOR_PATH/ior -t 1M -b 10M -s 1 -i 5 -F -o /home/genarog/Documents/UC3M/Codes/UPDATED_IMSS/imss/bash/data.out"
-COMMAND="/home/genarog/Documents/UC3M/Codes/Apps/Nek5000/run/eddy_uv/nek5000 eddy_uv"
-# COMMAND="./exe_WRITE-AND-READ-TEST-BIFURCADO /mnt/imss/eddy hola.txt 1024"
-# COMMAND="./exe_READ_EXISTING_FILE /home/genarog/Documents/UC3M/Codes/UPDATED_IMSS/imss/bash/test_file.txt 11"
-# COMMAND="./exe_READ_EXISTING_FILE /mnt/imss/test_file.txt 11"
+COMMAND="$IOR_PATH/ior -t 100M -b 100M -s 1 -i 10 -o /mnt/hercules/data.out"
+# COMMAND="$IOR_PATH/ior -t 1M -b 10M -s 1 -i 5 -F -o /home/genarog/Documents/UC3M/Codes/UPDATED_IMSS/hercules/bash/data.out"
+# COMMAND="/home/genarog/Documents/UC3M/Codes/Apps/Nek5000/run/eddy_uv/nek5000 eddy_uv"
+# COMMAND="./exe_WRITE-AND-READ-TEST-BIFURCADO /mnt/hercules/eddy hola.txt 1024"
+# COMMAND="./exe_READ_EXISTING_FILE /home/genarog/Documents/UC3M/Codes/UPDATED_IMSS/hercules/bash/test_file.txt 11"
+# COMMAND="./exe_READ_EXISTING_FILE /mnt/hercules/test_file.txt 11"
 
-mpiexec -np $H_NNFC -npernode $H_NCPN $H_MPI_HOSTFILE_DEF $H_MPI_HOSTFILE_NAME  \
-   $H_MPI_ENV_DEF H_CONF=$H_CONF \
-   $H_MPI_ENV_DEF $H_POSIX_PRELOAD \
+mpiexec -npernode $H_NCPN $H_MPI_HOSTFILE_DEF $H_MPI_HOSTFILE_NAME  \
+   $H_MPI_ENV_DEF HERCULES_CONF=$HERCULES_CONF \
+   $H_MPI_ENV_DEF LD_PRELOAD=$HERCULES_POSIX_PRELOAD \
 	$COMMAND > logfile
 	# strace -s 2000 -o strace.log $COMMAND
 	#ltrace -s 2000 -o ltrace.log $COMMAND
@@ -47,11 +47,11 @@ mpiexec -np $H_NNFC -npernode $H_NCPN $H_MPI_HOSTFILE_DEF $H_MPI_HOSTFILE_NAME  
 
 # sleep 20
 # export $H_POSIX_PRELOAD 
-# export LD_PRELOAD=/home/genarog/Documents/UC3M/Codes/UPDATED_IMSS/imss/build/tools/libhercules_posix.so
+# export LD_PRELOAD=/home/genarog/Documents/UC3M/Codes/UPDATED_IMSS/hercules/build/tools/libhercules_posix.so
 # sleep 20
 # $COMMAND
 
-# LD_PRELOAD=/home/genarog/Documents/UC3M/Codes/UPDATED_IMSS/imss/build/tools/libhercules_posix.so ./exe_READ_EXISTING_FILE /mnt/imss/test_file.txt 11
+# LD_PRELOAD=/home/genarog/Documents/UC3M/Codes/UPDATED_IMSS/hercules/build/tools/libhercules_posix.so ./exe_READ_EXISTING_FILE /mnt/hercules/test_file.txt 11
 
 
 # unset LD_PRELOAD
