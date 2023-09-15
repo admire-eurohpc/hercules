@@ -395,7 +395,7 @@ int imss_open(const char *path, uint64_t *fh)
 	char *aux;
 	// Look for the 'file descriptor' of 'imss_path' in the local map.
 	fd_lookup(imss_path, &fd, &stats, &aux);
-	slog_info("[FUSE][imss_posix_api] File descriptor is %d", fd);
+	slog_info("[FUSE][imss_posix_api] fd looked up=%d", fd);
 	if (fd >= 0)
 	{
 		file_desc = fd;

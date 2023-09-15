@@ -2145,6 +2145,7 @@ int32_t get_data(int32_t dataset_id, int32_t data_id, char *buffer)
 		//	gettimeofday(&start, NULL);
 		// printf("GET_DATA after send petition to read");
 		// Receive data related to the previous read request directly into the buffer.
+		slog_info("[IMSS][get_data] Receiving data");
 		// t = clock();
 		size_t length = 0;
 		length = recv_data(ucp_worker_data, ep, buffer, local_data_uid, 0);
@@ -2169,6 +2170,7 @@ int32_t get_data(int32_t dataset_id, int32_t data_id, char *buffer)
 		// Check if the requested key was correctly retrieved.
 		if (strncmp((const char *)buffer, "$ERRIMSS_NO_KEY_AVAIL$", 22))
 		{
+			slog_info("[IMSS][get_data] OK!, length=%ld", length);
 			return (int32_t)length;
 		}
 		else

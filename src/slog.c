@@ -216,6 +216,8 @@ char *slog_get(SlogDate *pDate, char *msg, ...)
  */
 void slog(int flag, const char *msg, ...)
 {
+    int prev_errno = errno;
+
     if (flag > slg.level)
     {
         return;
@@ -356,6 +358,10 @@ void slog(int flag, const char *msg, ...)
             exit(EXIT_FAILURE);
         }
     }
+
+    // fprintf(stderr,"prev_errno=%d, actual_errno=%d\t", prev_errno, errno);
+    errno = prev_errno;
+
 }
 
 void slog_init(const char *fname, int lvl, int writeFile, int debugConsole, int debugColor, int filestamp, int t_safe, unsigned int rank)
