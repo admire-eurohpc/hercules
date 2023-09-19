@@ -36,10 +36,11 @@ COMMAND="$IOR_PATH/ior -t 100M -b 100M -s 1 -i 10 -o /mnt/hercules/data.out"
 # COMMAND="./exe_READ_EXISTING_FILE /home/genarog/Documents/UC3M/Codes/UPDATED_IMSS/hercules/bash/test_file.txt 11"
 # COMMAND="./exe_READ_EXISTING_FILE /mnt/hercules/test_file.txt 11"
 
-mpiexec -npernode $H_NCPN $H_MPI_HOSTFILE_DEF $H_MPI_HOSTFILE_NAME  \
-   $H_MPI_ENV_DEF HERCULES_CONF=$HERCULES_CONF \
-   $H_MPI_ENV_DEF LD_PRELOAD=$HERCULES_POSIX_PRELOAD \
-	$COMMAND > logfile
+# mpiexec -npernode $H_NCPN $H_MPI_HOSTFILE_DEF $H_MPI_HOSTFILE_NAME  \
+#    $H_MPI_ENV_DEF HERCULES_CONF=$HERCULES_CONF \
+#    $H_MPI_ENV_DEF LD_PRELOAD=$HERCULES_POSIX_PRELOAD \
+# 	$COMMAND > logfile
+
 	# strace -s 2000 -o strace.log $COMMAND
 	#ltrace -s 2000 -o ltrace.log $COMMAND
 
@@ -54,13 +55,75 @@ mpiexec -npernode $H_NCPN $H_MPI_HOSTFILE_DEF $H_MPI_HOSTFILE_NAME  \
 # LD_PRELOAD=/home/genarog/Documents/UC3M/Codes/UPDATED_IMSS/hercules/build/tools/libhercules_posix.so ./exe_READ_EXISTING_FILE /mnt/hercules/test_file.txt 11
 
 
-# unset LD_PRELOAD
-
-set +x
+export LD_PRELOAD="$HERCULES_POSIX_PRELOAD"
 
 
 # mpiexec $H_MPI_HOSTFILE_DEF $H_MPI_HOSTFILE_NAME -np $H_NNFC \
    # -wdir  /home/genarog/Documents/UC3M/Codes/Apps/Nek5000/run/eddy_uv \
 
+# touch /mnt/hercules/namelist.wps
+cat namelist.wps > /mnt/hercules/namelist.wps
+
+# ltrace -s 2000 -o ltrace_cat.out cat > /mnt/hercules/namelist.wps << EOF
+# &share
+#  wrf_core = 'ARW',
+#  start_date = '$INITIAL','$INITIAL','$INITIAL','$INITIAL','$INITIAL','$INITIAL',
+#  end_date   = '$FINAL','$FINAL','$FINAL','$FINAL','$FINAL','$FINAL',
+#  interval_seconds = 10800
+#  max_dom = 3,
+#  io_form_geogrid = 2,
+# /
+
+# &geogrid
+#  parent_id         =    1,      1,      2,      3,      4,     5,
+#  parent_grid_ratio =    1,      5,      5,      5,      3,     3,     
+#  i_parent_start    = 1,120,173,
+#  j_parent_start    = 1,33,112,
+#  e_we              = 280,361,301,
+#  e_sn              = 209,336,306,
+#  geog_data_res     = '30s','30s','30s','30s','30s',
+#  dx = 25000,
+#  dy = 25000,
+#  map_proj = 'lambert',
+#  ref_lat   =  50.36,
+#  ref_lon   =   8.959,
+#  truelat1  =  50.36,
+#  truelat2  =  50.36,
+#  stand_lon =   8.959,
+#  geog_data_path = './geog'
+#  OPT_GEOGRID_TBL_PATH = './geogrid'
+# /
+
+# &ungrib
+#  out_format = 'WPS',
+#  prefix = 'FILE',
+# /
+
+
+# &metgrid
+#  fg_name = 'FILE'
+#  io_form_metgrid = 2,
+# /
+
+# &mod_levs
+#  press_pa = 201300 , 200100 , 100000 ,
+#              95000 ,  90000 ,
+#              85000 ,  80000 ,
+#              75000 ,  70000 ,
+#              65000 ,  60000 ,
+#              55000 ,  50000 ,
+#              45000 ,  40000 ,
+#              35000 ,  30000 ,
+#              25000 ,  20000 ,
+#              15000 ,  10000 ,
+#               5000 ,   1000
+# /
+# EOF
+
+# ls -lh /mnt/hercules/
+
+unset LD_PRELOAD
+
+set +x
 
 ./hercules stop

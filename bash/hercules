@@ -361,6 +361,7 @@ unset STORAGE_SIZE
 if [[ "$SLURM" -eq "0" ]]; then
     GREEN='\033[0;32m'  # Green
     RED='\033[0;31m'          # Red
+    YELLOW='\033[33m'    # Yellow
     NC='\033[0m'    # No Color
 
     echo -e "#############################################################################
@@ -373,14 +374,14 @@ if [[ "$SLURM" -eq "0" ]]; then
     echo -e "#############################################################################
     [!] 2. To load the client library:
     ${GREEN}
-    export $H_POSIX_PRELOAD
+    "export LD_PRELOAD=$HERCULES_POSIX_PRELOAD"
     ${NC}
     #############################################################################"
 
     echo -e "#############################################################################
     [!] 2. To unload the client library:
     ${RED}
-    unset $H_POSIX_PRELOAD
+    "unset LD_PRELOAD=$HERCULES_POSIX_PRELOAD"
     ${NC}
     #############################################################################"
 
@@ -390,6 +391,15 @@ if [[ "$SLURM" -eq "0" ]]; then
     hercules stop
     ${NC}
     #############################################################################"
+
+    echo -e "#############################################################################
+    [!] Warning: due to UCX bug (Shared memory error) it is sometimes necesary to run:
+    ${YELLOW}
+    export UCX_POSIX_USE_PROC_LINK=n
+    ${NC}
+    #############################################################################"
+
+
 fi
 
 # export LD_PRELOAD=$HERCULES_PATH/build/tools/libhercules_posix.so

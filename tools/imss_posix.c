@@ -216,6 +216,7 @@ static int (*real_ftruncate)(int fd, off_t length) = NULL;
 static int (*real_flock)(int fd, int operation) = NULL;
 
 static int (*real_dup2)(int oldfd, int newfd) = NULL;
+static int (*real_dup)(int oldfd) = NULL;
 
 // int _openat(int dirfd, const char *pathname, int flags, ...)
 // {
@@ -467,7 +468,10 @@ __attribute__((constructor)) void imss_posix_init(void)
 
 	// fprintf(stderr, "[%d] ************ Calling constructor, HERCULES_PATH=%s, pid=%d, init=%d ************\n", rank, HERCULES_PATH, getpid(), init);
 
-	sprintf(log_path, "%s/client.%02d-%02d.%d", HERCULES_PATH, tm.tm_hour, tm.tm_min, rank);
+	if (!strncmp(log_path, "", 1))
+	{
+		sprintf(log_path, "%s/client.%02d-%02d.%d", HERCULES_PATH, tm.tm_hour, tm.tm_min, rank);
+	}
 	if (IMSS_DEBUG_FILE)
 	{
 		fprintf(stderr, "LOG PATH=%s\n", log_path);
@@ -924,7 +928,7 @@ int __lxstat(int fd, const char *pathname, struct stat *buf)
 			errno = -ret;
 			ret = -1;
 		}
-		slog_debug("[POSIX]. End Hercules '__lxstat', ret=%d, errno=%d:%s, file_size=%lu", ret, errno, strerror(errno), buf->st_size);
+		slog_debug("[POSIX]. End Hercules '__lxstat', fd=%d, ret=%d, errno=%d:%s, file_size=%lu", fd, ret, errno, strerror(errno), buf->st_size);
 		free(new_path);
 	}
 	else
@@ -1041,14 +1045,19 @@ pid_t fork(void)
 
 		int new_rank = MurmurOAAT32(hostname);
 
-		// fill global variables with the enviroment variables value.
-		getConfiguration();
+		// // fill global variables with the enviroment variables value.
+		// getConfiguration();
 
-		time_t t = time(NULL);
-		struct tm tm = *localtime(&t);
-		sprintf(log_path, "%s/client-child.%02d-%02d.%d", HERCULES_PATH, tm.tm_hour, tm.tm_min, new_rank);
+		// time_t t = time(NULL);
+		// struct tm tm = *localtime(&t);
+		// sprintf(log_path, "%s/client-child.%02d-%02d.%d", HERCULES_PATH, tm.tm_hour, tm.tm_min, new_rank);
 
-		slog_init(log_path, IMSS_DEBUG_LEVEL, IMSS_DEBUG_FILE, IMSS_DEBUG_SCREEN, 1, 1, 1, new_rank);
+		// slog_init(log_path, IMSS_DEBUG_LEVEL, IMSS_DEBUG_FILE, IMSS_DEBUG_SCREEN, 1, 1, 1, new_rank);
+		slog_info("[POSIX]. Fork child created, new rank = %d", new_rank);
+	}
+	else
+	{
+		slog_info("[POSIX]. Calling fork");
 	}
 
 	return pid;
@@ -1688,12 +1697,18 @@ int generalOpen(const char *new_path, int flags, mode_t mode)
 				map_fd_put(map_fd, new_path, ret, p); // TO CHECK!
 			}
 		}
+		// if (ret == 0)
+		// {
+		// 	slog_debug("[POSIX] Puting fd %d into map", ret);
+		// 	map_fd_put(map_fd, new_path, ret, p);
+		// }
+		// else
 		if (ret > -1)
 		{
 			ret = real_open("/dev/null", 0); // Get a file descriptor
 			// stores the file descriptor "ret" into the map "map_fd".
 			slog_debug("[POSIX] Puting fd %d into map", ret);
-			map_fd_put(map_fd, new_path, ret, p); // TO CHECK!
+			map_fd_put(map_fd, new_path, ret, p);
 		}
 	}
 	else
@@ -2429,6 +2444,61 @@ int execve(const char *pathname, char *const argv[], char *const envp[])
 	return real_execve(pathname, argv, envp);
 }
 
+int dup(int oldfd)
+{
+	if (!real_dup)
+		real_dup = dlsym(RTLD_NEXT, "dup");
+
+	if (!init)
+	{
+		return real_dup(oldfd);
+	}
+
+	errno = 0;
+	int ret;
+	char *pathname;
+	if (pathname = map_fd_search_by_val(map_fd, oldfd))
+	{
+		slog_debug("[POSIX]. Calling Hercules 'dup', pathname=%s, oldfd=%d.", pathname, oldfd);
+
+		int lowest_fd;
+
+		// Attempt to duplicate the lowest available file descriptor (>= 0).
+		lowest_fd = fcntl(0, F_DUPFD, 0);
+
+		if (lowest_fd != -1)
+		{
+			slog_info("[POSIX]. Lowest available file descriptor: %d\n", lowest_fd);
+			close(lowest_fd); // Close the duplicated file descriptor
+			ret = map_fd_put(map_fd, pathname, lowest_fd, 0);
+			if (ret == -1)
+			{
+				errno = 9;
+				slog_error("[POSIX] Error Hercules in 'dup', lowest_fd=%d already exist, errno=%d:%s.", lowest_fd, errno, strerror(errno)); // -1 when error, and errno is set.
+			}
+			else
+			{
+				ret = lowest_fd;
+			}
+		}
+		else
+		{
+			perror("Failed to get the lowest available file descriptor");
+			ret = -1;
+		}
+
+		slog_debug("[POSIX]. End Hercules 'dup', pathname=%s, ret=%d.", pathname, ret);
+	}
+	else
+	{
+		slog_debug("[POSIX]. Calling real 'dup', oldfd=%d.", oldfd);
+		ret = real_dup(oldfd);
+		slog_debug("[POSIX]. End real 'dup', oldfd=%d, newfd=%d.", oldfd, ret);
+	}
+
+	return ret;
+}
+
 int dup2(int oldfd, int newfd)
 {
 	if (!real_dup2)
@@ -2445,14 +2515,21 @@ int dup2(int oldfd, int newfd)
 	if (pathname = map_fd_search_by_val(map_fd, oldfd))
 	{
 		slog_debug("[POSIX]. Calling Hercules 'dup2', pathname=%s, oldfd=%d, newfd=%d.", pathname, oldfd, newfd);
-		ret = map_fd_put(map_fd, pathname, newfd, 0);
-		if (ret == -1)
+		if (oldfd == newfd)
 		{
-			slog_error("[POSIX] Error Hercules in 'dup2', newfd=%d already exist.", newfd); // -1 when error, and errno is set.
+			ret = newfd;
 		}
 		else
 		{
-			ret = newfd;
+			ret = map_fd_put(map_fd, pathname, newfd, 0);
+			if (ret == -1)
+			{
+				slog_error("[POSIX] Error Hercules in 'dup2', newfd=%d already exist.", newfd); // -1 when error, and errno is set.
+			}
+			else
+			{
+				ret = newfd;
+			}
 		}
 		slog_debug("[POSIX]. End Hercules 'dup2', pathname=%s, ret=%d.", pathname, ret);
 	}
