@@ -36,10 +36,10 @@ COMMAND="$IOR_PATH/ior -t 100M -b 100M -s 1 -i 10 -o /mnt/hercules/data.out"
 # COMMAND="./exe_READ_EXISTING_FILE /home/genarog/Documents/UC3M/Codes/UPDATED_IMSS/hercules/bash/test_file.txt 11"
 # COMMAND="./exe_READ_EXISTING_FILE /mnt/hercules/test_file.txt 11"
 
-# mpiexec -npernode $H_NCPN $H_MPI_HOSTFILE_DEF $H_MPI_HOSTFILE_NAME  \
-#    $H_MPI_ENV_DEF HERCULES_CONF=$HERCULES_CONF \
-#    $H_MPI_ENV_DEF LD_PRELOAD=$HERCULES_POSIX_PRELOAD \
-# 	$COMMAND > logfile
+mpiexec -npernode $HERCULES_NCPN $HERCULES_MPI_HOSTFILE_DEF $HERCULES_MPI_HOSTFILE_NAME  \
+   $HERCULES_MPI_ENV_DEF HERCULES_CONF=$HERCULES_CONF \
+   $HERCULES_MPI_ENV_DEF LD_PRELOAD=$HERCULES_POSIX_PRELOAD \
+	$COMMAND > logfile
 
 	# strace -s 2000 -o strace.log $COMMAND
 	#ltrace -s 2000 -o ltrace.log $COMMAND
@@ -55,14 +55,14 @@ COMMAND="$IOR_PATH/ior -t 100M -b 100M -s 1 -i 10 -o /mnt/hercules/data.out"
 # LD_PRELOAD=/home/genarog/Documents/UC3M/Codes/UPDATED_IMSS/hercules/build/tools/libhercules_posix.so ./exe_READ_EXISTING_FILE /mnt/hercules/test_file.txt 11
 
 
-export LD_PRELOAD="$HERCULES_POSIX_PRELOAD"
+# export LD_PRELOAD="$HERCULES_POSIX_PRELOAD"
 
 
-# mpiexec $H_MPI_HOSTFILE_DEF $H_MPI_HOSTFILE_NAME -np $H_NNFC \
+# mpiexec $HERCULES_MPI_HOSTFILE_DEF $HERCULES_MPI_HOSTFILE_NAME -np $H_NNFC \
    # -wdir  /home/genarog/Documents/UC3M/Codes/Apps/Nek5000/run/eddy_uv \
 
 # touch /mnt/hercules/namelist.wps
-cat namelist.wps > /mnt/hercules/namelist.wps
+# cat namelist.wps > /mnt/hercules/namelist.wps
 
 # ltrace -s 2000 -o ltrace_cat.out cat > /mnt/hercules/namelist.wps << EOF
 # &share

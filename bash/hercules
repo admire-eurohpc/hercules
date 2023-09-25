@@ -59,7 +59,7 @@ do
     case "${flag}" in
         m) META_SERVER_FILE=${OPTARG};;
         d) DATA_SERVER_FILE=${OPTARG};;
-        c) H_MPI_HOSTFILE_NAME=${OPTARG};;
+        c) HERCULES_MPI_HOSTFILE_NAME=${OPTARG};;
         # Indicates whether slurm should be used when it is installed.
         s) SLURM=${OPTARG};;
         # Configuration file path.
@@ -86,10 +86,10 @@ if [ ! -z "$META_SERVER_FILE" ]; then
         exit 0
     fi
 fi
-if [ ! -z "$H_MPI_HOSTFILE_NAME" ]; then
-    echo "CLIENT FILE - $H_MPI_HOSTFILE_NAME"
-    if [ ! -f "$H_MPI_HOSTFILE_NAME" ]; then
-        echo "Client deployment file " $H_MPI_HOSTFILE_NAME " does not exists"
+if [ ! -z "$HERCULES_MPI_HOSTFILE_NAME" ]; then
+    echo "CLIENT FILE - $HERCULES_MPI_HOSTFILE_NAME"
+    if [ ! -f "$HERCULES_MPI_HOSTFILE_NAME" ]; then
+        echo "Client deployment file " $HERCULES_MPI_HOSTFILE_NAME " does not exists"
         exit 0
     fi
 fi
@@ -124,7 +124,6 @@ then
 fi
 
 ## Define values.
-
 
 ## If a configuration file was not provided.
 if [ -z "$FILE" ]; then
@@ -182,7 +181,7 @@ BLOCK_SIZE=$(cat $FILE | grep "BLOCK_SIZE" | awk '{print $3}')
 STORAGE_SIZE=$(cat $FILE | grep "STORAGE_SIZE" | awk '{print $3}')
 
 # If a client hostfile was not provided we set a default path.
-if [ -z "$H_MPI_HOSTFILE_NAME" ]; then
+if [ -z "$HERCULES_MPI_HOSTFILE_NAME" ]; then
     ## Error if slurm is not being used and no client hostfile was defined.
     if [[ $SLURM -eq "0" ]]; then
         echo "[Error] Client hostfile not specified, you can specify it with -c <filename> flag"
@@ -190,8 +189,8 @@ if [ -z "$H_MPI_HOSTFILE_NAME" ]; then
     fi
 
     if [[ $SLURM -eq "1" ]]; then
-        H_MPI_HOSTFILE_NAME="$HERCULES_BASH_PATH/client_hostfile"
-        tail -n +$((NUM_METADATA+NUM_DATA+1)) hostfile | head -n $NUM_NODES_FOR_CLIENTS > $H_MPI_HOSTFILE_NAME
+        HERCULES_MPI_HOSTFILE_NAME="$HERCULES_BASH_PATH/client_hostfile"
+        tail -n +$((NUM_METADATA+NUM_DATA+1)) hostfile | head -n $NUM_NODES_FOR_CLIENTS > $HERCULES_MPI_HOSTFILE_NAME
     fi
 fi
 
@@ -311,8 +310,8 @@ echo "[-] Data servers started in $runtime seconds, start=$start, end=$end"
 
 
 
-export H_NCPN=$NUM_CLIENTS_PER_NODE
-export H_NNFC=$NUM_NODES_FOR_CLIENTS
+export HERCULES_NCPN=$NUM_CLIENTS_PER_NODE
+export HERCULES_NNFC=$NUM_NODES_FOR_CLIENTS
 
 ## Search for the mpi distribution installed.
 for MPI_DS in {"open-mpi","mpich","Intel"}
@@ -328,16 +327,16 @@ done
 case $MPI_DS in
     "open-mpi")
         # echo "[+] Option openmpi"
-        export H_MPI_ENV_DEF="-x"
-        export H_MPI_HOSTFILE_DEF="-hostfile"
-        export H_MPI_PPN="--npernode"
+        export HERCULES_MPI_ENV_DEF="-x"
+        export HERCULES_MPI_HOSTFILE_DEF="-hostfile"
+        export HERCULES_MPI_PPN="--npernode"
         #export H_MPI_NNFC=""
     ;;
     "mpich" | "impi")
         # echo "[+] Option mpich | impi"
-        export H_MPI_ENV_DEF="-env"
-        export H_MPI_HOSTFILE_DEF="-f"
-        export H_MPI_PPN="-ppn"
+        export HERCULES_MPI_ENV_DEF="-env"
+        export HERCULES_MPI_HOSTFILE_DEF="-f"
+        export HERCULES_MPI_PPN="-ppn"
     ;;
     *)
         # Check!

@@ -69,7 +69,7 @@ spack load hercules
 
 # Usage
 
-The current prototype of Hercules enables the access to the storage infrastructure in three different ways: API library and LD_PRELOAD by overriding symbols. In the following subsection we describe the characteristics of the preferred option.
+The current prototype of Hercules enables the access to the storage infrastructure in two different ways: API library and LD_PRELOAD by overriding symbols. In the following subsection we describe the characteristics of the preferred option.
 
 
 ## With Slurm 
