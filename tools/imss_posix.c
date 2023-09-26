@@ -31,6 +31,8 @@
 
 #include <sys/time.h>
 
+#include "tempname.h"
+
 #undef _FILE_OFFSET_BITS
 #undef __USE_LARGEFILE64
 #undef __USE_FILE_OFFSET64
@@ -218,6 +220,7 @@ static int (*real_flock)(int fd, int operation) = NULL;
 static int (*real_dup2)(int oldfd, int newfd) = NULL;
 static int (*real_dup)(int oldfd) = NULL;
 
+static int (*real_mkstemp)(char *template) = NULL;
 
 // int _openat(int dirfd, const char *pathname, int flags, ...)
 // {
@@ -475,7 +478,7 @@ __attribute__((constructor)) void imss_posix_init(void)
 	}
 	if (IMSS_DEBUG_FILE)
 	{
-		fprintf(stderr, "LOG PATH=%s\n", log_path);
+		fprintf(stderr, "LOG PATH= %s\n", log_path);
 	}
 	// sprintf(log_path, "./client.%02d-%02d-%02d.%d", tm.tm_hour, tm.tm_min, tm.tm_sec, rank);
 	slog_init(log_path, IMSS_DEBUG_LEVEL, IMSS_DEBUG_FILE, IMSS_DEBUG_SCREEN, 1, 1, 1, rank);
@@ -1331,7 +1334,7 @@ int open64(const char *pathname, int flags, ...)
 
 		ret = generalOpen(new_path, flags, mode);
 
-		slog_debug("[POSIX]. Ending Hercules 'open64', pathname=%s, fd=%ld.", pathname, ret);
+		slog_debug("[POSIX]. Ending Hercules 'open64', pathname=%s, fd=%d.", pathname, ret);
 		free(new_path);
 	}
 	else
@@ -1342,6 +1345,40 @@ int open64(const char *pathname, int flags, ...)
 		else
 			ret = real_open64(pathname, flags, mode);
 		slog_debug("[POSIX %d]. Ending Real 'open64', pathname=%s.", rank, pathname);
+	}
+	return ret;
+}
+
+int mkstemp(char *template) {
+	if (!real_mkstemp)
+		real_mkstemp = dlsym(RTLD_NEXT, "mkstemp");
+
+	if(!init) {
+		return real_mkstemp(template);
+	}
+
+	errno = 0;
+	int ret;
+	char *new_path = checkHerculesPath(template);
+	if (new_path != NULL)
+	{
+		slog_debug("[POSIX]. Calling Hercules 'mkstemp', new_path=%s, template=%s", new_path, new_path, template);
+
+		// checkOpenFlags(pathname, flags);
+
+		//ret = generalOpen(new_path, flags, mode);
+		try_tempname_len(template);
+		errno = 2;
+		ret = -1;
+
+		slog_debug("[POSIX]. Ending Hercules 'mkstemp', new_path=%s, template=%s, fd=%d.", new_path, template, ret);
+		free(new_path);
+	}
+	else
+	{
+		slog_debug("[POSIX %d]. Calling Real 'mkstemp', pathname=%s.", rank, template);
+		ret = real_mkstemp(template);
+		slog_debug("[POSIX %d]. Ending Real 'mkstemp', pathname=%s.", rank, template);
 	}
 	return ret;
 }
