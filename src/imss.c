@@ -1501,9 +1501,11 @@ int32_t stat_dataset(const char *dataset_uri, dataset_info *dataset_info_)
 	for (int32_t i = 0; i < datasetd->len; i++)
 	{
 		*dataset_info_ = g_array_index(datasetd, dataset_info, i);
-		slog_debug("[IMSS][stat_dataset] dataset_uri=%s, dataset_info_->uri_=%s", dataset_uri, dataset_info_->uri_);
 		if (!strcmp(dataset_uri, dataset_info_->uri_))
+		{
+			slog_debug("[IMSS][stat_dataset] dataset_uri=%s, dataset_info_->uri_=%s", dataset_uri, dataset_info_->uri_);
 			return 2;
+		}
 	}
 
 	// Formated dataset uri to be sent to the metadata server.
@@ -1554,13 +1556,14 @@ int32_t set_dataset(char * dataset_uri, unsigned char * buffer, uint64_t offset)
 int32_t get_data_location(int32_t dataset_id, int32_t data_id, int32_t op_type)
 {
 	// If the current dataset policy was not established yet.
-	slog_debug("[get_data_location] current_dataset=%ld, dataset_id=%ld", current_dataset, dataset_id);
+	slog_debug("[get_data_location] current_dataset=%d, dataset_id=%d", current_dataset, dataset_id);
+	// fprintf(stderr,"[get_data_location] current_dataset=%d, dataset_id=%d\n", current_dataset, dataset_id);
 	if (current_dataset != dataset_id)
 	{
 		// Retrieve the corresponding dataset_info structure and the associated IMSS.
 		curr_dataset = g_array_index(datasetd, dataset_info, dataset_id);
 		curr_imss = g_array_index(imssd, imss, curr_dataset.imss_d);
-		slog_debug("[get_data_location] curr_dataset=%ld, dataset_id=%ld", curr_dataset, dataset_id);
+		slog_debug("[get_data_location] curr_dataset=%ld, dataset_id=%d", curr_dataset, dataset_id);
 
 		// Set the corresponding.
 		if (set_policy(&curr_dataset) == -1)
@@ -2076,7 +2079,7 @@ int32_t imss_flush_data()
 // Method retrieving a data element associated to a certain dataset.
 int32_t get_data(int32_t dataset_id, int32_t data_id, char *buffer)
 {
-	slog_debug("[IMSS][get_data]");
+	slog_debug("[IMSS][get_data], dataset_id=%d, data_id=%d", dataset_id, data_id);
 	// slog_fatal("Caller name: %pS", __builtin_return_address(0));
 	int32_t n_server;
 
@@ -2086,12 +2089,14 @@ int32_t get_data(int32_t dataset_id, int32_t data_id, char *buffer)
 		return -1;
 	}
 
+	slog_debug("[IMSS][get_data] n_server=%d, curr_dataset.repl_factor=%d, curr_imss.info.num_storages=%d", n_server, curr_dataset.repl_factor, curr_imss.info.num_storages);
+
 	// Servers that the data block is going to be requested to.
 	int32_t repl_servers[curr_dataset.repl_factor];
 	int32_t curr_imss_storages = curr_imss.info.num_storages;
 
 	// Retrieve the corresponding connections to the previous servers.
-	slog_debug("[IMSS][get_data] curr_dataset.repl_factor=%d", curr_dataset.repl_factor);
+	// slog_debug("[IMSS][get_data] curr_dataset.repl_factor=%d", curr_dataset.repl_factor);
 	for (int32_t i = 0; i < curr_dataset.repl_factor; i++)
 	{
 		// Server storing the current data block.
@@ -2136,11 +2141,11 @@ int32_t get_data(int32_t dataset_id, int32_t data_id, char *buffer)
 		// time_taken = ((double)t) / CLOCKS_PER_SEC; // in seconds
 		// slog_debug("[IMSS][get_data] send_data %f s", time_taken);
 
-		int size = 0;
-		if (data_id)
-			size = curr_dataset.data_entity_size;
-		else
-			size = sizeof(struct stat);
+		// int size = 0;
+		// if (data_id)
+		// 	size = curr_dataset.data_entity_size;
+		// else
+		// 	size = sizeof(struct stat);
 
 		//	gettimeofday(&start, NULL);
 		// printf("GET_DATA after send petition to read");

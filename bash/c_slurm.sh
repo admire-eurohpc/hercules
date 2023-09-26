@@ -2,12 +2,12 @@
 #SBATCH --job-name=hercules    # Job name
 #SBATCH --time=00:03:00               # Time limit hrs:min:sec
 #SBATCH --output=logs/hercules/%j_hercules.log   # Standard output and error log
-##SBATCH --mem=0
+#SBATCH --mem=0
 #SBATCH --overcommit
 #SBATCH --oversubscribe
+#SBATCH --exclude=broadwell-[000-002]
 ##SBATCH --nodelist=broadwell-[038-043]
 ##SBATCH --nodelist=broadwell-[000-004]
-##SBATCH --exclude=broadwell-[000-030]
 ###SBATCH --exclusive=user
 
 CONFIG_PATH=$1
@@ -19,7 +19,7 @@ FILE_SIZE_PER_CLIENT=$2
 # module load mpi/mpich3/3.2.1
 
 ## Uncomment when working in Unito.
-# IOR_PATH=/beegfs/home/javier.garciablas/io500/bin
+IOR_PATH=/beegfs/home/javier.garciablas/io500/bin
 # spack load \
 #    cmake@3.24.3%gcc@9.4.0 arch=linux-ubuntu20.04-broadwell \
 #    glib@2.74.1%gcc@9.4.0 arch=linux-ubuntu20.04-broadwell \
@@ -41,7 +41,7 @@ FILE_SIZE_PER_CLIENT=$2
 # module load ior
 
 ## Local
-IOR_PATH=/usr/local/bin
+# IOR_PATH=/usr/local/bin
 
 echo "Starting Hercules"
 start_=$(date +%s.%N)
@@ -51,7 +51,7 @@ if [ -z "$CONFIG_PATH" ]; then
 else
    echo "Configuration file pass $CONFIG_PATH"
    source hercules start \
-   -f "$CONFIG_PATH" \
+   -f "$CONFIG_PATH"
 fi
 end_=$(date +%s.%N)
 runtime=$(echo "$end_ - $start_" | bc -l)

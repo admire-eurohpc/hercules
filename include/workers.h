@@ -13,6 +13,7 @@
 #define DELETE_OP		  4
 #define RENAME_OP		  5
 #define RENAME_DIR_DIR_OP 6
+// #define STATFS			  7
 
 #define WRITE_OP		  1
 #define WRITEV 			  7

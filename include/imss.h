@@ -53,6 +53,7 @@ extern int32_t IMSS_DEBUG;
  * Macro to measure the time spend by function_to_call.
  * char*::print_comment: comment to be concatenated to the elapsed time.
  */
+#ifdef __TIMING__
 #define TIMING(function_to_call, print_comment, type)          \
 	({                                                         \
 		clock_t t;                                             \
@@ -64,8 +65,13 @@ extern int32_t IMSS_DEBUG;
 		time_taken = ((double)t) / (CLOCKS_PER_SEC);           \
 		slog_time(",TIMING,%f,%s", time_taken, print_comment); \
 		ret;                                                   \
+	})														   
+#else
+#define TIMING(function_to_call, print_comment, type) 			\
+	({															\
+		function_to_call;										\
 	})
-
+#endif
 // typedef enum {
 //     CLIENT_SERVER_SEND_RECV_STREAM  = UCS_BIT(0),
 //     CLIENT_SERVER_SEND_RECV_DEFAULT = CLIENT_SERVER_SEND_RECV_STREAM

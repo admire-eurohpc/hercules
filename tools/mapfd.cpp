@@ -112,6 +112,10 @@ extern "C"
 		}
 	}
 
+	/* 
+	Note: this function should also return a pointer to the offset 
+	to avoid to use "map_fd_search", which add extra overhead.
+	*/
 	char *map_fd_search_by_val(void *map, const int fd)
 	{
 		std::unique_lock<std::mutex> lck(fdlock);

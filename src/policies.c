@@ -26,7 +26,6 @@ set_policy(dataset_info *dataset)
 {
 	// Invalid number of blocks to be sent.
 	if (dataset->num_data_elem <= 0)
-
 		return -1;
 
 	// Save the connection to the imss server running in the same node.

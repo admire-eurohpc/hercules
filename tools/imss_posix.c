@@ -218,6 +218,7 @@ static int (*real_flock)(int fd, int operation) = NULL;
 static int (*real_dup2)(int oldfd, int newfd) = NULL;
 static int (*real_dup)(int oldfd) = NULL;
 
+
 // int _openat(int dirfd, const char *pathname, int flags, ...)
 // {
 // 	real__openat = dlsym(RTLD_NEXT, "_openat");
@@ -1149,7 +1150,7 @@ int statvfs(const char *restrict path, struct statvfs *restrict buf)
 	if (new_path != NULL)
 	{
 
-		fprintf(stderr, "[POSIX] Calling Hercules 'statvfs', path=%s, init=%d, new_path=%s\n", path, init, new_path);
+		// fprintf(stderr, "[POSIX] Calling Hercules 'statvfs', path=%s, init=%d, new_path=%s\n", path, init, new_path);
 		slog_debug("[POSIX %d]. Calling Hercules 'statvfs', path=%s.", rank, path);
 
 		buf->f_bsize = IMSS_BLKSIZE * KB;
@@ -2146,13 +2147,15 @@ int unlink(const char *name)
 	char *new_path = checkHerculesPath(name);
 	if (new_path != NULL)
 	{
+		slog_debug("[POSIX]. Calling Hercules 'unlink', new_path=%s", new_path);
+		// fprintf(stderr, "[POSIX]. Calling Hercules 'unlink', new_path=%s\n", new_path);
 		int32_t type = get_type(new_path);
-		slog_debug("[POSIX]. Calling Hercules 'unlink', type=%d, name=%s, new_path=%s", type, name, new_path);
+		slog_debug("[POSIX][unlink] type=%d, new_path=%s", type, new_path);
 		if (type == 0)
 		{
 			strcat(new_path, "/");
 			type = get_type(new_path);
-			slog_debug("[POSIX]. Calling Hercules 'unlink' type %ld, name=%s, new_path=%s", type, name, new_path);
+			slog_debug("[POSIX][unlink] type=%d, new_path=%s", type, new_path);
 			if (type == 2)
 			{
 				ret = imss_rmdir(new_path);
@@ -2165,6 +2168,7 @@ int unlink(const char *name)
 		}
 		else
 		{
+			slog_debug("[POSIX][unlink] type=%d, new_path=%s", type, new_path);
 			ret = imss_unlink(new_path);
 		}
 
@@ -2179,9 +2183,15 @@ int unlink(const char *name)
 		if (map_fd_erase_by_pathname(map_fd, new_path) == -1)
 		{
 			slog_error("[POSIX]. Error Hercules no file descriptor found for the pathname=%s", new_path);
+			fprintf(stderr, "[POSIX][unlink]. Error. No Fd deleted in the local map, new_path=%s\n", new_path);
 		}
+		// else
+		// {
+		// 	fprintf(stderr, "[POSIX][unlink]. Fd deleted in the local map, new_path=%s\n", new_path);
+		// }
 
-		slog_debug("[POSIX]. Ending Hercules 'unlink', type %ld, name=%s, new_path=%s, ret=%d", type, name, new_path, ret);
+		slog_debug("[POSIX]. Ending Hercules 'unlink', type %d, new_path=%s, ret=%d", type, new_path, ret);
+		// fprintf(stderr, "[POSIX]. Ending Hercules 'unlink', type %d, new_path=%s, ret=%d\n", type, new_path, ret);
 		free(new_path);
 	}
 	else if (!strncmp(name, "imss://", strlen("imss://"))) // TO REVIEW!
@@ -3045,34 +3055,47 @@ int access(const char *path, int mode)
 	{
 		struct stat stat_buf;
 		int permissions = 0;
-		slog_debug("[POSIX]. Calling Hercules 'access', path=%s, new_path=%s", path, new_path);
+		slog_debug("[POSIX]. Calling Hercules 'access', new_path=%s", new_path);
+		// fprintf(stderr, "[POSIX]. Calling Hercules 'access', new_path=%s\n", new_path);
 
-		imss_refresh(new_path);
-		ret = imss_getattr(new_path, &stat_buf);
+		ret = imss_refresh(new_path);
 		if (ret < 0)
 		{
 			errno = -ret;
 			ret = -1;
+			// perror("ERRIMSS_ACCESS_IMSSREFRESH");
 		}
 		else
 		{
-			/* check permissions */
-			if ((mode & F_OK) == F_OK)
-				permissions |= F_OK; /* file exists */
-			if ((mode & R_OK) == R_OK && (stat_buf.st_mode & S_IRUSR))
-				permissions |= R_OK; /* read permissions granted */
-			if ((mode & W_OK) == W_OK && (stat_buf.st_mode & S_IWUSR))
-				permissions |= W_OK; /* write permissions granted */
-			if ((mode & X_OK) == X_OK && (stat_buf.st_mode & S_IXUSR))
-				permissions |= X_OK; /* execute permissions granted */
-
-			/* check if all the tested permissions are granted */
-			if (mode == permissions)
-				ret = 0;
-			else
+			ret = imss_getattr(new_path, &stat_buf);
+			if (ret < 0)
+			{
+				errno = -ret;
 				ret = -1;
+				// perror("ERRIMSS_ACCESS_IMSSGETATTR");
+			}
+			else
+			{
+				/* check permissions */
+				if ((mode & F_OK) == F_OK)
+					permissions |= F_OK; /* file exists */
+				if ((mode & R_OK) == R_OK && (stat_buf.st_mode & S_IRUSR))
+					permissions |= R_OK; /* read permissions granted */
+				if ((mode & W_OK) == W_OK && (stat_buf.st_mode & S_IWUSR))
+					permissions |= W_OK; /* write permissions granted */
+				if ((mode & X_OK) == X_OK && (stat_buf.st_mode & S_IXUSR))
+					permissions |= X_OK; /* execute permissions granted */
+
+				/* check if all the tested permissions are granted */
+				if (mode == permissions)
+					ret = 0;
+				else
+					ret = -1;
+			}
 		}
-		slog_debug("[POSIX]. End Hercules 'access', path=%s, new_path=%s ret=%d, errno=%d:%s.", path, new_path, ret, errno, strerror(errno));
+
+		slog_debug("[POSIX]. End Hercules 'access', new_path=%s ret=%d, errno=%d:%s.", new_path, ret, errno, strerror(errno));
+		// fprintf(stderr, "[POSIX]. End Hercules 'access', new_path=%s ret=%d, errno=%d:%s.\n", new_path, ret, errno, strerror(errno));
 		free(new_path);
 	}
 	else

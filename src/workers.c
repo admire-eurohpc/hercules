@@ -1174,6 +1174,7 @@ int stat_worker_helper(p_argv *arguments, char *req)
 		case DELETE_OP:
 		{
 			int32_t result = map->delete_metadata_stat_worker(key);
+			slog_debug("[stat_worker_thread][READ_OP][DELETE_OP] delete_metadata_stat_worker=%d", result);
 			GTree_delete((char *)key.c_str());
 
 			char release_msg[] = "DELETE\0";
