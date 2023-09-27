@@ -923,7 +923,6 @@ int __lxstat(int fd, const char *pathname, struct stat *buf)
 	char *new_path = checkHerculesPath(pathname);
 	if (new_path != NULL)
 	{
-		unsigned long p = 0;
 		slog_debug("[POSIX]. Calling Hercules '__lxstat', pathname=%s, new_path=%s, fd=%d, errno=%d:%s", pathname, new_path, fd, errno, strerror(errno));
 		imss_refresh(new_path);
 		ret = imss_getattr(new_path, buf);
@@ -1349,11 +1348,13 @@ int open64(const char *pathname, int flags, ...)
 	return ret;
 }
 
-int mkstemp(char *template) {
+int mkstemp(char *template)
+{
 	if (!real_mkstemp)
 		real_mkstemp = dlsym(RTLD_NEXT, "mkstemp");
 
-	if(!init) {
+	if (!init)
+	{
 		return real_mkstemp(template);
 	}
 
@@ -1363,15 +1364,25 @@ int mkstemp(char *template) {
 	if (new_path != NULL)
 	{
 		slog_debug("[POSIX]. Calling Hercules 'mkstemp', new_path=%s, template=%s", new_path, new_path, template);
+		char *new_path_by_template;
+		mode_t mode = 0;
+		int flags = 0;
 
-		// checkOpenFlags(pathname, flags);
-
-		//ret = generalOpen(new_path, flags, mode);
+		// Get a unique pathname.
 		try_tempname_len(template);
-		errno = 2;
-		ret = -1;
+		// Get HERCULES uri by using the unique pathname.
+		new_path_by_template = checkHerculesPath(template);
 
-		slog_debug("[POSIX]. Ending Hercules 'mkstemp', new_path=%s, template=%s, fd=%d.", new_path, template, ret);
+		// Set mode and flags.
+		mode |= S_IRUSR | S_IWUSR;
+		// flags = O_EXCL | O_CREAT;
+		flags = O_RDWR | O_CREAT | O_EXCL;
+
+		// Creates the file and returns the file descriptor.
+		ret = generalOpen(new_path_by_template, flags, mode);
+
+		slog_debug("[POSIX]. Ending Hercules 'mkstemp', new_path=%s, template=%s, fd=%d, new_path_by_template=%s", new_path, template, ret, new_path_by_template);
+		free(new_path_by_template);
 		free(new_path);
 	}
 	else
@@ -2056,6 +2067,7 @@ ssize_t write(int fd, const void *buf, size_t size)
 {
 	if (!real_write)
 		real_write = dlsym(RTLD_NEXT, "write");
+
 	if (!init)
 	{
 		return real_write(fd, buf, size);
@@ -2063,19 +2075,11 @@ ssize_t write(int fd, const void *buf, size_t size)
 
 	errno = 0;
 	size_t ret = -1;
-	struct timeval tv;
-	gettimeofday(&tv, NULL);
-	double begin = (tv.tv_sec) * 1000 + (tv.tv_usec) / 1000;
-
 	char *pathname;
 	if (pathname = map_fd_search_by_val(map_fd, fd))
 	{
-		gettimeofday(&tv, NULL);
-		double end = (tv.tv_sec) * 1000 + (tv.tv_usec) / 1000;
-		double time_taken = end - begin;
-
-		unsigned long p = -1;
-		slog_debug("[POSIX]. Calling Hercules 'write', pathname=%s, size=%lu, time taken=%f", pathname, size, time_taken);
+		unsigned long offset = -1;
+		slog_debug("[POSIX]. Calling Hercules 'write', pathname=%s, size=%lu", pathname, size);
 
 		struct stat ds_stat_n;
 		imss_getattr(pathname, &ds_stat_n);
@@ -2086,10 +2090,10 @@ ssize_t write(int fd, const void *buf, size_t size)
 			slog_error("[POSIX] Error Hercules 'write'	: %d:%s", errno, strerror(errno));
 			return ret;
 		}
-		map_fd_search(map_fd, pathname, fd, &p);
-		slog_debug("[POSIX]. pathname=%s, size=%lu, current_file_size=%lu, offset=%d", pathname, size, ds_stat_n.st_size, p);
+		map_fd_search(map_fd, pathname, fd, &offset);
+		slog_debug("[POSIX]. pathname=%s, size=%lu, current_file_size=%lu, offset=%d", pathname, size, ds_stat_n.st_size, offset);
 
-		ret = TIMING(imss_write(pathname, buf, size, p), "imss_write", int);
+		ret = TIMING(imss_write(pathname, buf, size, offset), "imss_write", int);
 
 		if (ds_stat_n.st_size + size > ds_stat_n.st_size)
 		{

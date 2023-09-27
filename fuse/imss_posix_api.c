@@ -149,6 +149,7 @@ int imss_refresh(const char *path)
 	get_iuri(path, imss_path);
 
 	fd_lookup(imss_path, &fd, &old_stats, &aux2);
+	slog_debug("[imss_refresh] fd_lookup=%d", fd);
 	if (fd >= 0)
 	{
 		// fprintf(stderr, "[imss_refresh] fd_lookup=%d\n", fd);
@@ -167,7 +168,7 @@ int imss_refresh(const char *path)
 		return -1;
 	}
 	stats = (struct stat *)aux;
-
+	slog_debug("[imss_refresh] ds=%d, size=%ld", ds, stats->st_size);
 	map_update(map, imss_path, ds, *stats);
 
 	// 	slog_debug("[imss_refresh] Calling map_search, %s", path);
@@ -225,6 +226,7 @@ int imss_getattr(const char *path, struct stat *stbuf)
 	case 1:
 		if ((n_ent = get_dir((char *)imss_path, &buffer, &refs)) != -1)
 		{
+			slog_live("[imss_getattr] n_ent=%d", n_ent);
 			stbuf->st_size = 4;
 			stbuf->st_nlink = 1;
 			stbuf->st_mode = S_IFDIR | 0755;
@@ -276,6 +278,7 @@ int imss_getattr(const char *path, struct stat *stbuf)
 			}
 		}
 
+		slog_debug("[imss_getattr] stats.st_nlink=%lu", stats.st_nlink);
 		if (stats.st_nlink != 0)
 		{
 			memcpy(stbuf, &stats, sizeof(struct stat));
@@ -286,6 +289,8 @@ int imss_getattr(const char *path, struct stat *stbuf)
 			// fprintf(stderr, "[IMSS-FUSE]	Cannot get dataset metadata.");
 			return -ENOENT;
 		}
+		slog_debug("[imss_getattr] file descriptor=%d, file size=%ld", fd, stbuf->st_size);
+
 		return 0;
 	default:
 		return -1;
@@ -1310,7 +1315,7 @@ int imss_write(const char *path, const char *buf, size_t size, off_t off)
 	else if (fd == -2)
 		return -ENOENT;
 
-	slog_live("[imss_write] size=%ld, IMSS_DATA_BSIZE=%ld, stats.st_size=%ld, start_blk=%ld, start_offset=%ld, end_offset=%ld, end_blk=%ld, curr_blk=%ld, fd=%ld, off=%ld", size, IMSS_DATA_BSIZE, stats.st_size, start_blk, start_offset, end_offset, end_blk, curr_blk, fd, off);
+	slog_live("[imss_write] size=%ld, IMSS_DATA_BSIZE=%ld, stats.st_size=%ld, start_blk=%ld, start_offset=%ld, end_offset=%ld, end_blk=%ld, curr_blk=%ld, ds=%d, off=%ld", size, IMSS_DATA_BSIZE, stats.st_size, start_blk, start_offset, end_offset, end_blk, curr_blk, ds, off);
 
 	if (MULTIPLE_WRITE == 1)
 	{
@@ -1332,6 +1337,7 @@ int imss_write(const char *path, const char *buf, size_t size, off_t off)
 			return size;
 		}
 	}
+
 	i_blk = 0;
 	// WRITE NORMAL CASE
 	while (curr_blk <= end_blk)
@@ -2530,7 +2536,7 @@ int imss_rename(const char *old_path, const char *new_path)
 
 	if (res == 0)
 	{
-		fprintf(stderr, "**************EXISTE EL DESTINO=%s\n", new_path);
+		// fprintf(stderr, "**************EXISTE EL DESTINO=%s\n", new_path);
 		// printf("new_path[last]=%c\n",new_path[strlen(new_path) -1]);
 		if (S_ISDIR(ds_stat_n.st_mode))
 		{
@@ -2542,10 +2548,10 @@ int imss_rename(const char *old_path, const char *new_path)
 			imss_unlink(new_path);
 		}
 	}
-	else
-	{
-		fprintf(stderr, "**************NO EXISTE EL DESTINO=%s\n", new_path);
-	}
+	// else
+	// {
+	// 	fprintf(stderr, "**************NO EXISTE EL DESTINO=%s\n", new_path);
+	// }
 
 	// printf("old_rpath=%s, new_rpath=%s\n",old_rpath, new_rpath);
 

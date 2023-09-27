@@ -652,8 +652,8 @@ int32_t main(int32_t argc, char **argv)
 		t = clock() - t;
 		time_taken = ((double)t) / (CLOCKS_PER_SEC);
 		// printf("[%c-server %d] Deployment time %f\n", args.type, args.id, time_taken);
-		if (!args.id)
-			fprintf(stderr, "ServerID,'Deployment time (s)'\n");
+		// if (!args.id)
+		// 	fprintf(stderr, "ServerID,'Deployment time (s)'\n");
 
 		// fprintf(stderr, "tmp_file_path=%s\n", tmp_file_path);
 

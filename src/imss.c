@@ -517,7 +517,6 @@ uint32_t get_dir(char *requested_uri, char **buffer, char ***items)
 		(*items)[i] = (char *)malloc(URI_);
 		memcpy((*items)[i], curr, URI_);
 		//(*items)[i] = elements;
-
 		curr += URI_;
 	}
 	return num_elements;
@@ -1475,7 +1474,7 @@ rename_dataset_metadata(char *old_dataset_uri, char *new_dataset_uri)
 
 	// Send the request.
 	sprintf(formated_uri, "%" PRIu32 " GET 5 %s %s", stat_ids[m_srv], old_dataset_uri, new_dataset_uri);
-	fprintf(stderr, "Request - %s\n", formated_uri);
+	// fprintf(stderr, "Request - %s\n", formated_uri);
 	if (send_req(ucp_worker_meta, ep, local_addr_meta, local_addr_len_meta, formated_uri) < 0)
 	{
 		perror("ERRIMSS_RLSIMSS_SENDADDR");
@@ -1688,7 +1687,7 @@ int32_t rename_dataset_srv_worker(char *old_dataset_uri, char *new_dataset_uri,
 
 		// Key related to the requested data element.
 		sprintf(key_, "GET 5 0 %s,%s", old_dataset_uri, new_dataset_uri);
-		fprintf(stderr, "Request - %s\n", key_);
+		// fprintf(stderr, "Request - %s\n", key_);
 		// printf("BLOCK %d ASKED TO %d SERVER with key: %s (%d)", data_id, repl_servers[i], key, key_length);
 		if (send_req(ucp_worker_data, ep, local_addr_data, local_addr_len_data, key_) < 0)
 		{
@@ -2388,8 +2387,6 @@ int32_t set_data(int32_t dataset_id, int32_t data_id, char *buffer, size_t size,
 		// Server receiving the current data block.
 		uint32_t n_server_ = (n_server + i * (curr_imss_storages / curr_dataset.repl_factor)) % curr_imss_storages;
 
-		// printf("BLOCK %d SENT TO %d SERVER with key: %s (%d)", data_id, n_server_, key, key_length);
-
 		//	gettimeofday(&start, NULL);
 
 		if (data_id == 0)
@@ -2398,7 +2395,8 @@ int32_t set_data(int32_t dataset_id, int32_t data_id, char *buffer, size_t size,
 			size = curr_dataset.data_entity_size;
 
 		sprintf(key_, "SET %lu %ld %s$%d", size, offset, curr_dataset.uri_, data_id);
-		slog_info("[IMSS][set_data] Request - '%s'", key_);
+		slog_info("[IMSS][set_data] BLOCK %d SENT TO %d SERVER with Request: %s (%d)", data_id, n_server_, key_, size);
+		// slog_info("[IMSS][set_data] Request - '%s'", key_);
 		ep = curr_imss.conns.eps[n_server_];
 
 		if (send_req(ucp_worker_data, ep, local_addr_data, local_addr_len_data, key_) < 0)
@@ -2667,7 +2665,7 @@ int32_t get_type(char *uri)
 	// Formated uri to be sent to the metadata server.
 	char formated_uri[REQUEST_SIZE];
 
-	slog_debug("[IMSS][get_type]");
+	// slog_debug("[IMSS][get_type]");
 	// Discover the metadata server that handles the entity.
 	uint32_t m_srv = discover_stat_srv(uri);
 
