@@ -70,15 +70,16 @@ int ready(char *tmp_file_path, const char *msg)
 	if (tmp_file == NULL)
 	{
 		puts("Error in creating temporary file");
-		return 0;
+		return -1;
 	}
 
 	strcpy(status,"STATUS = ");
 	strcat(status, msg);
 
-	fputs(status, tmp_file);
+	fwrite(status, strlen(status), 1, tmp_file);
 
 	fclose(tmp_file);
+	return 0;
 }
 // Thread method attending client read-write data requests.
 void *srv_worker(void *th_argv)
