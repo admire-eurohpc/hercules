@@ -145,6 +145,7 @@ static int (*real__open_2)(const char *pathname, int flags, ...) = NULL;
 static int (*real_open64)(const char *pathname, int flags, ...) = NULL;
 static int (*real_open)(const char *pathname, int flags, ...) = NULL;
 static FILE *(*real_fopen)(const char *restrict pathname, const char *restrict mode) = NULL;
+static FILE *(*real_fdopen)(int fildes, const char *mode) = NULL;
 // static FILE *(*real_fopen64)(const char *restrict pathname, const char *restrict mode) = NULL;
 static int (*real_access)(const char *pathname, int mode) = NULL;
 static int (*real_mkdir)(const char *path, mode_t mode) = NULL;
@@ -1436,7 +1437,7 @@ int fclose(FILE *fp)
 	{
 		slog_debug("[POSIX]. Calling Hercules 'fclose', pathname=%s", pathname);
 		ret = imss_close(pathname);
-		slog_debug("[POSIX]. Ending Hercules 'fclose' pathname=%s", pathname);
+		slog_debug("[POSIX]. Ending Hercules 'fclose' pathname=%s\n", pathname);
 		map_fd_update_value(map_fd, pathname, fp->_fileno, 0);
 		free(fp);
 	}
@@ -1523,7 +1524,7 @@ size_t fwrite(const void *buf, size_t size, size_t count, FILE *fp)
 		slog_debug("[POSIX]. Calling Hercules 'fwrite', pathname=%s, time taken=%f micro seconds", pathname, time_taken);
 		map_fd_search(map_fd, pathname, fp->_fileno, &p);
 		ret = imss_write(pathname, buf, count, p);
-		slog_debug("[POSIX %d]. Ending Hercules 'fwrite', ret=%ld,  errno=%d:%s", ret, pathname, errno, strerror(errno));
+		slog_debug("[POSIX %d]. Ending Hercules 'fwrite', ret=%ld,  errno=%d:%s\n", ret, pathname, errno, strerror(errno));
 	}
 	else
 	{
@@ -1656,7 +1657,7 @@ FILE *fopen(const char *restrict pathname, const char *restrict mode)
 			flags = O_WRONLY | O_CREAT | O_TRUNC;
 		}
 
-		slog_debug("Calling Hercules 'fopen', pathname=%s, mode=%s, new_mode=%o", new_path, mode, new_mode);
+		slog_debug("[POSIX] Calling Hercules 'fopen', pathname=%s, mode=%s, new_mode=%o", new_path, mode, new_mode);
 
 		// if (strstr(mode, "w"))
 		// 	flags = O_CREAT;
@@ -1682,7 +1683,7 @@ FILE *fopen(const char *restrict pathname, const char *restrict mode)
 			slog_debug("File %s was not found\n", pathname);
 		}
 
-		slog_debug("Ending Hercules 'fopen', new_path=%s\n", new_path);
+		slog_debug("[POSIX]Ending Hercules 'fopen', new_path=%s\n", new_path);
 		free(new_path);
 	}
 	else /* Do not try to use slog_ here! This function uses 'fopen' internally. */
@@ -1692,6 +1693,76 @@ FILE *fopen(const char *restrict pathname, const char *restrict mode)
 		// 	// fprintf(stderr, "Calling Real 'fopen', pathname=%s\n", pathname);
 		// }
 		file = real_fopen(pathname, mode);
+	}
+
+	return file;
+}
+
+FILE *fdopen(int fildes, const char *mode)
+{
+	if (!real_fdopen)
+		real_fdopen = dlsym(RTLD_NEXT, "fdopen");
+
+	if (!init)
+	{
+		return real_fdopen(fildes, mode);
+	}
+
+	errno = 0;
+	FILE *file = NULL;
+	int ret = 0;
+	// char *new_path = checkHerculesPath(pathname);
+	// if (new_path != NULL)
+	char *pathname;
+	if (pathname = map_fd_search_by_val(map_fd, fildes)) // recibe un fd que debe estar el mapa si el archivo pertenece a Hercules, se hace el generalOpen y se rellena la estructura.
+	{
+		uint64_t ret_ds;
+		unsigned long offset = 0;
+		mode_t new_mode = 0;
+		int flags = 0;
+
+		// To interpret the mode recived:
+		// Opening a file in append mode (a as the first character of mode)
+		// causes all subsequent write operations to this stream to occur at
+		// end-of-file, as if preceded by the call:
+		//   fseek(stream, 0, SEEK_END);
+		if (strstr(mode, "w"))
+		{
+			new_mode |= S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH;
+			flags = O_WRONLY | O_CREAT | O_TRUNC;
+		}
+
+		slog_debug("[POSIX] Calling Hercules 'fdopen', pathname=%s, mode=%s, new_mode=%o, fildes=%d", pathname, mode, new_mode, fildes);
+
+		// if (strstr(mode, "w"))
+		// 	flags = O_CREAT;
+
+		ret = generalOpen(pathname, flags, new_mode);
+
+		slog_debug("File descriptor=%d", ret);
+
+		if (ret < 0)
+		{
+			return NULL;
+		}
+
+		file = malloc(sizeof(struct _IO_FILE));
+
+		file->_fileno = ret;
+		file->_flags2 = IMSS_BLKSIZE * KB;
+		file->_offset = offset;
+		file->_mode = 0;
+
+		if (file == NULL)
+		{
+			slog_debug("File %s was not found\n", pathname);
+		}
+
+		slog_debug("[POSIX] Ending Hercules 'fdopen', pathname=%s, fildes=%d\n", pathname, fildes);
+	}
+	else
+	{
+		file = real_fdopen(fildes, mode);
 	}
 
 	return file;
@@ -1716,9 +1787,9 @@ int generalOpen(const char *new_path, int flags, mode_t mode)
 			slog_debug("[POSIX] imss_create(%s, %d, %ld), err_create: %d", new_path, mode, ret_ds, err_create);
 			if (err_create == -EEXIST)
 			{
-				// slog_debug("[POSIX] dataset already exists.");
 				slog_debug("[POSIX] 1 - Dataset already exists, imss_open(%s, %ld)", new_path, ret_ds);
 				ret = TIMING(imss_open(new_path, &ret_ds), "imss_open op1", int);
+				errno = EEXIST;
 			}
 		}
 		else // the file must exist.
@@ -1819,7 +1890,7 @@ int open(const char *pathname, int flags, ...)
 
 		ret = generalOpen(new_path, flags, mode);
 
-		slog_debug("[POSIX] Ending Hercules 'open', mode=%o, ret=%d, errno=%d:%s", mode, ret, errno, strerror(errno));
+		slog_debug("[POSIX] Ending Hercules 'open', mode=%o, ret=%d, errno=%d:%s\n", mode, ret, errno, strerror(errno));
 		free(new_path);
 	}
 	else
@@ -2191,7 +2262,7 @@ int unlink(const char *name)
 		slog_debug("[POSIX]. Calling Hercules 'unlink', new_path=%s", new_path);
 		// fprintf(stderr, "[POSIX]. Calling Hercules 'unlink', new_path=%s\n", new_path);
 		int32_t type = get_type(new_path);
-		slog_debug("[POSIX][unlink] type=%d, new_path=%s", type, new_path);
+		// slog_debug("[POSIX][unlink] type=%d, new_path=%s", type, new_path);
 		if (type == 0)
 		{
 			strcat(new_path, "/");
@@ -2226,38 +2297,33 @@ int unlink(const char *name)
 			slog_error("[POSIX]. Error Hercules no file descriptor found for the pathname=%s", new_path);
 			fprintf(stderr, "[POSIX][unlink]. Error. No Fd deleted in the local map, new_path=%s\n", new_path);
 		}
-		// else
-		// {
-		// 	fprintf(stderr, "[POSIX][unlink]. Fd deleted in the local map, new_path=%s\n", new_path);
-		// }
 
 		slog_debug("[POSIX]. Ending Hercules 'unlink', type %d, new_path=%s, ret=%d", type, new_path, ret);
-		// fprintf(stderr, "[POSIX]. Ending Hercules 'unlink', type %d, new_path=%s, ret=%d\n", type, new_path, ret);
 		free(new_path);
 	}
-	else if (!strncmp(name, "imss://", strlen("imss://"))) // TO REVIEW!
-	{
-		slog_debug("[POSIX]. Calling 'unlink' op 2, name=%s.", name);
-		// fprintf(stderr, "[POSIX]. Calling 'unlink' op 2, name=%s\n", name);
-		char *pathname = (char *)calloc(256, sizeof(char));
-		strcpy(pathname, name);
-		int32_t type = get_type(pathname);
-		if (type == 0)
-		{
-			strcat(pathname, "/");
-			type = get_type(pathname);
+	// else if (!strncmp(name, "imss://", strlen("imss://"))) // TO REVIEW!
+	// {
+	// 	slog_debug("[POSIX]. Calling 'unlink' op 2, name=%s.", name);
+	// 	// fprintf(stderr, "[POSIX]. Calling 'unlink' op 2, name=%s\n", name);
+	// 	char *pathname = (char *)calloc(256, sizeof(char));
+	// 	strcpy(pathname, name);
+	// 	int32_t type = get_type(pathname);
+	// 	if (type == 0)
+	// 	{
+	// 		strcat(pathname, "/");
+	// 		type = get_type(pathname);
 
-			if (type == 2)
-			{
-				ret = imss_rmdir(pathname);
-			}
-		}
-		else
-		{
-			ret = imss_unlink(pathname);
-		}
-		free(pathname);
-	}
+	// 		if (type == 2)
+	// 		{
+	// 			ret = imss_rmdir(pathname);
+	// 		}
+	// 	}
+	// 	else
+	// 	{
+	// 		ret = imss_unlink(pathname);
+	// 	}
+	// 	free(pathname);
+	// }
 	else
 	{
 		slog_debug("[POSIX]. Calling Real 'unlink', name=%s", name);

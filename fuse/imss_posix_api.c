@@ -1893,6 +1893,7 @@ int imss_release(const char *path)
 	memcpy(head, &stats, sizeof(struct stat));
 	// pthread_mutex_lock(&lock);
 	//  fprintf(stderr,"[Client for file %s] file size %ld\n", path, stats.st_size);
+	// Updates the size of the file in the block 0.
 	if (set_data(ds, 0, head, 0, 0) < 0)
 	{
 		fprintf(stderr, "[IMSS-FUSE][release]	Error writing to imss.\n");
@@ -1988,7 +1989,6 @@ int imss_create(const char *path, mode_t mode, uint64_t *fh)
 	set_data(*fh, 0, (char *)buff, 0, 0);
 	pthread_mutex_unlock(&lock); // unlock.
 
-	// ret =
 	map_erase(map, rpath);
 	slog_live("[imss_create] map_erase(map, rpath:%s), ret:%d", rpath, ret);
 	// if(ret < 1){
@@ -2091,6 +2091,7 @@ int imss_unlink(const char *path)
 	// header.st_blocks = INT32_MAX;
 	// header.st_nlink = 0;
 	header.st_nlink = header.st_nlink - 1;
+	slog_debug("[FUSE][imss_posix_api] header.st_nlink=%lu", header.st_nlink);
 
 	// Write initial block (0).
 	memcpy(buff, &header, sizeof(struct stat));
