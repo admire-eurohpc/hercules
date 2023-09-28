@@ -18,6 +18,7 @@
 #include <unistd.h>
 // #include <disk.h>
 
+
 // Pointer to the tree's root node.
 extern GNode *tree_root;
 extern pthread_mutex_t tree_mut;
@@ -512,6 +513,7 @@ int32_t main(int32_t argc, char **argv)
 		arguments[i].blocksize = block_size;
 		arguments[i].storage_size = max_storage_size;
 		arguments[i].port = bind_port;
+		arguments[i].tmp_file_path = tmp_file_path;
 
 		// Add the instance URI to the thread arguments.
 		strcpy(arguments[i].my_uri, imss_uri);
@@ -524,6 +526,7 @@ int32_t main(int32_t argc, char **argv)
 			if (pthread_create(&threads[i], NULL, dispatcher, (void *)&arguments[i]) == -1)
 			{
 				// Notify thread error deployment.
+				ready(tmp_file_path, "ERROR");
 				perror("ERRIMSS_DISPATCHER_DEPLOY");
 				return -1;
 			}
@@ -657,14 +660,7 @@ int32_t main(int32_t argc, char **argv)
 
 		// fprintf(stderr, "tmp_file_path=%s\n", tmp_file_path);
 
-		FILE *tmp_file = tmpfile(); // make the file pointer as temporary file.
-		tmp_file = fopen(tmp_file_path, "w");
-		if (tmp_file == NULL)
-		{
-			puts("Error in creating temporary file");
-			return 0;
-		}
-		fclose(tmp_file);
+		ready(tmp_file_path, "OK");
 
 		// printf("%d,%f\n", args.id, time_taken);
 		// fflush(stdout);
@@ -705,3 +701,5 @@ int32_t main(int32_t argc, char **argv)
 	// Free the publisher release address.
 	return 0;
 }
+
+

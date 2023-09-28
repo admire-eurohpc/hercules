@@ -52,6 +52,7 @@ typedef struct {
 	uint64_t	  storage_size;
 	ucp_address_t * peer_address;
 	uint64_t worker_uid;
+	char *tmp_file_path;
 } p_argv;
 
 
@@ -73,6 +74,8 @@ void * srv_attached_dispatcher (void * th_argv);
 
 //Dispatcher thread method distributing clients among the pool of metadata server threads.
 void * dispatcher (void * th_argv);
+
+int ready(char *tmp_file_path, const char *msg);
 
 #endif
 

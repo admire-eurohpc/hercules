@@ -62,6 +62,24 @@ extern int IMSS_THREAD_POOL;
 
 #define GARBAGE_COLLECTOR_PERIOD 120
 
+int ready(char *tmp_file_path, const char *msg)
+{
+	char status[25];
+	FILE *tmp_file = tmpfile(); // make the file pointer as temporary file.
+	tmp_file = fopen(tmp_file_path, "w");
+	if (tmp_file == NULL)
+	{
+		puts("Error in creating temporary file");
+		return 0;
+	}
+
+	strcpy(status,"STATUS = ");
+	strcat(status, msg);
+
+	fputs(status, tmp_file);
+
+	fclose(tmp_file);
+}
 // Thread method attending client read-write data requests.
 void *srv_worker(void *th_argv)
 {
@@ -1498,6 +1516,7 @@ void *dispatcher(void *th_argv)
 	int optval = 1;
 	char service[8];
 	struct addrinfo hints, *res, *t;
+	char *tmp_file_path = arguments->tmp_file_path;
 
 	snprintf(service, sizeof(service), "%ld", arguments->port);
 	memset(&hints, 0, sizeof(hints));
@@ -1522,7 +1541,8 @@ void *dispatcher(void *th_argv)
 		{
 
 			// perror("Dispatcher Server");
-			perror("ERRIMSS_DISPATCHER_DEPLOY");
+			ready(tmp_file_path, "ERROR");
+			perror("ERRIMSS_DISPATCHER_COM");
 			exit(-1);
 		}
 		else if (ret == 0)
