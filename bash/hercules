@@ -189,14 +189,13 @@ if [ -z "$HERCULES_MPI_HOSTFILE_NAME" ]; then
     fi
     ## Creates a client hostfile using some of the allocates nodes.
     if [[ $SLURM -eq "1" ]]; then
-        HERCULES_MPI_HOSTFILE_NAME="$HERCULES_BASH_PATH/client_hostfile"
+        HERCULES_MPI_HOSTFILE_NAME="client_hostfile"
         tail -n +$((NUM_METADATA+NUM_DATA+1)) hostfile | head -n $NUM_NODES_FOR_CLIENTS > $HERCULES_MPI_HOSTFILE_NAME
     fi
 fi
 
 
 ## To run the metadata servers.
-echo "[+] Hercules: Running metadata servers"
 ## Checks if a metadata hostfile was not defined.
 if [[ -z $META_SERVER_FILE ]];
 then
@@ -222,7 +221,7 @@ printf "%s\n" ${meta_hosts[@]} > meta_hostfile
 
 ## The array is read to deploy the metadata servers.
 i=0
-
+echo "[+] Hercules: Starting metadata servers on ${meta_hosts[@]}"
 start=`date +%s.%N`
 for node in ${meta_hosts[@]}
 do    
@@ -232,16 +231,16 @@ do
     ## to the node via ssh.
     if [[ "$SLURM" -eq "0" ]]; then
         #{ ssh $node "$RM; cd $HERCULES_BASH_PATH && $COMMAND"; } &
-        echo "[+] Removing temporal files on $node"
+        echo "[ + ] Removing temporal files on $node"
         ( ssh $node "$RM" )
-        echo "[+] Running metadata server $i in $node..."
+        echo "[ + ] Starting metadata server $i on $node..."
         ( ssh $node "cd $HERCULES_BASH_PATH && HERCULES_CONF=$FILE $COMMAND" ) &
     else
         ## Deletes the file that we use to make sure that the server has started.
         echo "[+] Removing temporal files on $node"
-        srun --exclusive --export=ALL -N 1 -n 1 -w $node $RM
+        srun --exclusive --export=ALL -N 1 -n 1 -w $node $RM 2> /dev/null
         ## If slurm is being used, the service is deploy using srun.
-        echo "[+] Running metadata server $i in $node..."
+        echo "[+] Starting metadata server $i on $node..."
         srun --exclusive --export=ALL -N 1 -n 1 -w $node $COMMAND &
     fi
     i=$(($i+1))
@@ -252,21 +251,20 @@ done
 WaitForServers "metadata" "m" ${meta_hosts[@]}
 end=`date +%s.%N`
 runtime=$( echo "$end - $start" | bc -l )
-echo "[-] Metadata servers started in $runtime seconds, start=$start, end=$end"
+echo "[-] Metadata servers started in $runtime seconds"
 
 ## To run the data servers.
-echo "[+] Hercules: Running data servers"
 if [[ -z $DATA_SERVER_FILE ]];
 then
     ## Error if slurm is not being used and no data hostfile was defined.
     if [[ "$SLURM" -eq "0" ]]; then
-        echo "[Error] Data server file not specified, please set one using -d <filename> flag"
+        echo "[Error] Data server file not specified, please set one using -d <filename> flag."
         exit 1
     fi
     ## If a data file was not defined and we have slurm's nodes allocated,
     ## then we create an array which contains the hostnames of the nodes that
     ## will be used to deploy the determinate set of data servers.
-    echo "[+] Data server file not specified, getting information from slurm"
+    echo "[+] Data server file not specified, getting information from slurm."
     readarray -t data_hosts < <(tail -n +$((NUM_METADATA+1)) hostfile | head -n $NUM_DATA)
 else
     ## If a data file was defined we read it to create an array which
@@ -279,24 +277,25 @@ fi
 ## To create the default data hostfile.
 printf "%s\n" ${data_hosts[@]} > data_hostfile
 i=0
+echo "[+] Hercules: Starting data servers on ${data_hosts[@]}"
 start=`date +%s.%N`
 for node in ${data_hosts[@]}
 do
-    echo "[+] Running data server $i in $node..-"
+    # echo "[+] Running data server $i in $node..."
     RM="rm /tmp/d-hercules-$i"
     COMMAND="$HERCULES_BUILD_PATH/hercules_server d $i ${meta_hosts[0]}"
     if [[ "$SLURM" -eq "0" ]]; then
         # ssh $node "$RM; cd $HERCULES_BASH_PATH &&  $COMMAND &"
-        echo "[+] Removing temporal files on $node"
+        echo "[ + ] Removing temporal files on $node"
         ( ssh $node "$RM" )
-        echo "[+] Running data server $i in $node..."
+        echo "[ + ] Starting data server $i in $node..."
         ( ssh $node "cd $HERCULES_BASH_PATH && HERCULES_CONF=$FILE $COMMAND" ) &
     else
         ## Deletes the file that we use to make sure that the server has started.
         echo "[+] Removing temporal files on $node"
-        srun --exclusive --export=ALL -N 1 -n 1 -w $node $RM
+        srun --exclusive --export=ALL -N 1 -n 1 -w $node $RM 2> /dev/null
         ## If slurm is being used, the service is deploy using srun.
-        echo "[+] Running data server $i in $node..."
+        echo "[+] Starting data server $i on $node..."
         srun --exclusive --export=ALL -N 1 -n 1 -w $node $COMMAND &
     fi
     i=$(($i+1))
@@ -306,7 +305,7 @@ done
 WaitForServers "data" "d" ${data_hosts[@]}
 end=`date +%s.%N`
 runtime=$( echo "$end - $start" | bc -l )
-echo "[-] Data servers started in $runtime seconds, start=$start, end=$end"
+echo "[-] Data servers started in $runtime seconds"
 
 
 

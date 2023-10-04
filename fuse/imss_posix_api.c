@@ -1369,7 +1369,7 @@ int imss_write(const char *path, const char *buf, size_t size, off_t off)
 		}
 
 		// store block
-		slog_live("[imss_write] writting %" PRIu64 " kilobytes (%" PRIu64 " bytes) with an offset of %" PRIu64 "", bytes_to_copy / 1024, bytes_to_copy, block_offset / 1024);
+		slog_live("[imss_write] writting %" PRIu64 " kilobytes (%" PRIu64 " bytes) with an offset of %" PRIu64 " kilobytes (%" PRIu64 " bytes)", bytes_to_copy / 1024, bytes_to_copy, block_offset / 1024, block_offset);
 
 		if (MALLEABILITY)
 		{

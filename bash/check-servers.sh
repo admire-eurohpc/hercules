@@ -8,10 +8,15 @@ i=1
 FILE="/tmp/$SERVER_TYPE-hercules-$SERVER_NUMBER"
 ## Checks if the file exists.
 until [ -f $FILE ]; do
-    echo "Waiting for $FILE, attemp $i"
+    # echo "Waiting for $FILE, attemp $i"
     i=$(($i + 1))
+    ## Waits "attemps" times, then an error is return.
     if [ $i -gt $ATTEMPS ]; then
         exit 1
+    fi
+    t=$(($i % 5))
+    if [ $t -eq 0 ]; then
+        echo "[+] Waiting for server $SERVER_NUMBER"
     fi
     sleep 1
 done

@@ -662,7 +662,7 @@ int32_t main(int32_t argc, char **argv)
 
 		ready(tmp_file_path, "OK");
 
-		fprintf(stderr,"Servidor activo\n");
+		// fprintf(stderr,"Servidor activo\n");
 
 		// printf("%d,%f\n", args.id, time_taken);
 		// fflush(stdout);
