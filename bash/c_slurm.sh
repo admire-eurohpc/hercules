@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=hercules    # Job name
-#SBATCH --time=00:03:00               # Time limit hrs:min:sec
+#SBATCH --time=00:10:00               # Time limit hrs:min:sec
 #SBATCH --output=logs/hercules/%j_hercules.log   # Standard output and error log
 #SBATCH --mem=0
 #SBATCH --overcommit
@@ -20,6 +20,8 @@ FILE_SIZE_PER_CLIENT=$2
 
 ## Uncomment when working in Unito.
 IOR_PATH=/beegfs/home/javier.garciablas/io500/bin
+#spack load mpich@3.2.1%gcc@=9.4.0
+spack load openmpi@4.1.5
 # spack load \
 #    cmake@3.24.3%gcc@9.4.0 arch=linux-ubuntu20.04-broadwell \
 #    glib@2.74.1%gcc@9.4.0 arch=linux-ubuntu20.04-broadwell \
@@ -65,12 +67,13 @@ TRANSFER_SIZE=$((1024 * 16))
 #COMMAND="/beegfs/home/javier.garciablas/nek5000/run/eddy_uv/nek5000"
 # COMMAND="./exe_WRITE_AND_READ-TEST /mnt/imss/eddy hola.txt 1024"
 # COMMAND="/beegfs/home/javier.garciablas/nek5000/run/eddy_uv_spack/nek5000"
-COMMAND="~/Nek5000/run/turbPipe/nek5000"
+#COMMAND="~/Nek5000/run/turbPipe/nek5000"
+COMMAND="strace -o strace.out ./exe_test_mpi_set_view /mnt/hercules/example.txt"
 
 set -x
 
 # : ' # this is a multi-line comment
-mpiexec -npernode $HERCULES_NCPN $HERCULES_MPI_HOSTFILE_DEF $HERCULES_MPI_HOSTFILE_NAME \
+mpiexec -np $HERCULES_NCPN $HERCULES_MPI_HOSTFILE_DEF $HERCULES_MPI_HOSTFILE_NAME \
    $HERCULES_MPI_ENV_DEF HERCULES_CONF=$HERCULES_CONF \
    $HERCULES_MPI_ENV_DEF LD_PRELOAD=$HERCULES_POSIX_PRELOAD \
    $COMMAND

@@ -1312,10 +1312,8 @@ int statvfs(const char *restrict path, struct statvfs *restrict buf)
 	int ret = 0;
 	char *new_path = checkHerculesPath(path);
 	if (new_path != NULL)
-	{
-		// fprintf(stderr, "[POSIX] Calling Hercules 'statvfs', path=%s, init=%d, new_path=%s\n", path, init, new_path);
+	{		
 		slog_debug("[POSIX]. Calling Hercules 'statvfs', path=%s", new_path);
-
 		buf->f_bsize = IMSS_BLKSIZE * KB;
 		buf->f_namemax = URI_;
 		slog_debug("[POSIX]. End Hercules 'statvfs', path=%s", new_path);
@@ -1349,7 +1347,7 @@ int statfs(const char *restrict path, struct statfs *restrict buf)
 		slog_debug("[POSIX]. Calling Hercules 'statfs', path=%s, new_path=%s", path, new_path);
 		buf->f_bsize = IMSS_BLKSIZE * KB;
 		buf->f_namelen = URI_;
-		slog_debug("[POSIX]. Ending Hercules 'statfs', path=%s.", path);
+		slog_debug("[POSIX]. Ending Hercules 'statfs', path=%s", path);
 		free(new_path);
 	}
 	else
@@ -1675,7 +1673,7 @@ size_t fwrite(const void *buf, size_t size, size_t count, FILE *fp)
 		slog_debug("[POSIX]. Calling Hercules 'fwrite', pathname=%s", pathname);
 		map_fd_search(map_fd, pathname, fp->_fileno, &p);
 		ret = imss_write(pathname, buf, count, p);
-		slog_debug("[POSIX %d]. Ending Hercules 'fwrite', ret=%ld,  errno=%d:%s\n", ret, pathname, errno, strerror(errno));
+		slog_debug("[POSIX]. Ending Hercules 'fwrite', pathname=%s, ret=%ld,  errno=%d:%s\n", pathname, ret, errno, strerror(errno));
 	}
 	else
 	{
@@ -1743,7 +1741,7 @@ ssize_t writev(int fd, const struct iovec *iov, int iovcnt)
 		slog_debug("[POSIX]. Calling Hercules 'writev', pathname=%s", pathname);
 		map_fd_search(map_fd, pathname, fd, &p);
 		ret = imss_write(pathname, buffer, bytes, p);
-		slog_debug("[POSIX %d]. Ending Hercules 'writev', pathname=%s, ret=%ld, errno=%d:%s\n", pathname, ret, errno, strerror(errno));
+		slog_debug("[POSIX]. Ending Hercules 'writev', pathname=%s, ret=%ld, errno=%d:%s\n", pathname, ret, errno, strerror(errno));
 	}
 	else
 	{

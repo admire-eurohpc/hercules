@@ -172,7 +172,7 @@ void *srv_worker(void *th_argv)
 		}
 		else
 		{
-			slog_debug("\t[srv_worker]['%" PRIu64 "] Endpoint already exist'\n", attr.worker_uid);
+			slog_debug("\t[srv_worker]['%" PRIu64 "] Endpoint already exist'", attr.worker_uid);
 			// fprintf(stderr, "\t[d]['%" PRIu64 "] Endpoint already exist'\n", attr.worker_uid);
 		}
 
@@ -186,7 +186,7 @@ void *srv_worker(void *th_argv)
 		t = clock() - t;
 
 		time_taken = ((double)t) / CLOCKS_PER_SEC; // in seconds
-		slog_info("[srv_worker] Serving time %f s", time_taken);
+		slog_info("[srv_worker] Serving time %f s\n", time_taken);
 
 		free(peer_addr);
 
