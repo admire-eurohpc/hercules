@@ -286,7 +286,7 @@ int32_t main(int32_t argc, char **argv)
 	else
 	{
 		slog_debug("[CLI PARAMS] type = %c port = %" PRId64 " bufsize = %" PRId64 " ", args.type, args.stat_port, args.bufsize);
-		slog_debug("stat-logfile = %s", args.stat_logfile);
+		// slog_debug("stat-logfile = %s", args.stat_logfile);
 		// bind port number.
 		bind_port = args.stat_port;
 	}

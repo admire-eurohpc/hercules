@@ -1,11 +1,11 @@
 #!/bin/bash
 #SBATCH --job-name=hercules    # Job name
-#SBATCH --time=00:10:00               # Time limit hrs:min:sec
+#SBATCH --time=01:00:00               # Time limit hrs:min:sec
 #SBATCH --output=logs/hercules/%j_hercules.log   # Standard output and error log
 #SBATCH --mem=0
 #SBATCH --overcommit
 #SBATCH --oversubscribe
-#SBATCH --exclude=broadwell-[000-002]
+##SBATCH --exclude=broadwell-[000-002]
 ##SBATCH --nodelist=broadwell-[038-043]
 ##SBATCH --nodelist=broadwell-[000-004]
 ###SBATCH --exclusive=user
@@ -61,23 +61,26 @@ echo "Hercules started in $runtime seconds, start=$start_, end=$end_"
 
 echo "Running clients"
 TRANSFER_SIZE=$((1024 * 16))
-#COMMAND="$IOR_PATH/ior -o /mnt/hercules/data.out -t 100M -b 100M -s 1 -i 10 -w -r -W -R"
+COMMAND="$IOR_PATH/ior -o /mnt/hercules/data.out -t 100M -b 100M -s 1 -i 10 -w -r -W -R -k"
 #COMMAND="$IOR_PATH/ior -t ${TRANSFER_SIZE}kb -b ${FILE_SIZE_PER_CLIENT}kb -s 1 -i 2 -F -o /mnt/hercules/data.out"
 #COMMAND="../../bin/nekbmpi eddy_uv 2"
 #COMMAND="/beegfs/home/javier.garciablas/nek5000/run/eddy_uv/nek5000"
 # COMMAND="./exe_WRITE_AND_READ-TEST /mnt/imss/eddy hola.txt 1024"
 # COMMAND="/beegfs/home/javier.garciablas/nek5000/run/eddy_uv_spack/nek5000"
 #COMMAND="~/Nek5000/run/turbPipe/nek5000"
-COMMAND="strace -o strace.out ./exe_test_mpi_set_view /mnt/hercules/example.txt"
+#COMMAND="strace -o strace.out ./exe_test_mpi_set_view /mnt/hercules/example.txt"
+#COMMAND="ls -lh /mnt/hercules"
 
 set -x
 
 # : ' # this is a multi-line comment
-mpiexec -np $HERCULES_NCPN $HERCULES_MPI_HOSTFILE_DEF $HERCULES_MPI_HOSTFILE_NAME \
+mpiexec $HERCULES_MPI_PPN $HERCULES_NCPN $HERCULES_MPI_HOSTFILE_DEF $HERCULES_MPI_HOSTFILE_NAME \
    $HERCULES_MPI_ENV_DEF HERCULES_CONF=$HERCULES_CONF \
    $HERCULES_MPI_ENV_DEF LD_PRELOAD=$HERCULES_POSIX_PRELOAD \
    $COMMAND
 # '
+
+HERCULES_CONF=$HERCULES_CONF LD_PRELOAD=$HERCULES_POSIX_PRELOAD ls -lh /mnt/hercules
 
 #LD_PRELOAD=/beegfs/home/javier.garciablas/imss/build/tools/libhercules_posix.so
 #export LD_PRELOAD

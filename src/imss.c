@@ -33,6 +33,8 @@ uint32_t n_stat_servers; // Number of metadata servers available.
 uint32_t *stat_ids;
 void *stat_mon; // Metadata monitoring socket.
 
+uint32_t NUM_DATA_SERVERS;
+
 int32_t current_dataset;   // Dataset whose policy has been set last.
 dataset_info curr_dataset; // Currently managed dataset.
 imss curr_imss;
@@ -367,8 +369,8 @@ int32_t stat_init(char *stat_hostfile,
 
 		// Save IMSS metadata deployment.
 		n_chars = getline(&stat_node, &l_size, stat_nodes);
-		// Erase the new line character ('') from the string.
 
+		// Erase the new line character ('') from the string.
 		if (stat_node[n_chars - 1] == '\n')
 		{
 			stat_node[n_chars - 1] = '\0';
@@ -793,6 +795,8 @@ int32_t open_imss(char *imss_uri)
 	ucp_worker_address_query(local_addr_data, &attr);
 	local_data_uid = attr.worker_uid;
 
+	NUM_DATA_SERVERS = new_imss.info.num_storages;
+
 	// Connect to the requested IMSS.
 	for (int32_t i = 0; i < new_imss.info.num_storages; i++)
 	{
@@ -913,7 +917,7 @@ int32_t stat_imss(char *imss_uri, imss_info *imss_info_)
 	int ret = 0;
 	ucp_ep_h ep;
 
-	slog_debug("[IMSS][stat_imss] imss_uri=%s", imss_uri);
+	// slog_debug("[IMSS][stat_imss] imss_uri=%s", imss_uri);
 	if ((imss_found_in = find_imss(imss_uri, &searched_imss)) != -1)
 	{
 		memcpy(imss_info_, &searched_imss.info, sizeof(imss_info));
@@ -2062,7 +2066,6 @@ int32_t imss_flush_data()
 	// }
 
 	// Release the set of connections to the corresponding IMSS.
-
 	for (int32_t i = 0; i < curr_imss.info.num_storages; i++)
 	{
 		ucp_ep_h ep;
@@ -2683,10 +2686,22 @@ int32_t get_type(char *uri)
 	slog_info("[IMSS][get_type] Request - '%s'", formated_uri);
 	// fprintf(stderr, "[IMSS] Request - '%s'\n", formated_uri);
 
+	// // Search for the requested IMSS.
+	// imss imss_;
+	// int32_t imss_position;
+	// if ((imss_position = find_imss(uri, &imss_)) == -1)
+	// {
+	// 	slog_fatal("ERRIMSS_GETTYPE_NOTFOUND");
+	// 	return -1;
+	// }
+
 	imss_info *data;
 
 	// Receive the answer.
-	char result[RESPONSE_SIZE];
+	// char result[RESPONSE_SIZE];
+	size_t res_size = sizeof(imss_info) + NUM_DATA_SERVERS * LINE_LENGTH;
+	slog_debug("[IMSS][get_type] res_size = %ld, curr_imss.info.num_storages=%d", res_size, NUM_DATA_SERVERS);
+	char result[res_size];
 
 	if (recv_dynamic_stream(ucp_worker_meta, ep, result, BUFFER, local_meta_uid) < 0)
 	{

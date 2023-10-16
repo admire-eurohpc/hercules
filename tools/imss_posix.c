@@ -1086,13 +1086,24 @@ int __lxstat(int fd, const char *pathname, struct stat *buf)
 	if (new_path != NULL)
 	{
 		slog_debug("[POSIX]. Calling Hercules '__lxstat', pathname=%s, new_path=%s, fd=%d, errno=%d:%s", pathname, new_path, fd, errno, strerror(errno));
-		imss_refresh(new_path);
-		ret = imss_getattr(new_path, buf);
-		if (ret < 0)
+		// imss_refresh(new_path);
+		ret = imss_refresh(new_path);
+		// if (ret < 0)
+		// {
+		// 	errno = -ret;
+		// 	ret = -1;
+		// 	// perror("ERRIMSS_ACCESS_IMSSREFRESH");
+		// }
+		// else
 		{
-			errno = -ret;
-			ret = -1;
+			ret = imss_getattr(new_path, buf);
+			if (ret < 0)
+			{
+				errno = -ret;
+				ret = -1;
+			}
 		}
+
 		slog_debug("[POSIX]. End Hercules '__lxstat', fd=%d, ret=%d, errno=%d:%s, file_size=%lu", fd, ret, errno, strerror(errno), buf->st_size);
 		free(new_path);
 	}
@@ -1312,7 +1323,7 @@ int statvfs(const char *restrict path, struct statvfs *restrict buf)
 	int ret = 0;
 	char *new_path = checkHerculesPath(path);
 	if (new_path != NULL)
-	{		
+	{
 		slog_debug("[POSIX]. Calling Hercules 'statvfs', path=%s", new_path);
 		buf->f_bsize = IMSS_BLKSIZE * KB;
 		buf->f_namemax = URI_;

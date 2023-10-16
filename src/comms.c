@@ -79,7 +79,7 @@ int init_worker(ucp_context_h ucp_context, ucp_worker_h *ucp_worker)
 		ret = -1;
 	}
 
-	slog_debug("[COMM] Inicializated worker result: %d", ret);
+	// slog_debug("[COMM] Inicializated worker result: %d", ret);
 	return ret;
 }
 
@@ -131,7 +131,7 @@ int init_context(ucp_context_h *ucp_context, ucp_config_t *config, ucp_worker_h 
 	ucp_mem_alloc(*ucp_context, 4 * 1024 * 1024, (void **)&send_buffer);
 	ucp_mem_alloc(*ucp_context, 4 * 1024 * 1024, (void **)&recv_buffer);
 
-	slog_debug("[COMM] Inicializated context result: %d", ret);
+	// slog_debug("[COMM] Inicializated context result: %d", ret);
 	return ret;
 
 err_cleanup:

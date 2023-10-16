@@ -157,6 +157,7 @@ int imss_refresh(const char *path)
 	}
 	else
 	{
+		slog_warn("[imss_refresh] %s", strerror(ENOENT));
 		return -ENOENT;
 	}
 
