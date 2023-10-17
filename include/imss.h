@@ -53,7 +53,7 @@ extern int32_t IMSS_DEBUG;
  * Macro to measure the time spend by function_to_call.
  * char*::print_comment: comment to be concatenated to the elapsed time.
  */
-#ifdef __TIMING__
+#ifdef __TIMING__	
 #define TIMING(function_to_call, print_comment, type)          \
 	({                                                         \
 		clock_t t;                                             \

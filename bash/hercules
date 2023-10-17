@@ -177,6 +177,7 @@ NUM_METADATA=$(cat $FILE | grep "NUM_META_SERVERS" | awk '{print $3}')
 NUM_DATA=$(cat $FILE | grep "NUM_DATA_SERVERS" | awk '{print $3}')
 NUM_NODES_FOR_CLIENTS=$(cat $FILE | grep "NUM_NODES_FOR_CLIENTS" | awk '{print $3}')
 NUM_CLIENTS_PER_NODE=$(cat $FILE | grep "NUM_CLIENTS_PER_NODE" | awk '{print $3}')
+ATTACHED=$(cat $FILE | grep "ATTACHED" | awk '{print $3}')
 BLOCK_SIZE=$(cat $FILE | grep "BLOCK_SIZE" | awk '{print $3}')
 STORAGE_SIZE=$(cat $FILE | grep "STORAGE_SIZE" | awk '{print $3}')
 
@@ -190,7 +191,11 @@ if [ -z "$HERCULES_MPI_HOSTFILE_NAME" ]; then
     ## Creates a client hostfile using some of the allocates nodes.
     if [[ $SLURM -eq "1" ]]; then
         HERCULES_MPI_HOSTFILE_NAME="client_hostfile"
-        tail -n +$((NUM_METADATA+NUM_DATA+1)) hostfile | head -n $NUM_NODES_FOR_CLIENTS > $HERCULES_MPI_HOSTFILE_NAME
+        if [[ $ATTACHED -eq "1" ]]; then
+            tail -n +$((NUM_METADATA+1)) hostfile | head -n $NUM_NODES_FOR_CLIENTS > $HERCULES_MPI_HOSTFILE_NAME
+        else
+            tail -n +$((NUM_METADATA+NUM_DATA+1)) hostfile | head -n $NUM_NODES_FOR_CLIENTS > $HERCULES_MPI_HOSTFILE_NAME
+        fi
     fi
 fi
 

@@ -2675,6 +2675,7 @@ int32_t get_type(char *uri)
 	ep = stat_eps[m_srv];
 
 	sprintf(formated_uri, "%" PRIu32 " GET 0 %s", stat_ids[m_srv], uri);
+	slog_info("[IMSS][get_type] Request - '%s'", formated_uri);
 	// printf("get_type=%s",uri);
 	// Send the request.
 	if (send_req(ucp_worker_meta, ep, local_addr_meta, local_addr_len_meta, formated_uri) < 0)
@@ -2683,7 +2684,6 @@ int32_t get_type(char *uri)
 		return -1;
 	}
 
-	slog_info("[IMSS][get_type] Request - '%s'", formated_uri);
 	// fprintf(stderr, "[IMSS] Request - '%s'\n", formated_uri);
 
 	// // Search for the requested IMSS.

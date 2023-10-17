@@ -61,7 +61,7 @@ echo "Hercules started in $runtime seconds, start=$start_, end=$end_"
 
 echo "Running clients"
 TRANSFER_SIZE=$((1024 * 16))
-COMMAND="$IOR_PATH/ior -o /mnt/hercules/data.out -t 100M -b 100M -s 1 -i 10 -w -r -W -R -k"
+COMMAND="$IOR_PATH/ior -o /mnt/hercules/data.out -t 100M -b 100M -s 1 -i 1 -w -r -W -R -k"
 #COMMAND="$IOR_PATH/ior -t ${TRANSFER_SIZE}kb -b ${FILE_SIZE_PER_CLIENT}kb -s 1 -i 2 -F -o /mnt/hercules/data.out"
 #COMMAND="../../bin/nekbmpi eddy_uv 2"
 #COMMAND="/beegfs/home/javier.garciablas/nek5000/run/eddy_uv/nek5000"
@@ -73,6 +73,8 @@ COMMAND="$IOR_PATH/ior -o /mnt/hercules/data.out -t 100M -b 100M -s 1 -i 10 -w -
 
 set -x
 
+# HERCULES_CONF=$HERCULES_CONF LD_PRELOAD=$HERCULES_POSIX_PRELOAD ls -lh /mnt/hercules
+
 # : ' # this is a multi-line comment
 mpiexec $HERCULES_MPI_PPN $HERCULES_NCPN $HERCULES_MPI_HOSTFILE_DEF $HERCULES_MPI_HOSTFILE_NAME \
    $HERCULES_MPI_ENV_DEF HERCULES_CONF=$HERCULES_CONF \
@@ -80,7 +82,7 @@ mpiexec $HERCULES_MPI_PPN $HERCULES_NCPN $HERCULES_MPI_HOSTFILE_DEF $HERCULES_MP
    $COMMAND
 # '
 
-HERCULES_CONF=$HERCULES_CONF LD_PRELOAD=$HERCULES_POSIX_PRELOAD ls -lh /mnt/hercules
+# HERCULES_CONF=$HERCULES_CONF LD_PRELOAD=$HERCULES_POSIX_PRELOAD ls -lh /mnt/hercules
 
 #LD_PRELOAD=/beegfs/home/javier.garciablas/imss/build/tools/libhercules_posix.so
 #export LD_PRELOAD

@@ -102,7 +102,10 @@ void fd_lookup(const char *path, int *fd, struct stat *s, char **aux)
 	*fd = -1;
 	int found = map_search(map, path, fd, s, aux);
 	if (!found)
+	{
+		fprintf(stderr,"File not found, %s\n", path);
 		*fd = -1;
+	}
 	// pthread_mutex_unlock(&lock_file);
 }
 
@@ -153,6 +156,7 @@ int imss_refresh(const char *path)
 	if (fd >= 0)
 	{
 		// fprintf(stderr, "[imss_refresh] fd_lookup=%d\n", fd);
+		slog_info("[imss_refresh] fd_lookup=%d", fd);
 		ds = fd;
 	}
 	else
@@ -187,14 +191,17 @@ int imss_refresh(const char *path)
 int imss_getattr(const char *path, struct stat *stbuf)
 {
 	// Needed variables for the call
+	slog_debug("[imss_getattr], IMSS_DATA_BSIZE=%ld", IMSS_DATA_BSIZE);
 	char *buffer;
 	char **refs;
-	char head[IMSS_DATA_BSIZE];
+	// char head[IMSS_DATA_BSIZE];
 	int n_ent;
+	slog_debug("[imss_getattr] before calloc");
 	char *imss_path = calloc(MAX_PATH, sizeof(char));
 	dataset_info metadata;
 	struct timespec spec;
 	get_iuri(path, imss_path);
+	slog_debug("[imss_getattr] before memset");
 	memset(stbuf, 0, sizeof(struct stat));
 	clock_gettime(CLOCK_REALTIME, &spec);
 
@@ -203,8 +210,10 @@ int imss_getattr(const char *path, struct stat *stbuf)
 	stbuf->st_ctim = spec;
 	stbuf->st_uid = getuid();
 	stbuf->st_gid = getgid();
-	stbuf->st_blksize = IMSS_BLKSIZE;
+	stbuf->st_blksize = IMSS_DATA_BSIZE;
+	slog_debug("[imss_getattr], IMSS_DATA_BSIZE=%ld, st_blksize=%ld", IMSS_DATA_BSIZE, stbuf->st_blksize);
 	// printf("imss_getattr=%s\n",imss_path);
+	slog_debug("[imss_getattr] before get_type");
 	uint32_t type = get_type(imss_path);
 	slog_live("[imss_getattr] get_type(%s):%ld", imss_path, type);
 	if (type == 0)
@@ -286,8 +295,8 @@ int imss_getattr(const char *path, struct stat *stbuf)
 		}
 		else
 		{
-
 			// fprintf(stderr, "[IMSS-FUSE]	Cannot get dataset metadata.");
+			slog_error("[imss_getattr] Cannot get dataset metadata");
 			return -ENOENT;
 		}
 		slog_debug("[imss_getattr] file descriptor=%d, file size=%ld", fd, stbuf->st_size);
@@ -1880,7 +1889,8 @@ int imss_release(const char *path)
 	else
 		return -ENOENT;
 
-	char head[IMSS_DATA_BSIZE];
+	// char head[IMSS_DATA_BSIZE];
+	char *head = (char *)malloc(IMSS_DATA_BSIZE);
 
 	// Get time
 	struct timespec spec;
@@ -1906,6 +1916,7 @@ int imss_release(const char *path)
 	}
 
 	// pthread_mutex_unlock(&lock);
+	free(head);
 	free(rpath);
 	return 0;
 }

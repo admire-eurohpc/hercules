@@ -3229,7 +3229,7 @@ struct dirent *readdir(DIR *dirp)
 					entry->d_reclen = ceil((double)(strlen(token) - 4) / 8) * 8 + 24;
 				}
 
-				// fprintf(stderr, "[POSIX] token=%s, d_reclen=%d\n", token, entry->d_reclen);
+				slog_debug("[POSIX] token=%s, d_reclen=%d\n", token, entry->d_reclen);
 				break;
 			}
 			token = strtok(NULL, "$");
