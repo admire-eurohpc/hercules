@@ -258,11 +258,11 @@ size_t recv_data(ucp_worker_h ucp_worker, ucp_ep_h ep, char *msg, uint64_t dest,
 	recv_param.datatype = ucp_dt_make_contig(1);
 	recv_param.cb.recv = recv_handler;
 
-	// slog_debug("[COMM] Probe tag (%ld bytes).", info_tag.length);
+	slog_debug("[COMM] Probe tag (%ld bytes).", info_tag.length);
 	//	t = clock();
 	if (async)
 	{
-		request = (struct ucx_context *)TIMING(ucp_tag_recv_nbx(ucp_worker, msg, info_tag.length, dest, tag_mask, &recv_param), "[imss_read]ucp_tag_recv_nbx", ucs_status_ptr_t);
+		request = (struct ucx_context *)ucp_tag_recv_nbx(ucp_worker, msg, info_tag.length, dest, tag_mask, &recv_param):
 	}
 	else
 	{
@@ -271,7 +271,7 @@ size_t recv_data(ucp_worker_h ucp_worker, ucp_ep_h ep, char *msg, uint64_t dest,
 	}
 
 	// sleep(1);
-	status = TIMING(ucx_wait(ucp_worker, request, "recv", "data"), "[imss_read]ucx_wait", ucs_status_t);
+	status = ucx_wait(ucp_worker, request, "recv", "data");
 	// slog_debug("[COMM] status=%s.", ucs_status_string(status));
 	// slog_debug("--- %s\n", msg);
 
@@ -383,7 +383,7 @@ void err_cb_client(void *arg, ucp_ep_h ep, ucs_status_t status)
 void err_cb_server(void *arg, ucp_ep_h ep, ucs_status_t status)
 {
 
-	uint64_t worker_uid = (uint64_t)arg;
+	uint64_t worker_uid = (uint64_t)arg;	
 	// struct worker_info *worker_info = (struct worker_info *)arg;
 
 	// if (status != UCS_ERR_CONNECTION_RESET && status != UCS_ERR_ENDPOINT_TIMEOUT)
@@ -591,6 +591,7 @@ int32_t recv_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, void *data_str
 {
 	size_t length;
 	char result[BUFFER_SIZE];
+	// char *result = (char*)malloc(1024*130);
 
 	slog_debug("[COMM] recv_dynamic_stream start ");
 	length = recv_data(ucp_worker, ep, result, dest, 0);
@@ -679,6 +680,7 @@ int32_t recv_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, void *data_str
 	}
 	}
 	slog_debug("[COMM] recv_dynamic_stream end %ld", length);
+	// free(result);
 	return length;
 }
 

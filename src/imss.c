@@ -2671,6 +2671,7 @@ int32_t get_type(char *uri)
 	// slog_debug("[IMSS][get_type]");
 	// Discover the metadata server that handles the entity.
 	uint32_t m_srv = discover_stat_srv(uri);
+	uint32_t ret;
 
 	ep = stat_eps[m_srv];
 
@@ -2703,7 +2704,9 @@ int32_t get_type(char *uri)
 	slog_debug("[IMSS][get_type] res_size = %ld, curr_imss.info.num_storages=%d", res_size, NUM_DATA_SERVERS);
 	char result[res_size];
 
-	if (recv_dynamic_stream(ucp_worker_meta, ep, result, BUFFER, local_meta_uid) < 0)
+	ret = recv_dynamic_stream(ucp_worker_meta, ep, result, BUFFER, local_meta_uid);
+	slog_debug("[IMSS][get_type] after recv_dynamic_stream ret=%ld", ret);
+	if (ret < 0)
 	{
 		slog_fatal("ERRIMSS_GETTYPE_REQ");
 		return -1;

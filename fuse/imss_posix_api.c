@@ -152,7 +152,7 @@ int imss_refresh(const char *path)
 	get_iuri(path, imss_path);
 
 	fd_lookup(imss_path, &fd, &old_stats, &aux2);
-	slog_debug("[imss_refresh] fd_lookup=%d", fd);
+	// slog_debug("[imss_refresh] fd_lookup=%d", fd);
 	if (fd >= 0)
 	{
 		// fprintf(stderr, "[imss_refresh] fd_lookup=%d\n", fd);
@@ -173,7 +173,7 @@ int imss_refresh(const char *path)
 		return -1;
 	}
 	stats = (struct stat *)aux;
-	slog_debug("[imss_refresh] ds=%d, size=%ld", ds, stats->st_size);
+	slog_debug("[imss_refresh] ret=%ld ds=%d, size=%ld", ret, ds, stats->st_size);
 	map_update(map, imss_path, ds, *stats);
 
 	// 	slog_debug("[imss_refresh] Calling map_search, %s", path);
@@ -183,7 +183,7 @@ int imss_refresh(const char *path)
 	// 	slog_debug("[imss_refresh] key %s has not been found", path);
 	// }
 
-	free(aux);
+	// free(aux);
 	free(imss_path);
 	return 0;
 }
@@ -196,12 +196,12 @@ int imss_getattr(const char *path, struct stat *stbuf)
 	char **refs;
 	// char head[IMSS_DATA_BSIZE];
 	int n_ent;
-	slog_debug("[imss_getattr] before calloc");
+	// slog_debug("[imss_getattr] before calloc");
 	char *imss_path = calloc(MAX_PATH, sizeof(char));
 	dataset_info metadata;
 	struct timespec spec;
 	get_iuri(path, imss_path);
-	slog_debug("[imss_getattr] before memset");
+	// slog_debug("[imss_getattr] before memset");
 	memset(stbuf, 0, sizeof(struct stat));
 	clock_gettime(CLOCK_REALTIME, &spec);
 
@@ -210,7 +210,7 @@ int imss_getattr(const char *path, struct stat *stbuf)
 	stbuf->st_ctim = spec;
 	stbuf->st_uid = getuid();
 	stbuf->st_gid = getgid();
-	stbuf->st_blksize = IMSS_DATA_BSIZE;
+	stbuf->st_blksize = IMSS_BLKSIZE;//IMSS_DATA_BSIZE;
 	slog_debug("[imss_getattr], IMSS_DATA_BSIZE=%ld, st_blksize=%ld", IMSS_DATA_BSIZE, stbuf->st_blksize);
 	// printf("imss_getattr=%s\n",imss_path);
 	slog_debug("[imss_getattr] before get_type");
@@ -288,7 +288,7 @@ int imss_getattr(const char *path, struct stat *stbuf)
 			}
 		}
 
-		slog_debug("[imss_getattr] stats.st_nlink=%lu", stats.st_nlink);
+		slog_debug("[imss_getattr] stats.st_nlink=%lu, stats.st_size=%ld", stats.st_nlink, stats.st_size);
 		if (stats.st_nlink != 0)
 		{
 			memcpy(stbuf, &stats, sizeof(struct stat));
@@ -2103,7 +2103,7 @@ int imss_unlink(const char *path)
 	// header.st_blocks = INT32_MAX;
 	// header.st_nlink = 0;
 	header.st_nlink = header.st_nlink - 1;
-	slog_debug("[FUSE][imss_posix_api] header.st_nlink=%lu", header.st_nlink);
+	slog_debug("[FUSE][imss_posix_api][imss_unlink] header.st_nlink=%lu", header.st_nlink);
 
 	// Write initial block (0).
 	memcpy(buff, &header, sizeof(struct stat));

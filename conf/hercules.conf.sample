@@ -28,6 +28,9 @@ NUM_NODES_FOR_CLIENTS = 1
 # Total number of clients per node
 NUM_CLIENTS_PER_NODE = 1
 
+# 1: client process are share resources with data nodes.
+ATTACHED = 1
+
 # 1: enables malleability functions
 MALLEABILITY = 0
 UPPER_BOUND_MALLEABILITY = 0

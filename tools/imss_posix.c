@@ -1057,7 +1057,7 @@ int close(int fd)
 	{
 		slog_debug("[POSIX]. Calling Hercules 'close', pathname=%s, fd=%d, errno=%d:%s", pathname, fd, errno, strerror(errno));
 		ret = TIMING(imss_close(pathname), "imss_close", int);
-		slog_debug("[POSIX]. Ending Hercules 'close', pathname=%s, ret=%d, errno=%d:%s", pathname, ret, errno, strerror(errno));
+		slog_debug("[POSIX]. Ending Hercules 'close', pathname=%s, ret=%d, errno=%d:%s\n", pathname, ret, errno, strerror(errno));
 
 		map_fd_update_value(map_fd, pathname, fd, 0);
 	}
@@ -2048,7 +2048,7 @@ FILE *fopen(const char *restrict pathname, const char *restrict mode)
 
 		ret = generalOpen(new_path, flags, new_mode);
 
-		slog_debug("File descriptor=%d", ret);
+		slog_debug("[POSIX][fopen] File descriptor=%d", ret);
 
 		if (ret < 0)
 		{
@@ -2123,7 +2123,7 @@ FILE *fdopen(int fildes, const char *mode)
 
 		ret = generalOpen(pathname, flags, new_mode);
 
-		slog_debug("File descriptor=%d", ret);
+		slog_debug("[POSIX][fdopen] File descriptor=%d", ret);
 
 		if (ret < 0)
 		{
@@ -2555,7 +2555,7 @@ ssize_t write(int fd, const void *buf, size_t size)
 			map_fd_update_value(map_fd, pathname, fd, ds_stat_n.st_size + size);
 		}
 
-		slog_debug("[POSIX]. Ending Hercules 'write', pathname=%s, ret=%ld", pathname, ret);
+		slog_debug("[POSIX]. Ending Hercules 'write', pathname=%s, ret=%ld\n", pathname, ret);
 	}
 	else
 	{

@@ -67,7 +67,8 @@ extern "C"
 #define SLOG_PANIC 7
 #define SLOG_TIME 8
 
-#ifdef _SLOG_
+#define USESLOG
+#ifdef USESLOG
     #define slog_none(...) \
         slog(SLOG_NONE, __VA_ARGS__);
 

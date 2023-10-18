@@ -279,8 +279,9 @@ int srv_worker_helper(p_argv *arguments, const char *req)
 					to_read = block_size_rtvd;
 				}
 				slog_debug("[srv_worker_thread][READ_OP][READ_OP] Send the requested block with key=%s, block_offset=%ld, block_size_rtvd=%ld kb, to_read=%ld kb", key.c_str(), block_offset, block_size_rtvd / 1024, to_read / 1024);
-				ret = TIMING(send_data(arguments->ucp_worker, arguments->server_ep, address_ + block_offset, to_read, arguments->worker_uid), "[srv_worker_helper][READ_OP]send_data", uint64_t);
+				ret = send_data(arguments->ucp_worker, arguments->server_ep, address_ + block_offset, to_read, arguments->worker_uid);
 				// fprintf(stderr,"\tblock_size_rtvd=%ld, address_=%s\n", block_size_rtvd, address_);
+				slog_debug("[srv_worker_thread][READ_OP][READ_OP] send_data, ret=%d", ret);
 				if (ret < 0)
 				{
 					perror("ERRIMSS_WORKER_SENDBLOCK");
