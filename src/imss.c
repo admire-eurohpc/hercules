@@ -1324,11 +1324,21 @@ int32_t release_dataset(int32_t dataset_id)
 			return -1;
 		}
 
-		char update_result[RESPONSE_SIZE];
+		int msg_length;
+		// char update_result[RESPONSE_SIZE];
 
-		if (recv_data(ucp_worker_meta, ep, update_result, local_meta_uid, 0) < 0)
+		msg_length = get_recv_data_length(ucp_worker_meta, local_meta_uid);
+		if (msg_length < 0)
 		{
-			perror("ERRIMSS_RELDATASET_RECVUPDATERES");
+			perror("ERRIMSS_REL_DATASET_INVALID_MSG_LENGTH");
+			return -1;
+		}
+
+		char update_result[msg_length];
+		msg_length = recv_data(ucp_worker_meta, ep, update_result, msg_length, local_meta_uid, 0);
+		if (msg_length < 0)
+		{
+			perror("ERRIMSS_REL_DATASET_RECV_UPDATERES");
 			return -1;
 		}
 
@@ -1377,13 +1387,29 @@ int32_t delete_dataset(const char *dataset_uri)
 		return -1;
 	}
 
-	char result[RESPONSE_SIZE];
-	if (recv_data(ucp_worker_meta, ep, result, local_meta_uid, 0) < 0)
+	// char result[RESPONSE_SIZE];
+	// if (recv_data(ucp_worker_meta, ep, result, local_meta_uid, 0) < 0)
+	// {
+	// 	perror("ERRIMSS_RECVDYNAMSTRUCT_RECV");
+	// 	return -1;
+	// }
+	// slog_debug("[IMSS][delete_dataset] response=%s", result);
+
+	int msg_length;
+	msg_length = get_recv_data_length(ucp_worker_meta, local_meta_uid);
+	if (msg_length < 0)
 	{
-		perror("ERRIMSS_RECVDYNAMSTRUCT_RECV");
+		perror("ERRIMSS_DEL_DATASET_INVALID_MSG_LENGTH");
 		return -1;
 	}
-	slog_debug("[IMSS][delete_dataset] response=%s", result);
+
+	char result[msg_length];
+	msg_length = recv_data(ucp_worker_meta, ep, result, msg_length, local_meta_uid, 0);
+	if (msg_length < 0)
+	{
+		perror("ERRIMSS_DEL_DATASET_RECV_DATA");
+		return -1;
+	}
 
 	return 1;
 }
@@ -1440,12 +1466,29 @@ int32_t rename_dataset_metadata_dir_dir(char *old_dir, char *rdir_dest)
 		return -1;
 	}
 
-	char result[RESPONSE_SIZE];
-	if (recv_data(ucp_worker_meta, ep, result, local_meta_uid, 0) < 0)
+	// char result[RESPONSE_SIZE];
+	// if (recv_data(ucp_worker_meta, ep, result, local_meta_uid, 0) < 0)
+	// {
+	// 	perror("ERRIMSS_RECVDYNAMSTRUCT_RECV");
+	// 	return -1;
+	// }
+
+	int msg_length;
+	msg_length = get_recv_data_length(ucp_worker_meta, local_meta_uid);
+	if (msg_length < 0)
 	{
-		perror("ERRIMSS_RECVDYNAMSTRUCT_RECV");
+		perror("ERRIMSS_REN_DATASET_METADATA_DIR_DIR_INVALID_MSG_LENGTH");
 		return -1;
 	}
+
+	char result[msg_length];
+	msg_length = recv_data(ucp_worker_meta, ep, result, msg_length, local_meta_uid, 0);
+	if (msg_length < 0)
+	{
+		perror("ERRIMSS_REN_DATASET_METADATA_DIR_DIR_RECV_DATA");
+		return -1;
+	}
+
 	return 0;
 }
 
@@ -1485,10 +1528,26 @@ rename_dataset_metadata(char *old_dataset_uri, char *new_dataset_uri)
 		return -1;
 	}
 
-	char result[RESPONSE_SIZE];
-	if (recv_data(ucp_worker_meta, ep, result, local_meta_uid, 0) < 0)
+	// char result[RESPONSE_SIZE];
+	// if (recv_data(ucp_worker_meta, ep, result, local_meta_uid, 0) < 0)
+	// {
+	// 	perror("ERRIMSS_RECVDYNAMSTRUCT_RECV");
+	// 	return -1;
+	// }
+
+	int msg_length;
+	msg_length = get_recv_data_length(ucp_worker_meta, local_meta_uid);
+	if (msg_length < 0)
 	{
-		perror("ERRIMSS_RECVDYNAMSTRUCT_RECV");
+		perror("ERRIMSS_REN_DATASET_INVALID_MSG_LENGTH");
+		return -1;
+	}
+
+	char result[msg_length];
+	msg_length = recv_data(ucp_worker_meta, ep, result, msg_length, local_meta_uid, 0);
+	if (msg_length < 0)
+	{
+		perror("ERRIMSS_REN_DATASET_RECV_DATA");
 		return -1;
 	}
 
@@ -1638,10 +1697,26 @@ int32_t rename_dataset_srv_worker_dir_dir(char *old_dir, char *rdir_dest,
 			return -1;
 		}
 
-		char result[RESPONSE_SIZE];
-		if (recv_data(ucp_worker_data, ep, result, local_data_uid, 0) < 0)
+		// char result[RESPONSE_SIZE];
+		// if (recv_data(ucp_worker_data, ep, result, local_data_uid, 0) < 0)
+		// {
+		// 	perror("ERRIMSS_RECVDYNAMSTRUCT_RECV");
+		// 	return -1;
+		// }
+
+		int msg_length;
+		msg_length = get_recv_data_length(ucp_worker_data, local_data_uid);
+		if (msg_length < 0)
 		{
-			perror("ERRIMSS_RECVDYNAMSTRUCT_RECV");
+			perror("ERRIMSS_REN_DATASET_DATA_DIR_DIR_INVALID_MSG_LENGTH");
+			return -1;
+		}
+
+		char result[msg_length];
+		msg_length = recv_data(ucp_worker_data, ep, result, msg_length, local_data_uid, 0);
+		if (msg_length < 0)
+		{
+			perror("ERRIMSS_REN_DATASET_DATA_DIR_DIR_RECV_DATA");
 			return -1;
 		}
 
@@ -1699,10 +1774,26 @@ int32_t rename_dataset_srv_worker(char *old_dataset_uri, char *new_dataset_uri,
 			return -1;
 		}
 
-		char result[RESPONSE_SIZE];
-		if (recv_data(ucp_worker_data, ep, result, local_data_uid, 0) < 0)
+		// char result[RESPONSE_SIZE];
+		// if (recv_data(ucp_worker_data, ep, result, local_data_uid, 0) < 0)
+		// {
+		// 	perror("ERRIMSS_RECVDYNAMSTRUCT_RECV");
+		// 	return -1;
+		// }
+
+		int msg_length;
+		msg_length = get_recv_data_length(ucp_worker_data, local_data_uid);
+		if (msg_length < 0)
 		{
-			perror("ERRIMSS_RECVDYNAMSTRUCT_RECV");
+			perror("ERRIMSS_REN_DATASET_DATA_INVALID_MSG_LENGTH");
+			return -1;
+		}
+
+		char result[msg_length];
+		msg_length = recv_data(ucp_worker_data, ep, result, msg_length, local_data_uid, 0);
+		if (msg_length < 0)
+		{
+			perror("ERRIMSS_REN_DATASET_DATA_RECV_DATA");
 			return -1;
 		}
 
@@ -1816,12 +1907,21 @@ int32_t readv_multiple(int32_t dataset_id,
 			return -1;
 		}
 
+		int msg_length;
+		msg_length = get_recv_data_length(ucp_worker_data, local_data_uid);
+		if (msg_length < 0)
+		{
+			perror("ERRIMSS_REN_DATASET_DATA_DIR_DIR_INVALID_MSG_LENGTH");
+			return -1;
+		}
+
 		// Receive data related to the previous read request directly into the buffer.
-		if (recv_data(ucp_worker_data, ep, buffer, local_data_uid, 0) < 0)
+		msg_length = recv_data(ucp_worker_data, ep, buffer, msg_length, local_data_uid, 0);
+		if (msg_length < 0)
 		{
 			if (errno != EAGAIN)
 			{
-				perror("ERRIMSS_GETDATA_RECV");
+				perror("ERRIMSS_GETDATA_RECV_DATA");
 				return -1;
 			}
 			else
@@ -1944,11 +2044,21 @@ void *split_readv(void *th_argv)
 		/*long delta_us;
 		  gettimeofday(&start, NULL);*/
 		// Receive data related to the previous read request directly into the buffer.
-		if (recv_data(ucp_worker_data, ep, arguments->buffer, local_data_uid, 0) < 0)
+
+		int msg_length;
+		msg_length = get_recv_data_length(ucp_worker_data, local_data_uid);
+		if (msg_length < 0)
+		{
+			perror("ERRIMSS_SPLIT_READ_INVALID_MSG_LENGTH");
+			pthread_exit(NULL);
+		}
+
+		msg_length = recv_data(ucp_worker_data, ep, arguments->buffer, msg_length, local_data_uid, 0);
+		if (msg_length < 0)
 		{
 			if (errno != EAGAIN)
 			{
-				perror("ERRIMSS_GETDATA_RECV");
+				perror("ERRIMSS_SPLIT_READ_RECV");
 				pthread_exit(NULL);
 			}
 			else
@@ -2081,7 +2191,7 @@ int32_t imss_flush_data()
 // Method retrieving a data element associated to a certain dataset.
 int32_t get_data(int32_t dataset_id, int32_t data_id, char *buffer)
 {
-	slog_debug("[IMSS][get_data], dataset_id=%d, data_id=%d", dataset_id, data_id);
+	slog_debug("[IMSS][get_data] dataset_id=%d, data_id=%d", dataset_id, data_id);
 	// slog_fatal("Caller name: %pS", __builtin_return_address(0));
 	int32_t n_server;
 
@@ -2126,7 +2236,7 @@ int32_t get_data(int32_t dataset_id, int32_t data_id, char *buffer)
 		// t = clock();
 		//  Key related to the requested data element.
 		sprintf(key_, "GET 0 0 %s$%d", curr_dataset.uri_, data_id);
-		slog_debug("[IMSS][get_data] Request - '%s' in repl_servers %ld", key_, repl_servers[i]);
+		slog_debug("[IMSS][get_data] Request - '%s' to server %ld", key_, repl_servers[i]);
 		ep = curr_imss.conns.eps[repl_servers[i]];
 
 		if (send_req(ucp_worker_data, ep, local_addr_data, local_addr_len_data, key_) < 0)
@@ -2154,9 +2264,18 @@ int32_t get_data(int32_t dataset_id, int32_t data_id, char *buffer)
 		// Receive data related to the previous read request directly into the buffer.
 		slog_info("[IMSS][get_data] Receiving data");
 		// t = clock();
-		size_t length = 0;
-		length = recv_data(ucp_worker_data, ep, buffer, local_data_uid, 0);
-		if (length < 0)
+
+		int msg_length;
+		msg_length = get_recv_data_length(ucp_worker_data, local_data_uid);
+		if (msg_length < 0)
+		{
+			perror("ERRIMSS_GET_DATA_INVALID_MSG_LENGTH");
+			return -1;
+		}
+
+		// size_t length = 0;
+		msg_length = recv_data(ucp_worker_data, ep, buffer, msg_length, local_data_uid, 0);
+		if (msg_length < 0)
 		{
 			if (errno != EAGAIN)
 			{
@@ -2177,8 +2296,8 @@ int32_t get_data(int32_t dataset_id, int32_t data_id, char *buffer)
 		// Check if the requested key was correctly retrieved.
 		if (strncmp((const char *)buffer, "$ERRIMSS_NO_KEY_AVAIL$", 22))
 		{
-			slog_info("[IMSS][get_data] OK!, length=%ld", length);
-			return (int32_t)length;
+			slog_info("[IMSS][get_data] OK!, length=%ld", msg_length);
+			return (int32_t)msg_length;
 		}
 		else
 		{
@@ -2239,17 +2358,26 @@ int32_t get_ndata(int32_t dataset_id, int32_t data_id, char *buffer, size_t to_r
 		// slog_info("[IMSS][get_data] Request - '%s'", key_);
 		ep = curr_imss.conns.eps[repl_servers[i]];
 		slog_debug("[get_ndata] Sending request %s", key_);
-		if (TIMING(send_req(ucp_worker_data, ep, local_addr_data, local_addr_len_data, key_), "[imss_read]send_req", size_t) < 0)
+		if (send_req(ucp_worker_data, ep, local_addr_data, local_addr_len_data, key_) < 0)
 		{
 			perror("ERRIMSS_RLSIMSS_SENDADDR");
 			return -1;
 		}
+		
+
+		int msg_length;
+		msg_length = get_recv_data_length(ucp_worker_data, local_data_uid);
+		if (msg_length < 0)
+		{
+			perror("ERRIMSS_REN_DATASET_DATA_INVALID_MSG_LENGTH");
+			return -1;
+		}
 
 		// Receive data related to the previous read request directly into the buffer.
-		size_t length = 0;
-		length = TIMING(recv_data(ucp_worker_data, ep, buffer, local_data_uid, 0), "[imss_read]recv_data", size_t);
-		slog_debug("[get_ndata] Receiving request, length=%ld", length);
-		if (length < 0)
+		// size_t length = 0;
+		msg_length = recv_data(ucp_worker_data, ep, buffer, msg_length, local_data_uid, 0);
+		slog_debug("[get_ndata] Receiving request, length=%ld", msg_length);
+		if (msg_length < 0)
 		{
 			if (errno != EAGAIN)
 			{
@@ -2263,7 +2391,7 @@ int32_t get_ndata(int32_t dataset_id, int32_t data_id, char *buffer, size_t to_r
 		// Check if the requested key was correctly retrieved.
 		if (strncmp((const char *)buffer, "$ERRIMSS_NO_KEY_AVAIL$", 22))
 		{
-			return (int32_t)length;
+			return (int32_t)msg_length;
 		}
 		else
 		{
@@ -2333,10 +2461,18 @@ int32_t get_data_mall(int32_t dataset_id, int32_t data_id, char *buffer, size_t 
 			return -1;
 		}
 
+		int msg_length;
+		msg_length = get_recv_data_length(ucp_worker_data, local_data_uid);
+		if (msg_length < 0)
+		{
+			perror("ERRIMSS_REN_DATASET_DATA_INVALID_MSG_LENGTH");
+			return -1;
+		}
+
 		// Receive data related to the previous read request directly into the buffer.
-		size_t length = 0;
-		length = TIMING(recv_data(ucp_worker_data, ep, buffer, local_data_uid, 0), "[imss_read]recv_data", size_t);
-		if (length < 0)
+		// size_t length = 0;
+		msg_length = recv_data(ucp_worker_data, ep, buffer, msg_length, local_data_uid, 0);
+		if (msg_length < 0)
 		{
 			if (errno != EAGAIN)
 			{
@@ -2350,7 +2486,7 @@ int32_t get_data_mall(int32_t dataset_id, int32_t data_id, char *buffer, size_t 
 		// Check if the requested key was correctly retrieved.
 		if (strncmp((const char *)buffer, "$ERRIMSS_NO_KEY_AVAIL$", 22))
 		{
-			return (int32_t)length;
+			return (int32_t)msg_length;
 		}
 		else
 		{

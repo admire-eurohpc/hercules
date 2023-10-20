@@ -175,7 +175,7 @@ int32_t main(int32_t argc, char **argv)
 	}
 
 	if (cfg_get(cfg, "BLOCK_SIZE"))
-		args.block_size = atoi(cfg_get(cfg, "BLOCK_SIZE"));
+		args.block_size = atoi(cfg_get(cfg, "BLOCK_SIZE")); // block size in kilobytes. 
 
 	if (args.type == TYPE_DATA_SERVER)
 	{
@@ -187,7 +187,7 @@ int32_t main(int32_t argc, char **argv)
 		args.thread_pool = atoi(cfg_get(cfg, "THREAD_POOL"));
 
 	if (cfg_get(cfg, "STORAGE_SIZE"))
-		args.storage_size = atoi(cfg_get(cfg, "STORAGE_SIZE"));
+		args.storage_size = atoi(cfg_get(cfg, "STORAGE_SIZE")); // in giga bytes.
 
 	if (cfg_get(cfg, "METADA_PERSISTENCE_FILE"))
 	{
@@ -278,7 +278,7 @@ int32_t main(int32_t argc, char **argv)
 	if (args.type == TYPE_DATA_SERVER)
 	{
 		args.stat_host = argv[3];
-		slog_debug("imss_uri = %s stat-host = %s stat-port = %" PRId64 " num-servers = %" PRId64 " deploy-hostfile = %s block-size = %" PRIu64 " storage-size = %" PRIu64 "",
+		slog_debug("imss_uri = %s stat-host = %s stat-port = %" PRId64 " num-servers = %" PRId64 " deploy-hostfile = %s block-size = %" PRIu64 " (kB) storage-size = %" PRIu64 " (gB)",
 				   args.imss_uri, args.stat_host, args.stat_port, args.num_servers, args.deploy_hostfile, args.block_size, args.storage_size);
 		// bind port number.
 		bind_port = args.port;
@@ -323,7 +323,7 @@ int32_t main(int32_t argc, char **argv)
 	// init memory pool
 	mem_pool = StsQueue.create();
 	// figure out how many blocks we need and allocate them
-	num_blocks = max_storage_size / (args.block_size * KB);
+	num_blocks = max_storage_size / (args.block_size * KB); 
 	slog_info("[main] num_blocks=%lu", num_blocks);
 	for (int i = 0; i < num_blocks; ++i)
 	{
@@ -349,7 +349,7 @@ int32_t main(int32_t argc, char **argv)
 		// IMSS' MPI deployment file.
 		deployfile = args.deploy_hostfile;
 		// data block size
-		block_size = args.block_size;
+		block_size = args.block_size; // in kilobytes.
 		// total storage size
 		// storage_size = max_storage_size;
 

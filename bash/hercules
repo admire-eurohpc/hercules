@@ -169,7 +169,6 @@ HERCULES_POSIX_PRELOAD="$HERCULES_PATH/build/tools/libhercules_posix.so"
 
 ## Read configuration file.
 export MOUNT_POINT=$(cat $FILE | grep "MOUNT_POINT" | head -1 | awk '{print $3}')
-echo MOUNT_POINT - $MOUNT_POINT
 META_PORT=$(cat $FILE | grep "METADATA_PORT" | awk '{print $3}')
 DATA_PORT=$(cat $FILE | grep "DATA_PORT" | awk '{print $3}')
 MALLEABILITY=$(cat $FILE | grep "MALLEABILITY" | awk '{print $3}')
@@ -178,8 +177,11 @@ NUM_DATA=$(cat $FILE | grep "NUM_DATA_SERVERS" | awk '{print $3}')
 NUM_NODES_FOR_CLIENTS=$(cat $FILE | grep "NUM_NODES_FOR_CLIENTS" | awk '{print $3}')
 NUM_CLIENTS_PER_NODE=$(cat $FILE | grep "NUM_CLIENTS_PER_NODE" | awk '{print $3}')
 ATTACHED=$(cat $FILE | grep "ATTACHED" | awk '{print $3}')
-BLOCK_SIZE=$(cat $FILE | grep "BLOCK_SIZE" | awk '{print $3}')
+HERCULES_BLOCK_SIZE=$(cat $FILE | grep "BLOCK_SIZE" | awk '{print $3}')
 STORAGE_SIZE=$(cat $FILE | grep "STORAGE_SIZE" | awk '{print $3}')
+
+echo MOUNT_POINT - "$MOUNT_POINT" - HERCULES_BLOCK_SIZE - "$HERCULES_BLOCK_SIZE"
+
 
 # If a client hostfile was not provided we set a default path.
 if [ -z "$HERCULES_MPI_HOSTFILE_NAME" ]; then
@@ -357,7 +359,7 @@ unset NUM_METADATA
 #unset NUM_DATA
 unset NUM_NODES_FOR_CLIENTS
 unset NUM_CLIENTS_PER_NODE
-unset BLOCK_SIZE
+# unset HERCULES_BLOCK_SIZE
 unset STORAGE_SIZE
 
 

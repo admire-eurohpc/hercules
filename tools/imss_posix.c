@@ -1179,7 +1179,7 @@ int __xstat(int fd, const char *pathname, struct stat *buf)
 			slog_error("[POSIX] Error Hercules '__xstat': %d:%s", errno, strerror(errno));
 		}
 
-		slog_debug("[POSIX] End Hercules '__xstat', pathname=%s, fd=%d, new_path=%s, errno=%d:%s, ret=%d", pathname, fd, new_path, errno, strerror(errno), ret);
+		slog_debug("[POSIX] End Hercules '__xstat', pathname=%s, fd=%d, new_path=%s, errno=%d:%s, ret=%d\n", pathname, fd, new_path, errno, strerror(errno), ret);
 		free(new_path);
 	}
 	else
@@ -1454,7 +1454,7 @@ int __open_2(const char *pathname, int flags, ...)
 
 		ret = generalOpen(new_path, flags, mode);
 
-		slog_debug("[POSIX]. Ending Hercules '__open_2', new_path=%s, ret=%d, errno=%d:%s", new_path, ret, errno, strerror(errno));
+		slog_debug("[POSIX]. Ending Hercules '__open_2', new_path=%s, ret=%d, errno=%d:%s\n", new_path, ret, errno, strerror(errno));
 		free(new_path);
 	}
 	else
@@ -2439,7 +2439,7 @@ off_t lseek(int fd, off_t offset, int whence)
 			map_fd_update_value(map_fd, pathname, fd, ret);
 		}
 
-		slog_debug("[POSIX]. Ending Hercules 'lseek', ret=%ld, errno=%d:%s", ret, errno, strerror(errno));
+		slog_debug("[POSIX]. Ending Hercules 'lseek', ret=%ld, errno=%d:%s\n", ret, errno, strerror(errno));
 	}
 	else
 	{
@@ -2593,9 +2593,9 @@ ssize_t read(int fd, void *buf, size_t size)
 	char *pathname;
 	if (pathname = map_fd_search_by_val(map_fd, fd))
 	{
-		unsigned long p = 0;
+		unsigned long offset = 0;
 		slog_debug("[POSIX]. Calling Hercules 'read', pathname=%s, size=%ld, fd=%ld.", pathname, size, fd);
-		map_fd_search(map_fd, pathname, fd, &p);
+		map_fd_search(map_fd, pathname, fd, &offset);
 		struct stat ds_stat_n;
 		ret = imss_getattr(pathname, &ds_stat_n);
 		slog_debug("[POSIX]. pathname=%s, stat.size=%ld.", pathname, ds_stat_n.st_size);
@@ -2605,16 +2605,16 @@ ssize_t read(int fd, void *buf, size_t size)
 			ret = -1;
 			slog_error("[POSIX] Error Hercules 'read'	: %s", strerror(errno));
 		}
-		else if (p >= ds_stat_n.st_size)
+		else if (offset >= ds_stat_n.st_size)
 		{
 			ret = 0;
 		}
 		else
 		{
-			ret = TIMING(imss_read(pathname, buf, size, p), "[read]imss_read", int);
-			p += ret;
-			slog_debug("[POSIX] Updating map_fd, offset=%d", p);
-			map_fd_update_value(map_fd, pathname, fd, p);
+			ret = TIMING(imss_read(pathname, buf, size, offset), "[read]imss_read", int);
+			offset += ret;
+			slog_debug("[POSIX] Updating map_fd, offset=%d", offset);
+			map_fd_update_value(map_fd, pathname, fd, offset);
 		}
 
 		slog_debug("[POSIX]. End Hercules 'read', pathname=%s, ret=%ld, size=%ld, fd=%d, errno=%d:%s", pathname, ret, size, fd, errno, strerror(errno));

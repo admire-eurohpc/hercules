@@ -103,7 +103,7 @@ void fd_lookup(const char *path, int *fd, struct stat *s, char **aux)
 	int found = map_search(map, path, fd, s, aux);
 	if (!found)
 	{
-		fprintf(stderr,"File not found, %s\n", path);
+		fprintf(stderr, "File not found, %s\n", path);
 		*fd = -1;
 	}
 	// pthread_mutex_unlock(&lock_file);
@@ -210,7 +210,7 @@ int imss_getattr(const char *path, struct stat *stbuf)
 	stbuf->st_ctim = spec;
 	stbuf->st_uid = getuid();
 	stbuf->st_gid = getgid();
-	stbuf->st_blksize = IMSS_BLKSIZE;//IMSS_DATA_BSIZE;
+	stbuf->st_blksize = IMSS_BLKSIZE; // IMSS_DATA_BSIZE;
 	slog_debug("[imss_getattr], IMSS_DATA_BSIZE=%ld, st_blksize=%ld", IMSS_DATA_BSIZE, stbuf->st_blksize);
 	// printf("imss_getattr=%s\n",imss_path);
 	slog_debug("[imss_getattr] before get_type");
@@ -491,19 +491,18 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 
 	get_iuri(path, rpath);
 
-	int64_t curr_blk, num_of_blk, end_blk, start_offset, end_offset, block_offset, i_blk;
-	int64_t first = 0;
+	size_t curr_blk, num_of_blk, end_blk, start_offset, end_offset, block_offset, i_blk;
+	size_t first = 0;
 	int ds = 0;
 	curr_blk = offset / IMSS_DATA_BSIZE + 1; // Plus one to skip the header (0) block
 	start_offset = offset % IMSS_DATA_BSIZE;
+	end_offset = (offset + size) % IMSS_DATA_BSIZE;
 	// end_blk = (offset+size) / IMSS_DATA_BSIZE + 1; //Plus one to skip the header (0) block
 	end_blk = ceil((double)(offset + size) / IMSS_DATA_BSIZE);
-
 	num_of_blk = end_blk - curr_blk;
-	end_offset = (offset + size) % IMSS_DATA_BSIZE;
-	size_t to_read = 0;
 
 	// Needed variables
+	size_t to_read = 0;
 	size_t byte_count = 0;
 	int64_t rbytes;
 
@@ -517,7 +516,7 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 		end_blk = ceil((double)(offset + stats.st_size) / IMSS_DATA_BSIZE);
 	}
 
-	slog_warn("[imss_read] size %ld, first %ld, start_offset %ld, end_blk %ld, end_offset %ld, curr_blk %ld, offset=%ld, IMSS_DATA_BSIZE=%ld, stats.st_size=%ld", size, first, start_offset, end_blk, end_offset, curr_blk, offset, IMSS_DATA_BSIZE, stats.st_size);
+	slog_debug("[imss_read] TotalSizeToRead=%ld, start_offset=%ld, curr_blk=%ld, end_blk=%ld, num_of_blks=%ld, offset=%ld, end_offset=%ld, IMSS_DATA_BSIZE=%ld, stats.st_size=%ld", size, start_offset, curr_blk, end_blk, num_of_blk, offset, end_offset, IMSS_DATA_BSIZE, stats.st_size);
 
 	// Check if offset is bigger than filled, return 0 because is EOF case
 	if (start_offset >= stats.st_size)
@@ -560,32 +559,42 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 			block_offset = start_offset;
 			if (size < (stats.st_size - start_offset) && size < IMSS_DATA_BSIZE)
 			{
+				slog_info("[imss_read] case 1");
 				to_read = size;
 			}
 			else
 			{
 				if (stats.st_size < IMSS_DATA_BSIZE)
 				{
+					slog_info("[imss_read] case 2");
 					to_read = stats.st_size - start_offset;
 				}
 				else
 				{
+					slog_info("[imss_read] case 3");
 					to_read = IMSS_DATA_BSIZE - start_offset;
 				}
 			}
 			// get_ndata(ds, curr_blk, (char *)buf + byte_count, to_read, start_offset);
-			slog_warn("[imss_read] First block case, to_read=%ld, fd=%d, ds=%d\n", to_read, fd, ds);
+			slog_debug("[imss_read] FIRST BLOCK CASE, to_read=%ld, fd=%d, ds=%d", to_read, fd, ds);
 			// memcpy(buf, aux, to_read);
 			// fprintf(stderr,"[imss_read] buf=%s\n", buf);
-			// slog_warn("[imss_read] buf=%s\n", buf);
+			// slog_debug("[imss_read] buf=%s\n", buf);
 
 			++first;
 			// Check if offset is bigger than filled, return 0 because is EOF case
-			slog_warn("[imss_read] start_offset=%ld, to_read=%ld, stats.st_size=%ld, start_offset + to_read=%ld", start_offset, to_read, stats.st_size, start_offset + to_read);
+			slog_debug("[imss_read] start_offset=%ld, to_read=%ld, stats.st_size=%ld, start_offset + to_read=%ld", start_offset, to_read, stats.st_size, start_offset + to_read);
 			if (start_offset + to_read > stats.st_size)
 			{
 				slog_warn("[imss_read] returning size 0");
 				return 0;
+			}
+
+			// prevents to read out of the block.
+			if (start_offset + to_read > IMSS_DATA_BSIZE)
+			{
+				to_read = IMSS_DATA_BSIZE - start_offset;
+				slog_warn("[imss_read] data block overflow, reducing the amount of data to read in the block to %lu", curr_blk, to_read);
 			}
 		}
 		else if (curr_blk != end_blk) // Middle block case
@@ -601,7 +610,7 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 
 			// Read the minimum between end_offset and filled (read_ = min(end_offset, filled))
 			to_read = size - byte_count;
-			slog_warn("[imss_read] end block case, to_read=%ld", to_read);
+			slog_debug("[imss_read] END BLOCK CASE, to_read=%ld", to_read);
 			/*struct timeval start, end;
 			  long delta_us;
 			  gettimeofday(&start, NULL);*/
@@ -614,8 +623,8 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 
 			// byte_count += pending;
 		}
-		// slog_warn("[imss_read] curr_blk=%ld, reading %" PRIu64 " kilobytes, block_offset=%ld kilobytes, byte_count=%ld", curr_blk, to_read / 1024, block_offset / 1024, byte_count);
-		slog_warn("[imss_read] curr_blk=%ld, reading %ld bytes (%ld kilobytes) with an offset of %ld bytes (%ld kilobytes)", curr_blk, to_read, to_read / 1024, block_offset, block_offset / 1024);
+		// slog_debug("[imss_read] curr_blk=%ld, reading %" PRIu64 " kilobytes, block_offset=%ld kilobytes, byte_count=%ld", curr_blk, to_read / 1024, block_offset / 1024, byte_count);
+		slog_debug("[imss_read] curr_blk=%ld, reading %ld bytes (%ld kilobytes) with an offset of %ld bytes (%ld kilobytes), byte_count=%ld bytes (%ld kilobytes)", curr_blk, to_read, to_read / 1024, block_offset, block_offset / 1024, byte_count, byte_count / 1024);
 
 		if (MALLEABILITY)
 		{
@@ -638,12 +647,12 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 
 			slog_debug("[imss_read] i_blk=%ld, num_storages=%ld, N_SERVERS=%ld", i_blk, num_storages, N_SERVERS);
 
-			TIMING(get_data_mall(ds, curr_blk, (char *)buf + byte_count, to_read, block_offset, num_storages), "[imss_read]get_data_mall", int32_t);
+			to_read = get_data_mall(ds, curr_blk, (char *)buf + byte_count, to_read, block_offset, num_storages);
 			i_blk++;
 		}
 		else
 		{
-			TIMING(get_ndata(ds, curr_blk, (char *)buf + byte_count, to_read, block_offset), "[imss_read]get_ndata", int32_t);
+			to_read = get_ndata(ds, curr_blk, (char *)buf + byte_count, to_read, block_offset);
 		}
 
 		block_offset = 0;
