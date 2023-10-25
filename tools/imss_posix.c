@@ -125,6 +125,8 @@ void getConfiguration();
 char *checkHerculesPath(const char *pathname);
 char *convert_path(const char *name);
 int generalOpen(const char *new_path, int flags, mode_t mode);
+int generalWrite(const char *pathname, int fd, const char *buf, size_t size, size_t offset);
+
 static off_t (*real_lseek)(int fd, off_t offset, int whence) = NULL;
 static int (*real__lxstat)(int fd, const char *pathname, struct stat *buf) = NULL;
 static int (*real__lxstat64)(int ver, const char *pathname, struct stat64 *buf) = NULL;
@@ -1680,10 +1682,42 @@ size_t fwrite(const void *buf, size_t size, size_t count, FILE *fp)
 	char *pathname;
 	if (pathname = map_fd_search_by_val(map_fd, fp->_fileno))
 	{
-		unsigned long p = 0;
-		slog_debug("[POSIX]. Calling Hercules 'fwrite', pathname=%s", pathname);
-		map_fd_search(map_fd, pathname, fp->_fileno, &p);
-		ret = imss_write(pathname, buf, count, p);
+		size_t to_write = size * count;
+		// size_t written = 0;
+
+		// while (to_write > 0)
+		// {
+		// 	size_t n = to_write;
+		// 	written += n;
+		// 	to_write -= n;
+
+		// }
+
+		unsigned long offset = -1;
+		slog_debug("[POSIX]. Calling Hercules 'fwrite', pathname=%s, to_write=%ld, size=%ld, count=%ld", pathname, to_write, size, count);
+
+		// struct stat ds_stat_n;
+		// imss_getattr(pathname, &ds_stat_n);
+		// if (ret < 0)
+		// {
+		// 	errno = -ret;
+		// 	ret = -1;
+		// 	slog_error("[POSIX] Error Hercules 'write'	: %d:%s", errno, strerror(errno));
+		// 	return ret;
+		// }
+		// map_fd_search(map_fd, pathname, fp->_fileno, &offset);
+
+		// slog_debug("[POSIX]. pathname=%s, size=%lu, current_file_size=%lu, offset=%d", pathname, to_write, ds_stat_n.st_size, offset);
+
+		// ret = imss_write(pathname, buf, to_write, offset);
+
+		// if (ds_stat_n.st_size + to_write > ds_stat_n.st_size)
+		// {
+		// 	map_fd_update_value(map_fd, pathname, fp->_fileno, ds_stat_n.st_size + to_write);
+		// }
+
+		ret = generalWrite(pathname, fp->_fileno, buf, to_write, offset);
+
 		slog_debug("[POSIX]. Ending Hercules 'fwrite', pathname=%s, ret=%ld,  errno=%d:%s\n", pathname, ret, errno, strerror(errno));
 	}
 	else
@@ -1709,7 +1743,7 @@ ssize_t writev(int fd, const struct iovec *iov, int iovcnt)
 	char *pathname;
 	if (pathname = map_fd_search_by_val(map_fd, fd))
 	{
-		unsigned long p = 0;
+		unsigned long offset = -1;
 		/* Find the total number of bytes to be written.  */
 		size_t bytes = 0;
 		for (int i = 0; i < iovcnt; ++i)
@@ -1750,8 +1784,9 @@ ssize_t writev(int fd, const struct iovec *iov, int iovcnt)
 		}
 
 		slog_debug("[POSIX]. Calling Hercules 'writev', pathname=%s", pathname);
-		map_fd_search(map_fd, pathname, fd, &p);
-		ret = imss_write(pathname, buffer, bytes, p);
+		// map_fd_search(map_fd, pathname, fd, &p);
+		// ret = imss_write(pathname, buffer, bytes, p);
+		ret = generalWrite(pathname, fd, buffer, bytes, offset);
 		slog_debug("[POSIX]. Ending Hercules 'writev', pathname=%s, ret=%ld, errno=%d:%s\n", pathname, ret, errno, strerror(errno));
 	}
 	else
@@ -1779,7 +1814,7 @@ ssize_t pwritev(int fd, const struct iovec *iov, int iovcnt, off_t offset)
 	if (pathname = map_fd_search_by_val(map_fd, fd))
 	{
 		slog_debug("[POSIX]. Calling Hercules 'pwritev', pathname=%s, fd=%d, offset=%d", pathname, fd, offset);
-		unsigned long p = 0;
+		// unsigned long p = 0;
 		/* Find the total number of bytes to be written.  */
 		size_t bytes = 0;
 		for (int i = 0; i < iovcnt; ++i)
@@ -1820,8 +1855,9 @@ ssize_t pwritev(int fd, const struct iovec *iov, int iovcnt, off_t offset)
 		}
 
 		// map_fd_search(map_fd, pathname, fd, &p);
-		ret = imss_write(pathname, buffer, bytes, offset);
-		slog_debug("[POSIX]. Ending Hercules 'pwritev', pathname=%s, fd=%d, ret=%ld,  errno=%d:%s\n", pathname, fd, ret, errno, strerror(errno));
+		// ret = imss_write(pathname, buffer, bytes, offset);
+		ret = generalWrite(pathname, fd, buffer, bytes, offset);
+			slog_debug("[POSIX]. Ending Hercules 'pwritev', pathname=%s, fd=%d, ret=%ld,  errno=%d:%s\n", pathname, fd, ret, errno, strerror(errno));
 	}
 	else
 	{
@@ -1848,8 +1884,10 @@ ssize_t pwrite64(int fd, const void *buf, size_t count, off64_t offset)
 	if (pathname = map_fd_search_by_val(map_fd, fd))
 	{
 		slog_debug("[POSIX]. Calling Hercules 'pwrite64', pathname=%s, fd=%d, offset=%d", pathname, fd, offset);
-		ret = -1;
-		errno = -2;
+		// ret = -1;
+		// errno = -2;
+		ret = generalWrite(pathname, fd, buf, count, offset);
+
 		slog_debug("[POSIX]. Ending Hercules 'pwrite64', pathname=%s, fd=%d, ret=%ld,  errno=%d:%s\n", pathname, fd, ret, errno, strerror(errno));
 	}
 	else
@@ -2150,6 +2188,39 @@ FILE *fdopen(int fildes, const char *mode)
 	}
 
 	return file;
+}
+
+int generalWrite(const char *pathname, int fd, const char *buf, size_t size, size_t offset)
+{
+	int ret = 0;
+	struct stat ds_stat_n;
+	int update_offset = 0;
+	if (offset == -1)
+	{
+		update_offset = 1;
+		map_fd_search(map_fd, pathname, fd, &offset);
+
+		imss_getattr(pathname, &ds_stat_n);
+		if (ret < 0)
+		{
+			errno = -ret;
+			ret = -1;
+			slog_error("[POSIX] Error Hercules 'write'	: %d:%s", errno, strerror(errno));
+			return ret;
+		}
+	}
+
+	slog_debug("[POSIX]. pathname=%s, size=%lu, offset=%d", pathname, size, offset);
+
+	ret = imss_write(pathname, buf, size, offset);
+
+	if (update_offset)
+		if (ds_stat_n.st_size + size > ds_stat_n.st_size)
+		{
+			map_fd_update_value(map_fd, pathname, fd, ds_stat_n.st_size + size);
+		}
+
+	return ret;
 }
 
 int generalOpen(const char *new_path, int flags, mode_t mode)
@@ -2507,7 +2578,8 @@ ssize_t pwrite(int fd, const void *buf, size_t count, off_t offset)
 	if (pathname = map_fd_search_by_val(map_fd, fd))
 	{
 		slog_debug("[POSIX] Calling Hercules 'pwrite', pathname=%s, fd=%d, count=%ld, offset=%ld, errno=%d:%s", pathname, fd, count, offset, errno, strerror(errno));
-		ret = imss_write(pathname, buf, count, offset);
+		// ret = imss_write(pathname, buf, count, offset);
+		ret = generalWrite(pathname, fd, buf, count, offset);
 		slog_debug("[POSIX] Ending Hercules 'pwrite', pathname=%s, fd=%d, ret=%ld, count=%ld, offset=%ld, errno=%d:%s", pathname, fd, ret, count, offset, errno, strerror(errno));
 	}
 	else
@@ -2536,24 +2608,25 @@ ssize_t write(int fd, const void *buf, size_t size)
 		unsigned long offset = -1;
 		slog_debug("[POSIX]. Calling Hercules 'write', pathname=%s, size=%lu", pathname, size);
 
-		struct stat ds_stat_n;
-		imss_getattr(pathname, &ds_stat_n);
-		if (ret < 0)
-		{
-			errno = -ret;
-			ret = -1;
-			slog_error("[POSIX] Error Hercules 'write'	: %d:%s", errno, strerror(errno));
-			return ret;
-		}
-		map_fd_search(map_fd, pathname, fd, &offset);
-		slog_debug("[POSIX]. pathname=%s, size=%lu, current_file_size=%lu, offset=%d", pathname, size, ds_stat_n.st_size, offset);
+		// struct stat ds_stat_n;
+		// imss_getattr(pathname, &ds_stat_n);
+		// if (ret < 0)
+		// {
+		// 	errno = -ret;
+		// 	ret = -1;
+		// 	slog_error("[POSIX] Error Hercules 'write'	: %d:%s", errno, strerror(errno));
+		// 	return ret;
+		// }
+		// map_fd_search(map_fd, pathname, fd, &offset);
+		// slog_debug("[POSIX]. pathname=%s, size=%lu, current_file_size=%lu, offset=%d", pathname, size, ds_stat_n.st_size, offset);
 
-		ret = TIMING(imss_write(pathname, buf, size, offset), "imss_write", int);
+		// ret = TIMING(imss_write(pathname, buf, size, offset), "imss_write", int);
 
-		if (ds_stat_n.st_size + size > ds_stat_n.st_size)
-		{
-			map_fd_update_value(map_fd, pathname, fd, ds_stat_n.st_size + size);
-		}
+		// if (ds_stat_n.st_size + size > ds_stat_n.st_size)
+		// {
+		// 	map_fd_update_value(map_fd, pathname, fd, ds_stat_n.st_size + size);
+		// }
+		ret = generalWrite(pathname, fd, buf, size, offset);
 
 		slog_debug("[POSIX]. Ending Hercules 'write', pathname=%s, ret=%ld\n", pathname, ret);
 	}

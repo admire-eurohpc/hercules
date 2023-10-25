@@ -594,7 +594,7 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 			if (start_offset + to_read > IMSS_DATA_BSIZE)
 			{
 				to_read = IMSS_DATA_BSIZE - start_offset;
-				slog_warn("[imss_read] data block overflow, reducing the amount of data to read in the block to %lu", curr_blk, to_read);
+				slog_warn("[imss_read] data block overflow, reducing the amount of data to read in the block %lu to %lu", curr_blk, to_read);
 			}
 		}
 		else if (curr_blk != end_blk) // Middle block case

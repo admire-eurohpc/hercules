@@ -460,7 +460,7 @@ ucs_status_t server_create_ep(ucp_worker_h data_worker,
 	ep_params.field_mask = UCP_EP_PARAM_FIELD_ERR_HANDLER | UCP_EP_PARAM_FIELD_CONN_REQUEST;
 	ep_params.conn_request = conn_request;
 	ep_params.err_handler.cb = err_cb_server;
-	ep_params.err_mode = UCP_ERR_HANDLING_MODE_NONE;
+	ep_params.err_mode = UCP_ERR_HANDLING_MODE_PEER;
 	ep_params.err_handler.arg = NULL;
 
 	status = ucp_ep_create(data_worker, &ep_params, server_ep);
@@ -489,7 +489,7 @@ ucs_status_t client_create_ep(ucp_worker_h worker, ucp_ep_h *ep, ucp_address_t *
 						   UCP_EP_PARAM_FIELD_ERR_HANDLER |
 						   UCP_EP_PARAM_FIELD_USER_DATA;
 	ep_params.address = peer_addr;
-	ep_params.err_mode = UCP_ERR_HANDLING_MODE_NONE;
+	ep_params.err_mode = UCP_ERR_HANDLING_MODE_PEER;
 	ep_params.err_handler.cb = err_cb_client;
 	ep_params.err_handler.arg = NULL;
 	ep_params.user_data = &ep_status;

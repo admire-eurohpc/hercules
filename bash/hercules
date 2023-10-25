@@ -168,7 +168,7 @@ HERCULES_POSIX_PRELOAD="$HERCULES_PATH/build/tools/libhercules_posix.so"
 
 
 ## Read configuration file.
-export MOUNT_POINT=$(cat $FILE | grep "MOUNT_POINT" | head -1 | awk '{print $3}')
+export HERCULES_MOUNT_POINT=$(cat $FILE | grep "MOUNT_POINT" | head -1 | awk '{print $3}')
 META_PORT=$(cat $FILE | grep "METADATA_PORT" | awk '{print $3}')
 DATA_PORT=$(cat $FILE | grep "DATA_PORT" | awk '{print $3}')
 MALLEABILITY=$(cat $FILE | grep "MALLEABILITY" | awk '{print $3}')
@@ -180,7 +180,7 @@ ATTACHED=$(cat $FILE | grep "ATTACHED" | awk '{print $3}')
 HERCULES_BLOCK_SIZE=$(cat $FILE | grep "BLOCK_SIZE" | awk '{print $3}')
 STORAGE_SIZE=$(cat $FILE | grep "STORAGE_SIZE" | awk '{print $3}')
 
-echo MOUNT_POINT - "$MOUNT_POINT" - HERCULES_BLOCK_SIZE - "$HERCULES_BLOCK_SIZE"
+echo HERCULES_MOUNT_POINT - "$HERCULES_MOUNT_POINT" - HERCULES_BLOCK_SIZE - "$HERCULES_BLOCK_SIZE"
 
 
 # If a client hostfile was not provided we set a default path.

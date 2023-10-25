@@ -390,7 +390,7 @@ int32_t main(int32_t argc, char **argv)
 								   UCP_EP_PARAM_FIELD_ERR_HANDLER |
 								   UCP_EP_PARAM_FIELD_USER_DATA;
 			ep_params.address = peer_addr;
-			ep_params.err_mode = UCP_ERR_HANDLING_MODE_NONE;
+			ep_params.err_mode = UCP_ERR_HANDLING_MODE_PEER;
 			ep_params.err_handler.cb = err_cb_client;
 			ep_params.err_handler.arg = NULL;
 			ep_params.user_data = &ep_status;
