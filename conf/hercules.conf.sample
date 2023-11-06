@@ -36,8 +36,8 @@ MALLEABILITY = 0
 UPPER_BOUND_MALLEABILITY = 0
 LOWER_BOUND_MALLEABILITY = 0
 
-# File containing a list of nodes serving as data nodes
-DATA_HOSTFILE = data_hostfile
+# Full path of the file containing a list of nodes serving as data nodes.
+DATA_HOSTFILE = /home/user/data_hostfile 
 
 # Number of threads attending data requests
 THREAD_POOL = 1
@@ -48,8 +48,8 @@ STORAGE_SIZE = 0 # No limit
 # Main metadata node hostname
 # METADATA_HOST = 
 
-# File containing a list of nodes serving as metadata nodes
-METADATA_HOSTFILE = hostfile
+# Full path of the file containing a list of nodes serving as metadata nodes.
+METADATA_HOSTFILE = /home/user/meta_hostfile
 
 # Replication factor
 REPL_FACTOR = 1

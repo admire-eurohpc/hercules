@@ -22,6 +22,8 @@ FILE_SIZE_PER_CLIENT=$2
 IOR_PATH=/beegfs/home/javier.garciablas/io500/bin
 #spack load mpich@3.2.1%gcc@=9.4.0
 spack load openmpi@4.1.5
+#spack load mpich@3.2.1%gcc@=9.4.0 arch=linux-ubuntu20.04-zen
+whereis mpiexec
 # spack load \
 #    cmake@3.24.3%gcc@9.4.0 arch=linux-ubuntu20.04-broadwell \
 #    glib@2.74.1%gcc@9.4.0 arch=linux-ubuntu20.04-broadwell \
@@ -72,11 +74,12 @@ COMMAND="$IOR_PATH/ior -o /mnt/hercules/data.out -t 100M -b 100M -s 1 -i 5 -w -r
 #COMMAND="ls -lh /mnt/hercules"
 
 set -x
-
+#MPIEXEC="/beegfs/home/javier.garciablas/spack/opt/spack/linux-ubuntu20.04-zen/gcc-9.4.0/mpich-3.2.1-5pgpbav7caqh5rwfpnrizu736maawpgc/bin/mpiexec"
+MPIEXEC="mpiexec"
 # HERCULES_CONF=$HERCULES_CONF LD_PRELOAD=$HERCULES_POSIX_PRELOAD ls -lh /mnt/hercules
 
 # : ' # this is a multi-line comment
-mpiexec $HERCULES_MPI_PPN $HERCULES_NCPN $HERCULES_MPI_HOSTFILE_DEF $HERCULES_MPI_HOSTFILE_NAME \
+$MPIEXEC $HERCULES_MPI_PPN $HERCULES_NCPN $HERCULES_MPI_HOSTFILE_DEF $HERCULES_MPI_HOSTFILE_NAME \
    $HERCULES_MPI_ENV_DEF UCX_TLS=all \
    $HERCULES_MPI_ENV_DEF HERCULES_CONF=$HERCULES_CONF \
    $HERCULES_MPI_ENV_DEF LD_PRELOAD=$HERCULES_POSIX_PRELOAD \

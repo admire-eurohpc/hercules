@@ -172,13 +172,19 @@ export HERCULES_MOUNT_POINT=$(cat $FILE | grep "MOUNT_POINT" | head -1 | awk '{p
 META_PORT=$(cat $FILE | grep "METADATA_PORT" | awk '{print $3}')
 DATA_PORT=$(cat $FILE | grep "DATA_PORT" | awk '{print $3}')
 MALLEABILITY=$(cat $FILE | grep "MALLEABILITY" | awk '{print $3}')
-NUM_METADATA=$(cat $FILE | grep "NUM_META_SERVERS" | awk '{print $3}')
-NUM_DATA=$(cat $FILE | grep "NUM_DATA_SERVERS" | awk '{print $3}')
+HERCULES_NUM_METADATA=$(cat $FILE | grep "NUM_META_SERVERS" | awk '{print $3}')
+HERCULES_NUM_DATA=$(cat $FILE | grep "NUM_DATA_SERVERS" | awk '{print $3}')
 NUM_NODES_FOR_CLIENTS=$(cat $FILE | grep "NUM_NODES_FOR_CLIENTS" | awk '{print $3}')
 NUM_CLIENTS_PER_NODE=$(cat $FILE | grep "NUM_CLIENTS_PER_NODE" | awk '{print $3}')
 ATTACHED=$(cat $FILE | grep "ATTACHED" | awk '{print $3}')
 HERCULES_BLOCK_SIZE=$(cat $FILE | grep "BLOCK_SIZE" | awk '{print $3}')
 STORAGE_SIZE=$(cat $FILE | grep "STORAGE_SIZE" | awk '{print $3}')
+HERCULES_DATA_HOSTFILE=$(cat $FILE | grep "\<DATA_HOSTFILE\>" | awk '{print $3}')
+HERCULES_METADATA_HOSTFILE=$(cat $FILE | grep "METADATA_HOSTFILE" | awk '{print $3}')
+
+## \< \> to match exact word.
+
+
 
 echo HERCULES_MOUNT_POINT - "$HERCULES_MOUNT_POINT" - HERCULES_BLOCK_SIZE - "$HERCULES_BLOCK_SIZE"
 
@@ -194,9 +200,9 @@ if [ -z "$HERCULES_MPI_HOSTFILE_NAME" ]; then
     if [[ $SLURM -eq "1" ]]; then
         HERCULES_MPI_HOSTFILE_NAME="client_hostfile"
         if [[ $ATTACHED -eq "1" ]]; then
-            tail -n +$((NUM_METADATA+1)) hostfile | head -n $NUM_NODES_FOR_CLIENTS > $HERCULES_MPI_HOSTFILE_NAME
+            tail -n +$((HERCULES_NUM_METADATA+1)) hostfile | head -n $NUM_NODES_FOR_CLIENTS > $HERCULES_MPI_HOSTFILE_NAME
         else
-            tail -n +$((NUM_METADATA+NUM_DATA+1)) hostfile | head -n $NUM_NODES_FOR_CLIENTS > $HERCULES_MPI_HOSTFILE_NAME
+            tail -n +$((HERCULES_NUM_METADATA+HERCULES_NUM_DATA+1)) hostfile | head -n $NUM_NODES_FOR_CLIENTS > $HERCULES_MPI_HOSTFILE_NAME
         fi
     fi
 fi
@@ -213,18 +219,20 @@ then
     fi
     echo "[+] Metadata server file not specified, getting information from slurm."
     ## If a metadata file was not defined and we have slurm's nodes allocated,
-    ## then we create an array which contains the hostnames of the nodes that
+    ## then we create a file which contains the hostnames of the nodes that
     ## will be used to deploy the determinate set of metadata servers.
-    readarray -t meta_hosts < <(head -n $NUM_METADATA hostfile)
+    #readarray -t meta_hosts < <(head -n $HERCULES_NUM_METADATA hostfile)
+    head -n "$HERCULES_NUM_METADATA" hostfile > "$HERCULES_METADATA_HOSTFILE"
+    ## To create an array with the meta nodes.
+    #printf "%s\n" ${meta_hosts[@]} > "$META_SERVER_FILE"
+    readarray -t meta_hosts < "$HERCULES_METADATA_HOSTFILE"
 else
     ## If a metadata file was defined we read it to create an array which
     ## contains the hostnames of the nodes that will be used to deploy the
     ## determinate set of metadata servers.
     echo "[+] Reading metadata server file - $META_SERVER_FILE"
-    readarray -t meta_hosts < $META_SERVER_FILE
+    readarray -t meta_hosts < "$META_SERVER_FILE"
 fi
-## To create the default metadata hostfile.
-printf "%s\n" ${meta_hosts[@]} > meta_hostfile
 
 ## The array is read to deploy the metadata servers.
 i=0
@@ -268,11 +276,15 @@ then
         echo "[Error] Data server file not specified, please set one using -d <filename> flag."
         exit 1
     fi
-    ## If a data file was not defined and we have slurm's nodes allocated,
-    ## then we create an array which contains the hostnames of the nodes that
-    ## will be used to deploy the determinate set of data servers.
     echo "[+] Data server file not specified, getting information from slurm."
-    readarray -t data_hosts < <(tail -n +$((NUM_METADATA+1)) hostfile | head -n $NUM_DATA)
+    ## If a data file was not defined and we have slurm's nodes allocated,
+    ## then we create a file which contains the hostnames of the nodes that
+    ## will be used to deploy the determinate set of data servers.
+    # readarray -t data_hosts < <(tail -n +$((HERCULES_NUM_METADATA+1)) hostfile | head -n $HERCULES_NUM_DATA)
+    tail -n +$((HERCULES_NUM_METADATA+1)) hostfile | head -n "$HERCULES_NUM_DATA" > "$HERCULES_DATA_HOSTFILE"
+    ## To create an array with the data nodes.
+    # printf "%s\n" ${data_hosts[@]} > "$DATA_SERVER_FILE"
+    readarray -t data_hosts < "$HERCULES_DATA_HOSTFILE"
 else
     ## If a data file was defined we read it to create an array which
     ## contains the hostnames of the nodes that will be used to deploy the
@@ -281,8 +293,6 @@ else
     readarray -t data_hosts < $DATA_SERVER_FILE
 fi
 
-## To create the default data hostfile.
-printf "%s\n" ${data_hosts[@]} > data_hostfile
 i=0
 echo "[+] Hercules: Starting data servers on ${data_hosts[@]}"
 start=`date +%s.%N`
@@ -355,8 +365,8 @@ esac
 unset META_PORT
 unset DATA_PORT
 unset MALLEABILITY
-unset NUM_METADATA
-#unset NUM_DATA
+# unset HERCULES_NUM_METADATA
+# unset HERCULES_NUM_DATA
 unset NUM_NODES_FOR_CLIENTS
 unset NUM_CLIENTS_PER_NODE
 # unset HERCULES_BLOCK_SIZE
