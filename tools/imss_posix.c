@@ -1102,11 +1102,11 @@ int __lxstat(int fd, const char *pathname, struct stat *buf)
 	{
 		slog_debug("[POSIX]. Calling Hercules '__lxstat', pathname=%s, new_path=%s, fd=%d, errno=%d:%s", pathname, new_path, fd, errno, strerror(errno));
 		// imss_refresh(new_path);
-		if (!strncmp(new_path, "Success", strlen("Success")))
-		{
-			ret = 0;
-		}
-		else
+		// if (!strncmp(new_path, "Success", strlen("Success")))
+		// {
+		// 	ret = 0;
+		// }
+		// else
 		{
 			ret = imss_refresh(new_path);
 			// if (ret < 0)
@@ -1156,7 +1156,7 @@ int __lxstat64(int fd, const char *pathname, struct stat64 *buf)
 		slog_debug("[POSIX]. Calling Hercules '__lxstat64', pathname=%s", pathname);
 
 		imss_refresh(new_path);
-		ret = imss_getattr(new_path, buf);
+		ret = imss_getattr(new_path, (struct stat *)buf);
 		if (ret < 0)
 		{
 			errno = -ret;
@@ -1407,14 +1407,14 @@ int __xstat64(int ver, const char *pathname, struct stat64 *stat_buf)
 	if (new_path != NULL)
 	{
 		slog_debug("[POSIX]. Calling Hercules '__xstat64', pathname=%s, new_path=%s", pathname, new_path);
-		if (!strncmp(new_path, "Success", strlen("Success")))
-		{
-			ret = 0;
-		}
-		else
+		// if (!strncmp(new_path, "Success", strlen("Success")))
+		// {
+		// 	ret = 0;
+		// }
+		// else
 		{
 			imss_refresh(new_path);
-			ret = imss_getattr(new_path, stat_buf);
+			ret = imss_getattr(new_path, (struct stat *)stat_buf);
 			if (ret < 0)
 			{
 				errno = -ret;
@@ -1526,8 +1526,6 @@ int open64(const char *pathname, int flags, ...)
 	{
 		slog_debug("[POSIX]. Calling Hercules 'open64', pathname=%s, new_path=%s", pathname, new_path);
 		checkOpenFlags(pathname, flags);
-
-		// checkOpenFlags(pathname, flags);
 
 		ret = generalOpen(new_path, flags, mode);
 

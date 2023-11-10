@@ -63,11 +63,11 @@ echo "Hercules started in $runtime seconds, start=$start_, end=$end_"
 
 echo "Running clients"
 TRANSFER_SIZE=$((1024 * 16))
-COMMAND="$IOR_PATH/ior -o /mnt/hercules/data.out -t 100M -b 100M -s 1 -i 5 -w -r -W -R -k"
+#COMMAND="$IOR_PATH/ior -o /mnt/hercules/data.out -t 100M -b 100M -s 1 -i 5 -w -r -W -R -k"
 #COMMAND="$IOR_PATH/ior -t ${TRANSFER_SIZE}kb -b ${FILE_SIZE_PER_CLIENT}kb -s 1 -i 2 -F -o /mnt/hercules/data.out"
 #COMMAND="../../bin/nekbmpi eddy_uv 2"
 #COMMAND="/beegfs/home/javier.garciablas/nek5000/run/eddy_uv/nek5000"
-# COMMAND="./exe_WRITE_AND_READ-TEST /mnt/imss/eddy hola.txt 1024"
+COMMAND="./exe_WRITE_AND_READ-TEST /mnt/imss/eddy hola.txt 1024"
 # COMMAND="/beegfs/home/javier.garciablas/nek5000/run/eddy_uv_spack/nek5000"
 #COMMAND="~/Nek5000/run/turbPipe/nek5000"
 #COMMAND="strace -o strace.out ./exe_test_mpi_set_view /mnt/hercules/example.txt"

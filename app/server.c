@@ -18,7 +18,6 @@
 #include <unistd.h>
 // #include <disk.h>
 
-
 // Pointer to the tree's root node.
 extern GNode *tree_root;
 extern pthread_mutex_t tree_mut;
@@ -175,7 +174,7 @@ int32_t main(int32_t argc, char **argv)
 	}
 
 	if (cfg_get(cfg, "BLOCK_SIZE"))
-		args.block_size = atoi(cfg_get(cfg, "BLOCK_SIZE")); // block size in kilobytes. 
+		args.block_size = atoi(cfg_get(cfg, "BLOCK_SIZE")); // block size in kilobytes.
 
 	if (args.type == TYPE_DATA_SERVER)
 	{
@@ -323,7 +322,7 @@ int32_t main(int32_t argc, char **argv)
 	// init memory pool
 	mem_pool = StsQueue.create();
 	// figure out how many blocks we need and allocate them
-	num_blocks = max_storage_size / (args.block_size * KB); 
+	num_blocks = max_storage_size / (args.block_size * KB);
 	slog_info("[main] num_blocks=%lu", num_blocks);
 	for (int i = 0; i < num_blocks; ++i)
 	{
@@ -703,5 +702,3 @@ int32_t main(int32_t argc, char **argv)
 	// Free the publisher release address.
 	return 0;
 }
-
-

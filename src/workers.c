@@ -150,7 +150,7 @@ void *srv_worker(void *th_argv)
 		ucp_worker_address_attr_t attr;
 		attr.field_mask = UCP_WORKER_ADDRESS_ATTR_FIELD_UID;
 		ucp_worker_address_query(peer_addr, &attr);
-		// slog_debug("[srv_worker_thread] Receiving request from %" PRIu64 ".", attr.worker_uid);
+		slog_debug("[srv_worker_thread] Receiving request from %" PRIu64 ".", attr.worker_uid);
 
 		//  look for this peer_addr in the map and get the ep
 		ret = map_server_eps_search(map_server_eps, attr.worker_uid, &ep);
@@ -1206,12 +1206,26 @@ int stat_worker_helper(p_argv *arguments, char *req)
 			m.size = numelems_indir * URI_;
 			m.data = buffer;
 
+			slog_info("[workers][stat_worker_helper] MSG, numelems_indir=%ld, size=%ld", numelems_indir, m.size);
+
 			if (send_dynamic_stream(arguments->ucp_worker, arguments->server_ep, (char *)&m, MSG, arguments->worker_uid) < 0)
 			{
 				perror("ERRIMSS_WORKER_SENDBLOCK");
 				return -1;
 			}
 
+			slog_debug("[workers][stat_worker_helper] buffer=%s", buffer);
+
+			// char *curr = buffer;
+			// char *item = (char *)malloc(URI_ * sizeof(char));
+			// for (int32_t i = 0; i < numelems_indir; i++)
+			// {
+			// 	memcpy(item, curr, URI_);
+			// 	//(*items)[i] = elements;
+			// 	slog_debug("[IMSS][get_dir] item %d: %s", i, item);
+			// 	curr += URI_;
+			// }
+			// free(item);
 			free(buffer);
 			break;
 		}

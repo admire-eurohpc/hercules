@@ -401,11 +401,11 @@ void err_cb_server(void *arg, ucp_ep_h ep, ucs_status_t status)
 	uint64_t worker_uid = (uint64_t)arg;
 	// struct worker_info *worker_info = (struct worker_info *)arg;
 
-	// if (status != UCS_ERR_CONNECTION_RESET && status != UCS_ERR_ENDPOINT_TIMEOUT)
-	// {
-	// }
+	if (status != UCS_ERR_CONNECTION_RESET && status != UCS_ERR_ENDPOINT_TIMEOUT)
+	{
+		fprintf(stderr, "\t [COMM]['%" PRIu64 "'] Server error handling callback was invoked with status %d (%s)\n", worker_uid, status, ucs_status_string(status));
+	}
 	slog_error("[COMM]['%" PRIu64 "'] server error handling callback was invoked with status %d (%s)", worker_uid, status, ucs_status_string(status));
-	fprintf(stderr, "\t [COMM]['%" PRIu64 "'] Server error handling callback was invoked with status %d (%s)\n", worker_uid, status, ucs_status_string(status));
 }
 
 void common_cb(void *user_data, const char *type_str)
@@ -615,8 +615,9 @@ int32_t recv_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, void *data_str
 		perror("ERRIMSS_RECVDYNAMSTRUCT_RECV");
 		return -1;
 	}
+
 	// reserve memory to the buffer to store the message.
-	result = (char *)malloc(length);
+	result = (char *)malloc(sizeof(char) * length);
 
 	slog_debug("[COMM] recv_dynamic_stream start ");
 	// receive the message from the backend.
@@ -688,7 +689,10 @@ int32_t recv_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, void *data_str
 	case STRING:
 	case BUFFER:
 	{
-
+		// if (data_struct == NULL)
+		// {
+		// 	data_struct = (char *)malloc(length);
+		// }
 		slog_debug(" \t\t receiving STRING or BUFFER %ld", length);
 		if (!strncmp("$ERRIMSS_NO_KEY_AVAIL$", msg_data, 22))
 		{

@@ -340,7 +340,9 @@ int imss_readdir(const char *path, void *buf, posix_fill_dir_t filler, off_t off
 
 	slog_debug("[IMSS][imss_readdir] imss_path=%s", imss_path);
 	// Call IMSS to get metadata
-	if ((n_ent = get_dir((char *)imss_path, &buffer, &refs)) < 0)
+	n_ent = get_dir((char *)imss_path, &buffer, &refs);
+	slog_debug("[IMSS][imss_readdir] n_ent=%d", n_ent);
+	if (n_ent < 0)
 	{
 		strcat(imss_path, "/");
 		slog_debug("[IMSS][imss_readdir] imss_path=%s", imss_path);
@@ -351,12 +353,14 @@ int imss_readdir(const char *path, void *buf, posix_fill_dir_t filler, off_t off
 			return -ENOENT;
 		}
 	}
+	slog_debug("[IMSS][imss_readdir] Before flush data");
 
 	flush_data();
 
 	// Fill buffer
 	// TODO: Check if subdirectory
 	// printf("[FUSE] imss_readdir %s has=%d\n",path, n_ent);
+	slog_debug("[IMSS][imss_readdir] imss_readdir %s has=%d", path, n_ent);
 	for (int i = 0; i < n_ent; ++i)
 	{
 		if (i == 0)

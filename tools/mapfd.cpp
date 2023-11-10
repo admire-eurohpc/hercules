@@ -82,7 +82,8 @@ extern "C"
 		for (auto &it : *m)
 		{
 			const char *val = it.second.first.c_str();
-			if (!strncmp(val, pathname, strlen(val)))
+			// if (!strncmp(val, pathname, strlen(val)))
+			if (!strcmp(val, pathname))
 			{
 				int fd = it.first;
 				m->erase(fd);
@@ -92,7 +93,7 @@ extern "C"
 		return -1;
 	}
 
-	int map_fd_search(void *map, char *pathname, const int fd, unsigned long *offset)
+	int map_fd_search(void *map, const char *pathname, const int fd, unsigned long *offset)
 	{
 		// lock this function.
 		std::unique_lock<std::mutex> lck(fdlock);
@@ -162,11 +163,11 @@ extern "C"
 		std::unique_lock<std::mutex> lck(fdlock);
 		Map *m = reinterpret_cast<Map *>(map);
 		// Traverse the map
-
 		for (auto &it : *m)
 		{
 			const char *val = it.second.first.c_str();
-			if (!strncmp(val, pathname, strlen(val)))
+			// if (!strncmp(val, pathname, strlen(val)))
+			if (!strcmp(val, pathname))
 			{
 				*fd = it.first;
 				*offset = it.second.second;

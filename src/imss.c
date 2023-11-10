@@ -488,8 +488,9 @@ uint32_t get_dir(char *requested_uri, char **buffer, char ***items)
 		return -1;
 	}
 
-	char elements[4096];
-	// Retrieve the set of elements within the requested uri.
+	// char elements[6144];
+	char *elements = (char *)malloc(45000);
+	//  Retrieve the set of elements within the requested uri.
 	ret = recv_dynamic_stream(ucp_worker_meta, ep, elements, BUFFER, local_meta_uid);
 	if (ret < 0)
 	{
@@ -505,22 +506,35 @@ uint32_t get_dir(char *requested_uri, char **buffer, char ***items)
 
 	uint32_t elements_size = ret;
 
+	// slog_debug("[IMSS][get_dir] elements_size=%lu - ret = %d", elements_size, ret);
+
 	//*buffer = (char *) malloc(sizeof(char)*elements_size);
 	// memcpy(*buffer, elements, elements_size);
 	// elements = *buffer;
 
 	uint32_t num_elements = elements_size / URI_;
-	*items = (char **)malloc(sizeof(char *) * num_elements);
+	// slog_debug("[IMSS][get_dir] num_elements=%lu", num_elements);
+	*items = (char **)malloc(sizeof(char *) * (num_elements));
+	// slog_debug("[IMSS][get_dir] malloc items");
 
 	// Identify each element within the buffer provided.
 	char *curr = elements;
 	for (int32_t i = 0; i < num_elements; i++)
 	{
-		(*items)[i] = (char *)malloc(URI_);
+		// slog_debug("[IMSS][get_dir] item %d -- calloc", i);
+		(*items)[i] = (char *)calloc(URI_, 1);
+		// slog_debug("[IMSS][get_dir] item %d -- memcpy", i);
 		memcpy((*items)[i], curr, URI_);
 		//(*items)[i] = elements;
+		// slog_debug("[IMSS][get_dir] item %d -- curr+=URI", i);
 		curr += URI_;
+		// slog_debug("[IMSS][get_dir] item %d: %s", i, (*items)[i]);
 	}
+	
+	
+
+	free(elements);
+	// slog_debug("[IMSS][get_dir] Ending, num_elements=%d", num_elements);
 	return num_elements;
 }
 
@@ -2363,7 +2377,6 @@ int32_t get_ndata(int32_t dataset_id, int32_t data_id, char *buffer, size_t to_r
 			perror("ERRIMSS_RLSIMSS_SENDADDR");
 			return -1;
 		}
-		
 
 		int msg_length;
 		msg_length = get_recv_data_length(ucp_worker_data, local_data_uid);
@@ -2836,9 +2849,11 @@ int32_t get_type(char *uri)
 
 	// Receive the answer.
 	// char result[RESPONSE_SIZE];
-	size_t res_size = sizeof(imss_info) + NUM_DATA_SERVERS * LINE_LENGTH;
+	size_t res_size = sizeof(imss_info) + NUM_DATA_SERVERS * LINE_LENGTH + 100;
 	slog_debug("[IMSS][get_type] res_size = %ld, curr_imss.info.num_storages=%d", res_size, NUM_DATA_SERVERS);
-	char result[res_size];
+
+	// char result[res_size];
+	char *result = (char *)malloc(sizeof(char) * res_size);
 
 	ret = recv_dynamic_stream(ucp_worker_meta, ep, result, BUFFER, local_meta_uid);
 	slog_debug("[IMSS][get_type] after recv_dynamic_stream ret=%ld", ret);
