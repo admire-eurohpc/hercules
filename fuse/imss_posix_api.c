@@ -191,7 +191,7 @@ int imss_refresh(const char *path)
 int imss_getattr(const char *path, struct stat *stbuf)
 {
 	// Needed variables for the call
-	slog_debug("[imss_getattr], IMSS_DATA_BSIZE=%ld", IMSS_DATA_BSIZE);
+	slog_debug("[imss_getattr] IMSS_DATA_BSIZE=%ld", IMSS_DATA_BSIZE);
 	char *buffer;
 	char **refs;
 	// char head[IMSS_DATA_BSIZE];
@@ -226,7 +226,7 @@ int imss_getattr(const char *path, struct stat *stbuf)
 
 	uint32_t ds;
 
-	int fd;
+	int fd = -1;
 	struct stat stats;
 	char *aux;
 	switch (type)
@@ -2487,7 +2487,7 @@ int imss_rename(const char *old_path, const char *new_path)
 			if (file_desc_o < 0)
 			{
 
-				fprintf(stderr, "[IMSS-FUSE]    Cannot open dataset.\n");
+				slog_error("[IMSS-FUSE]    Cannot open dataset.");
 				free(new_rpath);
 				return -ENOENT;
 			}
