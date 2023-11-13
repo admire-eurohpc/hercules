@@ -453,7 +453,9 @@ char *checkHerculesPath(const char *pathname)
 	char *new_path = NULL;
 	char *workdir = getenv("PWD");
 
-	if (!strncmp(pathname, MOUNT_POINT, strlen(pathname) - 1))
+	// if (!strncmp(pathname, MOUNT_POINT, strlen(MOUNT_POINT) - 1)) // error when  pathname=/mnt/hercules/data/unet3d and MOUNT_POINT=/mnt/hercules,
+	// if (!strncmp(pathname, MOUNT_POINT, strlen(pathname) - 1))
+	if (!strncmp(pathname, MOUNT_POINT, MAX(strlen(pathname), strlen(MOUNT_POINT)) - 1))
 	{
 		slog_debug("[IMSS][checkHerculesPath] pathname=%s, MOUNT_POINT=%s, Success", pathname, MOUNT_POINT);
 		// new_path = calloc(strlen("Success"), sizeof(char));
@@ -1126,7 +1128,7 @@ int __lxstat(int fd, const char *pathname, struct stat *buf)
 			}
 			// }
 		}
-		slog_debug("[POSIX]. End Hercules '__lxstat', fd=%d, ret=%d, errno=%d:%s, file_size=%lu", fd, ret, errno, strerror(errno), buf->st_size);
+		slog_debug("[POSIX]. End Hercules '__lxstat', pathname=%s, new_path=%s, fd=%d, ret=%d, errno=%d:%s, file_size=%lu", pathname, new_path, fd, ret, errno, strerror(errno), buf->st_size);
 		free(new_path);
 	}
 	else
@@ -1980,7 +1982,8 @@ int feof(FILE *fp)
 	{
 		slog_debug("[POSIX]. Calling Hercules 'feof', pathname=%s", pathname);
 		// if ((fp->_flags & _IO_EOF_SEEN) != 0)
-		ret = _IO_feof_unlocked(fp);
+		// ret = _IO_feof_unlocked(fp);
+		ret = ((fp->_flags & _IO_EOF_SEEN) != 0);
 
 		slog_debug("[POSIX]. End Hercules 'feof', pathname=%s, ret=%d\n", pathname, ret);
 	}
@@ -3486,7 +3489,7 @@ DIR *opendir(const char *name)
 			slog_debug("[POSIX] map_fd_put, new_path=%s", new_path);
 			map_fd_put(map_fd, new_path, dirfd(dirp), p);
 		}
-		slog_debug("[POSIX]. End Hercules 'opendir', pathname=%s", name);
+		slog_debug("[POSIX]. End Hercules 'opendir', pathname=%s\n", name);
 		free(new_path);
 	}
 	else

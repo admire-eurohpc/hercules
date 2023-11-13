@@ -103,6 +103,13 @@ int32_t main(int32_t argc, char **argv)
 
 	args.type = argv[1][0];
 	args.id = atoi(argv[2]);
+
+	if (args.type != TYPE_METADATA_SERVER && args.type != TYPE_DATA_SERVER)
+	{
+		fprintf(stderr, "%c is not a valid server type \n usage: hercules_server <m|d> <server_id> <metadata_host>\n", args.type);
+		return 0;
+	}
+
 	sprintf(tmp_file_path, "/tmp/%c-hercules-%d", args.type, args.id);
 
 	cfg = cfg_init();

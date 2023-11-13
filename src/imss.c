@@ -522,7 +522,7 @@ uint32_t get_dir(char *requested_uri, char **buffer, char ***items)
 	for (int32_t i = 0; i < num_elements; i++)
 	{
 		// slog_debug("[IMSS][get_dir] item %d -- calloc", i);
-		(*items)[i] = (char *)calloc(URI_, 1);
+		(*items)[i] = (char *)calloc(URI_, sizeof(char));
 		// slog_debug("[IMSS][get_dir] item %d -- memcpy", i);
 		memcpy((*items)[i], curr, URI_);
 		//(*items)[i] = elements;

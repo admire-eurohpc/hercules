@@ -191,7 +191,7 @@ int imss_refresh(const char *path)
 int imss_getattr(const char *path, struct stat *stbuf)
 {
 	// Needed variables for the call
-	slog_debug("[imss_getattr] IMSS_DATA_BSIZE=%ld", IMSS_DATA_BSIZE);
+	// slog_debug("[imss_getattr] IMSS_DATA_BSIZE=%ld", IMSS_DATA_BSIZE);
 	char *buffer;
 	char **refs;
 	// char head[IMSS_DATA_BSIZE];
@@ -211,7 +211,7 @@ int imss_getattr(const char *path, struct stat *stbuf)
 	stbuf->st_uid = getuid();
 	stbuf->st_gid = getgid();
 	stbuf->st_blksize = IMSS_BLKSIZE; // IMSS_DATA_BSIZE;
-	slog_debug("[imss_getattr], IMSS_DATA_BSIZE=%ld, st_blksize=%ld", IMSS_DATA_BSIZE, stbuf->st_blksize);
+	// slog_debug("[imss_getattr], IMSS_DATA_BSIZE=%ld, st_blksize=%ld", IMSS_DATA_BSIZE, stbuf->st_blksize);
 	// printf("imss_getattr=%s\n",imss_path);
 	slog_debug("[imss_getattr] before get_type");
 	uint32_t type = get_type(imss_path);
@@ -365,13 +365,13 @@ int imss_readdir(const char *path, void *buf, posix_fill_dir_t filler, off_t off
 	{
 		if (i == 0)
 		{
-			// printf("[readdir]. y ..\n");
+			slog_debug("[IMSS][imss_readdir] . y ..\n");
 			filler(buf, "..", NULL, 0);
 			filler(buf, ".", NULL, 0);
 		}
 		else
 		{
-			// printf("[readdir]%s\n",refs[i]+6);
+			slog_debug("[IMSS][imss_readdir] %s\n",refs[i]+6);
 			struct stat stbuf;
 			int error = imss_getattr(refs[i] + 6, &stbuf);
 			if (!error)

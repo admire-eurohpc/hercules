@@ -39,6 +39,10 @@
 
 extern int32_t IMSS_DEBUG;
 
+#ifndef MAX
+#define MAX(x,y) ((x>y)?x:y)
+#endif
+
 #ifdef __DEBUG__
 #define DPRINT(...)                   \
 	if (IMSS_DEBUG)                   \
