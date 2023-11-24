@@ -26,7 +26,8 @@ gcc -Wall imss.c `pkg-config fuse --cflags --libs` -o imss
 #include <math.h>
 #include <sys/time.h>
 
-#include <dirent.h>
+// #include <dirent.h>
+
 #include <sys/types.h>
 #include "imss_posix_api.h"
 
@@ -211,6 +212,7 @@ int imss_getattr(const char *path, struct stat *stbuf)
 	stbuf->st_uid = getuid();
 	stbuf->st_gid = getgid();
 	stbuf->st_blksize = IMSS_BLKSIZE; // IMSS_DATA_BSIZE;
+
 	// slog_debug("[imss_getattr], IMSS_DATA_BSIZE=%ld, st_blksize=%ld", IMSS_DATA_BSIZE, stbuf->st_blksize);
 	// printf("imss_getattr=%s\n",imss_path);
 	slog_debug("[imss_getattr] before get_type");
@@ -262,7 +264,7 @@ int imss_getattr(const char *path, struct stat *stbuf)
 		//
 		//
 		fd_lookup(imss_path, &fd, &stats, &aux);
-		slog_debug("[imss_getattr] file descriptor=%d", fd);
+		slog_debug("[imss_getattr] imss_path=%s, file descriptor=%d", imss_path, fd);
 
 		if (fd >= 0)
 		{
@@ -273,8 +275,14 @@ int imss_getattr(const char *path, struct stat *stbuf)
 			ds = open_dataset(imss_path);
 			if (ds >= 0)
 			{
+				int ret = 0;
 				aux = (char *)malloc(IMSS_DATA_BSIZE);
-				get_data(ds, 0, (char *)aux);
+				ret = get_data(ds, 0, (char *)aux);
+				if (ret < 0)
+				{
+					slog_error("Error getting data: %s", imss_path);
+					return -ENOENT;
+				}
 				memcpy(&stats, aux, sizeof(struct stat));
 				pthread_mutex_lock(&lock_file);
 				map_put(map, imss_path, ds, stats, aux);
@@ -299,7 +307,10 @@ int imss_getattr(const char *path, struct stat *stbuf)
 			slog_error("[imss_getattr] Cannot get dataset metadata");
 			return -ENOENT;
 		}
-		slog_debug("[imss_getattr] file descriptor=%d, file size=%ld", fd, stbuf->st_size);
+		slog_debug("[imss_getattr] path=%s, imss_path=%s, file descriptor=%d, file size=%ld", path, imss_path, fd, stbuf->st_size);
+
+		// stbuf->st_blocks = ceil((double)stbuf->st_size/512.0);
+		stbuf->st_blocks = ceil((double)stbuf->st_size/IMSS_BLKSIZE);
 
 		return 0;
 	default:
@@ -341,13 +352,14 @@ int imss_readdir(const char *path, void *buf, posix_fill_dir_t filler, off_t off
 	slog_debug("[IMSS][imss_readdir] imss_path=%s", imss_path);
 	// Call IMSS to get metadata
 	n_ent = get_dir((char *)imss_path, &buffer, &refs);
-	slog_debug("[IMSS][imss_readdir] n_ent=%d", n_ent);
+	slog_debug("[IMSS][imss_readdir] imss_path=%s, n_ent=%d", imss_path, n_ent);
 	if (n_ent < 0)
 	{
 		strcat(imss_path, "/");
 		slog_debug("[IMSS][imss_readdir] imss_path=%s", imss_path);
 		// fprintf(stderr,"try again imss_path=%s\n",imss_path);
-		if ((n_ent = get_dir((char *)imss_path, &buffer, &refs)) < 0)
+		n_ent = get_dir((char *)imss_path, &buffer, &refs);
+		if (n_ent < 0)
 		{
 			fprintf(stderr, "[IMSS-FUSE]	Error retrieving directories for URI=%s", path);
 			return -ENOENT;
@@ -371,10 +383,11 @@ int imss_readdir(const char *path, void *buf, posix_fill_dir_t filler, off_t off
 		}
 		else
 		{
-			slog_debug("[IMSS][imss_readdir] %s\n",refs[i]+6);
-			struct stat stbuf;
-			int error = imss_getattr(refs[i] + 6, &stbuf);
-			if (!error)
+			slog_debug("[IMSS][imss_readdir] %s\n", refs[i] + 6);
+			// the stbuf is not used after here.
+			// struct stat stbuf;
+			// int error = imss_getattr(refs[i] + 6, &stbuf);
+			// if (!error)
 			{
 				char *last = refs[i] + strlen(refs[i]) - 1;
 				if (last[0] == '/')
@@ -390,7 +403,9 @@ int imss_readdir(const char *path, void *buf, posix_fill_dir_t filler, off_t off
 					}
 				}
 
-				filler(buf, refs[i] + offset + 1, &stbuf, 0);
+				// filler(buf, refs[i] + offset + 1, &stbuf, 0); // original
+				filler(buf, refs[i] + offset + 1, NULL, 0);
+				// filler(buf, refs[i], NULL, 0);
 			}
 			free(refs[i]);
 		}
@@ -441,7 +456,6 @@ int imss_open(const char *path, uint64_t *fh)
 	}
 	else
 	{
-
 		file_desc = open_dataset(imss_path);
 		if (file_desc < 0)
 		{ // dataset was not found.
@@ -484,7 +498,7 @@ int imss_open(const char *path, uint64_t *fh)
 	return 0;
 }
 
-int imss_sread(const char *path, char *buf, size_t size, off_t offset)
+int imss_sread(const char *path, void *buf, size_t size, off_t offset)
 {
 	int ret;
 	int32_t length;
@@ -526,7 +540,8 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 	if (start_offset >= stats.st_size)
 	{
 		slog_warn("[imss_read] returning size 0, EOF");
-		return 0;
+		memset(buf, '0', size);
+		return EOF;
 	}
 
 	if (fd >= 0)
@@ -656,7 +671,8 @@ int imss_sread(const char *path, char *buf, size_t size, off_t offset)
 		}
 		else
 		{
-			to_read = get_ndata(ds, curr_blk, (char *)buf + byte_count, to_read, block_offset);
+			//to_read = get_ndata(ds, curr_blk, (char *)buf + byte_count, to_read, block_offset);
+			to_read = get_ndata(ds, curr_blk, buf + byte_count, to_read, block_offset);
 		}
 
 		block_offset = 0;
@@ -1236,7 +1252,7 @@ int imss_vread_2x(const char *path, char *buf, size_t size, off_t offset)
 	return byte_count;
 }
 
-int imss_read(const char *path, char *buf, size_t size, off_t offset)
+int imss_read(const char *path, void *buf, size_t size, off_t offset)
 {
 	int ret;
 	// BEST_PERFORMANCE_READ (default 0)
@@ -1282,7 +1298,7 @@ int imss_read(const char *path, char *buf, size_t size, off_t offset)
 	return ret;
 }
 
-int imss_write(const char *path, const char *buf, size_t size, off_t off)
+int imss_write(const char *path, const void *buf, size_t size, off_t off)
 {
 	// slog_live("[%s] -----------------------------------------", buf + size - 1);
 	int ret;
@@ -1324,10 +1340,17 @@ int imss_write(const char *path, const char *buf, size_t size, off_t off)
 	uint32_t filled = 0;
 	struct stat header;
 	char *aux;
-	char *data_pointer = (char *)buf; // points to the buffer containing all bytes to be stored
+	// char *data_pointer = (char *)buf; // points to the buffer containing all bytes to be stored
+	const void *data_pointer = buf; // points to the buffer containing all bytes to be stored
 	char *rpath = (char *)calloc(MAX_PATH, sizeof(char));
 	get_iuri(path, rpath);
 	int middle = 0;
+
+	// // Erase the new line character ('') from the string.
+	// if (data_pointer[size - 1] == '\n')
+	// {
+	// 	data_pointer[size - 1] = '\0';
+	// }
 
 	int fd;
 	struct stat stats;
@@ -1940,7 +1963,7 @@ int imss_close(const char *path)
 	// t = clock();
 	// TIMING(flush_data(), "[imss_close]flush_data", int32_t);
 	slog_debug("[imss_close] Calling imss_flush_data");
-	TIMING(imss_flush_data(), "[imss_close]flush_data", int32_t);
+	// TIMING(imss_flush_data(), "[imss_close]flush_data", int32_t);
 	slog_debug("[imss_close] Ending imss_flush_data");
 	TIMING(imss_release(path), "[imss_close]imss_release", int);
 	slog_debug("[imss_close] Ending imss_release");

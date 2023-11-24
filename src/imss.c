@@ -488,8 +488,9 @@ uint32_t get_dir(char *requested_uri, char **buffer, char ***items)
 		return -1;
 	}
 
-	// char elements[6144];
+	// char elements[43264];
 	char *elements = (char *)malloc(45000);
+	// char *elements = NULL;
 	//  Retrieve the set of elements within the requested uri.
 	ret = recv_dynamic_stream(ucp_worker_meta, ep, elements, BUFFER, local_meta_uid);
 	if (ret < 0)
@@ -514,7 +515,8 @@ uint32_t get_dir(char *requested_uri, char **buffer, char ***items)
 
 	uint32_t num_elements = elements_size / URI_;
 	// slog_debug("[IMSS][get_dir] num_elements=%lu", num_elements);
-	*items = (char **)malloc(sizeof(char *) * (num_elements));
+	// *items = (char **)malloc(sizeof(char *) * (num_elements));
+	*items = (char **)calloc(num_elements, sizeof(char *));
 	// slog_debug("[IMSS][get_dir] malloc items");
 
 	// Identify each element within the buffer provided.
@@ -522,7 +524,7 @@ uint32_t get_dir(char *requested_uri, char **buffer, char ***items)
 	for (int32_t i = 0; i < num_elements; i++)
 	{
 		// slog_debug("[IMSS][get_dir] item %d -- calloc", i);
-		(*items)[i] = (char *)calloc(URI_, sizeof(char));
+		(*items)[i] = (char *)calloc(URI_, 1);
 		// slog_debug("[IMSS][get_dir] item %d -- memcpy", i);
 		memcpy((*items)[i], curr, URI_);
 		//(*items)[i] = elements;
@@ -530,10 +532,8 @@ uint32_t get_dir(char *requested_uri, char **buffer, char ***items)
 		curr += URI_;
 		// slog_debug("[IMSS][get_dir] item %d: %s", i, (*items)[i]);
 	}
-	
-	
 
-	free(elements);
+	// free(elements);
 	// slog_debug("[IMSS][get_dir] Ending, num_elements=%d", num_elements);
 	return num_elements;
 }
@@ -1595,9 +1595,13 @@ int32_t stat_dataset(const char *dataset_uri, dataset_info *dataset_info_)
 	sprintf(formated_uri, "%" PRIu32 " GET 0 %s", stat_ids[m_srv], dataset_uri);
 	slog_debug("[IMSS][stat_dataset] Request - %s", formated_uri);
 	// Send the request.
-	if (send_req(ucp_worker_meta, ep, local_addr_meta, local_addr_len_meta, formated_uri) < 0)
+	size_t msg_len = 0;
+	msg_len = send_req(ucp_worker_meta, ep, local_addr_meta, local_addr_len_meta, formated_uri);
+	slog_debug("[IMSS][stat_dataset] \tmsg_len=%ld", msg_len);
+	if (msg_len < 0)
 	{
 		perror("ERRIMSS_RLSIMSS_SENDADDR");
+		slog_error("ERRIMSS_RLSIMSS_SENDADDR");
 		return -1;
 	}
 
@@ -1606,9 +1610,7 @@ int32_t stat_dataset(const char *dataset_uri, dataset_info *dataset_info_)
 
 	if (ret < sizeof(dataset_info))
 	{
-		slog_debug("[IMSS][stat_dataset] stat_dataset: dataset does not exist.");
-		// fprintf(stderr,"[IMSS] stat_dataset: dataset does not exist.\n");
-		// exit(0);
+		slog_warn("[IMSS][stat_dataset] stat_dataset: dataset does not exist.");
 		return 0;
 	}
 	return 1;
@@ -2284,7 +2286,7 @@ int32_t get_data(int32_t dataset_id, int32_t data_id, char *buffer)
 		if (msg_length < 0)
 		{
 			perror("ERRIMSS_GET_DATA_INVALID_MSG_LENGTH");
-			return -1;
+			return -EINVAL;
 		}
 
 		// size_t length = 0;
@@ -2319,11 +2321,11 @@ int32_t get_data(int32_t dataset_id, int32_t data_id, char *buffer)
 		}
 	}
 
-	return 1;
+	return -1;
 }
 
 // Method retrieving a data element associated to a certain dataset.
-int32_t get_ndata(int32_t dataset_id, int32_t data_id, char *buffer, size_t to_read, off_t offset)
+int32_t get_ndata(int32_t dataset_id, int32_t data_id, void *buffer, size_t to_read, off_t offset)
 {
 	// slog_debug("[IMSS][get_data]");
 	// slog_fatal("Caller name: %pS", __builtin_return_address(0));
@@ -2511,7 +2513,7 @@ int32_t get_data_mall(int32_t dataset_id, int32_t data_id, char *buffer, size_t 
 }
 
 // Method storing a specific data element.
-int32_t set_data(int32_t dataset_id, int32_t data_id, char *buffer, size_t size, off_t offset)
+int32_t set_data(int32_t dataset_id, int32_t data_id, const void *buffer, size_t size, off_t offset)
 {
 	int32_t n_server;
 	clock_t t;
@@ -2579,7 +2581,7 @@ int32_t set_data(int32_t dataset_id, int32_t data_id, char *buffer, size_t size,
 }
 
 // Method storing a specific data element.
-int32_t set_data_mall(int32_t dataset_id, int32_t data_id, char *buffer, size_t size, off_t offset, int32_t num_storages)
+int32_t set_data_mall(int32_t dataset_id, int32_t data_id, const void *buffer, size_t size, off_t offset, int32_t num_storages)
 {
 	int32_t n_server;
 	clock_t t;

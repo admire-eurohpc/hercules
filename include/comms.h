@@ -71,7 +71,7 @@ typedef struct ucx_server_ctx {
  */
 typedef struct send_req {
     int complete;
-    char * buffer;
+    void * buffer;
 } send_req_t;
 
 /**
@@ -87,7 +87,7 @@ typedef struct ucx_async {
 
 typedef struct msg {
      size_t size;
-     char * data;
+     void * data;
 } msg_t;
 
 typedef struct msg_req
@@ -136,9 +136,9 @@ int init_worker(ucp_context_h ucp_context, ucp_worker_h *ucp_worker);
 int init_context(ucp_context_h *ucp_context,  ucp_config_t *config, ucp_worker_h *ucp_worker, send_recv_type_t send_recv_type);
 int request_finalize(ucp_worker_h ucp_worker, send_req_t *request, send_req_t *ctx);
 size_t send_req(ucp_worker_h ucp_worker, ucp_ep_h ep, ucp_address_t *addr, size_t addr_len, char * request);
-size_t send_data(ucp_worker_h ucp_worker, ucp_ep_h ep, const char *msg, size_t msg_len, uint64_t from);
+size_t send_data(ucp_worker_h ucp_worker, ucp_ep_h ep, const void *msg, size_t msg_len, uint64_t from);
 size_t get_recv_data_length(ucp_worker_h ucp_worker,  uint64_t dest);
-int32_t recv_data(ucp_worker_h ucp_worker, ucp_ep_h ep, char *msg, size_t msg_length,  uint64_t dest, int async);
+int32_t recv_data(ucp_worker_h ucp_worker, ucp_ep_h ep, void *msg, size_t msg_length,  uint64_t dest, int async);
 size_t recv_req(ucp_worker_h ucp_worker, ucp_ep_h ep, char *msg);
 ucs_status_t request_wait(ucp_worker_h ucp_worker, void *request, send_req_t *ctx);
 void stream_recv_cb(void *request, ucs_status_t status, size_t length, void *user_data);

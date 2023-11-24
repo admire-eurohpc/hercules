@@ -75,7 +75,7 @@ const char *slog_version(int min)
  */
 char *strclr(const char *clr, char *str, ...)
 {
-    static char output[MAXMSG+120];
+    static char output[MAXMSG + 120];
     char string[MAXMSG];
 
     /* Read args. */
@@ -107,8 +107,13 @@ void slog_to_file(char *out, const char *fname, SlogDate *sdate)
         snprintf(filename, sizeof(filename), "%s.log", fname);
     }
 
+    FILE *fp = NULL;
     // fprintf(stderr, "[SLOG] filename='%s'\n", filename);
-    FILE *fp = fopen(filename, "a");
+    // if (fp == NULL)
+    // {
+    fp = fopen(filename, "a");
+    // }
+
     if (fp == NULL)
     {
         fprintf(stderr, "[SLOG] Error opening file='%s'\n", filename);
@@ -193,7 +198,7 @@ int parse_config(const char *cfg_name)
  */
 char *slog_get(SlogDate *pDate, char *msg, ...)
 {
-    static char output[MAXMSG+120];
+    static char output[MAXMSG + 120];
     char string[MAXMSG];
 
     /* Read args. */
@@ -229,16 +234,16 @@ void slog(int flag, const char *msg, ...)
         int rc;
         if ((rc = pthread_mutex_lock(&slog_mutex)))
         {
-            fprintf(stderr, "[ERROR] <%s:%d> inside %s(): Can not lock mutex: %s\n",
-                   __FILE__, __LINE__, __func__, strerror(rc));
+            fprintf(stderr, "[ERROR][%s] <%s:%d> inside %s(): Can not lock mutex: %s\n",
+                    slg.fname, __FILE__, __LINE__, __func__, strerror(rc));
             exit(EXIT_FAILURE);
         }
     }
 
     SlogDate mdate;
-    char string[MAXMSG+120];
+    char string[MAXMSG + 120];
     char in_string[MAXMSG];
-    char prints[MAXMSG+240];
+    char prints[MAXMSG + 240];
     char color[32], alarm[32];
     char *output;
 
@@ -353,15 +358,14 @@ void slog(int flag, const char *msg, ...)
         int rc;
         if ((rc = pthread_mutex_unlock(&slog_mutex)))
         {
-            printf("[ERROR] <%s:%d> inside %s(): Can not deinitialize mutex: %s\n",
-                   __FILE__, __LINE__, __func__, strerror(rc));
+            fprintf(stderr, "[ERROR][%s] <%s:%d> inside %s(): Can not deinitialize mutex: %s\n",
+                    slg.fname, __FILE__, __LINE__, __func__, strerror(rc));
             exit(EXIT_FAILURE);
         }
     }
 
     // fprintf(stderr,"prev_errno=%d, actual_errno=%d\t", prev_errno, errno);
     errno = prev_errno;
-
 }
 
 void slog_init(const char *fname, int lvl, int writeFile, int debugConsole, int debugColor, int filestamp, int t_safe, unsigned int rank)

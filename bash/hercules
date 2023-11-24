@@ -48,7 +48,7 @@ WaitForServers() {
 STATUS=$1
 shift
 if [[ $STATUS != "stop" && $STATUS != "start" ]]; then
-    echo "Incorrect argument"
+    echo "Incorrect argument in STATUS option, usage: hercules <start|stop> [OPTION]"
     exit 1
 fi
 
@@ -61,23 +61,20 @@ do
         d) DATA_SERVER_FILE=${OPTARG};;
         c) HERCULES_MPI_HOSTFILE_NAME=${OPTARG};;
         # Indicates whether slurm should be used when it is installed.
-        s) SLURM=${OPTARG};;
+        s) SLURM_OPTION=${OPTARG};;
         # Configuration file path.
         f) FILE=${OPTARG};;
     esac
 done
 
-if [ -z "$SLURM" ]; then
-    ## Verify if slurm is installed.
-    SLURM=$([ -z "$SLURM_CLUSTER_NAME" ] && echo 0 || echo 1)
-fi
-
+HOSTFILES_OPTION=-1
 if [ ! -z "$DATA_SERVER_FILE" ]; then
     echo "Data server file - $DATA_SERVER_FILE"
     if [ ! -f "$DATA_SERVER_FILE" ]; then
         echo "Data server file " $DATA_SERVER_FILE " does not exists"
         exit 0
     fi
+    HOSTFILES_OPTION=1
 fi
 if [ ! -z "$META_SERVER_FILE" ]; then
     echo "Meta server file - $META_SERVER_FILE"
@@ -85,6 +82,7 @@ if [ ! -z "$META_SERVER_FILE" ]; then
         echo "Meta server file " $META_SERVER_FILE " does not exists"
         exit 0
     fi
+    HOSTFILES_OPTION=1
 fi
 if [ ! -z "$HERCULES_MPI_HOSTFILE_NAME" ]; then
     echo "Client file - $HERCULES_MPI_HOSTFILE_NAME"
@@ -92,34 +90,71 @@ if [ ! -z "$HERCULES_MPI_HOSTFILE_NAME" ]; then
         echo "Client deployment file " $HERCULES_MPI_HOSTFILE_NAME " does not exists"
         exit 0
     fi
+    HOSTFILES_OPTION=1
 fi
-if [ ! -z "$SLURM" ]; then
+
+SLURM=-1
+# If slurm option is set by the user (optional).
+if [[ ! -z "$SLURM_OPTION" ]]; then
+    case $SLURM_OPTION in
+        0) 
+            SLURM=0
+        ;; 
+        1) 
+            SLURM=1
+        ;;
+        *)
+            echo "Incorrect argument in SLURM option: -s <0|1>"
+            exit 1
+    esac
+fi
+
+if [[ $SLURM -eq "-1" && $HOSTFILES_OPTION -eq "-1" ]]; then
+    ## If not slurm option set by user and hostnames were not specify.
+    ## Verify if slurm is installed by using the env variable.
+    SLURM=$([ -z "$SLURM_CLUSTER_NAME" ] && echo 0 || echo 1)
+elif [[ $SLURM -eq "1" && $HOSTFILES_OPTION -eq "1" ]]; then
+    ## If slurm option set by user and hostnames were specify. 
+    echo "Inconsistency found, SLURM option (-s 1) and hostfiles (-m, -d, -c) could not be used together. Set "-s 0" or remove hostfile options."
+fi
+
+if [ ! "$SLURM" -eq "-1" ]; then
     echo "SLURM - $SLURM"
 fi
+
 if [ ! -z "$STATUS" ]; then
     echo "STATUS - $STATUS"
 fi
-if [ ! -z "$FILE" ]; then
-    # echo "FILE - $FILE"
-    if [ ! -f "$FILE" ]; then
+
+if [ ! -z "$FILE" ]; then ## Checks if a configuration file was provided by the user.
+    if [ ! -f "$FILE" ]; then ## Verify if that configuration file exists.
         echo "Configuration file " $FILE " does not exists"
         exit 0
+    else
+        ## To get absolute path of the configuration file.
+        ## To know if realpath is available.
+        realpath "$FILE" 2> /dev/null
+        if [ $? -eq 127 ]; then ## realpath is not available.
+            echo ""
+        else ## realpath is available
+            FILE=$(realpath $FILE)
+        fi
     fi
 fi
 
 ## Checks if the user wants to stop the services.
 if [[ $STATUS = "stop" ]];
 then
-    if [[ "$SLURM" -eq "0" ]]; then
-        ## Stops data and metadata servers.
-        readarray -t hosts < data_hostfile
-        echo "hosts=$hosts"
-        StopServers "data" $hosts
-        
-        readarray -t hosts < meta_hostfile
-        echo "hosts=$hosts"
-        StopServers "metadata" $hosts
-    fi
+    # if [[ "$SLURM" -eq "0" ]]; then
+    ## Stops data and metadata servers.
+    readarray -t hosts < data_hostfile
+    echo "hosts=$hosts"
+    StopServers "data" $hosts
+    
+    readarray -t hosts < meta_hostfile
+    echo "hosts=$hosts"
+    StopServers "metadata" $hosts
+    # fi
     exit 0
 fi
 
@@ -148,7 +183,7 @@ export HERCULES_CONF="$FILE"
 
 
 ## If slurm is used, then we create a hostfile containing the allocated nodes.
-if [[ $SLURM -eq 1 ]]; then
+if [[ $SLURM -eq "1" ]]; then
     srun -pernode hostname |sort > hostfile
 fi
 
@@ -187,7 +222,6 @@ HERCULES_METADATA_HOSTFILE=$(cat $FILE | grep "METADATA_HOSTFILE" | awk '{print 
 
 
 echo HERCULES_MOUNT_POINT - "$HERCULES_MOUNT_POINT" - HERCULES_BLOCK_SIZE - "$HERCULES_BLOCK_SIZE"
-
 
 # If a client hostfile was not provided we set a default path.
 if [ -z "$HERCULES_MPI_HOSTFILE_NAME" ]; then
@@ -290,7 +324,7 @@ else
     ## contains the hostnames of the nodes that will be used to deploy the
     ## determinate set of data servers.
     echo "[+] Reading data server file."
-    readarray -t data_hosts < $DATA_SERVER_FILE
+    readarray -t data_hosts < "$DATA_SERVER_FILE"
 fi
 
 i=0
@@ -356,8 +390,8 @@ case $MPI_DS in
     ;;
     *)
         # Check!
-        echo "[Error] No option"
-        exit 1
+        echo "[WARNING] No mpi distribution found"
+        # exit 1
     ;;
 esac
 
@@ -373,7 +407,7 @@ unset NUM_CLIENTS_PER_NODE
 unset STORAGE_SIZE
 
 
-if [[ "$SLURM" -eq "0" ]]; then
+# if [[ "$SLURM" -eq "0" ]]; then
     GREEN='\033[0;32m'  # Green
     RED='\033[0;31m'          # Red
     YELLOW='\033[33m'    # Yellow
@@ -415,6 +449,6 @@ if [[ "$SLURM" -eq "0" ]]; then
     #############################################################################"
 
 
-fi
+# fi
 
 # export LD_PRELOAD=$HERCULES_PATH/build/tools/libhercules_posix.so

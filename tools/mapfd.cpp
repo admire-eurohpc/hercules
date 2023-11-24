@@ -153,9 +153,9 @@ extern "C"
 		if (remove != -1)
 		{
 			m->erase(remove);
-			return 1;
+			return 0;
 		}
-		return 0;
+		return 1;
 	}
 
 	int map_fd_search_by_pathname(void *map, const char *pathname, int *fd, long *offset)

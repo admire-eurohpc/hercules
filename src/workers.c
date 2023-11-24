@@ -245,7 +245,7 @@ int srv_worker_helper(p_argv *arguments, const char *req)
 	key.assign((const char *)uri_);
 
 	// Information associated to the arriving key.
-	char *address_;
+	void *address_;
 	uint64_t block_size_rtvd;
 
 	// Differentiate between READ and WRITE operations.
@@ -279,7 +279,7 @@ int srv_worker_helper(p_argv *arguments, const char *req)
 					to_read = block_size_rtvd;
 				}
 				slog_debug("[srv_worker_thread][READ_OP][READ_OP] Send the requested block with key=%s, block_offset=%ld, block_size_rtvd=%ld kb, to_read=%ld kb", key.c_str(), block_offset, block_size_rtvd / 1024, to_read / 1024);
-				ret = send_data(arguments->ucp_worker, arguments->server_ep, address_ + block_offset, to_read, arguments->worker_uid);
+				ret = send_data(arguments->ucp_worker, arguments->server_ep, (char *)address_ + block_offset, to_read, arguments->worker_uid);
 				// fprintf(stderr,"\tblock_size_rtvd=%ld, address_=%s\n", block_size_rtvd, address_);
 				slog_debug("[srv_worker_thread][READ_OP][READ_OP] send_data, ret=%d", ret);
 				if (ret < 0)
@@ -395,7 +395,7 @@ int srv_worker_helper(p_argv *arguments, const char *req)
 				// printf("first_element=%s",first_element.c_str());
 				map->get(first_element, &address_, &block_size_rtvd);
 				struct stat *stats = (struct stat *)address_;
-				char *buf = (char *)malloc(size);
+				void *buf = (void *)malloc(size);
 
 				while (curr_blk <= end_blk)
 				{
@@ -437,7 +437,7 @@ int srv_worker_helper(p_argv *arguments, const char *req)
 							// Check if offset is bigger than filled, return 0 because is EOF case
 							if (start_offset > stats->st_size)
 								return 0;
-							memcpy(buf, address_ + start_offset, to_read);
+							memcpy(buf, (char *)address_ + start_offset, to_read);
 							byte_count += to_read;
 							++first;
 
@@ -445,7 +445,7 @@ int srv_worker_helper(p_argv *arguments, const char *req)
 						}
 						else if (curr_blk != end_blk)
 						{
-							memcpy(buf + byte_count, address_, blocksize * KB);
+							memcpy((char*)buf + byte_count, address_, blocksize * KB);
 							byte_count += blocksize * KB;
 							// End block case
 						}
@@ -454,7 +454,7 @@ int srv_worker_helper(p_argv *arguments, const char *req)
 
 							// Read the minimum between end_offset and filled (read_ = min(end_offset, filled))
 							int64_t pending = size - byte_count;
-							memcpy(buf + byte_count, address_, pending);
+							memcpy((char*)buf + byte_count, address_, pending);
 							byte_count += pending;
 						}
 					}
@@ -663,7 +663,7 @@ int srv_worker_helper(p_argv *arguments, const char *req)
 			int ds = 0;
 			int64_t to_copy = 0;
 			uint32_t filled = 0;
-			char *aux = (char *)malloc(IMSS_DATA_BSIZE);
+			void *aux = (void *)malloc(IMSS_DATA_BSIZE);
 			int count = 0;
 			// For the rest of blocks
 			while (curr_blk <= end_blk)
@@ -684,7 +684,7 @@ int srv_worker_helper(p_argv *arguments, const char *req)
 					// Bytes to write are the minimum between the size parameter and the remaining space in the block (BLOCKSIZE-start_offset)
 					to_copy = (size < IMSS_DATA_BSIZE - start_offset) ? size : IMSS_DATA_BSIZE - start_offset;
 
-					memcpy(aux + start_offset, buf + byte_count, to_copy);
+					memcpy((char *)aux + start_offset, buf + byte_count, to_copy);
 				}
 				// Last Block
 				else if (curr_blk == end_blk)
@@ -851,7 +851,7 @@ int srv_worker_helper(p_argv *arguments, const char *req)
 				slog_debug("[srv_worker_thread][WRITE_OP] NO key find %s", key.c_str());
 				clock_t tp;
 				tp = clock();
-				char *buffer = (char *)StsQueue.pop(mem_pool);
+				void *buffer = (void *)StsQueue.pop(mem_pool);
 				tp = clock() - tp;
 				double time_taken2 = ((double)tp) / CLOCKS_PER_SEC; // in seconds
 				// slog_info("[srv_worker_helper] pop time %f s", time_taken2);
@@ -868,7 +868,7 @@ int srv_worker_helper(p_argv *arguments, const char *req)
 					return -1;
 				}
 
-				msg_length = recv_data(arguments->ucp_worker, arguments->server_ep, buffer + block_offset, msg_length, arguments->worker_uid, 1);
+				msg_length = recv_data(arguments->ucp_worker, arguments->server_ep, (char *)buffer + block_offset, msg_length, arguments->worker_uid, 1);
 				if (msg_length < 0)
 				{
 					perror("ERRIMSS_DATA_WORKER_WRITE_NEW_BLOCK_RECV_DATA");
@@ -922,7 +922,7 @@ int srv_worker_helper(p_argv *arguments, const char *req)
 					struct stat *old, *latest;
 
 					// TODO: make sure this works
-					char *buffer = (char *)malloc(block_size_recv);
+					void *buffer = (void *)malloc(block_size_recv);
 
 					// TIMING(recv_data(arguments->ucp_worker, arguments->server_ep, buffer, arguments->worker_uid, 0), "[srv_worker_thread][WRITE_OP] recv_data Updating block $0");
 					int msg_length;
@@ -944,10 +944,10 @@ int srv_worker_helper(p_argv *arguments, const char *req)
 					latest = (struct stat *)buffer;
 					slog_debug("[srv_worker_thread] File size new %ld old %ld", latest->st_size, old->st_size);
 					latest->st_size = std::max(latest->st_size, old->st_size);
-					slog_debug("[srv_worker_thread] buffer: %ld", latest->st_size);
+					slog_debug("[srv_worker_thread] buffer->st_size: %ld", latest->st_size);
 
 					// TODO: make sure this works
-					memcpy(address_ + block_offset, buffer, block_size_recv);
+					memcpy((char *)address_ + block_offset, buffer, block_size_recv);
 					// TODO: should we update this block's size in the map?
 
 					// slog_debug("address_=%x", address_);
@@ -965,7 +965,7 @@ int srv_worker_helper(p_argv *arguments, const char *req)
 						return -1;
 					}
 
-					msg_length = recv_data(arguments->ucp_worker, arguments->server_ep, address_ + block_offset, msg_length, arguments->worker_uid, 1);
+					msg_length = recv_data(arguments->ucp_worker, arguments->server_ep, (char *)address_ + block_offset, msg_length, arguments->worker_uid, 1);
 					if (msg_length < 0)
 					{
 						perror("ERRIMSS_DATA_WORKER_WRITE_NON_BLOCK_0_RECV_DATA");
@@ -1170,7 +1170,7 @@ int stat_worker_helper(p_argv *arguments, char *req)
 	key.assign((const char *)uri_);
 
 	// Information associated to the arriving key.
-	char *address_;
+	void *address_;
 	uint64_t block_size_rtvd;
 	// printf("stat_worker RECV more=%ld, blocksss=%ld",more, block_size_recv);
 	// Differentiate between READ and WRITE operations.
@@ -1216,7 +1216,7 @@ int stat_worker_helper(p_argv *arguments, char *req)
 
 			slog_debug("[workers][stat_worker_helper] buffer=%s", buffer);
 
-			// char *curr = buffer;
+			char *curr = buffer;
 			// char *item = (char *)malloc(URI_ * sizeof(char));
 			// for (int32_t i = 0; i < numelems_indir; i++)
 			// {
@@ -1362,14 +1362,14 @@ int stat_worker_helper(p_argv *arguments, char *req)
 		if (!map->get(key, &address_, &block_size_rtvd))
 		{
 			pthread_mutex_unlock(&mp);
-			slog_debug("[STAT WORKER] Adding new block %s", &address_);
+			slog_debug("[STAT WORKER] Adding new block %p", &address_);
 			// Receive the block into the buffer.
-			char *buffer = (char *)malloc(block_size_recv);
+			void *buffer = (void *)malloc(block_size_recv);
 			slog_debug("[STAT WORKER] Recv dynamic buffer size %ld", block_size_recv);
 			recv_dynamic_stream(arguments->ucp_worker, arguments->server_ep, buffer, BUFFER, arguments->worker_uid);
 			slog_debug("[STAT WORKER] END Recv dynamic");
 
-			int32_t insert_successful;
+			int32_t insert_successful = -1;
 			insert_successful = map->put(key, buffer, block_size_recv);
 			slog_debug("[STAT WORKER] map->put (key %s) err %d", key.c_str(), insert_successful);
 
@@ -1388,7 +1388,6 @@ int stat_worker_helper(p_argv *arguments, char *req)
 			if (insert_successful == -1)
 			{
 				perror("ERRIMSS_STATWORKER_GTREEINSERT");
-
 				return -1;
 			}
 			// Update the pointer.
@@ -1413,7 +1412,8 @@ int stat_worker_helper(p_argv *arguments, char *req)
 					perror("ERRIMSS_METADATA_LOCAL_DATASET_UPDATE_INVALID_MSG_LENGTH");
 					return -1;
 				}
-				char data_ref[msg_length];
+				// void data_ref[msg_length];
+				void *data_ref = malloc(msg_length);
 				// char data_ref[REQUEST_SIZE];
 				msg_length = recv_data(arguments->ucp_worker, arguments->server_ep, data_ref, msg_length, arguments->worker_uid, 0);
 				if (msg_length < 0)
@@ -1425,12 +1425,12 @@ int stat_worker_helper(p_argv *arguments, char *req)
 				uint32_t data_size = RESPONSE_SIZE; // MIRAR
 
 				// Value to be written in certain positions of the vector.
-				uint16_t *update_value = (uint16_t *)(data_size + data_ref - 8);
+				uint16_t *update_value = (uint16_t *)(data_size + (char *)data_ref - 8);
 				// Positions to be updated.
 				uint32_t *update_positions = (uint32_t *)data_ref;
 
 				// Set of positions that are going to be updated (those are just under the concerned dataset but not pointed by it).
-				uint16_t *data_locations = (uint16_t *)(address_ + sizeof(dataset_info));
+				uint16_t *data_locations = (uint16_t *)((char *)address_ + sizeof(dataset_info));
 
 				// Number of positions to be updated.
 				int32_t num_pos_toupdate = (data_size / sizeof(uint32_t)) - 2;
@@ -1455,7 +1455,7 @@ int stat_worker_helper(p_argv *arguments, char *req)
 			{
 				slog_debug("[STAT_WORKER] Updating existing dataset %s.", key.c_str());
 				// Clear the corresponding memory region.
-				char *buffer = (char *)malloc(block_size_recv);
+				void *buffer = (void *)malloc(block_size_recv);
 				// Receive the block into the buffer.
 				recv_dynamic_stream(arguments->ucp_worker, arguments->server_ep, buffer, BUFFER, arguments->worker_uid);
 				free(buffer);

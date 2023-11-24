@@ -234,7 +234,6 @@ GTree_insert(char *desired_data)
 		}
 		else
 		{
-
 			memcpy(data_search, desired_data, strlen(desired_data));
 		}
 		char *father = (char *)calloc(256, sizeof(char));

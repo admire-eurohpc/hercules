@@ -19,8 +19,8 @@ extern void *map_ep;	  // map_ep used for async write
 extern int32_t is_client; // used to make sure the server doesn't do map_ep stuff
 pthread_mutex_t map_ep_mutex;
 
-char *send_buffer;
-char *recv_buffer;
+void *send_buffer;
+void *recv_buffer;
 
 ucs_status_t ucp_mem_alloc(ucp_context_h ucp_context, size_t length, void **address_p)
 {
@@ -140,7 +140,7 @@ err:
 	return ret;
 }
 
-size_t send_data(ucp_worker_h ucp_worker, ucp_ep_h ep, const char *msg, size_t msg_len, uint64_t from)
+size_t send_data(ucp_worker_h ucp_worker, ucp_ep_h ep, const void *msg, size_t msg_len, uint64_t from)
 {
 	ucs_status_t status;
 	struct ucx_context *request;
@@ -148,8 +148,8 @@ size_t send_data(ucp_worker_h ucp_worker, ucp_ep_h ep, const char *msg, size_t m
 	send_req_t ctx;
 
 	// char req[2048];
-
-	ctx.buffer = (char *)msg;
+	ctx.buffer = (void *)msg;
+	// ctx.buffer = (char *)msg;
 	// ctx.buffer = (char *)malloc(msg_len);
 	ctx.complete = 0;
 	// memcpy (ctx.buffer, msg, msg_len);
@@ -185,7 +185,9 @@ size_t send_req(ucp_worker_h ucp_worker, ucp_ep_h ep, ucp_address_t *addr, size_
 	msg_req_t *msg;
 
 	msg_len = sizeof(uint64_t) + REQUEST_SIZE + addr_len;
+	slog_info("[COMM][send_req] msg_len=%ld", msg_len);
 	msg = (msg_req_t *)malloc(msg_len);
+	slog_info("[COMM][send_req] msg_len=%ld, after malloc", msg_len);
 	//	msg = (msg_req_t *)send_buffer;
 
 	msg->addr_len = addr_len; // imprimir la long de adress_len.
@@ -204,8 +206,12 @@ size_t send_req(ucp_worker_h ucp_worker, ucp_ep_h ep, ucp_address_t *addr, size_
 	// send_param.memory_type  = UCS_MEMORY_TYPE_HOST;
 	send_param.user_data = &ctx;
 
+	slog_info("[COMM][send_req] before ucp_tag_send_nbx");
 	request = (struct ucx_context *)ucp_tag_send_nbx(ep, msg, msg_len, tag_req, &send_param);
+	slog_info("[COMM][send_req] after ucp_tag_send_nbx");
+	slog_info("[COMM][send_req] before ucx_wait");
 	status = ucx_wait(ucp_worker, request, "send", req);
+	slog_info("[COMM][send_req] after ucx_wait");
 
 	if (status != UCS_OK)
 	{
@@ -213,6 +219,7 @@ size_t send_req(ucp_worker_h ucp_worker, ucp_ep_h ep, ucp_address_t *addr, size_
 		//     // free(msg);
 		//     // goto err_ep;
 		// 	ep_close(ucp_worker, ep, UCP_EP_CLOSE_FLAG_FORCE);
+		slog_error("[COMM][send_req] Connection error, request=%s", req);
 		return -1;
 	}
 
@@ -235,7 +242,7 @@ size_t get_recv_data_length(ucp_worker_h ucp_worker, uint64_t dest)
 	return info_tag.length;
 }
 
-int32_t recv_data(ucp_worker_h ucp_worker, ucp_ep_h ep, char *msg, size_t msg_length, uint64_t dest, int async)
+int32_t recv_data(ucp_worker_h ucp_worker, ucp_ep_h ep, void *msg, size_t msg_length, uint64_t dest, int async)
 {
 	// ucp_tag_recv_info_t info_tag;
 	// 	ucp_tag_message_h msg_tag;
@@ -586,7 +593,7 @@ int32_t send_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, void *data_str
 	{
 		msg_t *msg = (msg_t *)data_struct;
 		msg_size = msg->size;
-		info_buffer = msg->data;
+		info_buffer = (char *)msg->data;
 		slog_debug("[COMM] \t\t msg size=%ld ", msg_size);
 	}
 	}
@@ -943,6 +950,7 @@ ucs_status_t ucx_wait(ucp_worker_h ucp_worker, struct ucx_context *request, cons
 	{
 		fprintf(stderr, "unable to %s %s (%s)", op_str, data_str,
 				ucs_status_string(status));
+		slog_error("[COMM][ucx_wait] unable to %s %s (%s)", op_str, data_str, ucs_status_string(status));
 	}
 
 	return status;

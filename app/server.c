@@ -333,7 +333,7 @@ int32_t main(int32_t argc, char **argv)
 	slog_info("[main] num_blocks=%lu", num_blocks);
 	for (int i = 0; i < num_blocks; ++i)
 	{
-		char *buffer = (char *)calloc(args.block_size * KB, sizeof(char));
+		void *buffer = (void *)calloc(args.block_size * KB, sizeof(char));
 		StsQueue.push(mem_pool, buffer);
 	}
 

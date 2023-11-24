@@ -21,7 +21,7 @@ set(CMAKE_CXX_FLAGS "-fPIC")
 
 add_library(hercules_posix_api STATIC ../fuse/imss_posix_api.c ../fuse/map.cpp ../fuse/mapprefetch.cpp ../src/slog.c)
 
-add_library (hercules_posix SHARED imss_posix.c mapfd.cpp ../fuse/map.cpp ../src/slog.c ../src/cfg_parse.c ) 
+add_library (hercules_posix SHARED imss_posix.c mapfd.cpp flags.c ../fuse/map.cpp ../src/slog.c ../src/cfg_parse.c ) 
 
 target_include_directories(hercules_posix PRIVATE ../fuse  .)
 

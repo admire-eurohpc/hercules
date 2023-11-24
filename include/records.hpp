@@ -48,9 +48,9 @@ class map_records
 		}
 		
 		//Method storing a new record.
-		int32_t put(std::string key, char * address, uint64_t length);
+		int32_t put(std::string key, void * address, uint64_t length);
 		//Method retrieving the address associated to a certain record.
-		int32_t get(std::string key, char ** add_, uint64_t * size_);
+		int32_t get(std::string key, void ** add_, uint64_t * size_);
 		//Method renaming from stat_worker
 		int32_t rename_metadata_stat_worker(std::string old_key, std::string new_key);
 		//Method renaming from srv_worker
@@ -63,14 +63,14 @@ class map_records
 		//Method retrieving the address associated to a certain record.
 		int32_t cleaning();
 		int32_t cleaning_specific(std::string new_key);
+		
 		//Method retrieving a map::begin iterator referencing the first element in the map container.
-		std::map <std::string, std::pair<char *, uint64_t>>::iterator begin()
+		std::map <std::string, std::pair<void *, uint64_t>>::iterator begin()
 		{
 			return buffer.begin();
 		}
-
 		//Method retrieving a reference to the end of the map.
-		std::map <std::string, std::pair<char *, uint64_t>>::iterator end()
+		std::map <std::string, std::pair<void *, uint64_t>>::iterator end()
 		{
 			return buffer.end();
 		}
@@ -82,9 +82,10 @@ class map_records
 		}
 
 	private:
-		//Map structure tracking stored records (by default sorts keys with '<' op).
-		std::map <std::string, std::pair<char *, uint64_t>> buffer;
-		//Mutex restricting access to structure.
+		// Map structure tracking stored records (by default sorts keys with '<' op).
+		// <key(file uri), <data, lenght>>
+		std::map <std::string, std::pair<void *, uint64_t>> buffer;
+		// Mutex restricting access to structure.
         uint64_t total_size;
 		uint64_t quantity_occupied = 0;
 		std::mutex * mut;
