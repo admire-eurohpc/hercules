@@ -16,8 +16,10 @@ StopServers() {
 ## To wait until all the servers are up.
 WaitForServers() {
     i=0
+    # get server name by arguments.
     SERVER_NAME=$1
     shift
+    # get server type by arguments.
     SERVER_TYPE=$1
     shift
     hosts=("$@")
@@ -26,12 +28,13 @@ WaitForServers() {
     do
         COMMAND="$HERCULES_BASH_PATH/check-servers.sh $SERVER_TYPE $i"
         echo "[+] Running comprobation $i in $node... $COMMAND"
+        # if slurm is not available.
         if [[ "$SLURM" -eq "0" ]]; then
             if [ -z "$(ssh-keygen -F $node)" ]; then
                 ssh-keyscan -H $node >> ~/.ssh/known_hosts
             fi
             ssh $node "$COMMAND"
-        else
+        else # if slurm is available.
             srun --exclusive --export=ALL -N 1 -n 1 -w $node $COMMAND
         fi
         ret=$?

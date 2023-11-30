@@ -395,7 +395,7 @@ void slog_init(const char *fname, int lvl, int writeFile, int debugConsole, int 
             (rc = pthread_mutex_init(&slog_mutex, &m_attr)) ||
             (rc = pthread_mutexattr_destroy(&m_attr)))
         {
-            printf("[ERROR] <%s:%d> inside %s(): Can not initialize mutex: %s\n",
+            fprintf(stderr, "[ERROR] <%s:%d> inside %s(): Can not initialize mutex: %s\n",
                    __FILE__, __LINE__, __func__, strerror(rc));
             slg.td_safe = 0;
         }

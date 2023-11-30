@@ -19,6 +19,8 @@
 #include <net/if.h>
 #include <arpa/inet.h>
 
+#include <fcntl.h>
+
 // Lock dealing when cleaning blocks
 pthread_mutex_t mutex_garbage = PTHREAD_MUTEX_INITIALIZER;
 
@@ -59,6 +61,10 @@ ucp_address_t **local_addr;
 size_t *local_addr_len;
 
 extern int IMSS_THREAD_POOL;
+
+// const char *TESTX = "imss://lorem_text.txt$1";
+// const char *TESTX = "imss://wfc1.dat$1";
+const char *TESTX = "p4x2.save/wfc1.dat";
 
 #define GARBAGE_COLLECTOR_PERIOD 120
 
@@ -445,7 +451,7 @@ int srv_worker_helper(p_argv *arguments, const char *req)
 						}
 						else if (curr_blk != end_blk)
 						{
-							memcpy((char*)buf + byte_count, address_, blocksize * KB);
+							memcpy((char *)buf + byte_count, address_, blocksize * KB);
 							byte_count += blocksize * KB;
 							// End block case
 						}
@@ -454,7 +460,7 @@ int srv_worker_helper(p_argv *arguments, const char *req)
 
 							// Read the minimum between end_offset and filled (read_ = min(end_offset, filled))
 							int64_t pending = size - byte_count;
-							memcpy((char*)buf + byte_count, address_, pending);
+							memcpy((char *)buf + byte_count, address_, pending);
 							byte_count += pending;
 						}
 					}
@@ -860,13 +866,15 @@ int srv_worker_helper(p_argv *arguments, const char *req)
 				// char *buffer = (char *)malloc(block_size_recv);
 				clock_t tr;
 				// TIMING(recv_data(arguments->ucp_worker, arguments->server_ep, buffer, arguments->worker_uid, 1), "[srv_worker_thread][WRITE_OP] recv_data: Receive the block into the buffer.");
-				int msg_length;
+				size_t msg_length;
 				msg_length = get_recv_data_length(arguments->ucp_worker, arguments->worker_uid);
 				if (msg_length < 0)
 				{
 					perror("ERRIMSS_DATA_WORKER_WRITE_NEW_BLOCK_INVALID_MSG_LENGTH");
 					return -1;
 				}
+
+				// void *aux_buf = (char *)buffer + block_offset;
 
 				msg_length = recv_data(arguments->ucp_worker, arguments->server_ep, (char *)buffer + block_offset, msg_length, arguments->worker_uid, 1);
 				if (msg_length < 0)
@@ -875,17 +883,34 @@ int srv_worker_helper(p_argv *arguments, const char *req)
 					return -1;
 				}
 				// sleep(5);
-				struct stat *stats = (struct stat *)buffer;
+				// struct stat *stats = (struct stat *)buffer;
 				int32_t insert_successful;
 
 				// Include the new record in the tracking structure.
 				tr = clock();
 				// fprintf(stderr,"[srv_worker_thread][WRITE_OP] ****[PUT]********* key=%s\n",  key.c_str());
-				slog_debug("[srv_worker_thread][WRITE_OP] ****[PUT, block_size_recv=%ld, stats->st_size=%ld]********* key=%s", block_size_recv, stats->st_size, key.c_str());
+				slog_debug("[srv_worker_thread][WRITE_OP] ****[PUT, block_size_recv=%ld, BLOCK_SIZE=%ld, msg_length=%ld]********* key=%s", block_size_recv, BLOCK_SIZE, msg_length, key.c_str());
 				// TODO: should this be block_size_recv or a different size? block_size_recv might not be the full block size
 				// insert_successful = map->put(key, buffer, block_size_recv);
 				//  fprintf(stderr, "BLOCK_SIZE=%ld", BLOCK_SIZE);
 				insert_successful = map->put(key, buffer, BLOCK_SIZE);
+
+				
+				// if (!strncmp(key.c_str() + 7, TESTX, strlen(TESTX)))
+				// {
+				// 	// fprintf(stderr, "Compare is equal on the read client, %s-%s\n", my_path, TESTX);
+				// 	char my_path[1000];
+				// 	sprintf(my_path, "/beegfs/home/javier.garciablas/gsanchez/lbellen1/phonon_cpu_best/ph-step-tbd/out_test/%s_server_write", key.c_str() + 7);
+				// 	int fd_ = open(my_path, O_CREAT | O_WRONLY | O_TRUNC, 0600);
+				// 	if (fd_ < 0)
+				// 	{
+				// 		fprintf(stderr, "Error opening file %s on the server, fd=%d\n", my_path, fd_);
+				// 	}
+				// 	int w = write(fd_, buffer, block_size_recv);
+				// 	close(fd_);
+				// }
+				//
+
 				slog_debug("[srv_worker_thread][WRITE_OP] insert_successful %d key=%s", insert_successful, key.c_str());
 				// map->get(key, &address_, &block_size_rtvd);
 				// fprintf(stderr,"****[PUT2]********* key=%s\n",  key.c_str());

@@ -83,6 +83,10 @@ int32_t MALLEABILITY;
 int32_t UPPER_BOUND_SERVERS;
 int32_t LOWER_BOUND_SERVERS;
 
+// const char *TESTX = "imss://lorem_text.txt$1";
+// const char *TESTX = "imss://wfc1.dat$1";
+const char *TESTX = "p4x2.save/wfc1.dat";
+
 // extern char *aux_refresh;
 // extern char *imss_path_refresh;
 
@@ -310,7 +314,7 @@ int imss_getattr(const char *path, struct stat *stbuf)
 		slog_debug("[imss_getattr] path=%s, imss_path=%s, file descriptor=%d, file size=%ld", path, imss_path, fd, stbuf->st_size);
 
 		// stbuf->st_blocks = ceil((double)stbuf->st_size/512.0);
-		stbuf->st_blocks = ceil((double)stbuf->st_size/IMSS_BLKSIZE);
+		stbuf->st_blocks = ceil((double)stbuf->st_size / IMSS_BLKSIZE);
 
 		return 0;
 	default:
@@ -539,9 +543,17 @@ int imss_sread(const char *path, void *buf, size_t size, off_t offset)
 	// Check if offset is bigger than filled, return 0 because is EOF case
 	if (start_offset >= stats.st_size)
 	{
-		slog_warn("[imss_read] returning size 0, EOF");
-		memset(buf, '0', size);
-		return EOF;
+		slog_warn("[imss_read] returning EOF");
+		free(rpath);
+		buf = '\0';
+		// memset(buf, 0, size);
+		// char *buf_pt = (char*) buf;
+		// for (size_t i = 0; i < size; ++i)
+		// {
+		// 	buf_pt[i] = 0;
+		// }
+		return 0;
+		// return size;
 	}
 
 	if (fd >= 0)
@@ -615,6 +627,12 @@ int imss_sread(const char *path, void *buf, size_t size, off_t offset)
 				to_read = IMSS_DATA_BSIZE - start_offset;
 				slog_warn("[imss_read] data block overflow, reducing the amount of data to read in the block %lu to %lu", curr_blk, to_read);
 			}
+			// prevents to read out of the EOF.
+			if (offset + to_read > stats.st_size)
+			{
+				to_read = stats.st_size - offset;
+				slog_warn("[imss_read] data block overflow, reducing the amount of data to read in the block %lu to %lu", curr_blk, to_read);
+			}
 		}
 		else if (curr_blk != end_blk) // Middle block case
 		{
@@ -645,6 +663,10 @@ int imss_sread(const char *path, void *buf, size_t size, off_t offset)
 		// slog_debug("[imss_read] curr_blk=%ld, reading %" PRIu64 " kilobytes, block_offset=%ld kilobytes, byte_count=%ld", curr_blk, to_read / 1024, block_offset / 1024, byte_count);
 		slog_debug("[imss_read] curr_blk=%ld, reading %ld bytes (%ld kilobytes) with an offset of %ld bytes (%ld kilobytes), byte_count=%ld bytes (%ld kilobytes)", curr_blk, to_read, to_read / 1024, block_offset, block_offset / 1024, byte_count, byte_count / 1024);
 
+		if(to_read <= 0) {
+			return to_read;
+		}
+
 		if (MALLEABILITY)
 		{
 			int32_t num_storages;
@@ -671,9 +693,25 @@ int imss_sread(const char *path, void *buf, size_t size, off_t offset)
 		}
 		else
 		{
-			//to_read = get_ndata(ds, curr_blk, (char *)buf + byte_count, to_read, block_offset);
+			// to_read = get_ndata(ds, curr_blk, (char *)buf + byte_count, to_read, block_offset);
 			to_read = get_ndata(ds, curr_blk, buf + byte_count, to_read, block_offset);
 		}
+
+		
+		// if (!strcmp(path+7, TESTX))
+		// {
+		// 	// fprintf(stderr, "Compare is equal on the read client, %s-%s\n", my_path, TESTX);
+		// 	char my_path[1000];
+		// 	sprintf(my_path, "/beegfs/home/javier.garciablas/gsanchez/lbellen1/phonon_cpu_best/ph-step-tbd/out_test/%s$%ld_client_read", path+7, curr_blk);
+		// 	int fd_ = open(my_path, O_CREAT | O_WRONLY | O_TRUNC, 0600);
+		// 	if (fd_ < 0)
+		// 	{
+		// 		fprintf(stderr, "Error opening file %s on the client, fd=%d", my_path, fd_);
+		// 	}
+		// 	int w = write(fd_, buf + byte_count, to_read);
+		// 	close(fd_);
+		// }
+		
 
 		block_offset = 0;
 		// memcpy(buf + byte_count, aux, to_read);
@@ -1298,10 +1336,10 @@ int imss_read(const char *path, void *buf, size_t size, off_t offset)
 	return ret;
 }
 
-int imss_write(const char *path, const void *buf, size_t size, off_t off)
+ssize_t imss_write(const char *path, const void *buf, size_t size, off_t off)
 {
 	// slog_live("[%s] -----------------------------------------", buf + size - 1);
-	int ret;
+	ssize_t ret;
 	clock_t t, tm, tmm;
 
 	// int MALLEABILITY = 0;
@@ -1331,7 +1369,7 @@ int imss_write(const char *path, const void *buf, size_t size, off_t off)
 
 	// Needed variables
 	size_t byte_count = 0;
-	size_t bytes_stored = 0;
+	ssize_t bytes_stored = 0;
 	int first_block_stored = 0;
 	int ds = 0;
 	int64_t to_copy = 0;
@@ -1417,6 +1455,8 @@ int imss_write(const char *path, const void *buf, size_t size, off_t off)
 		// store block
 		slog_live("[imss_write] writting %" PRIu64 " kilobytes (%" PRIu64 " bytes) with an offset of %" PRIu64 " kilobytes (%" PRIu64 " bytes)", bytes_to_copy / 1024, bytes_to_copy, block_offset / 1024, block_offset);
 
+		
+
 		if (MALLEABILITY)
 		{
 
@@ -1454,6 +1494,22 @@ int imss_write(const char *path, const void *buf, size_t size, off_t off)
 				return -ENOENT;
 			}
 		}
+
+		
+
+		// if (!strcmp(path+7, TESTX))
+		// {
+		// 	// fprintf(stderr, "Compare is equal on the read client, %s-%s\n", my_path, TESTX);
+		// 	char my_path[1000];
+		// 	sprintf(my_path, "/beegfs/home/javier.garciablas/gsanchez/lbellen1/phonon_cpu_best/ph-step-tbd/out_test/%s$%ld_client_write", path+7, curr_blk);
+		// 	int fd_ = open(my_path, O_CREAT | O_WRONLY | O_TRUNC, 0600);
+		// 	if (fd_ < 0)
+		// 	{
+		// 		fprintf(stderr, "Error opening file %s on the client, fd=%d", my_path, fd_);
+		// 	}
+		// 	int w = write(fd_, data_pointer, bytes_to_copy);
+		// 	close(fd_);
+		// }
 
 		bytes_stored += bytes_to_copy;
 		data_pointer += bytes_to_copy;

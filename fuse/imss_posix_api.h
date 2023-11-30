@@ -55,7 +55,7 @@ int imss_split_readv(const char *path, char *buf, size_t size, off_t offset);
 int imss_vread_prefetch(const char *path, char *buf, size_t size, off_t offset);
 int imss_vread_no_prefetch(const char *path, char *buf, size_t size, off_t offset);
 int imss_vread_2x(const char *path, char *buf, size_t size, off_t offset);
-int imss_write(const char *path, const void *buf, size_t size, off_t off);
+ssize_t imss_write(const char *path, const void *buf, size_t size, off_t off);
 int imss_split_writev(const char *path, const char *buf, size_t size, off_t off);
 int imss_release(const char *path);
 int imss_create(const char *path, mode_t mode, uint64_t *fh);
