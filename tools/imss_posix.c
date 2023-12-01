@@ -3013,7 +3013,7 @@ ssize_t read(int fd, void *buf, size_t size)
 		// unsigned long offset = lseek(fd, 0L, SEEK_CUR);
 		// slog_debug("[POSIX]. Ending real 'read', size=%ld, fd=%ld, ret=%d, old_offset=%d, new_offset=%d, errno=%d:%s.", size, fd, ret, old_offset, new_offset, errno, strerror(errno));
 		// fprintf(stderr, "[POSIX]. Real 'read', size=%ld, fd=%d, ret=%lu, offset=%lu, errno=%d:%s\n", size, fd, ret, offset, errno, strerror(errno));
-		
+
 		slog_debug("[POSIX]. Ending real 'read', size=%ld, fd=%ld, ret=%d, errno=%d:%s.", size, fd, ret, errno, strerror(errno));
 	}
 	return ret;
@@ -3119,6 +3119,8 @@ size_t fread(void *buf, size_t size, size_t count, FILE *fp)
 
 int unlink(const char *name)
 {
+	// fprintf(stderr, "Starting unlink, name=%s\n", name);
+
 	if (!real_unlink)
 		real_unlink = dlsym(RTLD_NEXT, "unlink");
 
@@ -3204,6 +3206,8 @@ int unlink(const char *name)
 		ret = real_unlink(name);
 		slog_debug("[POSIX]. Ending Real 'unlink', name=%s, ret=%d", name, ret);
 	}
+	// fprintf(stderr, "Ending unlink, name=%s\n", name);
+
 	return ret;
 }
 
@@ -3244,6 +3248,7 @@ int rmdir(const char *path)
 
 int unlinkat(int fd, const char *name, int flag)
 { // rm & rm -r
+	// fprintf(stderr, "Starting unlinkat, name=%s\n", name);
 	if (!real_unlinkat)
 		real_unlinkat = dlsym(RTLD_NEXT, "unlinkat");
 
@@ -3290,7 +3295,69 @@ int unlinkat(int fd, const char *name, int flag)
 	}
 	else
 	{
+		slog_debug("[POSIX]. Calling real 'unlinkat'");
 		ret = real_unlinkat(fd, name, flag);
+	}
+	// fprintf(stderr, "Ending unlinkat, name=%s\n", name);
+	return ret;
+}
+
+int(remove)(const char *name)
+{
+	if (!real_remove)
+		real_remove = dlsym(RTLD_NEXT, "remove");
+
+	if(!init) {
+		return real_remove(name);
+	}
+
+	errno = 0;
+	int ret, ret_map = 0;
+	char *new_path = checkHerculesPath(name);
+	if (new_path != NULL)
+	{
+		slog_debug("[POSIX]. Calling Hercules 'remove', new_path=%s", new_path);
+		int32_t type = get_type(new_path);
+		if (type == 0)
+		{
+			strcat(new_path, "/");
+			type = get_type(new_path);
+			slog_debug("[POSIX][remove] type=%d, new_path=%s", type, new_path);
+			if (type == 2)
+			{
+				ret = imss_rmdir(new_path);
+			}
+
+			if (type != 0)
+			{
+				ret = imss_unlink(new_path);
+			}
+		}
+		else
+		{
+			slog_debug("[POSIX][remove] type=%d, new_path=%s", type, new_path);
+			ret = imss_unlink(new_path);
+		}
+
+		if (ret < 0)
+		{
+			errno = -ret;
+			ret = -1;
+			slog_error("[POSIX]. Error Hercules 'remove', errno=%d:%s", errno, strerror(errno));
+		}
+
+		// remove the file descriptor from the local map.
+		ret_map = map_fd_erase_by_pathname(map_fd, new_path);
+		if (ret_map == -1)
+		{
+			slog_error("[POSIX]. Error Hercules no file descriptor found for the pathname=%s", new_path);
+			// fprintf(stderr, "[POSIX][remove]. Error. No Fd deleted in the local map, new_path=%s\n", new_path);
+		}
+
+		slog_debug("[POSIX]. Ending Hercules 'remove', type %d, new_path=%s, ret=%d, ret_map=%d\n", type, new_path, ret, ret_map);
+		free(new_path);
+	} else {
+		ret = real_remove(name);
 	}
 
 	return ret;

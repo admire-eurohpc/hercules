@@ -2019,7 +2019,7 @@ int imss_close(const char *path)
 	// t = clock();
 	// TIMING(flush_data(), "[imss_close]flush_data", int32_t);
 	slog_debug("[imss_close] Calling imss_flush_data");
-	// TIMING(imss_flush_data(), "[imss_close]flush_data", int32_t);
+	TIMING(imss_flush_data(), "[imss_close]flush_data", int32_t);
 	slog_debug("[imss_close] Ending imss_flush_data");
 	TIMING(imss_release(path), "[imss_close]imss_release", int);
 	slog_debug("[imss_close] Ending imss_release");
@@ -2170,6 +2170,8 @@ int imss_unlink(const char *path)
 	char *imss_path = (char *)calloc(MAX_PATH, sizeof(char));
 
 	get_iuri(path, imss_path);
+
+	slog_info("[imss_unlink] path=%s, imss_path=%s", path, imss_path);
 
 	uint32_t ds;
 	int fd;
