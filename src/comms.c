@@ -164,7 +164,7 @@ size_t send_data(ucp_worker_h ucp_worker, ucp_ep_h ep, const void *msg, size_t m
 	send_param.user_data = &ctx;
 
 	request = (struct ucx_context *)ucp_tag_send_nbx(ep, ctx.buffer, msg_len, from, &send_param);
-	//	status = ucx_wait(ucp_worker, request, "send",  "data");
+	status = ucx_wait(ucp_worker, request, "send", "data");
 
 	/*	if  (UCS_PTR_IS_ERR(request)) {
 			slog_fatal("[COMM] Error sending to endpoint.");

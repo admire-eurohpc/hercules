@@ -3006,10 +3006,14 @@ ssize_t read(int fd, void *buf, size_t size)
 	else
 	{
 		slog_debug("[POSIX]. Calling real 'read', size=%ld, fd=%ld.", size, fd);
+		// unsigned long old_offset, new_offset;
+		// old_offset = lseek(fd, 0L, SEEK_CUR);
 		ret = real_read(fd, buf, size);
+		// new_offset = lseek(fd, 0L, SEEK_CUR);
 		// unsigned long offset = lseek(fd, 0L, SEEK_CUR);
+		// slog_debug("[POSIX]. Ending real 'read', size=%ld, fd=%ld, ret=%d, old_offset=%d, new_offset=%d, errno=%d:%s.", size, fd, ret, old_offset, new_offset, errno, strerror(errno));
 		// fprintf(stderr, "[POSIX]. Real 'read', size=%ld, fd=%d, ret=%lu, offset=%lu, errno=%d:%s\n", size, fd, ret, offset, errno, strerror(errno));
-		// slog_debug("[POSIX]. Ending real 'read', size=%ld, fd=%ld, ret=%d, offset=%d, errno=%d:%s.", size, fd, ret, offset, errno, strerror(errno));
+		
 		slog_debug("[POSIX]. Ending real 'read', size=%ld, fd=%ld, ret=%d, errno=%d:%s.", size, fd, ret, errno, strerror(errno));
 	}
 	return ret;
