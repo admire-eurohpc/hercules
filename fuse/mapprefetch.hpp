@@ -1,7 +1,7 @@
 #ifndef H_MAP_PREFETCH
 #define H_MAP_PREFETCH
 
-#include <sys/stat.h>
+// #include <sys/stat.h>
 //structura con int, stat y char * malloc
 void* map_create_prefetch();
 char * map_get_buffer_prefetch (void* map, char * path, int * first_block, int * last_block);

@@ -4,7 +4,7 @@
 #include "map.hpp"
 #include "mapfd.hpp"
 #include "cfg_parse.h"
-#include "flags.h"
+// #include "flags.h"
 #include <stdio.h>
 #include <stdint.h>
 #include <dlfcn.h>
@@ -17,7 +17,7 @@
 #include <sys/xattr.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
-#include <sys/stat.h>
+// #include <sys/stat.h>
 #include <sys/statvfs.h>
 #include <sys/vfs.h> // statfs
 // #include <limits.h>	 // realpath
@@ -145,6 +145,8 @@ static int (*real_stat64)(const char *__restrict__ pathname, struct stat64 *__re
 static int (*real__xstat64)(int ver, const char *path, struct stat64 *stat_buf) = NULL;
 static int (*real_fstat)(int fd, struct stat *buf) = NULL;
 static int (*real_fstatat)(int dirfd, const char *pathname, struct stat *buf, int flags) = NULL;
+static int (*real_fstatat64)(int dirfd, const char *pathname, struct stat *buf, int flags) = NULL;
+static int (*real_newfstatat)(int dirfd, const char *pathname, struct stat *buf, int flags) = NULL;
 static int (*real__fxstat64)(int ver, int fd, struct stat64 *buf) = NULL;
 static int (*real__fxstat)(int ver, int fd, struct stat *buf) = NULL;
 static int (*real_close)(int fd) = NULL;
@@ -152,6 +154,7 @@ static int (*real_puts)(const char *str) = NULL;
 static int (*real__open_2)(const char *pathname, int flags, ...) = NULL;
 static int (*real_open64)(const char *pathname, int flags, ...) = NULL;
 static int (*real_open)(const char *pathname, int flags, ...) = NULL;
+static int (*real_creat)(const char *pathname, mode_t mode) = NULL;
 static FILE *(*real_fopen)(const char *restrict pathname, const char *restrict mode) = NULL;
 static FILE *(*real_fdopen)(int fildes, const char *mode) = NULL;
 // static FILE *(*real_fopen64)(const char *restrict pathname, const char *restrict mode) = NULL;
@@ -249,10 +252,25 @@ static int (*real_syncfs)(int fd) = NULL;
 static int (*real_posix_fadvise)(int fd, off_t offset, off_t len, int advice) = NULL;
 static int (*real_posix_fadvise64)(int fd, off64_t offset, off64_t len, int advice) = NULL;
 
+// #define _newfstatat
+// #define _fstatat64
+
+int creat(const char *pathname, mode_t mode)
+{
+	if (!real_creat)
+		real_creat = dlsym(RTLD_NEXT, "creat");
+
+	fprintf(stderr, "TODO: Calling creat, %s\n", pathname);
+	// if (!init)
+	{
+		return real_creat(pathname, mode);
+	}
+}
+
 int syncfs(int fd)
 {
 	if (!real_syncfs)
-		real_syncfs = dlsym(RTLD_NEXT, "fcntl");
+		real_syncfs = dlsym(RTLD_NEXT, "syncfs");
 
 	if (!init)
 	{
@@ -428,7 +446,6 @@ void checkOpenFlags(const char *pathname, int flags)
 	}
 	if (flags & O_TRUNC)
 	{
-
 		slog_debug("[POSIX]. O_TRUNC flag, pathname=%s, flags=%x, O_TRUNC=%x", pathname, flags, O_TRUNC);
 		// fprintf(stderr, "[POSIX]. O_TRUNC flag, pathname=%s, flags=%x, O_TRUNC=%x\n", pathname, flags, O_TRUNC);
 	}
@@ -2173,6 +2190,7 @@ FILE *fopen(const char *restrict pathname, const char *restrict mode)
 		if (file == NULL)
 		{
 			// slog_error("File struct %s was not created\n", pathname);
+			fprintf(stderr, "Error: File struct %s was not created\n", pathname);
 			return NULL;
 		}
 
@@ -2192,10 +2210,10 @@ FILE *fopen(const char *restrict pathname, const char *restrict mode)
 		}
 
 		// fprintf(stderr, "[POSIX] file->_fileno=%d, file->_offset=%ld\n", file->_fileno, file->_offset);
-		if (file != NULL)
-			fprintf(stderr, "[POSIX] Calling Hercules 'fopen', pathname=%s, mode=%s, file->_fileno=%d, file->_offset=%ld\n", new_path, mode, file->_fileno, file->_offset);
-		else
-			fprintf(stderr, "Calling Hercules 'fopen', file NULL\n");
+		// if (file != NULL)
+		// 	fprintf(stderr, "[POSIX] Calling Hercules 'fopen', pathname=%s, mode=%s, file->_fileno=%d, file->_offset=%ld\n", new_path, mode, file->_fileno, file->_offset);
+		// else
+		// fprintf(stderr, "Calling Hercules 'fopen', file NULL\n");
 
 		// slog_debug("[POSIX] Ending Hercules 'fopen', new_path=%s, ret=%d, errno=%d:%s\n", new_path, ret, errno, strerror(errno));
 		free(new_path);
@@ -2339,7 +2357,7 @@ int generalOpen(const char *new_path, int flags, mode_t mode)
 	// Search for the path "new_path" on the map "map_fd".
 	slog_debug("[POSIX] Searching for the %s on the map", new_path);
 	int exist = map_fd_search_by_pathname(map_fd, new_path, &ret, &p);
-	if (exist == -1) // if the "new_path" was not find:
+	if (exist == -1) // if the "new_path" was not find on the local map:
 	{
 		int create_flag = (flags & O_CREAT);
 		slog_debug("[POSIX] new_path:%s, exist: %d, create_flag: %d", new_path, exist, create_flag);
@@ -2449,7 +2467,7 @@ int open(const char *pathname, int flags, ...)
 	{
 		slog_debug("[POSIX] Calling Hercules 'open' flags=%d, mode=%o, pathname=%s, new_path=%s", flags, mode, pathname, new_path);
 
-		// checkOpenFlags(pathname, flags);
+		checkOpenFlags(pathname, flags);
 
 		ret = generalOpen(new_path, flags, mode);
 
@@ -3307,7 +3325,8 @@ int(remove)(const char *name)
 	if (!real_remove)
 		real_remove = dlsym(RTLD_NEXT, "remove");
 
-	if(!init) {
+	if (!init)
+	{
 		return real_remove(name);
 	}
 
@@ -3356,7 +3375,9 @@ int(remove)(const char *name)
 
 		slog_debug("[POSIX]. Ending Hercules 'remove', type %d, new_path=%s, ret=%d, ret_map=%d\n", type, new_path, ret, ret_map);
 		free(new_path);
-	} else {
+	}
+	else
+	{
 		ret = real_remove(name);
 	}
 
@@ -3832,7 +3853,7 @@ struct dirent *readdir(DIR *dirp)
 		{
 			entry = NULL;
 		}
-		slog_debug("[POSIX]. Ending Hercules 'readdir', pathname=%s", pathname);
+		slog_debug("[POSIX]. Ending Hercules 'readdir', pathname=%s\n", pathname);
 		// fprintf(stderr, "Hercules readdir\n");
 	}
 	else
@@ -3998,8 +4019,9 @@ int closedir(DIR *dirp)
 
 int openat(int dirfd, const char *pathname, int flags, ...)
 {
-	real_openat = dlsym(RTLD_NEXT, "openat");
-	// fprintf(stderr, "Calling openat %s\n", pathname);
+	if (!real_openat)
+		real_openat = dlsym(RTLD_NEXT, "openat");
+
 	int mode = 0;
 
 	if (flags & O_CREAT)
@@ -4008,6 +4030,13 @@ int openat(int dirfd, const char *pathname, int flags, ...)
 		va_start(ap, flags);
 		mode = va_arg(ap, unsigned);
 		va_end(ap);
+	}
+	// fprintf(stderr, "Calling openat %s\n", pathname);
+
+	char *new_path = map_fd_search_by_val(map_fd, dirfd);
+	if (new_path != NULL)
+	{
+		slog_warn("[TODO] Calling Hercules 'openat'.");
 	}
 
 	if (!mode)
@@ -4148,6 +4177,21 @@ int fstat(int fd, struct stat *buf)
 	return ret;
 }
 
+// int
+// #ifdef _fstatat
+// fstatat
+// #endif
+// #ifdef _fstatat64
+// fstatat64
+// #endif
+// #ifdef _newfstatat
+// newfstatat
+// #endif
+
+int generalFsstat()
+{
+}
+
 int fstatat(int dirfd, const char *pathname, struct stat *buf, int flags)
 {
 	if (!real_fstatat)
@@ -4161,6 +4205,36 @@ int fstatat(int dirfd, const char *pathname, struct stat *buf, int flags)
 	// TODO.
 
 	return real_fstatat(dirfd, pathname, buf, flags);
+}
+
+int fstatat64(int dirfd, const char *pathname, struct stat *buf, int flags)
+{
+	if (!real_fstatat64)
+		real_fstatat64 = dlsym(RTLD_NEXT, "fstatat64");
+
+	if (init)
+	{
+		slog_warn("[POSIX][TODO]. Calling Real 'fstatat64', pathname=%s", pathname);
+	}
+
+	// TODO.
+
+	return real_fstatat64(dirfd, pathname, buf, flags);
+}
+
+int newfstatat(int dirfd, const char *pathname, struct stat *buf, int flags)
+{
+	if (!real_newfstatat)
+		real_newfstatat = dlsym(RTLD_NEXT, "newfstatat");
+
+	if (init)
+	{
+		slog_warn("[POSIX][TODO]. Calling Real 'newfstatat', pathname=%s", pathname);
+	}
+
+	// TODO.
+
+	return real_newfstatat(dirfd, pathname, buf, flags);
 }
 
 void StatReport(int fd, struct stat sb)

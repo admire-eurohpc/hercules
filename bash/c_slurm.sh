@@ -81,11 +81,18 @@ MPIEXEC="/beegfs/home/javier.garciablas/spack/opt/spack/linux-ubuntu20.04-zen/gc
 
 set -x
 
-#export LD_PRELOAD=$HERCULES_POSIX_PRELOAD
+export LD_PRELOAD=$HERCULES_POSIX_PRELOAD
 #LD_PRELOAD=$HERCULES_POSIX_PRELOAD source bash
 #LD_PRELOAD=/beegfs/home/javier.garciablas/hercules/build/tools/libhercules_posix.so echo "hola" > /mnt/hercules/hola.txt
 #echo "hola"
 
+cp hostfile /mnt/hercules/hercules_hostfile 
+cp hostfile /mnt/hercules/hercules_hostfile 
+
+#cp hostfile hostfilex2
+#cp hostfile hostfilex2
+
+exit 0
 
 : ' # this is a multi-line comment '
 $MPIEXEC $HERCULES_MPI_PPN $HERCULES_NCPN $HERCULES_MPI_HOSTFILE_DEF $HERCULES_MPI_HOSTFILE_NAME \
