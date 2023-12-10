@@ -1,7 +1,7 @@
 #ifndef H_MAP_FD
 #define H_MAP_FD
 
-#include <sys/stat.h>
+// #include <sys/stat.h>
 void *map_fd_create();
 int map_fd_put(void *map, const char *pathname, const int fd, unsigned long offset);
 void map_fd_update_value(void *map, const char *pathname, const int fd, unsigned long offset);

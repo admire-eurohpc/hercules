@@ -5,7 +5,7 @@
 #include <pthread.h>
 #include <sys/signal.h>
 #include "imss.h"
-#include "stat.h"
+#include "metadata_stat.h"
 #include "comms.h"
 #include "workers.h"
 #include "memalloc.h"

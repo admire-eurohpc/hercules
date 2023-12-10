@@ -185,7 +185,7 @@ size_t send_req(ucp_worker_h ucp_worker, ucp_ep_h ep, ucp_address_t *addr, size_
 	msg_req_t *msg;
 
 	msg_len = sizeof(uint64_t) + REQUEST_SIZE + addr_len;
-	slog_info("[COMM][send_req] msg_len=%ld", msg_len);
+	// slog_info("[COMM][send_req] msg_len=%ld", msg_len);
 	msg = (msg_req_t *)malloc(msg_len);
 	slog_info("[COMM][send_req] msg_len=%ld, after malloc", msg_len);
 	//	msg = (msg_req_t *)send_buffer;
@@ -206,12 +206,12 @@ size_t send_req(ucp_worker_h ucp_worker, ucp_ep_h ep, ucp_address_t *addr, size_
 	// send_param.memory_type  = UCS_MEMORY_TYPE_HOST;
 	send_param.user_data = &ctx;
 
-	slog_info("[COMM][send_req] before ucp_tag_send_nbx");
+	// slog_info("[COMM][send_req] before ucp_tag_send_nbx");
 	request = (struct ucx_context *)ucp_tag_send_nbx(ep, msg, msg_len, tag_req, &send_param);
-	slog_info("[COMM][send_req] after ucp_tag_send_nbx");
-	slog_info("[COMM][send_req] before ucx_wait");
+	// slog_info("[COMM][send_req] after ucp_tag_send_nbx");
+	// slog_info("[COMM][send_req] before ucx_wait");
 	status = ucx_wait(ucp_worker, request, "send", req);
-	slog_info("[COMM][send_req] after ucx_wait");
+	// slog_info("[COMM][send_req] after ucx_wait");
 
 	if (status != UCS_OK)
 	{
@@ -219,7 +219,7 @@ size_t send_req(ucp_worker_h ucp_worker, ucp_ep_h ep, ucp_address_t *addr, size_
 		//     // free(msg);
 		//     // goto err_ep;
 		// 	ep_close(ucp_worker, ep, UCP_EP_CLOSE_FLAG_FORCE);
-		slog_error("[COMM][send_req] Connection error, request=%s", req);
+		slog_fatal("[COMM][send_req] Connection error, request=%s", req);
 		return -1;
 	}
 
@@ -626,7 +626,7 @@ int32_t recv_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, void *data_str
 	// reserve memory to the buffer to store the message.
 	result = (char *)malloc(sizeof(char) * length);
 
-	slog_debug("[COMM] recv_dynamic_stream start ");
+	slog_info("[COMM] recv_dynamic_stream start ");
 	// receive the message from the backend.
 	recv_data(ucp_worker, ep, result, length, dest, 0);
 
@@ -636,17 +636,17 @@ int32_t recv_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, void *data_str
 	{
 	case IMSS_INFO:
 	{
-		slog_debug(" \t\t receiving IMSS_INFO %ld", length);
+		slog_info(" \t\t receiving IMSS_INFO %ld", length);
 		imss_info *struct_ = (imss_info *)data_struct;
 
 		// Copy the actual structure into the one provided through reference.
 		memcpy(struct_, msg_data, sizeof(imss_info));
 
-		slog_debug(" \t\t msg_data=%s", msg_data);
+		slog_info(" \t\t msg_data=%s", msg_data);
 
 		if (!strncmp("$ERRIMSS_NO_KEY_AVAIL$", struct_->uri_, 22))
 		{
-			slog_debug("[COMM] recv_dynamic_stream end  with error, length=%ld", length);
+			slog_error("[COMM] recv_dynamic_stream end  with error, length=%ld", length);
 			return length;
 		}
 
@@ -671,10 +671,10 @@ int32_t recv_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, void *data_str
 
 		if (!strncmp("$ERRIMSS_NO_KEY_AVAIL$", msg_data, 22))
 		{
-			slog_debug("[COMM] recv_dynamic_stream end  with error, err code 22");
+			slog_error("[COMM] recv_dynamic_stream end  with error, err code 22");
 			return 22;
 		}
-		slog_debug(" \t\t DATASET_INFO %ld", length);
+		slog_info(" \t\t DATASET_INFO %ld", length);
 		dataset_info *struct_ = (dataset_info *)data_struct;
 
 		// Copy the actual structure into the one provided through reference.
@@ -700,17 +700,17 @@ int32_t recv_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, void *data_str
 		// {
 		// 	data_struct = (char *)malloc(length);
 		// }
-		slog_debug(" \t\t receiving STRING or BUFFER %ld", length);
+		slog_info(" \t\t receiving STRING or BUFFER %ld", length);
 		if (!strncmp("$ERRIMSS_NO_KEY_AVAIL$", msg_data, 22))
 		{
-			slog_debug("[COMM] recv_dynamic_stream end with error %ld", length);
+			slog_error("[COMM] recv_dynamic_stream end with error %ld", length);
 			return length;
 		}
 		memcpy(data_struct, result, length);
 		break;
 	}
 	}
-	slog_debug("[COMM] recv_dynamic_stream end %ld", length);
+	slog_info("[COMM] recv_dynamic_stream end %ld", length);
 	free(result);
 	return length;
 }

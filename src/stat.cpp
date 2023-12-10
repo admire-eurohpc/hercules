@@ -4,7 +4,7 @@
 #include <string>
 #include <sys/stat.h>
 #include <sys/types.h>
-#include "stat.h"
+#include "metadata_stat.h"
 #include "imss.h"
 #include "directory.h"
 

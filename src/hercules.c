@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <pthread.h>
 #include <sys/signal.h>
-#include "stat.h"
+#include "metadata_stat.h"
 #include "imss.h"
 #include "workers.h"
 #include "hercules.h"
