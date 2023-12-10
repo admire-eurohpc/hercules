@@ -1,142 +1,457 @@
 #!/bin/bash
 #######################################################
 #######################################################
+## To stop all servers.
 StopServers() {
-	NAME=$1
-	hosts=$2
-        echo "# Hercules: Stopping $NAME servers in $hosts"
-        for node in "${hosts[@]}"
-        do
-                (ssh $node "pkill hercules_server" ) &
-        done
+    NAME=$1
+    hosts=$2
+    echo "# Hercules: Stopping $NAME servers in $hosts"
+    for node in "${hosts[@]}"
+    do
+        echo "ssh $node pkill hercules_server"
+        ( ssh $node "pkill hercules_server" )
+    done
 }
 
-## Uncomment when working in Tucan.
-H_PATH=$(dirname `pwd`)
-H_BUILD_PATH=$H_PATH/build
-H_BASH_PATH=$H_PATH/bash
-META_PORT=70000
-DATA_PORT=80000
-MALLEABILITY=0
-NUM_METADATA=1
-NUM_DATA=1
-NODES_FOR_CLIENTS=1
-OPTIND=2
-BLOCK_SIZE=512
-STORAGE_SIZE=0
+## To wait until all the servers are up.
+WaitForServers() {
+    i=0
+    # get server name by arguments.
+    SERVER_NAME=$1
+    shift
+    # get server type by arguments.
+    SERVER_TYPE=$1
+    shift
+    hosts=("$@")
+    # echo "hostnames=${hosts[@]}"
+    for node in "${hosts[@]}"
+    do
+        COMMAND="$HERCULES_BASH_PATH/check-servers.sh $SERVER_TYPE $i"
+        echo "[+] Running comprobation $i in $node... $COMMAND"
+        # if slurm is not available.
+        if [[ "$SLURM" -eq "0" ]]; then
+            if [ -z "$(ssh-keygen -F $node)" ]; then
+                ssh-keyscan -H $node >> ~/.ssh/known_hosts
+            fi
+            ssh $node "$COMMAND"
+        else # if slurm is available.
+            srun --exclusive --export=ALL -N 1 -n 1 -w $node $COMMAND
+        fi
+        ret=$?
+        if [ "$ret" -gt 0 ]; then
+            echo "[Error: $ret] It has not been possible to run a $SERVER_NAME server on $node, please verify the configuration file and logs."
+            StopServers $SERVER_NAME $hosts
+            exit 1
+        fi
+        echo "[OK] $SERVER_NAME $i server running in $node"
+        i=$((i+1))
+    done
+}
 
-rm .hercules.conf
-echo -e "
-H_PATH $H_PATH\n
-H_META_PORT $META_PORT\n
-H_DATA_PORT $DATA_PORT\n
-H_BLOCK_SIZE $BLOCK_SIZE\n
-H_STORAGE_SIZE $STORAGE_SIZE
-" > .hercules.conf
+STATUS=$1
+shift
+if [[ $STATUS != "stop" && $STATUS != "start" ]]; then
+    echo "Incorrect argument in STATUS option, usage: hercules <start|stop> [OPTION]"
+    exit 1
+fi
 
-while getopts :m:d:o:c: flag
+## Check if user pass arguments.
+while getopts :m:d:o:c:s:f: flag
 do
+    # echo "Entra en getopts"
     case "${flag}" in
-	m) META_SERVER_FILE=${OPTARG};;
+        m) META_SERVER_FILE=${OPTARG};;
         d) DATA_SERVER_FILE=${OPTARG};;
-	o) OUTPUT_FILE=${OPTARG};;
-	c) CLIENT_FILE=${OPTARG};;
+        c) HERCULES_MPI_HOSTFILE_NAME=${OPTARG};;
+        # Indicates whether slurm should be used when it is installed.
+        s) SLURM_OPTION=${OPTARG};;
+        # Configuration file path.
+        f) FILE=${OPTARG};;
     esac
 done
-echo "DATA_SERVER_FILE=$DATA_SERVER_FILE"
-echo "META_SERVER_FILE=$META_SERVER_FILE"
-echo "OUTPUT_FILE=$OUTPUT_FILE"
-echo "STATUS=$1"
-STATUS=$1
-if [[ $STATUS != "stop" && $STATUS != "start" ]]; then
-	echo "Incorrect argument"
-	exit 0
+
+HOSTFILES_OPTION=-1
+if [ ! -z "$DATA_SERVER_FILE" ]; then
+    echo "Data server file - $DATA_SERVER_FILE"
+    if [ ! -f "$DATA_SERVER_FILE" ]; then
+        echo "Data server file " $DATA_SERVER_FILE " does not exists"
+        exit 0
+    fi
+    HOSTFILES_OPTION=1
 fi
-SLURM=$([ -z "$SLURM_CLUSTER_NAME" ] && echo 0 || echo 1)
+if [ ! -z "$META_SERVER_FILE" ]; then
+    echo "Meta server file - $META_SERVER_FILE"
+    if [ ! -f "$META_SERVER_FILE" ]; then
+        echo "Meta server file " $META_SERVER_FILE " does not exists"
+        exit 0
+    fi
+    HOSTFILES_OPTION=1
+fi
+if [ ! -z "$HERCULES_MPI_HOSTFILE_NAME" ]; then
+    echo "Client file - $HERCULES_MPI_HOSTFILE_NAME"
+    if [ ! -f "$HERCULES_MPI_HOSTFILE_NAME" ]; then
+        echo "Client deployment file " $HERCULES_MPI_HOSTFILE_NAME " does not exists"
+        exit 0
+    fi
+    HOSTFILES_OPTION=1
+fi
+
+SLURM=-1
+# If slurm option is set by the user (optional).
+if [[ ! -z "$SLURM_OPTION" ]]; then
+    case $SLURM_OPTION in
+        0) 
+            SLURM=0
+        ;; 
+        1) 
+            SLURM=1
+        ;;
+        *)
+            echo "Incorrect argument in SLURM option: -s <0|1>"
+            exit 1
+    esac
+fi
+
+if [[ $SLURM -eq "-1" && $HOSTFILES_OPTION -eq "-1" ]]; then
+    ## If not slurm option set by user and hostnames were not specify.
+    ## Verify if slurm is installed by using the env variable.
+    SLURM=$([ -z "$SLURM_CLUSTER_NAME" ] && echo 0 || echo 1)
+elif [[ $SLURM -eq "1" && $HOSTFILES_OPTION -eq "1" ]]; then
+    ## If slurm option set by user and hostnames were specify. 
+    echo "Inconsistency found, SLURM option (-s 1) and hostfiles (-m, -d, -c) could not be used together. Set "-s 0" or remove hostfile options."
+fi
+
+if [ ! "$SLURM" -eq "-1" ]; then
+    echo "SLURM - $SLURM"
+fi
+
+if [ ! -z "$STATUS" ]; then
+    echo "STATUS - $STATUS"
+fi
+
+if [ ! -z "$FILE" ]; then ## Checks if a configuration file was provided by the user.
+    if [ ! -f "$FILE" ]; then ## Verify if that configuration file exists.
+        echo "Configuration file " $FILE " does not exists"
+        exit 0
+    else
+        ## To get absolute path of the configuration file.
+        ## To know if realpath is available.
+        realpath "$FILE" 2> /dev/null
+        if [ $? -eq 127 ]; then ## realpath is not available.
+            echo ""
+        else ## realpath is available
+            FILE=$(realpath $FILE)
+        fi
+    fi
+fi
+
+## Checks if the user wants to stop the services.
 if [[ $STATUS = "stop" ]];
 then
-	#readarray -t hosts < <($([ -z "$DATA_SERVER_FILE" ] && echo $H_DATA_HOSTS || echo $DATA_SERVER_FILE))
-
-	#echo $H_DATA_HOSTS
-	#echo $H_META_HOSTS
-	#if [ -z "$DATA_SERVER_FILE" ] && [ -z "$H_DATA_HOSTS" ] && [ -z "$H_META_HOSTS" ]; then
-	#	echo "Nodes to stop hercules' services has not been defined"
-	#	exit 0
-	#fi
-	readarray -t hosts < data_hostfile
-	echo "hosts=$hosts"
-	StopServers "data" $hosts
-	#readarray -t hosts < <($([ -z "$META_SERVER_FILE" ] && echo $H_META_HOSTS || echo $META_SERVER_FILE))	
-	readarray -t hosts < meta_hostfile
-	echo "hosts=$hosts"
-	StopServers "metadata" $hosts
-	exit 0
+    # if [[ "$SLURM" -eq "0" ]]; then
+    ## Stops data and metadata servers.
+    readarray -t hosts < data_hostfile
+    echo "hosts=$hosts"
+    StopServers "data" $hosts
+    
+    readarray -t hosts < meta_hostfile
+    echo "hosts=$hosts"
+    StopServers "metadata" $hosts
+    # fi
+    exit 0
 fi
 
-echo "SLURM=$SLURM"
-if [[ $SLURM -eq 1 ]]; then
-	srun -pernode hostname |sort > hostfile
+## Define values.
+
+## If a configuration file was not provided.
+if [ -z "$FILE" ]; then
+    ## To know if a configuration file exists in the default paths.
+    for FILE in {"/etc/hercules.conf","./hercules.conf","hercules.conf","../conf/hercules.conf"}
+    do
+        echo "Checking configuration file - " $FILE
+        if [ -f "$FILE" ]; then
+            break
+        fi
+        FILE=""
+    done
 fi
 
-echo "# Hercules: Running metadata servers"
+if [ -z "$FILE" ]; then
+    echo "No configuration file was provided. Please create one and specify it using -f <file_path>"
+    exit 1
+fi
+
+echo "Reading configuration from $FILE"
+export HERCULES_CONF="$FILE"
+
+
+## If slurm is used, then we create a hostfile containing the allocated nodes.
+if [[ $SLURM -eq "1" ]]; then
+    srun -pernode hostname |sort > hostfile
+fi
+
+if [ -z "$FILE" ]; then
+    HERCULES_PATH=$(dirname `pwd`)
+else
+    HERCULES_PATH=$(cat $FILE | grep "HERCULES_PATH" | awk '{print $3}')
+fi
+
+echo "Hercules path - $HERCULES_PATH"
+
+export HERCULES_PATH=$HERCULES_PATH
+
+HERCULES_BUILD_PATH=$HERCULES_PATH/build
+HERCULES_BASH_PATH=$HERCULES_PATH/bash
+HERCULES_POSIX_PRELOAD="$HERCULES_PATH/build/tools/libhercules_posix.so"
+
+
+## Read configuration file.
+export HERCULES_MOUNT_POINT=$(cat $FILE | grep "MOUNT_POINT" | head -1 | awk '{print $3}')
+META_PORT=$(cat $FILE | grep "METADATA_PORT" | awk '{print $3}')
+DATA_PORT=$(cat $FILE | grep "DATA_PORT" | awk '{print $3}')
+MALLEABILITY=$(cat $FILE | grep "MALLEABILITY" | awk '{print $3}')
+HERCULES_NUM_METADATA=$(cat $FILE | grep "NUM_META_SERVERS" | awk '{print $3}')
+HERCULES_NUM_DATA=$(cat $FILE | grep "NUM_DATA_SERVERS" | awk '{print $3}')
+NUM_NODES_FOR_CLIENTS=$(cat $FILE | grep "NUM_NODES_FOR_CLIENTS" | awk '{print $3}')
+NUM_CLIENTS_PER_NODE=$(cat $FILE | grep "NUM_CLIENTS_PER_NODE" | awk '{print $3}')
+ATTACHED=$(cat $FILE | grep "ATTACHED" | awk '{print $3}')
+HERCULES_BLOCK_SIZE=$(cat $FILE | grep "BLOCK_SIZE" | awk '{print $3}')
+STORAGE_SIZE=$(cat $FILE | grep "STORAGE_SIZE" | awk '{print $3}')
+HERCULES_DATA_HOSTFILE=$(cat $FILE | grep "\<DATA_HOSTFILE\>" | awk '{print $3}')
+HERCULES_METADATA_HOSTFILE=$(cat $FILE | grep "METADATA_HOSTFILE" | awk '{print $3}')
+
+## \< \> to match exact word.
+
+
+
+echo HERCULES_MOUNT_POINT - "$HERCULES_MOUNT_POINT" - HERCULES_BLOCK_SIZE - "$HERCULES_BLOCK_SIZE"
+
+# If a client hostfile was not provided we set a default path.
+if [ -z "$HERCULES_MPI_HOSTFILE_NAME" ]; then
+    ## Warning if slurm is not being used and no client hostfile was defined.
+    if [[ $SLURM -eq "0" ]]; then
+        echo "[Warning] Client hostfile not specified, you can specify it with -c <filename> flag."
+        # exit 1
+    fi
+    ## Creates a client hostfile using some of the allocates nodes.
+    if [[ $SLURM -eq "1" ]]; then
+        HERCULES_MPI_HOSTFILE_NAME="client_hostfile"
+        if [[ $ATTACHED -eq "1" ]]; then
+            tail -n +$((HERCULES_NUM_METADATA+1)) hostfile | head -n $NUM_NODES_FOR_CLIENTS > $HERCULES_MPI_HOSTFILE_NAME
+        else
+            tail -n +$((HERCULES_NUM_METADATA+HERCULES_NUM_DATA+1)) hostfile | head -n $NUM_NODES_FOR_CLIENTS > $HERCULES_MPI_HOSTFILE_NAME
+        fi
+    fi
+fi
+
+
+## To run the metadata servers.
+## Checks if a metadata hostfile was not defined.
 if [[ -z $META_SERVER_FILE ]];
 then
-	if [[ $SLURM -eq 0 ]]; then
-		echo "Metadata server file not specified, please set one using -m <filename> flag"
-		exit 0
-	fi
-	echo "Metadata server file not specified, getting information from slurm"
-	readarray -t meta_hosts < <(head -n $NUM_METADATA hostfile)
+    ## Error if slurm is not being used and no metadata hostfile was defined.
+    if [[ "$SLURM" -eq "0" ]]; then
+        echo "[Error] Metadata server file not specified, please set one using -m <filename> flag."
+        exit 1
+    fi
+    echo "[+] Metadata server file not specified, getting information from slurm."
+    ## If a metadata file was not defined and we have slurm's nodes allocated,
+    ## then we create a file which contains the hostnames of the nodes that
+    ## will be used to deploy the determinate set of metadata servers.
+    #readarray -t meta_hosts < <(head -n $HERCULES_NUM_METADATA hostfile)
+    head -n "$HERCULES_NUM_METADATA" hostfile > "$HERCULES_METADATA_HOSTFILE"
+    ## To create an array with the meta nodes.
+    #printf "%s\n" ${meta_hosts[@]} > "$META_SERVER_FILE"
+    readarray -t meta_hosts < "$HERCULES_METADATA_HOSTFILE"
 else
-	readarray -t meta_hosts < $META_SERVER_FILE
+    ## If a metadata file was defined we read it to create an array which
+    ## contains the hostnames of the nodes that will be used to deploy the
+    ## determinate set of metadata servers.
+    echo "[+] Reading metadata server file - $META_SERVER_FILE"
+    readarray -t meta_hosts < "$META_SERVER_FILE"
 fi
-#export H_META_HOSTS=$meta_hosts
-echo $meta_hosts > meta_hostfile
 
+## The array is read to deploy the metadata servers.
 i=0
-for node in "${meta_hosts[@]}"
-do
-	echo "Running metadata server $i in $node..."
-	if [[ $SLURM -eq 0 ]]; then
-		(ssh $node "cd $H_BASH_PATH && $H_BUILD_PATH/hercules_server m --server-id=$i --stat-logfile=./metadata --port=$META_PORT --bufsize=0") &
-	else
-		srun --exclusive --export=ALL -N 1 -n 1 -w $node $H_BUILD_PATH/hercules_server m --server-id=$i --stat-logfile=./metadata --port=$META_PORT --bufsize=0 &
-	fi
-	i=$(($i+1))
+echo "[+] Hercules: Starting metadata servers on ${meta_hosts[@]}"
+start=`date +%s.%N`
+for node in ${meta_hosts[@]}
+do    
+    RM="rm /tmp/m-hercules-$i"
+    COMMAND="$HERCULES_BUILD_PATH/hercules_server m $i"
+    ## If slurm is not being used, we deploy the service by connecting
+    ## to the node via ssh.
+    if [[ "$SLURM" -eq "0" ]]; then
+        #{ ssh $node "$RM; cd $HERCULES_BASH_PATH && $COMMAND"; } &
+        echo "[ + ] Removing temporal files on $node"
+        ( ssh $node "$RM" )
+        echo "[ + ] Starting metadata server $i on $node..."
+        ( ssh $node "cd $HERCULES_BASH_PATH && HERCULES_CONF=$FILE $COMMAND" ) &
+    else
+        ## Deletes the file that we use to make sure that the server has started.
+        echo "[+] Removing temporal files on $node"
+        srun --exclusive --export=ALL -N 1 -n 1 -w $node $RM 2> /dev/null
+        ## If slurm is being used, the service is deploy using srun.
+        echo "[+] Starting metadata server $i on $node..."
+        srun --exclusive --export=ALL -N 1 -n 1 -w $node $COMMAND &
+    fi
+    i=$(($i+1))
 done
-sleep 10
 
-echo "# Hercules: Running data servers"
+
+## Wait until all metadata servers are up.
+WaitForServers "metadata" "m" ${meta_hosts[@]}
+end=`date +%s.%N`
+runtime=$( echo "$end - $start" | bc -l )
+echo "[-] Metadata servers started in $runtime seconds"
+
+## To run the data servers.
 if [[ -z $DATA_SERVER_FILE ]];
 then
-	if [[ $SLURM -eq 0 ]]; then
-		echo "Data server file not specified, please set one using -d <filename> flag"
-		exit 0
-	fi
-	echo "Data server file not specified, getting information from slurm"
-	readarray -t data_hosts < <(tail -n +$((NUM_METADATA+1)) hostfile | head -n $NUM_DATA)
+    ## Error if slurm is not being used and no data hostfile was defined.
+    if [[ "$SLURM" -eq "0" ]]; then
+        echo "[Error] Data server file not specified, please set one using -d <filename> flag."
+        exit 1
+    fi
+    echo "[+] Data server file not specified, getting information from slurm."
+    ## If a data file was not defined and we have slurm's nodes allocated,
+    ## then we create a file which contains the hostnames of the nodes that
+    ## will be used to deploy the determinate set of data servers.
+    # readarray -t data_hosts < <(tail -n +$((HERCULES_NUM_METADATA+1)) hostfile | head -n $HERCULES_NUM_DATA)
+    tail -n +$((HERCULES_NUM_METADATA+1)) hostfile | head -n "$HERCULES_NUM_DATA" > "$HERCULES_DATA_HOSTFILE"
+    ## To create an array with the data nodes.
+    # printf "%s\n" ${data_hosts[@]} > "$DATA_SERVER_FILE"
+    readarray -t data_hosts < "$HERCULES_DATA_HOSTFILE"
 else
-	readarray -t data_hosts < $DATA_SERVER_FILE
+    ## If a data file was defined we read it to create an array which
+    ## contains the hostnames of the nodes that will be used to deploy the
+    ## determinate set of data servers.
+    echo "[+] Reading data server file."
+    readarray -t data_hosts < "$DATA_SERVER_FILE"
 fi
-#export H_DATA_HOSTS=$data_hosts
-echo $data_hosts > data_hostfile
-#META_NODE=$(head -n 1 $META_SERVER_FILE)
-META_NODE=${meta_hosts[0]}
-NUM_METADATA=${#meta_hosts[@]}
-NUM_DATA=${#data_hosts[@]}
-#echo "H_NUM_DATA $NUM_DATA" > .hercules.env
+
 i=0
-for node in "${data_hosts[@]}"
+echo "[+] Hercules: Starting data servers on ${data_hosts[@]}"
+start=`date +%s.%N`
+for node in ${data_hosts[@]}
 do
-	echo "Running data server $i in $node..."
-	if [[ $SLURM -eq 0 ]]; then
-	        (ssh $node "cd $H_BASH_PATH && $H_BUILD_PATH/hercules_server d --server-id=$i --imss-uri=imss:// --port=$DATA_PORT --bufsize=0 --stat-host=$META_NODE --stat-port=$META_PORT --num-servers=$NUM_DATA --deploy-hostfile=./data_hostfile --block-size=$BLOCK_SIZE --storage-size=$STORAGE_SIZE") &
-	else
-		srun --exclusive --export=ALL -N 1 -n 1 -w $node $H_BUILD_PATH/hercules_server m --server-id=$i --stat-logfile=./metadata --port=$META_PORT --bufsize=0 &	
-	fi
-	i=$(($i+1))
+    # echo "[+] Running data server $i in $node..."
+    RM="rm /tmp/d-hercules-$i"
+    COMMAND="$HERCULES_BUILD_PATH/hercules_server d $i ${meta_hosts[0]}"
+    if [[ "$SLURM" -eq "0" ]]; then
+        # ssh $node "$RM; cd $HERCULES_BASH_PATH &&  $COMMAND &"
+        echo "[ + ] Removing temporal files on $node"
+        ( ssh $node "$RM" )
+        echo "[ + ] Starting data server $i in $node..."
+        ( ssh $node "cd $HERCULES_BASH_PATH && HERCULES_CONF=$FILE $COMMAND" ) &
+    else
+        ## Deletes the file that we use to make sure that the server has started.
+        echo "[+] Removing temporal files on $node"
+        srun --exclusive --export=ALL -N 1 -n 1 -w $node $RM 2> /dev/null
+        ## If slurm is being used, the service is deploy using srun.
+        echo "[+] Starting data server $i on $node..."
+        srun --exclusive --export=ALL -N 1 -n 1 -w $node $COMMAND &
+    fi
+    i=$(($i+1))
 done
 
-tail -n +$((NUM_METADATA+NUM_DATA+1)) hostfile | head -n $NODES_FOR_CLIENTS > client_hostfile
+## Wait until all data servers are up.
+WaitForServers "data" "d" ${data_hosts[@]}
+end=`date +%s.%N`
+runtime=$( echo "$end - $start" | bc -l )
+echo "[-] Data servers started in $runtime seconds"
 
-sleep 5
+
+
+export HERCULES_NCPN=$NUM_CLIENTS_PER_NODE
+export HERCULES_NNFC=$NUM_NODES_FOR_CLIENTS
+
+## Search for the mpi distribution installed.
+for MPI_DS in {"open-mpi","mpich","Intel"}
+do
+    RET=$(mpiexec --version | grep -c $MPI_DS)
+    if [ $RET -gt 0 ]; then
+        echo "[+] MPI distribution found; $MPI_DS"
+        break;
+    fi
+    MPI_DS=''
+done
+
+case $MPI_DS in
+    "open-mpi")
+        # echo "[+] Option openmpi"
+        export HERCULES_MPI_ENV_DEF="-x"
+        export HERCULES_MPI_HOSTFILE_DEF="-hostfile"
+        export HERCULES_MPI_PPN="--npernode"
+        #export H_MPI_NNFC=""
+    ;;
+    "mpich" | "impi")
+        # echo "[+] Option mpich | impi"
+        export HERCULES_MPI_ENV_DEF="-env"
+        export HERCULES_MPI_HOSTFILE_DEF="-f"
+        export HERCULES_MPI_PPN="-ppn"
+    ;;
+    *)
+        # Check!
+        echo "[WARNING] No mpi distribution found"
+        # exit 1
+    ;;
+esac
+
+
+unset META_PORT
+unset DATA_PORT
+unset MALLEABILITY
+# unset HERCULES_NUM_METADATA
+# unset HERCULES_NUM_DATA
+unset NUM_NODES_FOR_CLIENTS
+unset NUM_CLIENTS_PER_NODE
+# unset HERCULES_BLOCK_SIZE
+unset STORAGE_SIZE
+
+
+# if [[ "$SLURM" -eq "0" ]]; then
+    GREEN='\033[0;32m'  # Green
+    RED='\033[0;31m'          # Red
+    YELLOW='\033[33m'    # Yellow
+    NC='\033[0m'    # No Color
+
+    echo -e "#############################################################################
+    [!] 1. To export the path of the configuration file, run the following command:
+    ${GREEN}
+    export HERCULES_CONF=$FILE
+    ${NC}
+    #############################################################################"
+
+    echo -e "#############################################################################
+    [!] 2. To load the client library:
+    ${GREEN}
+    "export LD_PRELOAD=$HERCULES_POSIX_PRELOAD"
+    ${NC}
+    #############################################################################"
+
+    echo -e "#############################################################################
+    [!] 2. To unload the client library:
+    ${RED}
+    "unset LD_PRELOAD=$HERCULES_POSIX_PRELOAD"
+    ${NC}
+    #############################################################################"
+
+    echo -e "#############################################################################
+    [!] To stop the services:
+    ${RED}
+    hercules stop
+    ${NC}
+    #############################################################################"
+
+    echo -e "#############################################################################
+    [!] Warning: due to UCX bug (Shared memory error) it is sometimes necesary to run:
+    ${YELLOW}
+    export UCX_POSIX_USE_PROC_LINK=n
+    ${NC}
+    #############################################################################"
+
+
+# fi
+
+# export LD_PRELOAD=$HERCULES_PATH/build/tools/libhercules_posix.so
