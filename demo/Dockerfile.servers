@@ -1,14 +1,18 @@
-FROM ubuntu:jammy
+FROM ubuntu:focal
 
 RUN echo 'APT::Install-Suggests "0";' >> /etc/apt/apt.conf.d/00-docker
 RUN echo 'APT::Install-Recommends "0";' >> /etc/apt/apt.conf.d/00-docker
-RUN DEBIAN_FRONTEND=noninteractive \
-  apt-get update && apt-get install -y bc openssh-server wget mpich libglib2.0-dev pkg-config build-essential git vim cmake && rm -rf /var/lib/apt/lists/*
+
+ARG DEBIAN_FRONTEND=noninteractive
+ENV TZ=Etc/UTC
+
+RUN apt-get update &&  apt-get install -y strace bc openssh-server wget mpich libglib2.0-dev pkg-config build-essential git vim cmake && rm -rf /var/lib/apt/lists/*
 
 # Modify `sshd_config`
 RUN sed -ri 's/PermitEmptyPasswords no/PermitEmptyPasswords yes/' /etc/ssh/sshd_config
 RUN sed -ri 's/PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
 RUN sed -ri 's/^UsePAM yes/UsePAM no/' /etc/ssh/sshd_config
+RUN sed -ri 's/#Port 22/Port 2222/' /etc/ssh/sshd_config
 RUN echo "    StrictHostKeyChecking no" > /etc/ssh/ssh_config
 
 WORKDIR /tmp
@@ -53,6 +57,9 @@ ENV PATH="$PATH:/hercules/code/build:/hercules/code/bash"
 
 RUN ssh-keygen -t rsa -q -f "/root/.ssh/id_rsa" -N ""
 RUN cat /root/.ssh/id_rsa.pub >> /root/.ssh/authorized_keys
+RUN echo 'Host *\n\
+\tPort 2222\n'\
+>> /root/.ssh/config
 RUN mkdir /var/run/sshd && chmod 0755 /var/run/sshd
 
 EXPOSE 7500 8500

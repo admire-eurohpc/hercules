@@ -1,15 +1,12 @@
-FROM ubuntu:jammy
+FROM ubuntu:focal
 
 RUN echo 'APT::Install-Suggests "0";' >> /etc/apt/apt.conf.d/00-docker
 RUN echo 'APT::Install-Recommends "0";' >> /etc/apt/apt.conf.d/00-docker
-RUN DEBIAN_FRONTEND=noninteractive \
-  apt-get update && apt-get install -y automake libmpich-dev autoconf bc openssh-server wget mpich libglib2.0-dev pkg-config build-essential git vim cmake && rm -rf /var/lib/apt/lists/*
 
-# Modify `sshd_config`
-RUN sed -ri 's/PermitEmptyPasswords no/PermitEmptyPasswords yes/' /etc/ssh/sshd_config
-RUN sed -ri 's/PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
-RUN sed -ri 's/^UsePAM yes/UsePAM no/' /etc/ssh/sshd_config
-RUN echo "    StrictHostKeyChecking no" > /etc/ssh/ssh_config
+ARG DEBIAN_FRONTEND=noninteractive
+ENV TZ=Etc/UTC
+
+RUN apt-get update && apt-get install -y strace automake libmpich-dev autoconf bc openssh-server wget mpich libglib2.0-dev pkg-config build-essential git vim cmake && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /tmp
 
@@ -56,9 +53,5 @@ ENV H_BASH_PATH=/hercules/code/bash
 
 
 ENV PATH="$PATH:/hercules/code/build:/hercules/code/bash"
-
-RUN ssh-keygen -t rsa -q -f "/root/.ssh/id_rsa" -N ""
-RUN cat /root/.ssh/id_rsa.pub >> /root/.ssh/authorized_keys
-RUN mkdir /var/run/sshd && chmod 0755 /var/run/sshd
-
-
+ENV HERCULES_CONF=/hercules/conf/hercules.conf
+ENV LD_PRELOAD=/hercules/code/build/tools/libhercules_posix.so
