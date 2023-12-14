@@ -36,25 +36,25 @@ gcc -Wall imss.c `pkg-config fuse --cflags --libs` -o imss
 #define HEADER sizeof(uint32_t)
 
 
-#define S_IFMT  00170000
-#define S_IFSOCK 0140000
-#define S_IFLNK	 0120000
-#define S_IFREG  0100000
-#define S_IFBLK  0060000
-#define S_IFDIR  0040000
-#define S_IFCHR  0020000
-#define S_IFIFO  0010000
-#define S_ISUID  0004000
-#define S_ISGID  0002000
-#define S_ISVTX  0001000
+// #define S_IFMT  00170000
+// #define S_IFSOCK 0140000
+// #define S_IFLNK	 0120000
+// #define S_IFREG  0100000
+// #define S_IFBLK  0060000
+// #define S_IFDIR  0040000
+// #define S_IFCHR  0020000
+// #define S_IFIFO  0010000
+// #define S_ISUID  0004000
+// #define S_ISGID  0002000
+// #define S_ISVTX  0001000
 
-#define S_ISLNK(m)	(((m) & S_IFMT) == S_IFLNK)
-#define S_ISREG(m)	(((m) & S_IFMT) == S_IFREG)
-#define S_ISDIR(m)	(((m) & S_IFMT) == S_IFDIR)
-#define S_ISCHR(m)	(((m) & S_IFMT) == S_IFCHR)
-#define S_ISBLK(m)	(((m) & S_IFMT) == S_IFBLK)
-#define S_ISFIFO(m)	(((m) & S_IFMT) == S_IFIFO)
-#define S_ISSOCK(m)	(((m) & S_IFMT) == S_IFSOCK)
+// #define S_ISLNK(m)	(((m) & S_IFMT) == S_IFLNK)
+// #define S_ISREG(m)	(((m) & S_IFMT) == S_IFREG)
+// #define S_ISDIR(m)	(((m) & S_IFMT) == S_IFDIR)
+// #define S_ISCHR(m)	(((m) & S_IFMT) == S_IFCHR)
+// #define S_ISBLK(m)	(((m) & S_IFMT) == S_IFBLK)
+// #define S_ISFIFO(m)	(((m) & S_IFMT) == S_IFIFO)
+// #define S_ISSOCK(m)	(((m) & S_IFMT) == S_IFSOCK)
 
 
 /*
@@ -1724,6 +1724,7 @@ int imss_split_writev(const char *path, const char *buf, size_t size, off_t off)
 	pthread_mutex_unlock(&lock);
 	return size; /////////////
 }
+
 int imss_split_readv(const char *path, char *buf, size_t size, off_t offset)
 {
 	int64_t curr_blk, end_blk, start_offset, end_offset;

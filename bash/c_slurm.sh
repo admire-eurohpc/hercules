@@ -81,16 +81,44 @@ MPIEXEC="/beegfs/home/javier.garciablas/spack/opt/spack/linux-ubuntu20.04-zen/gc
 
 set -x
 
+export LD_LIBRARY_PATH=/beegfs/home/javier.garciablas/hercules/build/tools/libhercules_posix.so:$LD_LIBRARY_PATH
 export LD_PRELOAD=$HERCULES_POSIX_PRELOAD
+
 #LD_PRELOAD=$HERCULES_POSIX_PRELOAD source bash
 #LD_PRELOAD=/beegfs/home/javier.garciablas/hercules/build/tools/libhercules_posix.so echo "hola" > /mnt/hercules/hola.txt
 #echo "hola"
 
-cp hostfile /mnt/hercules/hercules_hostfile 
-cp hostfile /mnt/hercules/hercules_hostfile 
+# export LD_DEBUG=symbols
+# export LD_DEBUG_OUTPUT=symbol_redirect.txt
+
+#LD_PRELOAD=/beegfs/home/javier.garciablas/hercules/build/tools/libhercules_posix.so LD_DEBUG=symbols,libs LD_DEBUG_OUTPUT=symbol_redirect.txt 
+
+
+####### FIX COPY A FILE TWICE DON'T OVERWRITE.
+# LD_PRELOAD=/beegfs/home/javier.garciablas/hercules/build/tools/libhercules_posix.so cp hostfile /mnt/hercules/hercules_hostfile
+# LD_PRELOAD=/beegfs/home/javier.garciablas/hercules/build/tools/libhercules_posix.so LD_DEBUG=symbols,libs LD_DEBUG_OUTPUT=symbol_redirect.txt cp hostfile /mnt/hercules/hercules_hostfile
+#######
+
+mkdir /mnt/hercules/directory/
+touch /mnt/hercules/file.txt
+realpath /mnt/hercules/directory/../file.txt
+# touch /mnt/hercules/directory/../file.txt
+# ls -l /mnt/hercules/
+
+
+# cp hostfile /mnt/hercules/hercules_hostfile 
+# cp hostfile /mnt/hercules/hercules_hostfile 
+
+#strace -o strace_cp_hercules.txt 
+# ltrace -o ltrace_cp_hercules.txt 
 
 #cp hostfile hostfilex2
 #cp hostfile hostfilex2
+
+unset LD_PRELOAD
+
+set +x
+./hercules stop
 
 exit 0
 
@@ -202,7 +230,4 @@ $MPIEXEC $HERCULES_MPI_PPN $HERCULES_NCPN $HERCULES_MPI_HOSTFILE_DEF $HERCULES_M
 #  	$COMMAND
 
 # sleep 1000
-unset LD_PRELOAD
 
-set +x
-./hercules stop

@@ -1,8 +1,22 @@
 #ifndef H_MAP
 #define H_MAP
 
+// #ifdef __USE_LARGEFILE64
+// #undef __USE_LARGEFILE64
+// #endif
+// #undef _FILE_OFFSET_BITS
+// #undef __USE_LARGEFILE64
+// #undef __USE_FILE_OFFSET64
 
-#undef __USE_LARGEFILE64
+// #ifdef __USE_ATFILE
+// #define __USE_ATFILE 0
+// #endif
+
+
+// #undef _FILE_OFFSET_BITS
+// #undef __USE_LARGEFILE64
+// #undef __USE_FILE_OFFSET64
+
 #include <sys/stat.h>
 
 // #include <sys/types.h>
