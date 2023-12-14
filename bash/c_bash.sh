@@ -29,6 +29,23 @@ echo "[+] Running clients"
 
 set -x
 
+export LD_PRELOAD=$HERCULES_POSIX_PRELOAD
+mkdir /mnt/hercules/directory/
+touch /mnt/hercules/file.txt
+ls -l /mnt/hercules/directory/../file.txt
+ls -l /mnt/hercules/file.txt
+ls -l /mnt/hercules/./file.txt
+# ls /mnt/../mnt/hercules/file.txt
+# ls /mnt/../mnt/hercules/./../hercules/directory../file.txt
+# ls /mnt/../mnt/hercules
+# ls ../mnt/hercules/
+ls -l /mnt/hercules/
+unset LD_PRELOAD
+
+./hercules stop
+
+exit 0
+
 COMMAND="$IOR_PATH/ior -t 100M -b 100M -s 1 -i 10 -o /mnt/hercules/data.out"
 # COMMAND="$IOR_PATH/ior -t 1M -b 10M -s 1 -i 5 -F -o /home/genarog/Documents/UC3M/Codes/UPDATED_IMSS/hercules/bash/data.out"
 # COMMAND="/home/genarog/Documents/UC3M/Codes/Apps/Nek5000/run/eddy_uv/nek5000 eddy_uv"

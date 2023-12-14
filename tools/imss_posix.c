@@ -153,7 +153,7 @@ char *convert_path(const char *name);
 int generalOpen(const char *new_path, int flags, mode_t mode);
 ssize_t generalWrite(const char *pathname, int fd, const void *buf, size_t size, size_t offset);
 int IsAbsolutePath(char *pathname);
-char *ResolvePath(const char *path_, char *resolved);
+int ResolvePath(const char *path_, char *resolved);
 
 static off_t (*real_lseek)(int fd, off_t offset, int whence) = NULL;
 static off64_t (*real_lseek64)(int fd, off64_t offset, int whence) = NULL;
@@ -521,6 +521,8 @@ char *checkHerculesPath(const char *pathname)
 {
 	char *new_path = NULL;
 	char *workdir = getenv("PWD");
+	char real_pathname[MAX_PATH] = {'\0'};
+	int ret = 0;
 
 	// fprintf(stderr, "pathname=%s\n", pathname);
 
@@ -536,6 +538,9 @@ char *checkHerculesPath(const char *pathname)
 	}
 	else
 	{
+		// ResolvePath(pathname, real_pathname);
+		// fprintf(stderr,"real_pathname=%s\n", real_pathname);
+		// if (!strncmp(real_pathname, MOUNT_POINT, strlen(MOUNT_POINT) - 1) || (real_pathname[0] != '/' && !strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT) - 1)))
 		if (!strncmp(pathname, MOUNT_POINT, strlen(MOUNT_POINT) - 1) || (pathname[0] != '/' && !strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT) - 1)))
 		{
 			// if (pathname[0] == '.')
@@ -551,18 +556,24 @@ char *checkHerculesPath(const char *pathname)
 			}
 			else
 			{
-				char real_pathname[MAX_PATH];
-				slog_debug("[HERCULES][checkHerculesPath] before resolve path, pathname=%s", pathname);
-				ResolvePath(pathname, real_pathname);
-				slog_debug("[HERCULES][checkHerculesPath] after resolve path, pathname=%s", pathname);
+				// slog_debug("[HERCULES][checkHerculesPath] after resolve path, pathname=%s, real_pathname=%s", pathname, real_pathname);
+				// new_path = convert_path(pathname);
+				ret = ResolvePath(pathname, real_pathname);
+				if (ret > 0)
+				{
+					new_path = convert_path(real_pathname);
+				}
+				else
+				{
+					new_path = convert_path(pathname);
+				}
 
-				new_path = convert_path(pathname);
-
-				slog_debug("[HERCULES][checkHerculesPath] pathname=%s, realpath=%s, new_path=%s", pathname, real_pathname, new_path);
+				// slog_debug("[HERCULES][checkHerculesPath] pathname=%s, realpath=%s, new_path=%s", pathname, real_pathname, new_path);
 				// free(real_pathname);
 			}
 		}
 	}
+	// slog_debug("[HERCULES][checkHerculesPath] pathname=%s, new_path=%s", pathname, new_path);
 	return new_path;
 }
 
@@ -611,11 +622,11 @@ prefetch_function(void *th_argv)
 	pthread_exit(NULL);
 }
 
-char *ResolvePath(const char *path_, char *resolved)
+int ResolvePath(const char *path_, char *resolved)
 {
 	char path[PATH_MAX];
 	strcpy(path, path_);
-	slog_debug("[ResolvePath][0] path=%s", path);
+	// slog_debug("[ResolvePath][0] path=%s:%p, path_=%s:%p", path, &path, path_, &path_);
 
 	struct stat sb;
 	char *p, *q, *s;
@@ -631,7 +642,8 @@ char *ResolvePath(const char *path_, char *resolved)
 		resolved[0] = '/';
 		resolved[1] = '\0';
 		if (path[1] == '\0')
-			return (resolved);
+			// return (resolved);
+			return 1;
 		resolved_len = 1;
 		strncpy(left, path + 1, sizeof(left));
 		left_len = strlen(left);
@@ -640,8 +652,9 @@ char *ResolvePath(const char *path_, char *resolved)
 	{
 		if (getcwd(resolved, PATH_MAX) == NULL)
 		{
-			strncpy(resolved, ".", PATH_MAX);
-			return (NULL);
+			strncpy(resolved, ".", strlen("."));
+			// return (NULL);
+			return -1;
 		}
 		resolved_len = strlen(resolved);
 		strncpy(left, path, sizeof(left));
@@ -651,10 +664,11 @@ char *ResolvePath(const char *path_, char *resolved)
 	{
 		errno = ENAMETOOLONG;
 		slog_error("[ResolvePath] returning NULL, errno=%d:%s", errno, strerror(errno));
-		return (NULL);
+		// return (NULL);
+		return -1;
 	}
 
-	slog_debug("[ResolvePath][1] path=%s, resolved=%s, len=%d", path, resolved, resolved_len);
+	// slog_debug("[ResolvePath][1] path=%s:%p, path_=%s:%p, left=%s:%p, resolved=%s, len=%d", path, &path, path_, &path_, left, &left, resolved, resolved_len);
 
 	/*
 	 * Iterate over path components in `left'.
@@ -670,11 +684,13 @@ char *ResolvePath(const char *path_, char *resolved)
 		if (s - left >= sizeof(next_token))
 		{
 			errno = ENAMETOOLONG;
-			return (NULL);
+			// return (NULL);
+			return -1;
 		}
 		memcpy(next_token, left, s - left);
 		next_token[s - left] = '\0';
 		left_len -= s - left;
+		// slog_debug("[ResolvePath] next_token=%s, resolved_len=%d", next_token, resolved_len);
 		if (p != NULL)
 			memmove(left, s + 1, left_len + 1);
 		if (resolved[resolved_len - 1] != '/')
@@ -682,7 +698,8 @@ char *ResolvePath(const char *path_, char *resolved)
 			if (resolved_len + 1 >= PATH_MAX)
 			{
 				errno = ENAMETOOLONG;
-				return (NULL);
+				// return (NULL);
+				return -1;
 			}
 			resolved[resolved_len++] = '/';
 			resolved[resolved_len] = '\0';
@@ -697,12 +714,22 @@ char *ResolvePath(const char *path_, char *resolved)
 			 * Strip the last path component except when we have
 			 * single "/"
 			 */
+			// slog_debug("[ResolvePath] special case, resolved=%s, resolved_len=%d", resolved, resolved_len);
 			if (resolved_len > 1)
 			{
 				resolved[resolved_len - 1] = '\0';
 				q = strrchr(resolved, '/') + 1;
-				*q = '\0';
-				resolved_len = q - resolved;
+				if (q == NULL)
+				{
+					slog_error("[ResolvePath] q is NULL");
+				}
+				else
+				{
+					// slog_debug("[ResolvePath] special case, resolved=%s, q=%s", resolved, q);
+					//  remove the last path component because "..".
+					*q = '\0';
+					resolved_len = q - resolved;
+				}
 			}
 			continue;
 		}
@@ -712,25 +739,30 @@ char *ResolvePath(const char *path_, char *resolved)
 		 * lstat() fails we still can return successfully if
 		 * there are no more path components left.
 		 */
-		strncpy(resolved, next_token, PATH_MAX);
+		// strncpy(resolved, next_token, strlen(next_token));
+		strncat(resolved, next_token, strlen(next_token));
 		resolved_len = strlen(resolved);
 		if (resolved_len >= PATH_MAX)
 		{
 			errno = ENAMETOOLONG;
-			return (NULL);
+			// return (NULL);
+			return -1;
 		}
+		// slog_debug("[ResolvePath] resolved=%s, resolved_len=%d", resolved, resolved_len);
 	}
-	slog_debug("[ResolvePath][2] path=%s, resolved=%s, len=%d", path, resolved, resolved_len);
+	// slog_debug("[ResolvePath][2] path_=%s:%p, resolved=%s,%p, len=%d", path_, &path_, resolved, &resolved, resolved_len);
 	/*
 	 * Remove trailing slash except when the resolved pathname
 	 * is a single "/".
 	 */
-	if (resolved_len > 1 && resolved[resolved_len - 1] == '/') {
-		slog_debug("[ResolvePath][3] removing trailing slash");
+	if (resolved_len > 1 && resolved[resolved_len - 1] == '/')
+	{
+		// slog_debug("[ResolvePath][3] removing trailing slash");
 		resolved[resolved_len - 1] = '\0';
 	}
-	slog_debug("[ResolvePath][4] path=%s, resolved=%s, len=%d", path, resolved, resolved_len);
-	return (resolved);
+	// slog_debug("[ResolvePath][4] path_=%s, resolved=%s, len=%d", path_, resolved, resolved_len);
+	//  return (resolved);
+	return resolved_len;
 }
 
 char *convert_path(const char *name)

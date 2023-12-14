@@ -70,30 +70,21 @@ do
     esac
 done
 
-HOSTFILES_OPTION=-1
-if [ ! -z "$DATA_SERVER_FILE" ]; then
-    echo "Data server file - $DATA_SERVER_FILE"
-    if [ ! -f "$DATA_SERVER_FILE" ]; then
-        echo "Data server file " $DATA_SERVER_FILE " does not exists"
-        exit 0
-    fi
-    HOSTFILES_OPTION=1
-fi
-if [ ! -z "$META_SERVER_FILE" ]; then
-    echo "Meta server file - $META_SERVER_FILE"
-    if [ ! -f "$META_SERVER_FILE" ]; then
-        echo "Meta server file " $META_SERVER_FILE " does not exists"
-        exit 0
-    fi
-    HOSTFILES_OPTION=1
-fi
-if [ ! -z "$HERCULES_MPI_HOSTFILE_NAME" ]; then
-    echo "Client file - $HERCULES_MPI_HOSTFILE_NAME"
-    if [ ! -f "$HERCULES_MPI_HOSTFILE_NAME" ]; then
-        echo "Client deployment file " $HERCULES_MPI_HOSTFILE_NAME " does not exists"
-        exit 0
-    fi
-    HOSTFILES_OPTION=1
+
+## Checks if the user wants to stop the services.
+if [[ $STATUS = "stop" ]];
+then
+    # if [[ "$SLURM" -eq "0" ]]; then
+    ## Stops data and metadata servers.
+    readarray -t hosts < data_hostfile
+    echo "data hosts=$hosts"
+    StopServers "data" $hosts
+    
+    readarray -t hosts < meta_hostfile
+    echo "meta hosts=$hosts"
+    StopServers "metadata" $hosts
+    # fi
+    exit 0
 fi
 
 SLURM=-1
@@ -112,13 +103,53 @@ if [[ ! -z "$SLURM_OPTION" ]]; then
     esac
 fi
 
-if [[ $SLURM -eq "-1" && $HOSTFILES_OPTION -eq "-1" ]]; then
+# if [[ "$SLURM" -eq "-1" && $HOSTFILES_OPTION -eq "-1" ]]; then
+# if slurm option is not set by the user, we check if it is installed.
+if [[ "$SLURM" -eq "-1" ]]; then
     ## If not slurm option set by user and hostnames were not specify.
     ## Verify if slurm is installed by using the env variable.
     SLURM=$([ -z "$SLURM_CLUSTER_NAME" ] && echo 0 || echo 1)
-elif [[ $SLURM -eq "1" && $HOSTFILES_OPTION -eq "1" ]]; then
+#elif [[ "$SLURM" -eq "1" && $HOSTFILES_OPTION -eq "1" ]]; then
     ## If slurm option set by user and hostnames were specify. 
-    echo "Inconsistency found, SLURM option (-s 1) and hostfiles (-m, -d, -c) could not be used together. Set "-s 0" or remove hostfile options."
+#    echo "Inconsistency found, SLURM option (-s 1) and hostfiles (-m, -d, -c) could not be used together. Set "-s 0" or remove hostfile options."
+fi
+
+# If slurm is not use, we hope user set three hostfiles (for metadata, data and clients).
+SERVERS_HOSTFILES_OPTION=0
+if [[ "$SLURM" -eq "0" ]]; then
+    if [ ! -z "$DATA_SERVER_FILE" ]; then
+        echo "Data server file - $DATA_SERVER_FILE"
+        if [ ! -f "$DATA_SERVER_FILE" ]; then
+            echo "Data server file " $DATA_SERVER_FILE " does not exists"
+            exit 0
+        fi
+        # HOSTFILES_OPTION=1
+        SERVERS_HOSTFILES_OPTION=$(($SERVERS_HOSTFILES_OPTION + 1))
+    fi
+    if [ ! -z "$META_SERVER_FILE" ]; then
+        echo "Meta server file - $META_SERVER_FILE"
+        if [ ! -f "$META_SERVER_FILE" ]; then
+            echo "Meta server file " $META_SERVER_FILE " does not exists"
+            exit 0
+        fi
+        # SERVERS_HOSTFILES_OPTION=1
+        SERVERS_HOSTFILES_OPTION=$(($SERVERS_HOSTFILES_OPTION + 1))
+    fi
+    # client hostfile is optional.
+    if [ ! -z "$HERCULES_MPI_HOSTFILE_NAME" ]; then
+        echo "Client file - $HERCULES_MPI_HOSTFILE_NAME"
+        if [ ! -f "$HERCULES_MPI_HOSTFILE_NAME" ]; then
+            echo "Client deployment file " $HERCULES_MPI_HOSTFILE_NAME " does not exists"
+            exit 0
+        fi
+        # SERVERS_HOSTFILES_OPTION=1
+        #SERVERS_HOSTFILES_OPTION=$(($SERVERS_HOSTFILES_OPTION + 1))
+    fi
+    # if a server hostfile is missing. 
+    if [  ! "$SERVERS_HOSTFILES_OPTION" -eq "2" ]; then
+        echo "One or more hostfiles missing for the servers, please specify them with: -m <metadata_hostfile> -d <data_hostfile>"
+        exit 0
+    fi
 fi
 
 if [ ! "$SLURM" -eq "-1" ]; then
@@ -145,21 +176,6 @@ if [ ! -z "$FILE" ]; then ## Checks if a configuration file was provided by the 
     fi
 fi
 
-## Checks if the user wants to stop the services.
-if [[ $STATUS = "stop" ]];
-then
-    # if [[ "$SLURM" -eq "0" ]]; then
-    ## Stops data and metadata servers.
-    readarray -t hosts < data_hostfile
-    echo "hosts=$hosts"
-    StopServers "data" $hosts
-    
-    readarray -t hosts < meta_hostfile
-    echo "hosts=$hosts"
-    StopServers "metadata" $hosts
-    # fi
-    exit 0
-fi
 
 ## Define values.
 
@@ -185,8 +201,9 @@ echo "Reading configuration from $FILE"
 export HERCULES_CONF="$FILE"
 
 
-## If slurm is used, then we create a hostfile containing the allocated nodes.
-if [[ $SLURM -eq "1" ]]; then
+## If hostfiles was not set, then we create a hostfile containing the allocated nodes.
+# if [[ $SLURM -eq "1" ]]; then
+if [[ $SERVERS_HOSTFILES_OPTION -eq "0" ]]; then
     srun -pernode hostname |sort > hostfile
 fi
 
@@ -230,6 +247,7 @@ echo HERCULES_MOUNT_POINT - "$HERCULES_MOUNT_POINT" - HERCULES_BLOCK_SIZE - "$HE
 if [ -z "$HERCULES_MPI_HOSTFILE_NAME" ]; then
     ## Warning if slurm is not being used and no client hostfile was defined.
     if [[ $SLURM -eq "0" ]]; then
+    # if [[ $HOSTFILES_OPTION -eq "-1" ]]; then
         echo "[Warning] Client hostfile not specified, you can specify it with -c <filename> flag."
         # exit 1
     fi

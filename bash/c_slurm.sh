@@ -100,8 +100,8 @@ export LD_PRELOAD=$HERCULES_POSIX_PRELOAD
 #######
 
 mkdir /mnt/hercules/directory/
-touch /mnt/hercules/file.txt
-realpath /mnt/hercules/directory/../file.txt
+#touch /mnt/hercules/file.txt
+#realpath /mnt/hercules/directory/../file.txt
 # touch /mnt/hercules/directory/../file.txt
 # ls -l /mnt/hercules/
 
