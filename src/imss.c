@@ -489,6 +489,7 @@ uint32_t get_dir(char *requested_uri, char **buffer, char ***items)
 	}
 
 	// char elements[43264];
+	// FIX: TRY USING DYNAMIC MEMORY.
 	char *elements = (char *)malloc(45000);
 	// char *elements = NULL;
 	//  Retrieve the set of elements within the requested uri.

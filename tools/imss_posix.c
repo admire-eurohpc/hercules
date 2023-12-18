@@ -497,7 +497,7 @@ char *checkHerculesPath(const char *pathname)
 			// if (pathname[0] == '.')
 			if (!strncmp(pathname, ".", strlen(pathname)))
 			{
-				slog_debug("[IMSS][checkHerculesPath] workdir=%s", workdir);
+				slog_debug("[IMSS][checkHerculesPath] pathname=%s, workdir=%s", pathname, workdir);
 				new_path = convert_path(workdir);
 			}
 			else if (!strncmp(pathname, "./", strlen("./")))
@@ -1312,11 +1312,11 @@ pid_t fork(void)
 
 		// fprintf(stderr, "[POSIX]. Fork child created, hostname=%s, pid=%d, new rank = %d, log_path=%s, old_log_path=%s\n", hostname, pid, new_rank, log_path, old_log_path);
 		slog_init(log_path, IMSS_DEBUG_LEVEL, IMSS_DEBUG_FILE, IMSS_DEBUG_SCREEN, 1, 1, 1, new_rank);
-		// slog_info("[POSIX]. Fork child created, hostname=%s, new rank = %d", hostname, new_rank);
+		slog_info("[POSIX]. Fork child created, hostname=%s, new rank=%d, log_path=%s, old_log_path=%s", hostname, new_rank, log_path, old_log_path);
 	}
-	else
+	else // parent process.
 	{
-		// fprintf(stderr, "[POSIX]. Fork father status, pid=%d, rank=%d, log_path=%s, old_log_path=%s\n", pid, rank, log_path, old_log_path);
+		// fprintf(stderr, "[POSIX]. Fork parent status, pid=%d, rank=%d, log_path=%s, old_log_path=%s\n", pid, rank, log_path, old_log_path);
 		slog_info("[POSIX]. Calling fork, rank=%d, log_path=%s, old_log_path=%s", rank, log_path, old_log_path);
 	}
 
@@ -2105,7 +2105,6 @@ int ferror(FILE *fp)
 		ret = ((fp->_flags & _IO_ERR_SEEN) != 0);
 		// fprintf(stderr, "[POSIX][TODO]. Ending Hercules 'ferror', pathname=%s, ret=%d\n", pathname, ret);
 		slog_debug("[POSIX]. Ending Hercules 'ferror', pathname=%s, ret=%d", pathname, ret);
-
 	}
 	else
 	{
@@ -2583,7 +2582,7 @@ int open(const char *pathname, int flags, ...)
 int IsAbsolutePath(const char *pathname)
 {
 	int mount_point_len = 0;
-	char *file_name_without_prefix;
+	const char *file_name_without_prefix;
 	int ret = -1;
 
 	mount_point_len = strlen(MOUNT_POINT);
@@ -3008,9 +3007,24 @@ void seekdir(DIR *dirp, long loc)
 		return real_seekdir(dirp, loc);
 	}
 
-	slog_debug("[POSIX][TODO] Calling seekdir, loc=%ld", loc);
-
-	return real_seekdir(dirp, loc);
+	errno = 0;
+	off_t ret = -1;
+	int fd = dirfd(dirp);
+	char *pathname = map_fd_search_by_val(map_fd, fd);
+	if (pathname != NULL)
+	{
+		slog_debug("[POSIX] Calling Hercules 'seekdir', fd=%d, loc=%ld", fd, loc);
+		// lseek(fd, loc, SEEK_SET);
+		// dirp->size = 0;
+		// dirp->offset = 0;
+		// dirp->filepos = loc;
+		real_seekdir(dirp, loc);
+		slog_debug("[POSIX] Ending Hercules 'seekdir', fd=%d, loc=%ld, errno=%d:%s", fd, loc, errno, strerror(errno));
+	} else {
+		slog_debug("[POSIX] Calling real 'seekdir', fd=%d, loc=%ld", fd, loc);
+		real_seekdir(dirp, loc);
+		slog_debug("[POSIX] Ending real 'seekdir', fd=%d, loc=%ld, errno=%d:%s", fd, loc, errno, strerror(errno));
+	}
 }
 
 int truncate(const char *path, off_t length)
@@ -3532,7 +3546,7 @@ int unlinkat(int fd, const char *name, int flag)
 	return ret;
 }
 
-int(remove)(const char *name)
+int remove(const char *name)
 {
 	if (!real_remove)
 		real_remove = dlsym(RTLD_NEXT, "remove");
@@ -3590,7 +3604,9 @@ int(remove)(const char *name)
 	}
 	else
 	{
+		slog_debug("[POSIX] Calling real 'remove', pathname=%s", name);
 		ret = real_remove(name);
+		slog_debug("[POSIX] Ending real 'remove', pathname=%s, errno=%d:%s", name, errno, strerror(errno));
 	}
 
 	return ret;
@@ -3947,7 +3963,7 @@ DIR *opendir(const char *name)
 		}
 		else
 		{
-			slog_debug("[POSIX] map_fd_put, new_path=%s", new_path);
+			slog_debug("[POSIX] map_fd_put, new_path=%s, fd=%d", new_path, dirfd(dirp));
 			ret = map_fd_put(map_fd, new_path, dirfd(dirp), p);
 		}
 		slog_debug("[POSIX]. End Hercules 'opendir', pathname=%s, new_path=%s, ret=%d\n", name, new_path, ret);
@@ -3985,7 +4001,7 @@ struct dirent *readdir(DIR *dirp)
 	char *pathname = map_fd_search_by_val(map_fd, dirfd(dirp));
 	if (pathname != NULL)
 	{
-		// slog_debug("[POSIX]. Calling Hercules 'readdir', pathname=%s", pathname);
+		slog_debug("[POSIX]. Calling Hercules 'readdir', pathname=%s", pathname);
 		char buf[KB * KB] = {0};
 		char *token;
 		imss_readdir(pathname, buf, myfiller, 0);
@@ -4021,7 +4037,7 @@ struct dirent *readdir(DIR *dirp)
 				}
 				else
 				{
-					sprintf(path_search, "%s/%s", pathname, token);
+					sprintf(path_search, "%s%s", pathname, token);
 					// type of file;
 					int32_t type = get_type(path_search);
 
@@ -4069,9 +4085,9 @@ struct dirent *readdir(DIR *dirp)
 	}
 	else
 	{
-		slog_debug("[POSIX]. Calling Real 'readdir'.");
+		slog_debug("[POSIX]. Calling real 'readdir'.");
 		entry = real_readdir(dirp);
-		slog_debug("[POSIX]. Ending Real 'readdir'.");
+		slog_debug("[POSIX]. Ending real 'readdir'.");
 	}
 
 	return entry;

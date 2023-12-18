@@ -369,11 +369,11 @@ int imss_readdir(const char *path, void *buf, posix_fill_dir_t filler, off_t off
 
 	// Add "/" at the end of the path if it does not have it.
 	// FIX: "ls" when there is more than one "/".
-	int len = strlen(imss_path) - 1;
-	if (imss_path[len] != '/')
-	{
-		strcat(imss_path, "/");
-	}
+	// int len = strlen(imss_path) - 1;
+	// if (imss_path[len] != '/')
+	// {
+	// 	strcat(imss_path, "/");
+	// }
 
 	slog_debug("[IMSS][imss_readdir] imss_path=%s", imss_path);
 	// Call IMSS to get metadata
@@ -409,7 +409,7 @@ int imss_readdir(const char *path, void *buf, posix_fill_dir_t filler, off_t off
 		}
 		else
 		{
-			slog_debug("[IMSS][imss_readdir] %s\n", refs[i] + 6);
+			slog_debug("[IMSS][imss_readdir] %s\n", refs[i]);
 			// the stbuf is not used after here.
 			// struct stat stbuf;
 			// int error = imss_getattr(refs[i] + 6, &stbuf);

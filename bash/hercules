@@ -1,5 +1,6 @@
 #!/bin/bash
-set -x
+## Last modification: 18/12/2023
+# set -x
 #######################################################
 #######################################################
 ## To stop all servers.
@@ -438,35 +439,35 @@ unset STORAGE_SIZE
     echo -e "#############################################################################
     [!] 1. To export the path of the configuration file, run the following command:
     ${GREEN}
-    export HERCULES_CONF=$FILE
+export HERCULES_CONF=$FILE
     ${NC}
     #############################################################################"
 
     echo -e "#############################################################################
     [!] 2. To load the client library:
     ${GREEN}
-    "export LD_PRELOAD=$HERCULES_POSIX_PRELOAD"
+export LD_PRELOAD=$HERCULES_POSIX_PRELOAD
     ${NC}
     #############################################################################"
 
     echo -e "#############################################################################
     [!] 2. To unload the client library:
     ${RED}
-    "unset LD_PRELOAD=$HERCULES_POSIX_PRELOAD"
+unset LD_PRELOAD=$HERCULES_POSIX_PRELOAD
     ${NC}
     #############################################################################"
 
     echo -e "#############################################################################
     [!] To stop the services:
     ${RED}
-    hercules stop
+hercules stop
     ${NC}
     #############################################################################"
 
     echo -e "#############################################################################
     [!] Warning: due to UCX bug (Shared memory error) it is sometimes necesary to run:
     ${YELLOW}
-    export UCX_POSIX_USE_PROC_LINK=n
+export UCX_POSIX_USE_PROC_LINK=n
     ${NC}
     #############################################################################"
 
