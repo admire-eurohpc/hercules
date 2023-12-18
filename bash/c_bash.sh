@@ -30,16 +30,21 @@ echo "[+] Running clients"
 set -x
 
 export LD_PRELOAD=$HERCULES_POSIX_PRELOAD
-mkdir /mnt/hercules/directory/
-touch /mnt/hercules/file.txt
-ls -l /mnt/hercules/directory/../file.txt
-ls -l /mnt/hercules/file.txt
-ls -l /mnt/hercules/./file.txt
+# mkdir /mnt/hercules/directory/
+# touch /mnt/hercules/file.txt
+# ls -l /mnt/hercules/directory/../file.txt
+# ls -l /mnt/hercules/file.txt
+# ls -l /mnt/hercules/./file.txt
 # ls /mnt/../mnt/hercules/file.txt
 # ls /mnt/../mnt/hercules/./../hercules/directory../file.txt
 # ls /mnt/../mnt/hercules
 # ls ../mnt/hercules/
+
+mkdir /mnt/hercules/output/
+./tests/exe_OPENAT_TEST /mnt/hercules/output/ ../xfile.txt
+# cat /mnt/hercules/output/xfile.txt
 ls -l /mnt/hercules/
+
 unset LD_PRELOAD
 
 ./hercules stop

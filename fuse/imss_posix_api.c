@@ -454,7 +454,7 @@ int imss_readdir(const char *path, void *buf, posix_fill_dir_t filler, off_t off
 	  return 0;*/
 }
 
-int imss_open(const char *path, uint64_t *fh)
+int imss_open(char *path, uint64_t *fh)
 {
 	// printf("imss_open=%s\n",path);
 	int ret;
@@ -503,9 +503,7 @@ int imss_open(const char *path, uint64_t *fh)
 			char *buff = (char *)malloc(PREFETCH * IMSS_DATA_BSIZE);
 			map_init_prefetch(map_prefetch, imss_path, buff);
 		}
-
 		pthread_mutex_unlock(&lock_file);
-
 		// free(aux);
 	}
 
@@ -2300,10 +2298,10 @@ int imss_mkdir(const char *path, mode_t mode)
 	char *rpath = (char *)calloc(MAX_PATH, sizeof(char));
 	uint64_t fi;
 	strcpy(rpath, path);
-	if (path[strlen(path) - 1] != '/')
-	{
-		strcat(rpath, "/");
-	}
+	// if (path[strlen(path) - 1] != '/')
+	// {
+	// 	strcat(rpath, "/");
+	// }
 	imss_create(rpath, mode | S_IFDIR, &fi);
 	free(rpath);
 	return 0;
