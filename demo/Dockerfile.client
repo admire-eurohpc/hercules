@@ -1,0 +1,57 @@
+FROM ubuntu:focal
+
+RUN echo 'APT::Install-Suggests "0";' >> /etc/apt/apt.conf.d/00-docker
+RUN echo 'APT::Install-Recommends "0";' >> /etc/apt/apt.conf.d/00-docker
+
+ARG DEBIAN_FRONTEND=noninteractive
+ENV TZ=Etc/UTC
+
+RUN apt-get update && apt-get install -y strace automake libmpich-dev autoconf bc openssh-server wget mpich libglib2.0-dev pkg-config build-essential git vim cmake && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /tmp
+
+RUN wget --no-check-certificate https://github.com/openucx/ucx/releases/download/v1.15.0/ucx-1.15.0.tar.gz && tar xzf ucx-1.15.0.tar.gz
+WORKDIR /tmp/ucx-1.15.0
+RUN mkdir build
+WORKDIR /tmp/ucx-1.15.0/build
+RUN ../configure && make -j && make install
+
+RUN rm -rf /tmp/ucx-1.15.0*
+
+WORKDIR /tmp
+
+RUN GIT_SSL_NO_VERIFY=1 git clone https://github.com/hpc/ior.git
+WORKDIR /tmp/ior
+RUN ./bootstrap && ./configure && make -j && make install
+
+WORKDIR /
+RUN mkdir /hercules
+
+ENV GIT_SSL_NO_VERIFY=1
+WORKDIR /hercules
+RUN git clone https://gitlab.arcos.inf.uc3m.es/admire/hercules.git code
+WORKDIR /hercules/code
+RUN mkdir build
+WORKDIR /hercules/code/build
+RUN cmake .. && make -j
+
+
+#hercules start -m /hercules/metadata -d /hercules/data -f /hercules/code/conf/hercules.conf.sample
+
+WORKDIR /hercules
+RUN echo "localhost" > data
+RUN echo "localhost" > metadata
+RUN mkdir conf
+RUN cp /hercules/code/conf/hercules.conf.sample /hercules/conf/hercules.conf
+RUN sed -ri 's|/home/hercules|/hercules/code|g' /hercules/conf/hercules.conf
+RUN sed -ri 's|DATA_HOSTFILE = /home/user/data_hostfile|DATA_HOSTFILE = /hercules/data|g' /hercules/conf/hercules.conf
+RUN sed -ri 's|METADATA_HOSTFILE = /home/user/meta_hostfile|METADATA_HOSTFILE = /hercules/metadata|g' /hercules/conf/hercules.conf
+RUN cp /hercules/conf/hercules.conf /etc/
+ENV H_PATH=/hercules/code
+ENV H_BUILD_PATH=/hercules/code/build
+ENV H_BASH_PATH=/hercules/code/bash
+
+
+ENV PATH="$PATH:/hercules/code/build:/hercules/code/bash"
+ENV HERCULES_CONF=/hercules/conf/hercules.conf
+ENV LD_PRELOAD=/hercules/code/build/tools/libhercules_posix.so
