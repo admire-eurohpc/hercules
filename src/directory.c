@@ -279,6 +279,7 @@ GTree_insert(char *desired_data)
 	for (int32_t i = 0; i < more_chars; i++)
 	{
 		int32_t new_position = closest_data_length + i;
+		slog_debug("[Gtree] path=%s, new_position=%d, i=%d", desired_data, new_position, i);
 
 		if ((desired_data[new_position] == '/') || (i == (more_chars - 1)))
 		{
@@ -288,7 +289,8 @@ GTree_insert(char *desired_data)
 			// if (i == 0 && desired_data[new_position+1] == '/')
 
 			// String that will be introduced as a new node.
-			char *new_data = (char *)malloc(new_position + 1);
+			// char *new_data = (char *)malloc(new_position + 1);
+			char *new_data = (char *)malloc(strlen(desired_data) + 1);
 			strcpy(new_data, desired_data);
 			// New node to be introduced.
 			// printf("new_node=%s\n",new_data);

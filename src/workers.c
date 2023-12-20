@@ -1400,6 +1400,7 @@ int stat_worker_helper(p_argv *arguments, char *req)
 
 			if (insert_successful != 0)
 			{
+				slog_error("ERRIMSS_WORKER_MAPPUT");
 				perror("ERRIMSS_WORKER_MAPPUT");
 				return -1;
 			}
