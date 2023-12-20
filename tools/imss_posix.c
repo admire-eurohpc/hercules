@@ -34,6 +34,8 @@
 #undef __USE_GNU
 #include <poll.h>
 
+#include <sys/ptrace.h>
+
 #ifndef FCNTL_ADJUST_CMD
 #define FCNTL_ADJUST_CMD(__cmd) __cmd
 #endif
@@ -106,7 +108,7 @@ int release = 1;
 char log_path[1000] = {'\0'};
 pid_t g_pid = -1;
 
-void getConfiguration();
+int getConfiguration();
 char *checkHerculesPath(const char *pathname);
 char *convert_path(const char *name);
 int generalOpen(char *new_path, int flags, mode_t mode);
@@ -126,9 +128,9 @@ static int (*real_stat)(const char *pathname, struct stat *buf) = NULL;
 static int (*real_stat64)(const char *__restrict__ pathname, struct stat64 *__restrict__ buf) = NULL;
 static int (*real__xstat64)(int ver, const char *path, struct stat64 *stat_buf) = NULL;
 static int (*real_fstat)(int fd, struct stat *buf) = NULL;
-static int (*real_fstatat)(int dirfd, const char *pathname, struct stat *buf, int flags) = NULL;
+static int (*real_fstatat)(int __fd, const char *__restrict __file, struct stat *__restrict __buf, int __flag) = NULL;
 static int (*real_fstatat64)(int __fd, const char *__restrict __file, struct stat64 *__restrict __buf, int __flag) = NULL;
-static int (*real_newfstatat)(int dirfd, const char *pathname, struct stat *buf, int flags) = NULL;
+static int (*real_newfstatat)(int __fd, const char *__restrict __file, struct stat *__restrict __buf, int __flag) = NULL;
 static int (*real__fxstat64)(int ver, int fd, struct stat64 *buf) = NULL;
 static int (*real__fxstat)(int ver, int fd, struct stat *buf) = NULL;
 static int (*real_close)(int fd) = NULL;
@@ -174,7 +176,7 @@ static size_t (*real_fwrite)(const void *buf, size_t size, size_t count, FILE *f
 static int (*real_ferror)(FILE *fp) = NULL;
 static int (*real_feof)(FILE *fp) = NULL;
 static long int (*real_ftell)(FILE *fp) = NULL;
-void (*real_rewind)(FILE *stream) = NULL;
+static void (*real_rewind)(FILE *stream) = NULL;
 static void *(*real_mmap)(void *addr, size_t length, int prot, int flags, int fd, off_t offset) = NULL;
 static int (*real_symlink)(const char *name1, const char *name2) = NULL;
 static int (*real_symlinkat)(const char *name1, int fd, const char *name2) = NULL;
@@ -186,230 +188,36 @@ static int (*real_sys_chdir)(const char *filename) = NULL;
 static int (*real_wchdir)(const wchar_t *dirname) = NULL;
 static int (*real_chmod)(const char *pathname, mode_t mode) = NULL;
 static int (*real_fchmod)(int fd, mode_t mode) = NULL;
-
 static int (*real_execve)(const char *pathname, char *const argv[], char *const envp[]) = NULL;
 // static int (*real_execv)(const char *pathname, char *const argv[]) = NULL;
-
 static char *(*real_getcwd)(char *buf, size_t size) = NULL;
-
 static int (*real_change_to_directory)(char *, int, int) = NULL;
 static int (*real_bindpwd)(int) = NULL;
-
 static int (*real_epoll_ctl)(int epfd, int op, int fd, struct epoll_event *event) = NULL;
-
 static pid_t (*real_fork)(void) = NULL;
-
 static int (*real___fwprintf_chk)(FILE *stream, int flag, const wchar_t *format) = NULL;
-
 static ssize_t (*real_pread)(int fd, void *buf, size_t count, off_t offset) = NULL;
 static ssize_t (*real_pwrite)(int fd, const void *buf, size_t count, off_t offset) = NULL;
-
 static int (*real_truncate)(const char *path, off_t length) = NULL;
 static int (*real_ftruncate)(int fd, off_t length) = NULL;
-
 static int (*real_flock)(int fd, int operation) = NULL;
-
 static int (*real_dup2)(int oldfd, int newfd) = NULL;
 static int (*real_dup)(int oldfd) = NULL;
-
 static int (*real_mkstemp)(char *template) = NULL;
-
 // ssize_t readv(int fd, const struct iovec *iov, int iovcnt);
 static ssize_t (*real_writev)(int fd, const struct iovec *iov, int iovcnt) = NULL;
 // ssize_t preadv(int fd, const struct iovec *iov, int iovcnt, off_t offset);
 static ssize_t (*real_pwritev)(int fd, const struct iovec *iov, int iovcnt, off_t offset) = NULL;
 static ssize_t (*real_pwrite64)(int fd, const void *buf, size_t count, off64_t offset) = NULL;
-
 static int (*real_poll)(struct pollfd *fds, nfds_t nfds, int timeout) = NULL;
 static int (*real_ppoll)(struct pollfd *fds, nfds_t nfds, const struct timespec tmo_p, const sigset_t sigmask) = NULL;
-
 static int (*real_fcntl)(int fd, int cmd, ... /* arg */) = NULL;
-
 static int (*real_syncfs)(int fd) = NULL;
-
 static int (*real_posix_fadvise)(int fd, off_t offset, off_t len, int advice) = NULL;
 static int (*real_posix_fadvise64)(int fd, off64_t offset, off64_t len, int advice) = NULL;
-
-int creat(const char *pathname, mode_t mode)
-{
-	if (!real_creat)
-		real_creat = dlsym(RTLD_NEXT, "creat");
-
-	fprintf(stderr, "TODO: Calling creat, %s\n", pathname);
-	// if (!init)
-	{
-		return real_creat(pathname, mode);
-	}
-}
-
-int syncfs(int fd)
-{
-	if (!real_syncfs)
-		real_syncfs = dlsym(RTLD_NEXT, "syncfs");
-
-	if (!init)
-	{
-		return real_syncfs(fd);
-	}
-
-	errno = 0;
-	int ret = 0;
-	char *pathname;
-	if (pathname = map_fd_search_by_val(map_fd, fd))
-	{
-		slog_debug("[POSIX] Calling Hercules syncfs, pathname=%s", pathname);
-	}
-
-	return real_syncfs(fd);
-}
-
-int fcntl(int fd, int cmd, ... /* arg */)
-{
-	if (!real_fcntl)
-		real_fcntl = dlsym(RTLD_NEXT, "fcntl");
-
-	va_list ap;
-	void *arg;
-	va_start(ap, cmd);
-	arg = va_arg(ap, void *);
-	va_end(ap);
-
-	if (!init)
-	{
-		if (!arg)
-			return real_fcntl(fd, cmd);
-		else
-			return real_fcntl(fd, cmd, arg);
-	}
-
-	errno = 0;
-	int ret = 0;
-	char *pathname;
-	if (pathname = map_fd_search_by_val(map_fd, fd))
-	{
-		slog_debug("[POSIX]. Calling Hercules 'fcntl', pathname=%s, fd=%d", pathname, fd);
-		cmd = FCNTL_ADJUST_CMD(cmd);
-		switch (cmd)
-		{
-		// case F_SETLKW:
-		case F_SETLKW64: // release the existence of record locks.
-			// return SYSCALL_CANCEL(fcntl64, fd, cmd, arg);
-			slog_debug("[POSIX][fcntl] pathname=%s, fd=%d, F_SETLKW", pathname, fd);
-			// ret = 0;//real_fcntl(fd, cmd, arg);
-			ret = -1;
-			errno = EDEADLK;
-			break;
-		case F_OFD_SETLKW:
-		{
-			struct flock *flk = (struct flock *)arg;
-			slog_debug("[POSIX][fcntl] pathname=%s, fd=%d, F_OFD_SETLKW", pathname, fd);
-			// struct flock64 flk64 =
-			// 	{
-			// 		.l_type = flk->l_type,
-			// 		.l_whence = flk->l_whence,
-			// 		.l_start = flk->l_start,
-			// 		.l_len = flk->l_len,
-			// 		.l_pid = flk->l_pid
-			// 	};
-			// return SYSCALL_CANCEL(fcntl64, fd, cmd, &flk64);
-			ret = 0; // real_fcntl(fd, cmd, &flk);
-			break;
-		}
-		case F_OFD_GETLK:
-		case F_OFD_SETLK:
-		{
-			slog_debug("[POSIX][fcntl], pathname=%s, fd=%d, F_OFD_SETLK", pathname, fd);
-			struct flock *flk = (struct flock *)arg;
-			// struct flock64 flk64 =
-			// 	{
-			// 		.l_type = flk->l_type,
-			// 		.l_whence = flk->l_whence,
-			// 		.l_start = flk->l_start,
-			// 		.l_len = flk->l_len,
-			// 		.l_pid = flk->l_pid
-			// 	};
-			int ret = real_fcntl(fd, cmd, &flk); // INLINE_SYSCALL_CALL(fcntl64, fd, cmd, &flk64);
-			if (ret == -1)
-				return -1;
-			if ((off_t)flk->l_start != flk->l_start || (off_t)flk->l_len != flk->l_len)
-			{
-				//__set_errno(EOVERFLOW);
-				errno = EOVERFLOW;
-				return -1;
-			}
-			// flk->l_type = flk64.l_type;
-			// flk->l_whence = flk64.l_whence;
-			// flk->l_start = flk64.l_start;
-			// flk->l_len = flk64.l_len;
-			// flk->l_pid = flk64.l_pid;
-			// return ret;
-			break;
-		}
-		/* Since only F_SETLKW{64}/F_OLD_SETLK are cancellation entrypoints and
-	   only OFD locks require LFS handling, all others flags are handled
-	   unmodified by calling __NR_fcntl64.  */
-		default:
-			slog_debug("[POSIX][fcntl], pathname=%s, fd=%d, default", pathname, fd);
-			ret = real_fcntl(fd, cmd, arg);
-			break;
-			// return __fcntl64_nocancel_adjusted(fd, cmd, arg);
-		}
-		slog_debug("[POSIX]. Ending Hercules 'fcntl', pathname=%s, fd=%d, ret=%d, errno=%d:%s", pathname, fd, ret, errno, strerror(errno));
-	}
-	else
-	{
-		slog_debug("[POSIX]. Calling Real 'fcntl', fd=%d", fd);
-		// cmd = FCNTL_ADJUST_CMD(cmd);
-		// switch (cmd)
-		// {
-		// // case F_SETLKW:
-		// case F_SETLKW64: // release the existence of record locks.
-		// 	slog_debug("[POSIX][fcntl] fd=%d, F_SETLKW", fd);
-		// 	break;
-		// case F_OFD_SETLKW:
-		// {
-		// 	struct flock *flk = (struct flock *)arg;
-		// 	slog_debug("[POSIX][fcntl] fd=%d, F_OFD_SETLKW", fd);
-		// 	break;
-		// }
-		// case F_OFD_GETLK:
-		// case F_OFD_SETLK:
-		// {
-		// 	slog_debug("[POSIX][fcntl] fd=%d, F_OFD_SETLK", fd);
-		// 	break;
-		// }
-		// default:
-		// 	slog_debug("[POSIX][fcntl] fd=%d, default", fd);
-		// 	break;
-		// }
-		if (!arg)
-			ret = real_fcntl(fd, cmd);
-		else
-			ret = real_fcntl(fd, cmd, arg);
-		slog_debug("[POSIX]. Ending Real 'fcntl', fd=%d, ret=%d, errno=%d:%s", fd, ret, errno, strerror(errno));
-	}
-
-	return ret;
-}
-
-// int _openat(int dirfd, const char *pathname, int flags, ...)
-// {
-// 	real__openat = dlsym(RTLD_NEXT, "_openat");
-// 	int mode = 0;
-
-// 	if (flags & O_CREAT)
-// 	{
-// 		va_list ap;
-// 		va_start(ap, flags);
-// 		mode = va_arg(ap, unsigned);
-// 		va_end(ap);
-// 	}
-
-// 	fprintf(stderr, "Calling _openat %s\n", pathname);
-// 	return real__openat(dirfd, pathname, flags);
-// }
-
-// static int (*real_fsync)(int fd) = NULL;
+static int (*real___fxstatat)(int __ver, int __fildes, const char *__filename, struct stat *__stat_buf, int __flag) = NULL;
+static int (*real___fxstatat64)(int __ver, int __fildes, const char *__filename, struct stat64 *__stat_buf, int __flag) = NULL;
+static int (*real_faccessat)(int dirfd, const char *pathname, int mode, int flags) = NULL;
 
 void checkOpenFlags(const char *pathname, int flags)
 {
@@ -667,7 +475,11 @@ __attribute__((constructor)) void imss_posix_init(void)
 	rank = MurmurOAAT32(hostname);
 
 	// fill global variables with the enviroment variables value.
-	getConfiguration();
+	ret = getConfiguration();
+	if (ret == -1)
+	{
+		exit(EXIT_FAILURE);
+	}
 
 	// fprintf(stderr, "IMSS_DEBUG_LEVEL=%d\n", IMSS_DEBUG_LEVEL);
 
@@ -733,6 +545,7 @@ __attribute__((constructor)) void imss_posix_init(void)
 	{
 		// In case of error notify and exit
 		slog_error("Stat init failed, cannot connect to Metadata server.");
+		return;
 	}
 
 	if (DEPLOYMENT == 2)
@@ -788,7 +601,7 @@ __attribute__((constructor)) void imss_posix_init(void)
 	init = 1;
 }
 
-void getConfiguration()
+int getConfiguration()
 {
 	struct cfg_struct *cfg;
 
@@ -856,9 +669,9 @@ void getConfiguration()
 		// else
 		if (ret)
 		{
-			fprintf(stderr, "[CLIENT %d] Configuration file not found\n", rank);
+			fprintf(stderr, "[HERCULES CLIENT %d] Configuration file not found\n", rank);
 			perror("ERRIMSS_CONF_NOT_FOUND");
-			return;
+			return -1;
 		}
 		free(conf_path);
 	}
@@ -1056,6 +869,8 @@ void getConfiguration()
 	{
 		LOWER_BOUND_SERVERS = atoi(getenv("IMSS_LOWER_BOUND_MALLEABILITY"));
 	}
+
+	return 1;
 }
 
 void __attribute__((destructor)) run_me_last()
@@ -1361,6 +1176,7 @@ int lstat(const char *pathname, struct stat *buf)
 
 int stat(const char *pathname, struct stat *buf)
 {
+	// fprintf(stderr, "[POSIX]. Calling 'stat', new_path=%s\n", pathname);
 	if (!real_stat)
 		real_stat = dlsym(RTLD_NEXT, "stat");
 
@@ -1382,7 +1198,7 @@ int stat(const char *pathname, struct stat *buf)
 			errno = -ret;
 			ret = -1;
 		}
-		slog_debug("[POSIX]. Ending Hercules 'stat', new_path=%s, errno=%d:%s", new_path, errno, strerror(errno));
+		slog_debug("[POSIX]. Ending Hercules 'stat', new_path=%s, errno=%d:%s\n", new_path, errno, strerror(errno));
 		free(new_path);
 	}
 	else
@@ -2623,21 +2439,22 @@ int openat(int dirfd, const char *pathname, int flags, ...)
 			return real_openat(dirfd, pathname, flags, mode);
 	}
 
-	fprintf(stderr, "Calling openat %s\n", pathname);
-
 	errno = 0;
-	int saved_errno;
 	int ret = 0;
-
-	char *pathname_dir = map_fd_search_by_val(map_fd, dirfd);
-	if (pathname_dir != NULL)
-	// {
-
-	// }
-
-	// if (new_path != NULL)
+	char *pathname_dir, *new_path = NULL;
+	if (dirfd == AT_FDCWD)
 	{
-		// char *new_path = checkHerculesPath(pathname);
+		pathname_dir = getenv("PWD");
+		new_path = checkHerculesPath(pathname_dir);
+		pathname_dir = NULL;
+	}
+	else
+	{
+		pathname_dir = map_fd_search_by_val(map_fd, dirfd);
+	}
+
+	if (pathname_dir != NULL || new_path != NULL)
+	{
 		slog_debug("[POSIX] Calling Hercules 'openat' flags=%d, mode=%o, dirfd=%d, pathname_dir=%s, pathname=%s", flags, mode, dirfd, pathname_dir, pathname);
 		int is_absolute_path = IsAbsolutePath(pathname);
 
@@ -2687,6 +2504,7 @@ int openat(int dirfd, const char *pathname, int flags, ...)
 	}
 	else
 	{
+		slog_debug("[POSIX] Calling real 'openat', flags=%d, mode=%o, dirfd=%d, pathname=%s", flags, mode, dirfd, pathname);
 		if (!mode)
 		{
 			ret = real_openat(dirfd, pathname, flags);
@@ -2711,7 +2529,7 @@ int mkdir(const char *path, mode_t mode)
 	}
 
 	errno = 0;
-	size_t ret;
+	int ret;
 	char *new_path = checkHerculesPath(path);
 	if (new_path != NULL)
 	{
@@ -2720,7 +2538,13 @@ int mkdir(const char *path, mode_t mode)
 		// char *new_path;
 		// new_path = convert_path(path, MOUNT_POINT);
 		ret = imss_mkdir(new_path, mode);
-		slog_debug("[POSIX]. Ending hercules 'mkdir', path=%s, new_path=%s\n", path, new_path);
+		if (ret < 0)
+		{
+			errno = -ret;
+			ret = -1;
+			slog_debug("[POSIX]. Error in 'mkdir', ret=%ld, errno=%d:%s", ret, errno, strerror(errno));
+		}
+		slog_debug("[POSIX]. Ending hercules 'mkdir', path=%s, new_path=%s, ret=%d, errno=%d:%s\n", path, new_path, ret, errno, strerror(errno));
 		free(new_path);
 	}
 	else
@@ -3020,7 +2844,9 @@ void seekdir(DIR *dirp, long loc)
 		// dirp->filepos = loc;
 		real_seekdir(dirp, loc);
 		slog_debug("[POSIX] Ending Hercules 'seekdir', fd=%d, loc=%ld, errno=%d:%s", fd, loc, errno, strerror(errno));
-	} else {
+	}
+	else
+	{
 		slog_debug("[POSIX] Calling real 'seekdir', fd=%d, loc=%ld", fd, loc);
 		real_seekdir(dirp, loc);
 		slog_debug("[POSIX] Ending real 'seekdir', fd=%d, loc=%ld, errno=%d:%s", fd, loc, errno, strerror(errno));
@@ -3149,6 +2975,7 @@ ssize_t write(int fd, const void *buf, size_t size)
 
 void *mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)
 {
+	fprintf(stderr, "[POSIX] Calling 'mmap', addr=%p\n", &addr);
 	if (!real_mmap)
 		real_mmap = dlsym(RTLD_NEXT, "mmap");
 
@@ -3411,10 +3238,9 @@ int unlink(const char *name)
 		}
 
 		// remove the file descriptor from the local map.
-		ret = map_fd_erase_by_pathname(map_fd, new_path);
-		if (ret == -1)
+		if (map_fd_erase_by_pathname(map_fd, new_path) == -1)
 		{
-			slog_error("[POSIX]. Error Hercules no file descriptor found for the pathname=%s", new_path);
+			slog_warn("[POSIX]. Error Hercules no file descriptor found for the pathname=%s", new_path);
 			// fprintf(stderr, "[POSIX][unlink]. Error. No Fd deleted in the local map, new_path=%s\n", new_path);
 		}
 
@@ -3490,61 +3316,62 @@ int rmdir(const char *path)
 	return ret;
 }
 
-int unlinkat(int fd, const char *name, int flag)
-{ // rm & rm -r
-	// fprintf(stderr, "Starting unlinkat, name=%s\n", name);
-	if (!real_unlinkat)
-		real_unlinkat = dlsym(RTLD_NEXT, "unlinkat");
+// int unlinkat(int fd, const char *name, int flag)
+// { // rm & rm -r
+// 	// fprintf(stderr, "Starting unlinkat, name=%s\n", name);
+// 	if (!real_unlinkat)
+// 		real_unlinkat = dlsym(RTLD_NEXT, "unlinkat");
 
-	if (!init)
-	{
-		return real_unlinkat(fd, name, flag);
-	}
+// 	if (!init)
+// 	{
+// 		return real_unlinkat(fd, name, flag);
+// 	}
 
-	errno = 0;
-	int ret = 0;
-	char *new_path = checkHerculesPath(name);
-	if (new_path != NULL)
-	{
-		slog_debug("[POSIX]. Calling Hercules 'unlinkat', new_path=%s", new_path);
-		// char *new_path;
-		// new_path = convert_path(name, MOUNT_POINT);
-		int n_ent = 0;
-		char *buffer;
-		char **refs;
+// 	errno = 0;
+// 	int ret = 0;
+// 	char *new_path = checkHerculesPath(name);
+// 	if (new_path != NULL)
+// 	{
+// 		slog_debug("[POSIX]. Calling Hercules 'unlinkat', new_path=%s", new_path);
+// 		// char *new_path;
+// 		// new_path = convert_path(name, MOUNT_POINT);
+// 		int n_ent = 0;
+// 		char *buffer;
+// 		char **refs;
 
-		if ((n_ent = get_dir((char *)new_path, &buffer, &refs)) < 0)
-		{
-			strcat(new_path, "/");
-			if ((n_ent = get_dir((char *)new_path, &buffer, &refs)) < 0)
-			{
-				return -ENOENT;
-			}
-		}
+// 		if ((n_ent = get_dir((char *)new_path, &buffer, &refs)) < 0)
+// 		{
+// 			strcat(new_path, "/");
+// 			if ((n_ent = get_dir((char *)new_path, &buffer, &refs)) < 0)
+// 			{
+// 				return -ENOENT;
+// 			}
+// 		}
 
-		for (int i = n_ent - 1; i > -1; --i)
-		{
-			char *last = refs[i] + strlen(refs[i]) - 1;
+// 		for (int i = n_ent - 1; i > -1; --i)
+// 		{
+// 			char *last = refs[i] + strlen(refs[i]) - 1;
 
-			if (refs[i][strlen(refs[i]) - 1] == '/')
-			{
-				rmdir(refs[i]);
-			}
-			else
-			{
-				unlink(refs[i]);
-			}
-		}
-		free(new_path);
-	}
-	else
-	{
-		slog_debug("[POSIX]. Calling real 'unlinkat'");
-		ret = real_unlinkat(fd, name, flag);
-	}
-	// fprintf(stderr, "Ending unlinkat, name=%s\n", name);
-	return ret;
-}
+// 			if (refs[i][strlen(refs[i]) - 1] == '/')
+// 			{
+// 				rmdir(refs[i]);
+// 			}
+// 			else
+// 			{
+// 				unlink(refs[i]);
+// 			}
+// 		}
+// 		slog_debug("[POSIX]. Calling Hercules 'unlinkat', new_path=%s", new_path);
+// 		free(new_path);
+// 	}
+// 	else
+// 	{
+// 		slog_debug("[POSIX]. Calling real 'unlinkat', pathname=%s", name);
+// 		ret = real_unlinkat(fd, name, flag);
+// 	}
+// 	// fprintf(stderr, "Ending unlinkat, name=%s\n", name);
+// 	return ret;
+// }
 
 int remove(const char *name)
 {
@@ -4370,63 +4197,498 @@ int fstat(int fd, struct stat *buf)
 	return ret;
 }
 
-int generalFsstat()
+int __fxstatat(int ver, int dirfd, const char *pathname, struct stat *stat_buf, int flags)
 {
-}
-
-/*
-int fstatat(int dirfd, const char *pathname, struct stat *buf, int flags) {
-*/
-int fstatat(int __fd, const char *__restrict __file, struct stat *__restrict __buf, int __flag)
-{
-	fprintf(stderr, "[POSIX][TODO]. Calling Real 'fstatat', pathname=%s", __file);
-
-	if (!real_fstatat)
-		real_fstatat = dlsym(RTLD_NEXT, "fstatat");
-
-	if (init)
+	// fprintf(stderr, "[POSIX]. Calling Real '__fxstatat', pathname=%s, dirfd=%d\n", pathname, dirfd);
+	if (!real___fxstatat)
 	{
-		slog_warn("[POSIX][TODO]. Calling Real 'fstatat', pathname=%s", __file);
+		real___fxstatat = dlsym(RTLD_NEXT, __func__);
 	}
 
-	// TODO.
-
-	return real_fstatat(__fd, __file, __buf, __flag);
-}
-
-// int fstatat64(int dirfd, const char *pathname, struct stat *buf, int flags)
-int fstatat64(int __fd, const char *__restrict __file, struct stat64 *__restrict __buf, int __flag)
-{
-	fprintf(stderr, "[POSIX][TODO]. Calling Real 'fstatat64', pathname=%s", __file);
-
-	if (!real_fstatat64)
-		real_fstatat64 = dlsym(RTLD_NEXT, "fstatat64");
-
-	if (init)
+	if (!init)
 	{
-		slog_warn("[POSIX][TODO]. Calling Real 'fstatat64', pathname=%s", __file);
+		return real___fxstatat(ver, dirfd, pathname, stat_buf, flags);
 	}
 
-	// TODO.
-
-	return real_fstatat64(__fd, __file, __buf, __flag);
-}
-
-int newfstatat(int dirfd, const char *pathname, struct stat *buf, int flags)
-{
-	fprintf(stderr, "[POSIX][TODO]. Calling Real 'newfstatat', pathname=%s", pathname);
-	if (!real_newfstatat)
-		real_newfstatat = dlsym(RTLD_NEXT, "newfstatat");
-
-	if (init)
+	errno = 0;
+	int ret = 0;
+	char *pathname_dir, *new_path = NULL;
+	if (dirfd == AT_FDCWD)
 	{
-		slog_warn("[POSIX][TODO]. Calling Real 'newfstatat', pathname=%s", pathname);
+		pathname_dir = getenv("PWD");
+		new_path = checkHerculesPath(pathname_dir);
+		pathname_dir = NULL;
+	}
+	else
+	{
+		pathname_dir = map_fd_search_by_val(map_fd, dirfd);
 	}
 
-	// TODO.
+	if (pathname_dir != NULL || new_path != NULL)
+	{
+		// fprintf(stderr, "[POSIX] Calling Hercules '__fxstatat' flags=%d, dirfd=%d, pathname_dir=%s, new_path_dir=%s, pathname=%s\n", flags, dirfd, pathname_dir, new_path, pathname);
+		slog_debug("[POSIX] Calling Hercules '__fxstatat' flags=%d, dirfd=%d, pathname_dir=%s, pathname=%s", flags, dirfd, pathname_dir, pathname);
+		int is_absolute_path = IsAbsolutePath(pathname);
 
-	return real_newfstatat(dirfd, pathname, buf, flags);
+		// If pathname is absolute, then dirfd is ignored.
+		if (is_absolute_path == 1)
+		{
+			// char *new_path = checkHerculesPath(pathname);
+			slog_debug("[POSIX] is absolute, '__fxstatat', pathname=%s", pathname);
+			ret = stat(pathname, stat_buf);
+
+			// ret = generalOpen(new_path, flags, mode);
+			// free(new_path);
+		}
+		else if (is_absolute_path == 0) // pathname is relative.
+		{
+			if (dirfd == AT_FDCWD) // dirfd is the special value AT_FDCWD.
+			{					   // TO CHECK!
+				// char *new_path = checkHerculesPath(pathname);
+				// slog_debug("[POSIX] is relative, current directory, '__fxstatat', new_path=%s", new_path);
+				slog_debug("[POSIX] is relative, current directory, '__fxstatat', pathname=%s", pathname);
+				// pathname is interpreted relative to the current working directory of the calling process (like real_open).
+				// ret = generalOpen(new_path, flags, mode);
+				ret = stat(pathname, stat_buf);
+				// free(new_path);
+			}
+			else
+			{
+				// // get the pathname of the directory pointed by dirfd if it is storage in the local map "map_fd".
+				// char *pathname_dir = map_fd_search_by_val(map_fd, dirfd);
+				// if (pathname_dir == NULL)
+				// { // if dirfd is not storage locally
+				// 	// search dirfd on the metadata server.
+				// 	// fprintf(stderr,"");
+				// 	slog_error("[POSIX] dirfd=%d could not be resolved.");
+				// 	return -1;
+				// }
+
+				char absolute_pathname[MAX_PATH];
+				char *dirr = pathname_dir + strlen("imss://");
+				sprintf(absolute_pathname, "%s/%s/%s", MOUNT_POINT, dirr, pathname);
+
+				// char *new_path = checkHerculesPath(absolute_pathname);
+				//  slog_debug("[POSIX] is relative, '__fxstatat', new_path=%s", new_path);
+				slog_debug("[POSIX] is relative, '__fxstatat', absolute_pathname=%s", absolute_pathname);
+				ret = stat(absolute_pathname, stat_buf);
+
+				// ret = generalOpen(new_path, flags, mode);
+				// free(new_path);
+			}
+		}
+
+		slog_debug("[POSIX] Ending Hercules '__fxstatat', ret=%d, errno=%d:%s\n", ret, errno, strerror(errno));
+		if (new_path != NULL)
+			free(new_path);
+	}
+	else
+	{
+		slog_debug("[POSIX] Calling real '__fxstatat' flags=%d, dirfd=%d, pathname=%s", flags, dirfd, pathname);
+		// fprintf(stderr, "[POSIX] Calling real '__fxstatat' flags=%d, dirfd=%d, pathname=%s\n", flags, dirfd, pathname);
+		ret = real___fxstatat(ver, dirfd, pathname, stat_buf, flags);
+		slog_debug("[POSIX] Ending real '__fxstatat' flags=%d, dirfd=%d, pathname=%s, errno=%d:%s", flags, dirfd, pathname, errno, strerror(errno));
+	}
+
+	return ret;
 }
+
+int __fxstatat64(int ver, int dirfd, const char *pathname, struct stat64 *stat_buf, int flags)
+{
+	// fprintf(stderr, "[POSIX][TODO]. Calling Real '__fxstatat64', pathname=%s\n", __filename);
+	if (!real___fxstatat64)
+	{
+		real___fxstatat64 = dlsym(RTLD_NEXT, __func__);
+	}
+
+	if (!init)
+	{
+		return real___fxstatat64(ver, dirfd, pathname, stat_buf, flags);
+	}
+
+	errno = 0;
+	int ret = 0;
+	char *pathname_dir, *new_path = NULL;
+	if (dirfd == AT_FDCWD)
+	{
+		pathname_dir = getenv("PWD");
+		new_path = checkHerculesPath(pathname_dir);
+		pathname_dir = NULL;
+	}
+	else
+	{
+		pathname_dir = map_fd_search_by_val(map_fd, dirfd);
+	}
+
+	if (pathname_dir != NULL || new_path != NULL)
+	{
+		// fprintf(stderr, "[POSIX] Calling Hercules '__fxstatat' flags=%d, dirfd=%d, pathname_dir=%s, new_path_dir=%s, pathname=%s\n", flags, dirfd, pathname_dir, new_path, pathname);
+		slog_debug("[POSIX] Calling Hercules '__fxstatat64' flags=%d, dirfd=%d, pathname_dir=%s, pathname=%s", flags, dirfd, pathname_dir, pathname);
+		int is_absolute_path = IsAbsolutePath(pathname);
+
+		// If pathname is absolute, then dirfd is ignored.
+		if (is_absolute_path == 1)
+		{
+			// char *new_path = checkHerculesPath(pathname);
+			slog_debug("[POSIX] is absolute, '__fxstatat', pathname=%s", pathname);
+			ret = stat64(pathname, stat_buf);
+
+			// ret = generalOpen(new_path, flags, mode);
+			// free(new_path);
+		}
+		else if (is_absolute_path == 0) // pathname is relative.
+		{
+			if (dirfd == AT_FDCWD) // dirfd is the special value AT_FDCWD.
+			{					   // TO CHECK!
+				// char *new_path = checkHerculesPath(pathname);
+				// slog_debug("[POSIX] is relative, current directory, '__fxstatat', new_path=%s", new_path);
+				slog_debug("[POSIX] is relative, current directory, '__fxstatat', pathname=%s", pathname);
+				// pathname is interpreted relative to the current working directory of the calling process (like real_open).
+				// ret = generalOpen(new_path, flags, mode);
+				ret = stat64(pathname, stat_buf);
+				// free(new_path);
+			}
+			else
+			{
+				// // get the pathname of the directory pointed by dirfd if it is storage in the local map "map_fd".
+				// char *pathname_dir = map_fd_search_by_val(map_fd, dirfd);
+				// if (pathname_dir == NULL)
+				// { // if dirfd is not storage locally
+				// 	// search dirfd on the metadata server.
+				// 	// fprintf(stderr,"");
+				// 	slog_error("[POSIX] dirfd=%d could not be resolved.");
+				// 	return -1;
+				// }
+
+				char absolute_pathname[MAX_PATH];
+				char *dirr = pathname_dir + strlen("imss://");
+				sprintf(absolute_pathname, "%s/%s/%s", MOUNT_POINT, dirr, pathname);
+
+				// char *new_path = checkHerculesPath(absolute_pathname);
+				//  slog_debug("[POSIX] is relative, '__fxstatat', new_path=%s", new_path);
+				slog_debug("[POSIX] is relative, '__fxstatat', absolute_pathname=%s", absolute_pathname);
+				ret = stat64(absolute_pathname, stat_buf);
+
+				// ret = generalOpen(new_path, flags, mode);
+				// free(new_path);
+			}
+		}
+
+		slog_debug("[POSIX] Ending Hercules '__fxstatat64', ret=%d, errno=%d:%s\n", ret, errno, strerror(errno));
+		if (new_path != NULL)
+			free(new_path);
+	}
+	else
+	{
+		slog_debug("[POSIX] Calling real '__fxstatat64' flags=%d, dirfd=%d, pathname=%s", flags, dirfd, pathname);
+		// fprintf(stderr, "[POSIX] Calling real '__fxstatat' flags=%d, dirfd=%d, pathname=%s\n", flags, dirfd, pathname);
+		ret = real___fxstatat64(ver, dirfd, pathname, stat_buf, flags);
+		slog_debug("[POSIX] Ending real '__fxstatat64' flags=%d, dirfd=%d, pathname=%s, errno=%d:%s", flags, dirfd, pathname, errno, strerror(errno));
+	}
+
+	return ret;
+}
+
+// int (*real_faccessat)(int dirfd, const char *pathname, int mode, int flags) = NULL;
+int faccessat(int dirfd, const char *pathname, int mode, int flags)
+{
+	if (!real_faccessat)
+	{
+		real_faccessat = dlsym(RTLD_NEXT, __func__);
+	}
+
+	// fprintf(stderr, "Calling real 'faccessat', pathname=%s\n", pathname);
+
+	if (!init)
+	{
+		return real_faccessat(dirfd, pathname, mode, flags);
+	}
+
+	errno = 0;
+	int saved_errno;
+	int ret = 0;
+	char *pathname_dir, *new_path = NULL;
+	if (dirfd == AT_FDCWD)
+	{
+		pathname_dir = getenv("PWD");
+		new_path = checkHerculesPath(pathname_dir);
+		pathname_dir = NULL;
+	}
+	else
+	{
+		pathname_dir = map_fd_search_by_val(map_fd, dirfd);
+	}
+
+	if (pathname_dir != NULL || new_path != NULL)
+	{
+		// fprintf(stderr, "[POSIX] Calling Hercules 'faccessat' flags=%d, dirfd=%d, pathname_dir=%s, new_path_dir=%s, pathname=%s\n", flags, dirfd, pathname_dir, new_path, pathname);
+		slog_debug("[POSIX] Calling Hercules 'faccessat' flags=%d, dirfd=%d, pathname_dir=%s, pathname=%s", flags, dirfd, pathname_dir, pathname);
+		int is_absolute_path = IsAbsolutePath(pathname);
+
+		// If pathname is absolute, then dirfd is ignored.
+		if (is_absolute_path == 1)
+		{
+			// char *new_path = checkHerculesPath(pathname);
+			slog_debug("[POSIX] is absolute, 'faccessat', pathname=%s", pathname);
+			ret = access(pathname, mode);
+
+			// ret = generalOpen(new_path, flags, mode);
+			// free(new_path);
+		}
+		else if (is_absolute_path == 0) // pathname is relative.
+		{
+			if (dirfd == AT_FDCWD) // dirfd is the special value AT_FDCWD.
+			{					   // TO CHECK!
+				// char *new_path = checkHerculesPath(pathname);
+				// slog_debug("[POSIX] is relative, current directory, 'faccessat', new_path=%s", new_path);
+				slog_debug("[POSIX] is relative, current directory, 'faccessat', pathname=%s", pathname);
+				// pathname is interpreted relative to the current working directory of the calling process (like real_open).
+				// ret = generalOpen(new_path, flags, mode);
+				ret = access(pathname, mode);
+				// free(new_path);
+			}
+			else
+			{
+				// // get the pathname of the directory pointed by dirfd if it is storage in the local map "map_fd".
+				// char *pathname_dir = map_fd_search_by_val(map_fd, dirfd);
+				// if (pathname_dir == NULL)
+				// { // if dirfd is not storage locally
+				// 	// search dirfd on the metadata server.
+				// 	// fprintf(stderr,"");
+				// 	slog_error("[POSIX] dirfd=%d could not be resolved.");
+				// 	return -1;
+				// }
+
+				char absolute_pathname[MAX_PATH];
+				char *dirr = pathname_dir + strlen("imss://");
+				sprintf(absolute_pathname, "%s/%s/%s", MOUNT_POINT, dirr, pathname);
+
+				// char *new_path = checkHerculesPath(absolute_pathname);
+				//  slog_debug("[POSIX] is relative, 'faccessat', new_path=%s", new_path);
+				slog_debug("[POSIX] is relative, 'faccessat', absolute_pathname=%s", absolute_pathname);
+				ret = access(absolute_pathname, mode);
+
+				// ret = generalOpen(new_path, flags, mode);
+				// free(new_path);
+			}
+		}
+
+		slog_debug("[POSIX] Ending Hercules 'faccessat', ret=%d, errno=%d:%s\n", ret, errno, strerror(errno));
+		if (new_path != NULL)
+			free(new_path);
+	}
+	else
+	{
+		slog_debug("[POSIX] Calling real 'faccessat' flags=%d, dirfd=%d, pathname=%s", flags, dirfd, pathname);
+		// fprintf(stderr, "[POSIX] Calling real 'faccessat' flags=%d, dirfd=%d, pathname=%s\n", flags, dirfd, pathname);
+		ret = real_faccessat(dirfd, pathname, mode, flags);
+		slog_debug("[POSIX] Ending real 'faccessat' flags=%d, dirfd=%d, pathname=%s, errno=%d:%s", flags, dirfd, pathname, errno, strerror(errno));
+	}
+
+	return ret;
+}
+
+int unlinkat(int dirfd, const char *pathname, int flags)
+{
+	if (!real_unlinkat)
+	{
+		real_unlinkat = dlsym(RTLD_NEXT, __func__);
+	}
+
+	// fprintf(stderr, "Calling real 'unlinkat', pathname=%s\n", pathname);
+	if (!init)
+	{
+		return real_unlinkat(dirfd, pathname, flags);
+	}
+
+	errno = 0;
+	int ret = 0;
+	char *pathname_dir, *new_path = NULL;
+	if (dirfd == AT_FDCWD)
+	{
+		pathname_dir = getenv("PWD");
+		new_path = checkHerculesPath(pathname_dir);
+		pathname_dir = NULL;
+	}
+	else
+	{
+		pathname_dir = map_fd_search_by_val(map_fd, dirfd);
+	}
+
+	if (pathname_dir != NULL || new_path != NULL)
+	{
+		slog_debug("[POSIX] Calling Hercules 'unlinkat' flags=%d, dirfd=%d, pathname_dir=%s, pathname=%s", flags, dirfd, pathname_dir, pathname);
+		int is_absolute_path = IsAbsolutePath(pathname);
+
+		// If pathname is absolute, then dirfd is ignored.
+		if (is_absolute_path == 1)
+		{
+			// char *new_path = checkHerculesPath(pathname);
+			slog_debug("[POSIX] is absolute, 'unlinkat', pathname=%s", pathname);
+			ret = unlink(pathname);
+			// ret = generalOpen(new_path, flags, mode);
+			// free(new_path);
+		}
+		else if (is_absolute_path == 0) // pathname is relative.
+		{
+			if (dirfd == AT_FDCWD) // dirfd is the special value AT_FDCWD.
+			{					   // TO CHECK!
+				// char *new_path = checkHerculesPath(pathname);
+				// slog_debug("[POSIX] is relative, current directory, 'unlinkat', new_path=%s", new_path);
+				slog_debug("[POSIX] is relative, current directory, 'unlinkat', pathname=%s", pathname);
+				// pathname is interpreted relative to the current working directory of the calling process (like real_open).
+				// ret = generalOpen(new_path, flags, mode);
+				ret = unlink(pathname);
+				// free(new_path);
+			}
+			else
+			{
+				// // get the pathname of the directory pointed by dirfd if it is storage in the local map "map_fd".
+				// char *pathname_dir = map_fd_search_by_val(map_fd, dirfd);
+				// if (pathname_dir == NULL)
+				// { // if dirfd is not storage locally
+				// 	// search dirfd on the metadata server.
+				// 	// fprintf(stderr,"");
+				// 	slog_error("[POSIX] dirfd=%d could not be resolved.");
+				// 	return -1;
+				// }
+
+				char absolute_pathname[MAX_PATH];
+				char *dirr = pathname_dir + strlen("imss://");
+				sprintf(absolute_pathname, "%s/%s/%s", MOUNT_POINT, dirr, pathname);
+
+				// char *new_path = checkHerculesPath(absolute_pathname);
+				//  slog_debug("[POSIX] is relative, 'unlinkat', new_path=%s", new_path);
+				slog_debug("[POSIX] is relative, 'unlinkat', absolute_pathname=%s", absolute_pathname);
+				ret = unlink(absolute_pathname);
+
+				// ret = generalOpen(new_path, flags, mode);
+				// free(new_path);
+			}
+		}
+
+		slog_debug("[POSIX] Ending Hercules 'unlinkat', ret=%d, errno=%d:%s\n", ret, errno, strerror(errno));
+		if (new_path != NULL)
+			free(new_path);
+	}
+	else
+	{
+		slog_debug("[POSIX] Calling real 'unlinkat' flags=%d, dirfd=%d, pathname=%s", flags, dirfd, pathname);
+		fprintf(stderr, "[POSIX] Calling real 'unlinkat' flags=%d, dirfd=%d, pathname=%s\n", flags, dirfd, pathname);
+		ret = real_unlinkat(dirfd, pathname, flags);
+		slog_debug("[POSIX] Ending real 'unlinkat' flags=%d, dirfd=%d, pathname=%s, errno=%d:%s", flags, dirfd, pathname, errno, strerror(errno));
+	}
+
+	return ret;
+}
+
+int __fxstat64(int ver, int fd, struct stat64 *buf)
+{
+	if (!real__fxstat64)
+	{
+		real__fxstat64 = dlsym(RTLD_NEXT, "__fxstat64");
+	}
+
+	if (!init)
+	{
+		// slog_debug("[POSIX %d] Calling Real '__fxstat64'", rank);
+		return real__fxstat64(ver, fd, buf);
+	}
+
+	errno = 0;
+	int ret;
+	char *pathname = map_fd_search_by_val(map_fd, fd);
+	if (pathname != NULL)
+	{
+		slog_debug("[POSIX] Calling Hercules '__fxstat64', pathname=%s, fd=%d.", pathname, fd);
+		imss_refresh(pathname);
+		ret = imss_getattr(pathname, (struct stat *)buf);
+		if (ret < 0)
+		{
+			errno = -ret;
+			ret = -1;
+			slog_error("[POSIX] Error Hercules '__fxstat64'	: %s", strerror(errno));
+		}
+
+		slog_debug("[POSIX] End Hercules '__fxstat64', pathname=%s, fd=%d, errno=%d:%s, ret=%d, st_size=%ld, st_blocks=%ld, st_blksize=%ld\n", pathname, fd, errno, strerror(errno), ret, buf->st_size, buf->st_blocks, buf->st_blksize);
+	}
+	else
+	{
+		slog_debug("[POSIX] Calling Real '__fxstat64', ver=%d, fd=%d", ver, fd);
+		ret = real__fxstat64(ver, fd, buf);
+		slog_debug("[POSIX] End Real '__fxstat64', fd=%d, errno=%d:%s, ret=%d, st_size=%ld, st_blocks=%ld, st_blksize=%ld", fd, errno, strerror(errno), ret, buf->st_size, buf->st_blocks, buf->st_blksize);
+	}
+	// report(pathname, buf);
+	// StatReport(fd, *buf);
+	return ret;
+}
+
+// /*
+// int fstatat(int dirfd, const char *pathname, struct stat *buf, int flags) {
+// */
+// int fstatat(int __fd, const char *__restrict __file, struct stat *__restrict __buf, int __flag)
+// {
+// 	fprintf(stderr, "[POSIX][TODO]. Calling Real 'fstatat', pathname=%s\n", __file);
+
+// 	if (!real_fstatat)
+// 	{
+// 		// void *handle;
+// 		// /* open the needed object */
+// 		// handle = dlopen("/lib/x86_64-linux-gnu/libc.so.6", RTLD_LOCAL | RTLD_LAZY);
+// 		// /* find the address of function and data objects */
+// 		// real_fstatat = dlsym(handle, "fstatat");
+// 		real_fstatat = dlsym(RTLD_NEXT, "fstatat");
+// 	}
+
+// 	// fprintf(stderr, "[POSIX][TODO]. Calling Real 'fstatat', real_fstatat=%p\n", &real_fstatat);
+
+// 	// if (init)
+// 	// {
+// 	// 	slog_warn("[POSIX][TODO]. Calling Real 'fstatat', pathname=%s", __file);
+// 	// }
+// 	if (real_fstatat == NULL)
+// 		fprintf(stderr, "error: real_fstatat is NULL\n");
+
+// 	// // TODO.
+
+// 	return real_fstatat(__fd, __file, __buf, __flag);
+// }
+
+// // int fstatat64(int dirfd, const char *pathname, struct stat *buf, int flags)
+// int fstatat64(int __fd, const char *__restrict __file, struct stat64 *__restrict __buf, int __flag)
+// {
+// 	fprintf(stderr, "[POSIX][TODO]. Calling Real 'fstatat64', pathname=%s\n", __file);
+
+// 	if (!real_fstatat64)
+// 		real_fstatat64 = dlsym(RTLD_NEXT, "fstatat64");
+
+// 	if (init)
+// 	{
+// 		// slog_warn("[POSIX][TODO]. Calling Real 'fstatat64', pathname=%s", __file);
+// 	}
+
+// 	// fprintf(stderr, "[POSIX][TODO]. 'fstatat64', real_fstatat=%p\n", &real_fstatat);
+
+// 	// TODO.
+
+// 	return real_fstatat64(__fd, __file, __buf, __flag);
+// }
+
+// int newfstatat(int __fd, const char *__restrict __file, struct stat *__restrict __buf, int __flag)
+// {
+// 	fprintf(stderr, "[POSIX][TODO]. Calling Real 'newfstatat', pathname=%s\n", __file);
+// 	if (!real_newfstatat)
+// 		real_newfstatat = dlsym(RTLD_NEXT, "newfstatat");
+
+// 	if (init)
+// 	{
+// 		slog_warn("[POSIX][TODO]. Calling Real 'newfstatat', pathname=%s", __file);
+// 	}
+
+// 	// TODO.
+
+// 	return real_newfstatat(__fd, __file, __buf, __flag);
+// }
 
 void StatReport(int fd, struct stat sb)
 {
@@ -4531,21 +4793,6 @@ int __fwprintf_chk(FILE *stream, int flag, const wchar_t *format)
 	fprintf(stderr, "Calling __fwprintf_chk\n");
 	// TODO.
 	return real___fwprintf_chk(stream, flag, format);
-}
-
-int __fxstat64(int ver, int fd, struct stat64 *buf)
-{
-	real__fxstat64 = dlsym(RTLD_NEXT, "__fxstat64");
-
-	if (!init)
-	{
-		// slog_debug("[POSIX %d] Calling Real '__fxstat64'", rank);
-		return real__fxstat64(ver, fd, buf);
-	}
-
-	// fprintf(stderr, "[TODO] Calling __fxstat64, fd=%d\n", fd);
-
-	return real__fxstat64(ver, fd, buf);
 }
 
 int access(const char *path, int mode)
@@ -4776,6 +5023,33 @@ int _chdir(const char *path)
 	return real__chdir(path);
 }
 
+// static int (*real_do_system)(const char *line);
+// static int do_system(const char *line)
+// {
+
+// 	fprintf(stderr, "Calling do_system\n");
+// 	real_do_system = dlsym(RTLD_NEXT, __func__);
+
+// 	return real_do_system(line);
+// }
+
+// static int (*real___libc_system)(const char *line) = NULL;
+// int __libc_system(const char *line)
+// {
+// 	fprintf(stderr, "[PRELOAD] Calling '__libc_system'\n");
+// 	real___libc_system = dlsym(RTLD_NEXT, __func__);
+// 	return real___libc_system(line);
+// }
+
+// static long int (*real_ptrace)(enum __ptrace_request __request, ...) = NULL;
+// // extern long ptrace(enum __ptrace_request request, pid_t pid, void *addr, void *data) {
+// long int ptrace (enum __ptrace_request __request, ...)
+// {
+// 	fprintf(stderr, "[PRELOAD] Calling 'ptrace'\n");
+// 	real_ptrace = dlsym(RTLD_NEXT, __func__);
+// 	return real_ptrace(__request);
+// }
+
 int posix_fadvise(int fd, off_t offset, off_t len, int advice)
 {
 	if (!real_posix_fadvise)
@@ -4830,4 +5104,183 @@ int posix_fadvise(int fd, off_t offset, off_t len, int advice)
 // 		slog_debug("Calling posix_fadvise64, fd=%d", fd);
 // 	}
 // 	return real_posix_fadvise64(fd, offset, len, advice);
+// }
+
+int creat(const char *pathname, mode_t mode)
+{
+	if (!real_creat)
+		real_creat = dlsym(RTLD_NEXT, "creat");
+
+	fprintf(stderr, "TODO: Calling creat, %s\n", pathname);
+	// if (!init)
+	{
+		return real_creat(pathname, mode);
+	}
+}
+
+int syncfs(int fd)
+{
+	if (!real_syncfs)
+		real_syncfs = dlsym(RTLD_NEXT, "syncfs");
+
+	if (!init)
+	{
+		return real_syncfs(fd);
+	}
+
+	errno = 0;
+	int ret = 0;
+	char *pathname;
+	if (pathname = map_fd_search_by_val(map_fd, fd))
+	{
+		slog_debug("[POSIX] Calling Hercules syncfs, pathname=%s", pathname);
+	}
+
+	return real_syncfs(fd);
+}
+
+int fcntl(int fd, int cmd, ... /* arg */)
+{
+	if (!real_fcntl)
+		real_fcntl = dlsym(RTLD_NEXT, "fcntl");
+
+	va_list ap;
+	void *arg;
+	va_start(ap, cmd);
+	arg = va_arg(ap, void *);
+	va_end(ap);
+
+	if (!init)
+	{
+		if (!arg)
+			return real_fcntl(fd, cmd);
+		else
+			return real_fcntl(fd, cmd, arg);
+	}
+
+	errno = 0;
+	int ret = 0;
+	char *pathname;
+	if (pathname = map_fd_search_by_val(map_fd, fd))
+	{
+		slog_debug("[POSIX]. Calling Hercules 'fcntl', pathname=%s, fd=%d", pathname, fd);
+		cmd = FCNTL_ADJUST_CMD(cmd);
+		switch (cmd)
+		{
+		// case F_SETLKW:
+		case F_SETLKW64: // release the existence of record locks.
+			// return SYSCALL_CANCEL(fcntl64, fd, cmd, arg);
+			slog_debug("[POSIX][fcntl] pathname=%s, fd=%d, F_SETLKW", pathname, fd);
+			// ret = 0;//real_fcntl(fd, cmd, arg);
+			ret = -1;
+			errno = EDEADLK;
+			break;
+		case F_OFD_SETLKW:
+		{
+			struct flock *flk = (struct flock *)arg;
+			slog_debug("[POSIX][fcntl] pathname=%s, fd=%d, F_OFD_SETLKW", pathname, fd);
+			// struct flock64 flk64 =
+			// 	{
+			// 		.l_type = flk->l_type,
+			// 		.l_whence = flk->l_whence,
+			// 		.l_start = flk->l_start,
+			// 		.l_len = flk->l_len,
+			// 		.l_pid = flk->l_pid
+			// 	};
+			// return SYSCALL_CANCEL(fcntl64, fd, cmd, &flk64);
+			ret = 0; // real_fcntl(fd, cmd, &flk);
+			break;
+		}
+		case F_OFD_GETLK:
+		case F_OFD_SETLK:
+		{
+			slog_debug("[POSIX][fcntl], pathname=%s, fd=%d, F_OFD_SETLK", pathname, fd);
+			struct flock *flk = (struct flock *)arg;
+			// struct flock64 flk64 =
+			// 	{
+			// 		.l_type = flk->l_type,
+			// 		.l_whence = flk->l_whence,
+			// 		.l_start = flk->l_start,
+			// 		.l_len = flk->l_len,
+			// 		.l_pid = flk->l_pid
+			// 	};
+			int ret = real_fcntl(fd, cmd, &flk); // INLINE_SYSCALL_CALL(fcntl64, fd, cmd, &flk64);
+			if (ret == -1)
+				return -1;
+			if ((off_t)flk->l_start != flk->l_start || (off_t)flk->l_len != flk->l_len)
+			{
+				//__set_errno(EOVERFLOW);
+				errno = EOVERFLOW;
+				return -1;
+			}
+			// flk->l_type = flk64.l_type;
+			// flk->l_whence = flk64.l_whence;
+			// flk->l_start = flk64.l_start;
+			// flk->l_len = flk64.l_len;
+			// flk->l_pid = flk64.l_pid;
+			// return ret;
+			break;
+		}
+		/* Since only F_SETLKW{64}/F_OLD_SETLK are cancellation entrypoints and
+	   only OFD locks require LFS handling, all others flags are handled
+	   unmodified by calling __NR_fcntl64.  */
+		default:
+			slog_debug("[POSIX][fcntl], pathname=%s, fd=%d, default", pathname, fd);
+			ret = real_fcntl(fd, cmd, arg);
+			break;
+			// return __fcntl64_nocancel_adjusted(fd, cmd, arg);
+		}
+		slog_debug("[POSIX]. Ending Hercules 'fcntl', pathname=%s, fd=%d, ret=%d, errno=%d:%s", pathname, fd, ret, errno, strerror(errno));
+	}
+	else
+	{
+		slog_debug("[POSIX]. Calling Real 'fcntl', fd=%d", fd);
+		// cmd = FCNTL_ADJUST_CMD(cmd);
+		// switch (cmd)
+		// {
+		// // case F_SETLKW:
+		// case F_SETLKW64: // release the existence of record locks.
+		// 	slog_debug("[POSIX][fcntl] fd=%d, F_SETLKW", fd);
+		// 	break;
+		// case F_OFD_SETLKW:
+		// {
+		// 	struct flock *flk = (struct flock *)arg;
+		// 	slog_debug("[POSIX][fcntl] fd=%d, F_OFD_SETLKW", fd);
+		// 	break;
+		// }
+		// case F_OFD_GETLK:
+		// case F_OFD_SETLK:
+		// {
+		// 	slog_debug("[POSIX][fcntl] fd=%d, F_OFD_SETLK", fd);
+		// 	break;
+		// }
+		// default:
+		// 	slog_debug("[POSIX][fcntl] fd=%d, default", fd);
+		// 	break;
+		// }
+		if (!arg)
+			ret = real_fcntl(fd, cmd);
+		else
+			ret = real_fcntl(fd, cmd, arg);
+		slog_debug("[POSIX]. Ending Real 'fcntl', fd=%d, ret=%d, errno=%d:%s", fd, ret, errno, strerror(errno));
+	}
+
+	return ret;
+}
+
+// int _openat(int dirfd, const char *pathname, int flags, ...)
+// {
+// 	real__openat = dlsym(RTLD_NEXT, "_openat");
+// 	int mode = 0;
+
+// 	if (flags & O_CREAT)
+// 	{
+// 		va_list ap;
+// 		va_start(ap, flags);
+// 		mode = va_arg(ap, unsigned);
+// 		va_end(ap);
+// 	}
+
+// 	fprintf(stderr, "Calling _openat %s\n", pathname);
+// 	return real__openat(dirfd, pathname, flags);
 // }

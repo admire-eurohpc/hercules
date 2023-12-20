@@ -53,7 +53,7 @@ WaitForServers() {
 STATUS=$1
 shift
 if [[ $STATUS != "stop" && $STATUS != "start" ]]; then
-    echo "Incorrect argument in STATUS option, usage: hercules <start|stop> [OPTION]"
+    echo "Incorrect argument in STATUS option, usage: hercules <start|stop>"
     exit 1
 fi
 

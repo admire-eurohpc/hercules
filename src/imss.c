@@ -120,7 +120,6 @@ GInsert(int32_t *pos,
 	if (garray_free->len)
 	{
 		// Retrieve a free position from the existing wholes within the vector.
-
 		*pos = g_array_index(garray_free, int32_t, 0);
 		g_array_remove_index(garray_free, 0);
 	}
@@ -128,16 +127,13 @@ GInsert(int32_t *pos,
 	if (*pos == -1)
 	{
 		// Append an element into the corresponding array if there was no space left.
-
 		g_array_append_val(garray_insert, *item);
 		inserted_pos = ++(*max) - 1;
 	}
 	else
 	{
 		// Insert an element in a certain position within the provided garray.
-
 		if (*pos < garray_insert->len)
-
 			g_array_remove_index(garray_insert, *pos);
 
 		g_array_insert_val(garray_insert, *pos, *item);
@@ -178,7 +174,6 @@ Get_fd(int32_t *pos,
 	else
 	{
 		// Insert an element in a certain position within the provided garray.
-
 		if (*pos < garray_insert->len)
 			// g_array_remove_index(garray_insert, *pos);
 
@@ -342,7 +337,7 @@ int32_t stat_init(char *stat_hostfile,
 	if ((stat_nodes = fopen(stat_hostfile, "r+")) == NULL)
 	{
 		char error_msg[500];
-		sprintf(error_msg, "ERRIMSS_OPEN_STATFILE: %s", stat_hostfile);
+		sprintf(error_msg, "ERRHERCULES_OPEN_STATFILE: %s", stat_hostfile);
 		perror(error_msg);
 		return -1;
 	}
@@ -1054,7 +1049,10 @@ int32_t create_dataset(char *dataset_uri,
 		}
 
 		// Add the created struture into the underlying IMSSs.
-		return (GInsert(&datasetd_pos, &datasetd_max_size, (char *)&new_dataset, datasetd, free_datasetd));
+		// return (GInsert(&datasetd_pos, &datasetd_max_size, (char *)&new_dataset, datasetd, free_datasetd));
+		GInsert(&datasetd_pos, &datasetd_max_size, (char *)&new_dataset, datasetd, free_datasetd);
+
+		return -EEXIST;
 	}
 
 	// Save the associated metadata of the current dataset.
@@ -1299,6 +1297,7 @@ int32_t release_dataset(int32_t dataset_id)
 		// Formated dataset uri to be sent to the metadata server.
 		char formated_uri[REQUEST_SIZE];
 		sprintf(formated_uri, "%" PRIu32 " SET 0 %s", stat_ids[m_srv], release_dataset.uri_);
+		slog_debug("[IMSS][release_dataset] formated_uri='%s'", formated_uri);
 
 		if (send_req(ucp_worker_meta, ep, local_addr_meta, local_addr_len_meta, formated_uri) < 0)
 		{
@@ -1307,7 +1306,6 @@ int32_t release_dataset(int32_t dataset_id)
 		}
 
 		// Format update message to be sent to the metadata server.
-
 		uint64_t blocks_written_size = *(release_dataset.num_blocks_written) * sizeof(uint32_t);
 		uint64_t update_msg_size = 8 + blocks_written_size;
 

@@ -2075,8 +2075,8 @@ int imss_create(const char *path, mode_t mode, uint64_t *fh)
 	slog_live("[imss_create] create_dataset((char*)rpath:%s, POLICY:%s,  N_BLKS:%ld, IMSS_BLKSIZE:%d, REPL_FACTOR:%ld, n_servers:%d), res:%d", (char *)rpath, POLICY, N_BLKS, IMSS_BLKSIZE, REPL_FACTOR, n_servers, res);
 	if (res < 0)
 	{
-		fprintf(stderr, "[imss_create]	Cannot create new dataset.\n");
-		slog_error("[imss_create] Cannot create new dataset.\n");
+		// fprintf(stderr, "[imss_create]	Cannot create new dataset.\n");
+		slog_error("[imss_create] Cannot create new dataset, may already exist.\n");
 		free(rpath);
 		return res;
 	}
@@ -2295,16 +2295,18 @@ int imss_utimens(const char *path, const struct timespec tv[2])
 
 int imss_mkdir(const char *path, mode_t mode)
 {
-	char *rpath = (char *)calloc(MAX_PATH, sizeof(char));
+	// char *rpath = (char *)calloc(MAX_PATH, sizeof(char));
 	uint64_t fi;
-	strcpy(rpath, path);
+	int ret = -1;
+	// strcpy(rpath, path);
 	// if (path[strlen(path) - 1] != '/')
 	// {
 	// 	strcat(rpath, "/");
 	// }
-	imss_create(rpath, mode | S_IFDIR, &fi);
-	free(rpath);
-	return 0;
+	// imss_create(rpath, mode | S_IFDIR, &fi);
+	ret = imss_create(path, mode | S_IFDIR, &fi);
+	// free(rpath);
+	return ret;
 }
 
 int imss_symlinkat(char *new_path_1, char *new_path_2, int _case)
