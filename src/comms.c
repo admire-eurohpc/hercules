@@ -567,7 +567,6 @@ int32_t send_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, void *data_str
 		info_buffer = (char *)malloc(msg_size * sizeof(char));
 
 		// Serialize the provided message into the buffer.
-
 		char *offset_pt = info_buffer;
 
 		// Copy the actual structure to the buffer.

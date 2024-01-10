@@ -936,7 +936,7 @@ int close(int fd)
 	if (pathname != NULL)
 	{
 		slog_debug("[POSIX]. Calling Hercules 'close', pathname=%s, fd=%d, errno=%d:%s", pathname, fd, errno, strerror(errno));
-		ret = TIMING(imss_close(pathname), "imss_close", int);
+		ret = imss_close(pathname, fd);
 		slog_debug("[POSIX]. Ending Hercules 'close', pathname=%s, ret=%d, errno=%d:%s\n", pathname, ret, errno, strerror(errno));
 
 		map_fd_update_value(map_fd, pathname, fd, 0);
@@ -1595,7 +1595,7 @@ int fclose(FILE *fp)
 	if (pathname != NULL)
 	{
 		// slog_debug("[POSIX]. Calling Hercules 'fclose', pathname=%s", pathname);
-		ret = imss_close(pathname);
+		ret = imss_close(pathname, fd);
 		// slog_debug("[POSIX]. Ending Hercules 'fclose' pathname=%s\n", pathname);
 		// fprintf(stderr, "Calling Hercules 'fclose', pathname=%s, fd=%d, ret=%d\n", pathname, fd, ret);
 		map_fd_update_value(map_fd, pathname, fd, 0);
@@ -2262,7 +2262,7 @@ int generalOpen(char *new_path, int flags, mode_t mode)
 		if (create_flag == O_CREAT) // if the file does not exist, then we create it.
 		{
 			slog_debug("[POSIX] New file %s, ret=%d", new_path, ret);
-			int err_create = imss_create(new_path, mode, &ret_ds);
+			int err_create = imss_create(new_path, mode, &ret_ds, 1);
 			slog_debug("[POSIX] imss_create(%s, %d, %ld), err_create: %d", new_path, mode, ret_ds, err_create);
 			if (err_create == -EEXIST)
 			{
@@ -3230,18 +3230,20 @@ int unlink(const char *name)
 			ret = imss_unlink(new_path);
 		}
 
+		// unlink error.
 		if (ret < 0)
 		{
 			errno = -ret;
 			ret = -1;
 			slog_error("[POSIX]. Error Hercules 'unlink', errno=%d:%s", errno, strerror(errno));
 		}
-
 		// remove the file descriptor from the local map.
-		if (map_fd_erase_by_pathname(map_fd, new_path) == -1)
+		if (ret == 1)
 		{
-			slog_warn("[POSIX]. Error Hercules no file descriptor found for the pathname=%s", new_path);
-			// fprintf(stderr, "[POSIX][unlink]. Error. No Fd deleted in the local map, new_path=%s\n", new_path);
+			if (map_fd_erase_by_pathname(map_fd, new_path) == -1)
+			{
+				slog_warn("[POSIX]. Hercules Warning, no file descriptor found for the pathname=%s", new_path);
+			}
 		}
 
 		slog_debug("[POSIX]. Ending Hercules 'unlink', type %d, new_path=%s, ret=%d\n", type, new_path, ret);
@@ -3416,14 +3418,17 @@ int remove(const char *name)
 			errno = -ret;
 			ret = -1;
 			slog_error("[POSIX]. Error Hercules 'remove', errno=%d:%s", errno, strerror(errno));
-		}
-
-		// remove the file descriptor from the local map.
-		ret_map = map_fd_erase_by_pathname(map_fd, new_path);
-		if (ret_map == -1)
+		} else if (ret == 0)
 		{
-			slog_error("[POSIX]. Error Hercules no file descriptor found for the pathname=%s", new_path);
-			// fprintf(stderr, "[POSIX][remove]. Error. No Fd deleted in the local map, new_path=%s\n", new_path);
+			slog_debug("[POSIX]. Removing %s from the map", new_path);
+			// remove the file descriptor from the local map.
+			ret_map = map_fd_erase_by_pathname(map_fd, new_path);
+			if (ret_map == -1)
+			{
+				slog_error("[POSIX]. Error Hercules no file descriptor found for the pathname=%s", new_path);
+			}
+		} else {
+			ret = 0;
 		}
 
 		slog_debug("[POSIX]. Ending Hercules 'remove', type %d, new_path=%s, ret=%d, ret_map=%d\n", type, new_path, ret, ret_map);

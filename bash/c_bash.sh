@@ -40,10 +40,14 @@ export LD_PRELOAD=$HERCULES_POSIX_PRELOAD
 # ls /mnt/../mnt/hercules
 # ls ../mnt/hercules/
 
-mkdir /mnt/hercules/output/
-./tests/exe_OPENAT_TEST /mnt/hercules/output/ ../xfile.txt
+# mkdir /mnt/hercules/output/
+# ./tests/exe_OPENAT_TEST /mnt/hercules/output/ ../xfile.txt
 # cat /mnt/hercules/output/xfile.txt
+cp /home/genarog/Documents/UC3M/Codes/UPDATED_IMSS/hercules/bash/tests/data/wfc1.dat /mnt/hercules/
 ls -l /mnt/hercules/
+./tests/exe_Fortran_OPEN-READ_Hercules
+ls -l /mnt/hercules/
+
 
 unset LD_PRELOAD
 

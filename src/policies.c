@@ -90,7 +90,7 @@ find_server(int32_t n_servers,
 	{
 		dataset_info new_dataset;
 		// Dataset metadata request.
-		int32_t stat_dataset_res = stat_dataset(fname, &new_dataset);
+		int32_t stat_dataset_res = stat_dataset(fname, &new_dataset, 0);
 		slog_debug("[find_server] fname=%s, stat_dataset_res=%ld", fname, stat_dataset_res);
 
 		if (stat_dataset_res == 0)
@@ -116,7 +116,7 @@ find_server(int32_t n_servers,
 		uint16_t crc_;
 		dataset_info new_dataset;
 		// Dataset metadata request.
-		int32_t stat_dataset_res = stat_dataset(fname, &new_dataset);
+		int32_t stat_dataset_res = stat_dataset(fname, &new_dataset, 0);
 		if (stat_dataset_res == 0)
 		{
 			crc_ = crc16(fname, strlen(fname));
@@ -162,7 +162,7 @@ find_server(int32_t n_servers,
 	{
 		dataset_info new_dataset;
 		// Dataset metadata request.
-		int32_t stat_dataset_res = stat_dataset(fname, &new_dataset);
+		int32_t stat_dataset_res = stat_dataset(fname, &new_dataset, 0);
 		if (stat_dataset_res == 0)
 		{
 
@@ -214,7 +214,7 @@ find_server(int32_t n_servers,
 	{
 		dataset_info new_dataset;
 		// Dataset metadata request.
-		int32_t stat_dataset_res = stat_dataset(fname, &new_dataset);
+		int32_t stat_dataset_res = stat_dataset(fname, &new_dataset, 0);
 		if (stat_dataset_res == 0)
 		{
 
@@ -238,7 +238,7 @@ find_server(int32_t n_servers,
 	{
 		dataset_info new_dataset;
 		// Dataset metadata request.
-		int32_t stat_dataset_res = stat_dataset(fname, &new_dataset);
+		int32_t stat_dataset_res = stat_dataset(fname, &new_dataset, 0);
 		if (stat_dataset_res == 0)
 		{
 

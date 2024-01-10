@@ -303,6 +303,13 @@ int srv_worker_helper(p_argv *arguments, const char *req)
 			// return 0;
 			break;
 		}
+		case DELETE_OP:
+		{
+			slog_debug("DELETE_OP");
+			slog_debug("Caleaning %s", key);
+			map->cleaning_specific(key);
+			break;
+		}
 		case RENAME_OP:
 		{
 			std::size_t found = key.find(',');
@@ -895,7 +902,6 @@ int srv_worker_helper(p_argv *arguments, const char *req)
 				//  fprintf(stderr, "BLOCK_SIZE=%ld", BLOCK_SIZE);
 				insert_successful = map->put(key, buffer, BLOCK_SIZE);
 
-				
 				// if (!strncmp(key.c_str() + 7, TESTX, strlen(TESTX)))
 				// {
 				// 	// fprintf(stderr, "Compare is equal on the read client, %s-%s\n", my_path, TESTX);
@@ -970,6 +976,7 @@ int srv_worker_helper(p_argv *arguments, const char *req)
 					slog_debug("[srv_worker_thread] File size new %ld old %ld", latest->st_size, old->st_size);
 					latest->st_size = std::max(latest->st_size, old->st_size);
 					slog_debug("[srv_worker_thread] buffer->st_size: %ld", latest->st_size);
+					slog_debug("[srv_worker_thread] old->st_nlink: %ld, new->st_nlink: %ld", old->st_nlink, latest->st_nlink);
 
 					// TODO: make sure this works
 					memcpy((char *)address_ + block_offset, buffer, block_size_recv);
@@ -1007,7 +1014,6 @@ int srv_worker_helper(p_argv *arguments, const char *req)
 	}
 
 	slog_debug("[srv_worker_thread] Terminated data helper");
-
 	return 0;
 }
 
@@ -1153,14 +1159,14 @@ int stat_worker_helper(p_argv *arguments, char *req)
 	/*struct timeval start, end;
 	  long delta_us;*/
 
-	int client_id = 0;
+	int operation = 0;
 	char mode[MODE_SIZE];
 
 	// slog_debug("[STAT WORKER] Waiting for new request.");
 	// Save the request to be served.
 	// recv_data(arguments->ucp_worker, arguments->server_ep, req);
 	// slog_info("[STAT WORKER] Request - '%s'", req);
-	sscanf(req, "%" PRIu32 " %s", &client_id, mode);
+	sscanf(req, "%" PRIu32 " %s", &operation, mode);
 
 	char *req_content = strstr(req, mode);
 	req_content += 4;
@@ -1188,7 +1194,7 @@ int stat_worker_helper(p_argv *arguments, char *req)
 	char *uri_ = raw_msg + number_length + 1;
 	uint64_t block_size_recv = (uint64_t)atoi(number);
 
-	slog_info("[workers][stat_worker_helper] number=%s, number_length=%d uri=%s, block_size_recv=%ld", number, number_length, uri_, block_size_recv);
+	slog_info("[workers][stat_worker_helper] operation=%d, number=%s, number_length=%d uri=%s, block_size_recv=%ld", operation, number, number_length, uri_, block_size_recv);
 
 	// Create an std::string in order to be managed by the map structure.
 	std::string key;
@@ -1197,9 +1203,10 @@ int stat_worker_helper(p_argv *arguments, char *req)
 	// Information associated to the arriving key.
 	void *address_;
 	uint64_t block_size_rtvd;
+	dataset_info *dataset;
+
 	// printf("stat_worker RECV more=%ld, blocksss=%ld",more, block_size_recv);
 	// Differentiate between READ and WRITE operations.
-
 	switch (more)
 	{
 	// No more messages will arrive to the socket.
@@ -1277,6 +1284,23 @@ int stat_worker_helper(p_argv *arguments, char *req)
 				// imss_info * data = (imss_info *) address_;
 				// printf("READ_OP SEND data->type=%c",data->type);
 				// Send the requested block.
+
+				dataset = (dataset_info *)address_;
+				slog_debug("Before dataset->n_open=%d", dataset->n_open);
+				// Checks if the clients wants to open the file.
+				switch (operation)
+				{
+				case 1: // file opened.
+					dataset->n_open += 1;
+					slog_debug("File opened");
+					break;
+
+				default:
+					break;
+				}
+
+				slog_debug("After dataset->n_open=%d", dataset->n_open);
+
 				msg_t m;
 				m.data = address_;
 				m.size = block_size_rtvd;
@@ -1287,10 +1311,8 @@ int stat_worker_helper(p_argv *arguments, char *req)
 					return -1;
 				}
 			}
-
 			break;
 		}
-
 		case RELEASE:
 		{
 			slog_debug("[stat_worker_thread][READ_OP][RELEASE] Deleting endpoint with %" PRIu64 "", arguments->worker_uid);
@@ -1302,18 +1324,54 @@ int stat_worker_helper(p_argv *arguments, char *req)
 		}
 		case DELETE_OP:
 		{
-			int32_t result = map->delete_metadata_stat_worker(key);
-			slog_debug("[stat_worker_thread][READ_OP][DELETE_OP] delete_metadata_stat_worker=%d", result);
-			GTree_delete((char *)key.c_str());
-
-			char release_msg[] = "DELETE\0";
-
-			if (send_data(arguments->ucp_worker, arguments->server_ep, release_msg, RESPONSE_SIZE, arguments->worker_uid) < 0)
+			slog_debug("DELETE_OP");
+			int err = map->get(key, &address_, &block_size_rtvd);
+			slog_debug("[STAT WORKER] map->get (key %s, block_size_rtvd %ld) get res %d", key.c_str(), block_size_rtvd, err);
+			if (err == 0)
 			{
-				perror("ERRIMSS_PUBLISH_DELETEMSG");
-				return -1;
+				// Send the error code block.
+				if (send_dynamic_stream(arguments->ucp_worker, arguments->server_ep, err_code, STRING, arguments->worker_uid) < 0)
+				{
+					perror("ERRIMSS_WORKER_SENDERR");
+					return -1;
+				}
 			}
+			else
+			{
+				dataset = (dataset_info *)address_;
 
+				// Checks if the clients wants to unlink the file.
+				switch (operation)
+				{
+				case 4: // unlink.
+					strncpy(dataset->status, "dest", strlen("dest"));
+					slog_debug("Dataset mark as dest");
+					break;
+				default:
+					break;
+				}
+
+				slog_debug("dataset->n_open=%d, dataset->status=%s", dataset->n_open, dataset->status);
+				char release_msg[10];	  //= "DELETE\0";
+				if (dataset->n_open == 0) // if no more process has the file opened.
+				{
+					int32_t result = map->delete_metadata_stat_worker(key);
+					slog_debug("[stat_worker_thread][READ_OP][DELETE_OP] delete_metadata_stat_worker=%d", result);
+					GTree_delete((char *)key.c_str());
+					strcpy(release_msg, "DELETE");
+				}
+				else
+				{
+					strcpy(release_msg, "NODELETE");
+				}
+
+				// char release_msg[] = "DELETE\0";
+				if (send_data(arguments->ucp_worker, arguments->server_ep, release_msg, RESPONSE_SIZE, arguments->worker_uid) < 0)
+				{
+					perror("ERRIMSS_PUBLISH_DELETEMSG");
+					return -1;
+				}
+			}
 			break;
 		}
 		case RENAME_OP:
@@ -1373,6 +1431,103 @@ int stat_worker_helper(p_argv *arguments, char *req)
 			}
 			break;
 		}
+		case CLOSE_OP:
+		{
+			slog_debug("CLOSE_OP");
+			int err = map->get(key, &address_, &block_size_rtvd);
+			slog_debug("[STAT WORKER] map->get (key %s, block_size_rtvd %ld) get res %d", key.c_str(), block_size_rtvd, err);
+			if (err == 0)
+			{
+				// Send the error code block.
+				if (send_dynamic_stream(arguments->ucp_worker, arguments->server_ep, err_code, STRING, arguments->worker_uid) < 0)
+				{
+					perror("ERRIMSS_WORKER_SENDERR");
+					return -1;
+				}
+			}
+			else
+			{
+				dataset = (dataset_info *)address_;
+				// Checks if the clients wants to open the file.
+				// switch (operation)
+				// {
+				// case 1: // file opened.
+				slog_debug("Before dataset->n_open=%d", dataset->n_open);
+				dataset->n_open -= 1;
+				slog_debug("File closed");
+				// break;
+				// default:
+				// 	break;
+				// }
+				slog_debug("After dataset->n_open=%d, status=%s", dataset->n_open, dataset->status);
+				char release_msg[10]; //= "DELETE\0";
+				if (!strncmp(dataset->status, "dest", strlen("dest")) && dataset->n_open == 0)
+				{
+					slog_debug("Deleting %s", key.c_str());
+					int32_t result = map->delete_metadata_stat_worker(key);
+					slog_debug("[stat_worker_thread][READ_OP][DELETE_OP] delete_metadata_stat_worker=%d", result);
+					GTree_delete((char *)key.c_str());
+					strcpy(release_msg, "DELETE");
+				}
+				else
+				{
+					strcpy(release_msg, "CLOSE");
+				}
+				// int32_t result = map->delete_metadata_stat_worker(key);
+				// slog_debug("[stat_worker_thread][READ_OP][DELETE_OP] delete_metadata_stat_worker=%d", result);
+				// GTree_delete((char *)key.c_str());
+				// char release_msg[] = "CLOSE\0";
+				if (send_data(arguments->ucp_worker, arguments->server_ep, release_msg, RESPONSE_SIZE, arguments->worker_uid) < 0)
+				{
+					perror("ERRIMSS_PUBLISH_DELETEMSG");
+					return -1;
+				}
+			}
+			break;
+		}
+		case OPEN_OP:
+		{
+			slog_debug("OPEN_OP");
+			int err = map->get(key, &address_, &block_size_rtvd);
+			slog_debug("[STAT WORKER] map->get (key %s, block_size_rtvd %ld) get res %d", key.c_str(), block_size_rtvd, err);
+			if (err == 0)
+			{
+				// Send the error code block.
+				if (send_dynamic_stream(arguments->ucp_worker, arguments->server_ep, err_code, STRING, arguments->worker_uid) < 0)
+				{
+					perror("ERRIMSS_WORKER_SENDERR");
+					return -1;
+				}
+			}
+			else
+			{
+				dataset = (dataset_info *)address_;
+				// Checks if the clients wants to open the file.
+				// switch (operation)
+				// {
+				// case 1: // file opened.
+				slog_debug("Before dataset->n_open=%d", dataset->n_open);
+				dataset->n_open += 1;
+				slog_debug("File closed");
+				// break;
+				// default:
+				// 	break;
+				// }
+				slog_debug("After dataset->n_open=%d, status=%s", dataset->n_open, dataset->status);
+				char release_msg[10]; //= "DELETE\0";
+				strcpy(release_msg, "OPEN");
+				// int32_t result = map->delete_metadata_stat_worker(key);
+				// slog_debug("[stat_worker_thread][READ_OP][DELETE_OP] delete_metadata_stat_worker=%d", result);
+				// GTree_delete((char *)key.c_str());
+				// char release_msg[] = "CLOSE\0";
+				if (send_data(arguments->ucp_worker, arguments->server_ep, release_msg, RESPONSE_SIZE, arguments->worker_uid) < 0)
+				{
+					perror("ERRIMSS_PUBLISH_DELETEMSG");
+					return -1;
+				}
+			}
+			break;
+		}
 		default:
 			break;
 		}
@@ -1381,6 +1536,7 @@ int stat_worker_helper(p_argv *arguments, char *req)
 	// More messages will arrive to the socket.
 	case SET_OP:
 	{
+		slog_debug("SET_OP");
 		slog_debug("[STAT WORKER] Creating dataset %s.", key.c_str());
 		pthread_mutex_lock(&mp);
 		// If the record was not already stored, add the block.
@@ -1388,6 +1544,7 @@ int stat_worker_helper(p_argv *arguments, char *req)
 		{
 			pthread_mutex_unlock(&mp);
 			slog_debug("[STAT WORKER] Adding new block %p", &address_);
+
 			// Receive the block into the buffer.
 			void *buffer = (void *)malloc(block_size_recv);
 			slog_debug("[STAT WORKER] Recv dynamic buffer size %ld", block_size_recv);

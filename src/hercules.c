@@ -114,13 +114,13 @@ void * imss_server(void *arg_) {
 	// Initialize communication resources.
 	if (pthread_mutex_init(&buff_size_mut, NULL) != 0)
 	{
-		perror("ERRIMSS_SRVMUT_INIT");
+		perror("HERCULES_ERR_SRVMUT_INIT");
 		pthread_exit(NULL);
 	}
 
 	if (pthread_cond_init(&buff_size_cond, NULL) != 0)
 	{
-		perror("ERRIMSS_SRVCOND_INIT");
+		perror("HERCULES_ERR_SRVCOND_INIT");
 		pthread_exit(NULL);
 	}
 
@@ -143,7 +143,7 @@ void * imss_server(void *arg_) {
 	// Deploy a thread distributing incomming clients among all ports.
 	if (pthread_create(&threads[0], NULL, srv_attached_dispatcher, (void *)&arguments[0]) == -1)
 	{
-		perror("ERRIMSS_SRVDISPATCHER_DEPLOY");
+		perror("HERCULES_ERR_SRVDISPATCHER_DEPLOY");
 		pthread_exit(NULL);
 	}
 
@@ -159,11 +159,11 @@ void * imss_server(void *arg_) {
 
 	pthread_mutex_lock(&backend_buff_mut);
 
-	// Check if there is enough space to create a new IMSS server entity within the backend storage.
+	// Check if there is enough space to create a new HERCULES server entity within the backend storage.
 	printf("%ld > %ld", buffer_KB, backend_buffer_size);
 	if (buffer_KB > backend_buffer_size) // Total storage size include data server . Then must be lagger
 	{
-		perror("ERRIMSS_BUFFTOOBIG. Total storage size overpass when allocating a new imss_server_data_buffer");
+		perror("HERCULES_ERR_BUFFTOOBIG. Total storage size overpass when allocating a new HERCULES data server buffer");
 		pthread_exit(NULL);
 	}
 	backend_buffer_size -= buffer_KB;
@@ -190,34 +190,34 @@ void * imss_server(void *arg_) {
 		// Throw thread with the corresponding function and arguments.
 		if (pthread_create(&threads[i], NULL, srv_worker, (void *)&arguments[i]) == -1)
 		{
-			perror("ERRIMSS_SRVWORKER_DEPLOY");
+			perror("HERCULES_ERR_SRVWORKER_DEPLOY");
 			pthread_exit(NULL);
 		}
 	}
 
 	if (pthread_create(&thread_garbage_collector, NULL, garbage_collector, (void *)buffer_map.get()) == -1)
 	{
-		perror("ERRIMSS_GARBAGECOLLECTOR_DEPLOY");
+		perror("HERCULES_ERR_GARBAGECOLLECTOR_DEPLOY");
 		pthread_exit(NULL);
 	}
 
 	// Wait for the threads to conclude.
 	if (pthread_join(thread_garbage_collector, NULL) != 0)
 	{
-		perror("ERRIMSS_METADISPATCHER_JOIN");
+		perror("HERCULES_ERR_METADISPATCHER_JOIN");
 		pthread_exit(NULL);
 	}
 
 	// Release communication resources.
 	if (pthread_mutex_destroy(&buff_size_mut) != 0)
 	{
-		perror("ERRIMSS_SRVMUT_DESTROY");
+		perror("HERCULES_ERR_SRVMUT_DESTROY");
 		pthread_exit(NULL);
 	}
 
 	if (pthread_cond_destroy(&buff_size_cond) != 0)
 	{
-		perror("ERRIMSS_SRVCOND_DESTROY");
+		perror("HERCULES_ERR_SRVCOND_DESTROY");
 		pthread_exit(NULL);
 	}
 
@@ -226,7 +226,7 @@ void * imss_server(void *arg_) {
 	{
 		if (pthread_join(threads[i], NULL) != 0)
 		{
-			perror("ERRIMSS_SRVTH_JOIN");
+			perror("HERCULES_ERR_SRVTH_JOIN");
 			pthread_exit(NULL);
 		}
 	}
@@ -260,7 +260,7 @@ imss_metadata(void *arg_)
 	printf("%ld > %ld", buffer_KB, backend_buffer_size);
 	if (backend_buffer_size > arg.buffer_size) // Total storage size inclue metadata. Then must be lagger
 	{
-		perror("ERRIMSS_BUFFTOOBIG. Total storage size overpass when allocating a new imss_server_metadata_buffer.");
+		perror("HERCULES_ERR_BUFFTOOBIG. Total storage size overpass when allocating a new HERCULES metadata buffer.");
 		pthread_exit(NULL);
 	}
 	backend_buffer_size -= arg.buffer_size;
@@ -272,7 +272,7 @@ imss_metadata(void *arg_)
 
 	if (pthread_mutex_init(&tree_mut, NULL) != 0)
 	{
-		perror("ERRIMSS_TREEMUT_INIT");
+		perror("HERCULES_ERR_TREEMUT_INIT");
 		pthread_exit(NULL);
 	}
 
@@ -313,7 +313,7 @@ imss_metadata(void *arg_)
 			// Deploy a thread distributing incomming clients among all ports.
 			if (pthread_create(&threads[i], NULL, dispatcher, (void *)&arguments[i]) == -1)
 			{
-				perror("ERRIMSS_METADISPATCHER_DEPLOY");
+				perror("HERCULES_ERR_METADISPATCHER_DEPLOY");
 				pthread_exit(NULL);
 			}
 		}
@@ -327,7 +327,7 @@ imss_metadata(void *arg_)
 			// Throw thread with the corresponding function and arguments.
 			if (pthread_create(&threads[i], NULL, stat_worker, (void *)&arguments[i]) == -1)
 			{
-				perror("ERRIMSS_METAWORKER_DEPLOY");
+				perror("HERCULES_ERR_METAWORKER_DEPLOY");
 				pthread_exit(NULL);
 			}
 		}
@@ -338,7 +338,7 @@ imss_metadata(void *arg_)
 	{
 		if (pthread_join(threads[i], NULL) != 0)
 		{
-			perror("ERRIMSS_METATH_JOIN");
+			perror("HERCULES_ERR_METATH_JOIN");
 			pthread_exit(NULL);
 		}
 	}
@@ -352,7 +352,7 @@ imss_metadata(void *arg_)
 
 	if (pthread_mutex_destroy(&tree_mut) != 0)
 	{
-		perror("ERRIMSS_TREEMUT_DESTROY");
+		perror("HERCULES_ERR_TREEMUT_DESTROY");
 		pthread_exit(NULL);
 	}
 
@@ -377,18 +377,18 @@ hercules_init(uint32_t rank,
 	// Initialize communication resources.
 	if (pthread_mutex_init(&comms_mut, NULL) != 0)
 	{
-		perror("ERRHERCULES_MUT_INIT");
+		perror("HERCULES_ERR_MUT_INIT");
 		return -1;
 	}
 	if (pthread_cond_init(&comms_cond, NULL) != 0)
 	{
-		perror("ERRHERCULES_COND_INIT");
+		perror("HERCULES_ERR_COND_INIT");
 		return -1;
 	}
 
 	if (pthread_mutex_init(&backend_buff_mut, NULL) != 0)
 	{
-		perror("ERRHERCULES_BACKENDMUT_INIT");
+		perror("HERCULES_ERR_BACKENDMUT_INIT");
 		return -1;
 	}
 
@@ -401,7 +401,7 @@ hercules_init(uint32_t rank,
 	// Deploy the previous thread.
 	if (pthread_create(&server_th, NULL, imss_server, (void *)&srv_arg) != 0)
 	{
-		perror("ERRHERCULES_SRVTH_CREATE");
+		perror("HERCULES_ERR_SRVTH_CREATE");
 		return -1;
 	}
 	// Wait until the thread copies the provided arguments.
@@ -433,7 +433,7 @@ hercules_init(uint32_t rank,
 		// Deploy the previous thread.
 		if (pthread_create(&metadata_th, NULL, imss_metadata, (void *)&metadata_arg) != 0)
 		{
-			perror("HERCULES_METATH_CREATE");
+			perror("HERCULES_ERR_METATH_CREATE");
 			return -1;
 		}
 		// Wait until the thread copies the provided arguments.
@@ -450,13 +450,13 @@ hercules_init(uint32_t rank,
 	// Release communication resources.
 	if (pthread_mutex_destroy(&comms_mut) != 0)
 	{
-		perror("ERRHERCULES_MUT_DESTROY");
+		perror("HERCULES_ERR_MUT_DESTROY");
 		return -1;
 	}
 
 	if (pthread_cond_destroy(&comms_cond) != 0)
 	{
-		perror("ERRHERCULES_COND_DESTROY");
+		perror("HERCULES_ERR_COND_DESTROY");
 		return -1;
 	}
 	return 0;
@@ -471,7 +471,7 @@ hercules_release()
 
 	// if ( comm_msg_send(&release_rsc, pub, 0)== -1)
 	//{
-	//	perror("ERRHERCULES_PUBLISH_RELEASEMSG");
+	//	perror("HERCULES_ERR_PUBLISH_RELEASEMSG");
 	//	return -1;
 	// }
 
@@ -480,14 +480,14 @@ hercules_release()
 	{
 		if (pthread_join(metadata_th, NULL) != 0)
 		{
-			perror("ERRHERCULES_SRVTH_JOIN");
+			perror("HERCULES_ERR_SRVTH_JOIN");
 			return -1;
 		}
 	}
 
 	if (pthread_join(server_th, NULL) != 0)
 	{
-		perror("ERRHERCULES_METATH_JOIN");
+		perror("HERCULES_ERR_METATH_JOIN");
 		return -1;
 	}
 
@@ -496,7 +496,7 @@ hercules_release()
 	// Close publisher socket.
 	// if (comm_close(pub) == -1)
 	//{
-	//	perror("ERRHERCULES_PUBSOCK_CLOSE");
+	//	perror("HERCULES_ERR_PUBSOCK_CLOSE");
 	//	return -1;
 	// }
 
@@ -504,7 +504,7 @@ hercules_release()
 
 	if (pthread_mutex_destroy(&backend_buff_mut) != 0)
 	{
-		perror("ERRHERCULES_BACKENDMUT_DESTROY");
+		perror("HERCULES_ERR_BACKENDMUT_DESTROY");
 		return -1;
 	}
 

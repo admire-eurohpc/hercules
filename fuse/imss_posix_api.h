@@ -58,7 +58,7 @@ int imss_vread_2x(const char *path, char *buf, size_t size, off_t offset);
 ssize_t imss_write(const char *path, const void *buf, size_t size, off_t off);
 int imss_split_writev(const char *path, const char *buf, size_t size, off_t off);
 int imss_release(const char *path);
-int imss_create(const char *path, mode_t mode, uint64_t *fh);
+int imss_create(const char *path, mode_t mode, uint64_t *fh, int opened);
 int imss_opendir(const char *path);
 int imss_releasedir(const char *path);
 int imss_flush(const char *path);
@@ -74,6 +74,6 @@ int imss_chmod(const char *path, mode_t mode);
 int imss_chown(const char *path, uid_t uid, gid_t gid);
 int imss_rename(const char *old_path, const char *new_path);
 
-int imss_close(const char *path);
+int imss_close(const char *path, int fd);
 
 #endif

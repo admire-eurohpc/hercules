@@ -6,60 +6,6 @@
 // to manage logs.
 #include "slog.h"
 
-#ifndef __USE_LARGEFILE64
-/* Note stat64 has the same shape as stat for x86-64.  */
-struct stat64
-  {
-    __dev_t st_dev;		/* Device.  */
-# ifdef __x86_64__
-    __ino64_t st_ino;		/* File serial number.  */
-    __nlink_t st_nlink;		/* Link count.  */
-    __mode_t st_mode;		/* File mode.  */
-# else
-    unsigned int __pad1;
-    __ino_t __st_ino;			/* 32bit file serial number.	*/
-    __mode_t st_mode;			/* File mode.  */
-    __nlink_t st_nlink;			/* Link count.  */
-# endif
-    __uid_t st_uid;		/* User ID of the file's owner.	*/
-    __gid_t st_gid;		/* Group ID of the file's group.*/
-# ifdef __x86_64__
-    int __pad0;
-    __dev_t st_rdev;		/* Device number, if device.  */
-    __off_t st_size;		/* Size of file, in bytes.  */
-# else
-    __dev_t st_rdev;			/* Device number, if device.  */
-    unsigned int __pad2;
-    __off64_t st_size;			/* Size of file, in bytes.  */
-# endif
-    __blksize_t st_blksize;	/* Optimal block size for I/O.  */
-    __blkcnt64_t st_blocks;	/* Nr. 512-byte blocks allocated.  */
-# ifdef __USE_XOPEN2K8
-    /* Nanosecond resolution timestamps are stored in a format
-       equivalent to 'struct timespec'.  This is the type used
-       whenever possible but the Unix namespace rules do not allow the
-       identifier 'timespec' to appear in the <sys/stat.h> header.
-       Therefore we have to handle the use of this header in strictly
-       standard-compliant sources special.  */
-    struct timespec st_atim;		/* Time of last access.  */
-    struct timespec st_mtim;		/* Time of last modification.  */
-    struct timespec st_ctim;		/* Time of last status change.  */
-# else
-    __time_t st_atime;			/* Time of last access.  */
-    __syscall_ulong_t st_atimensec;	/* Nscecs of last access.  */
-    __time_t st_mtime;			/* Time of last modification.  */
-    __syscall_ulong_t st_mtimensec;	/* Nsecs of last modification.  */
-    __time_t st_ctime;			/* Time of last status change.  */
-    __syscall_ulong_t st_ctimensec;	/* Nsecs of last status change.  */
-# endif
-# ifdef __x86_64__
-    __syscall_slong_t __glibc_reserved[3];
-# else
-    __ino64_t st_ino;			/* File serial number.		*/
-# endif
-  };
-#endif
-
 // Maximum number of bytes assigned to a dataset or IMSS URI.
 #define URI_ 256
 
@@ -93,7 +39,7 @@ struct stat64
 extern int32_t IMSS_DEBUG;
 
 #ifndef MAX
-#define MAX(x,y) ((x>y)?x:y)
+#define MAX(x, y) ((x > y) ? x : y)
 #endif
 
 #ifdef __DEBUG__
@@ -110,7 +56,7 @@ extern int32_t IMSS_DEBUG;
  * Macro to measure the time spend by function_to_call.
  * char*::print_comment: comment to be concatenated to the elapsed time.
  */
-#ifdef __TIMING__	
+#ifdef __TIMING__
 #define TIMING(function_to_call, print_comment, type)          \
 	({                                                         \
 		clock_t t;                                             \
@@ -122,11 +68,11 @@ extern int32_t IMSS_DEBUG;
 		time_taken = ((double)t) / (CLOCKS_PER_SEC);           \
 		slog_time(",TIMING,%f,%s", time_taken, print_comment); \
 		ret;                                                   \
-	})														   
+	})
 #else
-#define TIMING(function_to_call, print_comment, type) 			\
-	({															\
-		function_to_call;										\
+#define TIMING(function_to_call, print_comment, type) \
+	({                                                \
+		function_to_call;                             \
 	})
 #endif
 // typedef enum {
@@ -206,6 +152,9 @@ typedef struct
 
 	char link[256];
 	int is_link;
+
+	int n_open;		  // how many process has the file open.
+	char status[128]; // delete the dataset when "dest" is set.
 } dataset_info;
 
 //[SPLIT READV] Set of arguments passed to each server thread.
@@ -370,7 +319,7 @@ link           - It is a link.
 RETURNS:	> 0 - Number identifying the created dataset among the client's session.
 -1 - In case of error.
 	 */
-	int32_t create_dataset(char *dataset_uri, char *policy, int32_t num_data_elem, int32_t data_elem_size, int32_t repl_factor, int32_t n_servers, char *link);
+	int32_t create_dataset(char *dataset_uri, char *policy, int32_t num_data_elem, int32_t data_elem_size, int32_t repl_factor, int32_t n_servers, char *link, int opened);
 
 	/* Method creating the required resources in order to READ and WRITE an existing dataset.
 
@@ -379,13 +328,15 @@ RECEIVES:	dataset_uri - URI identifying the dataset to be opened.
 RETURNS:	> 0 - Number identifying the retrieved dataset among the client's session.
 -1 - In case of error.
 	 */
-	int32_t open_dataset(char *dataset_uri);
+	int32_t open_dataset(char *dataset_uri, int opened);
 
 	/*Method deleting a dataset.
 
 RETURNS:	 0 - Release operation took place successfully.
 -1 - In case of error.*/
 	int32_t delete_dataset(const char *dataset_uri);
+
+	int32_t close_dataset(const char *dataset_uri, int fd);
 
 	/*Method writev various datasets.
 
@@ -420,6 +371,10 @@ RETURNS:	 0 - Release operation took place successfully.
 	int32_t rename_dataset_srv_worker(char *old_dataset_uri, char *new_dataset_uri, int32_t dataset_id,
 									  int32_t data_id);
 
+	int32_t delete_dataset_srv_worker(const char *dataset_uri, int32_t dataset_id, int32_t data_id);
+
+	int32_t open_local_dataset(const char *dataset_uri, int opened);
+
 	/* Method releasing the set of resources required to deal with a dataset.
 
 RECEIVES:	dataset_id - Number identifying the concerned dataset among the client's session. This number should have been
@@ -442,7 +397,7 @@ RETURNS:	 0 - No dataset was found with the provided URI.
 
 The current function does not allocate memory.
 	 */
-	int32_t stat_dataset(const char *dataset_uri, dataset_info *dataset_info_);
+	int32_t stat_dataset(const char *dataset_uri, dataset_info *dataset_info_, int opened);
 
 	////Method retrieving a whole dataset parallelizing the procedure.
 	// unsigned char * get_dataset(char * dataset_uri, uint64_t * buff_length);
