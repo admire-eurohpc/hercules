@@ -1545,10 +1545,19 @@ int stat_worker_helper(p_argv *arguments, char *req)
 			pthread_mutex_unlock(&mp);
 			slog_debug("[STAT WORKER] Adding new block %p", &address_);
 
+			slog_debug("[STAT WORKER] Recv dynamic buffer size %ld", block_size_recv);
+			// Get the length of the message to be received.
+			size_t length = -1;
+			length = get_recv_data_length(arguments->ucp_worker, arguments->worker_uid);
+			if (length == 0)
+			{
+				slog_error("HERCULES_ERR_METADATA_WORKER_GET_RECV_DATA_LENGTH_SET_OP");
+				perror("HERCULES_ERR_METADATA_WORKER_GET_RECV_DATA_LENGTH_SET_OP");
+				return -1;
+			}
 			// Receive the block into the buffer.
 			void *buffer = (void *)malloc(block_size_recv);
-			slog_debug("[STAT WORKER] Recv dynamic buffer size %ld", block_size_recv);
-			recv_dynamic_stream(arguments->ucp_worker, arguments->server_ep, buffer, BUFFER, arguments->worker_uid);
+			recv_dynamic_stream(arguments->ucp_worker, arguments->server_ep, buffer, BUFFER, arguments->worker_uid, length);
 			slog_debug("[STAT WORKER] END Recv dynamic");
 
 			int32_t insert_successful = -1;
@@ -1557,8 +1566,8 @@ int stat_worker_helper(p_argv *arguments, char *req)
 
 			if (insert_successful != 0)
 			{
-				slog_error("ERRIMSS_WORKER_MAPPUT");
-				perror("ERRIMSS_WORKER_MAPPUT");
+				slog_error("HERCULES_ERR_METADATA_WORKER_MAPPUT_SET_OP");
+				perror("HERCULES_ERR_METADATA_WORKER_MAPPUT_SET_OP");
 				return -1;
 			}
 
@@ -1570,7 +1579,9 @@ int stat_worker_helper(p_argv *arguments, char *req)
 
 			if (insert_successful == -1)
 			{
-				perror("ERRIMSS_STATWORKER_GTREEINSERT");
+				slog_error("HERCULES_ERR_METADATA_WORKER_GTREEINSERT_SET_OP");
+				perror("HERCULES_ERR_METADATA_WORKER_GTREEINSERT_SET_OP");
+				// perror("ERRIMSS_STATWORKER_GTREEINSERT");
 				return -1;
 			}
 			// Update the pointer.
@@ -1592,7 +1603,9 @@ int stat_worker_helper(p_argv *arguments, char *req)
 				msg_length = get_recv_data_length(arguments->ucp_worker, arguments->worker_uid);
 				if (msg_length < 0)
 				{
-					perror("ERRIMSS_METADATA_LOCAL_DATASET_UPDATE_INVALID_MSG_LENGTH");
+					slog_error("HERCULES_ERR_METADATA_WORKER_GET_RECV_DATA_LENGTH_SET_OP");
+					perror("HERCULES_ERR_METADATA_WORKER_GET_RECV_DATA_LENGTH_SET_OP");
+					// perror("ERRIMSS_METADATA_LOCAL_DATASET_UPDATE_INVALID_MSG_LENGTH");
 					return -1;
 				}
 				// void data_ref[msg_length];
@@ -1601,7 +1614,9 @@ int stat_worker_helper(p_argv *arguments, char *req)
 				msg_length = recv_data(arguments->ucp_worker, arguments->server_ep, data_ref, msg_length, arguments->worker_uid, 0);
 				if (msg_length < 0)
 				{
-					perror("ERRIMSS_METADATA_LOCAL_DATASET_UPDATE_RECV_DATA");
+					slog_error("HERCULES_ERR_METADATA_WORKER_RECV_DATA_SET_OP");
+					perror("HERCULES_ERR_METADATA_WORKER_RECV_DATA_SET_OP");
+					// perror("ERRIMSS_METADATA_LOCAL_DATASET_UPDATE_RECV_DATA");
 					return -1;
 				}
 
@@ -1627,7 +1642,9 @@ int stat_worker_helper(p_argv *arguments, char *req)
 				char answer[] = "UPDATED!\0";
 				if (send_data(arguments->ucp_worker, arguments->server_ep, answer, RESPONSE_SIZE, arguments->worker_uid) < 0)
 				{
-					perror("ERRIMSS_WORKER_DATALOCATANSWER2");
+					slog_error("HERCULES_ERR_METADATA_WORKER_SEND_DATA_SET_OP");
+					perror("HERCULES_ERR_METADATA_WORKER_SEND_DATA_SET_OP");
+					// perror("ERRIMSS_WORKER_DATALOCATANSWER2");
 					return -1;
 				}
 
@@ -1637,12 +1654,21 @@ int stat_worker_helper(p_argv *arguments, char *req)
 			default:
 			{
 				slog_debug("[STAT_WORKER] Updating existing dataset %s.", key.c_str());
+				// Get the length of the message to be received.
+				size_t length = -1;
+				length = get_recv_data_length(arguments->ucp_worker, arguments->worker_uid);
+				if (length == 0)
+				{
+					slog_error("HERCULES_ERR_METADATA_WORKER_GET_RECV_DATA_LENGTH_UPDATE_DATASET");
+					perror("HERCULES_ERR_METADATA_WORKER_GET_RECV_DATA_LENGTH_UPDATE_DATASET");
+					return -1;
+				}
 				// Clear the corresponding memory region.
 				void *buffer = (void *)malloc(block_size_recv);
 				// Receive the block into the buffer.
-				recv_dynamic_stream(arguments->ucp_worker, arguments->server_ep, buffer, BUFFER, arguments->worker_uid);
+				recv_dynamic_stream(arguments->ucp_worker, arguments->server_ep, buffer, BUFFER, arguments->worker_uid, length);
 				free(buffer);
-				slog_debug("[STAT_WORKER] End Updating existing dataset 2222 %s.", key.c_str());
+				slog_debug("[STAT_WORKER] End Updating existing dataset %s.", key.c_str());
 				break;
 			}
 			}

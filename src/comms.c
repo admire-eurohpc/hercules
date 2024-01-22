@@ -608,19 +608,21 @@ int32_t send_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, void *data_str
 }
 
 // Method retrieving a serialized dynamic data structure.
-int32_t recv_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, void *data_struct, int32_t data_type, uint64_t dest)
+int32_t recv_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, void *data_struct, int32_t data_type, uint64_t dest, size_t length)
 {
-	size_t length;
+	// size_t length = -1;
 	// char result[BUFFER_SIZE];
 	char *result; //= (char*)malloc(1024*130);
-
-	// get the length of the message to be received.
-	length = get_recv_data_length(ucp_worker, dest);
-	if (length == 0)
-	{
-		perror("ERRIMSS_RECVDYNAMSTRUCT_RECV");
-		return -1;
-	}
+	// if (length < 0)
+	// {
+	// 	// get the length of the message to be received.
+	// 	length = get_recv_data_length(ucp_worker, dest);
+	// 	if (length == 0)
+	// 	{
+	// 		perror("HERCULES_ERR_GET_RECV_DATA_LENGTH");
+	// 		return -1;
+	// 	}
+	// }
 
 	// reserve memory to the buffer to store the message.
 	result = (char *)malloc(sizeof(char) * length);
@@ -646,7 +648,9 @@ int32_t recv_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, void *data_str
 		if (!strncmp("$ERRIMSS_NO_KEY_AVAIL$", struct_->uri_, 22))
 		{
 			slog_error("[COMM] recv_dynamic_stream end  with error, length=%ld", length);
-			return length;
+			// return length;
+			free(result);
+			return -1;
 		}
 
 		msg_data += sizeof(imss_info);
@@ -667,11 +671,12 @@ int32_t recv_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, void *data_str
 
 	case DATASET_INFO:
 	{
-
 		if (!strncmp("$ERRIMSS_NO_KEY_AVAIL$", msg_data, 22))
 		{
 			slog_error("[COMM] recv_dynamic_stream end  with error, err code 22");
-			return 22;
+			// return 22;
+			free(result);
+			return -1;
 		}
 		slog_info(" \t\t DATASET_INFO %ld", length);
 		dataset_info *struct_ = (dataset_info *)data_struct;
@@ -689,7 +694,6 @@ int32_t recv_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, void *data_str
 		struct_->data_locations = (uint16_t *) malloc(struct_->num_data_elem * sizeof(uint16_t));
 		memcpy(struct_->data_locations, msg_data, (struct_->num_data_elem * sizeof(uint16_t)));
 		}*/
-
 		break;
 	}
 	case STRING:
@@ -703,7 +707,9 @@ int32_t recv_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, void *data_str
 		if (!strncmp("$ERRIMSS_NO_KEY_AVAIL$", msg_data, 22))
 		{
 			slog_error("[COMM] recv_dynamic_stream end with error %ld", length);
-			return length;
+			free(result);
+			// return length;
+			return -1;
 		}
 		memcpy(data_struct, result, length);
 		break;

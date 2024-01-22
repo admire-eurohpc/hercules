@@ -423,17 +423,29 @@ int32_t main(int32_t argc, char **argv)
 			// Send the request.
 			if (send_req(ucp_worker, client_ep, req_addr, req_addr_len, formated_uri) < 0)
 			{
-				perror("ERRIMSS_RLSIMSS_SENDADDR");
+				slog_error("HERCULES_ERR__SEND_REQ");
+				perror("HERCULES_ERR__SEND_REQ");
 				return -1;
 			}
 
 			imss_info imss_info_;
 
-			// Receive the associated structure.
-			ret = recv_dynamic_stream(ucp_worker, client_ep, &imss_info_, BUFFER, attr.worker_uid);
-
-			if (ret >= sizeof(imss_info))
+			// Get the length of the message to be received.
+			size_t length = -1;
+			length = get_recv_data_length(ucp_worker, attr.worker_uid);
+			if (length == 0)
 			{
+				slog_error("HERCULES_ERR__GET_RECV_DATA_LENGTH");
+				perror("HERCULES_ERR__GET_RECV_DATA_LENGTH");
+				return -1;
+			}
+			// Receive the associated structure.
+			ret = recv_dynamic_stream(ucp_worker, client_ep, &imss_info_, BUFFER, attr.worker_uid, length);
+			// fprintf(stderr, "Server %d, ret=%d, sizeof(imss_info)=%ld\n", args.id, ret, sizeof(imss_info));
+			// if (ret > sizeof(imss_info))
+			if (ret != -1)
+			{
+				// fprintf(stderr,"ret > imss_info\n");
 				imss_exists = 1;
 				for (int32_t i = 0; i < imss_info_.num_storages; i++)
 					free(imss_info_.ips[i]);
@@ -443,7 +455,8 @@ int32_t main(int32_t argc, char **argv)
 
 		if (imss_exists)
 		{
-			fprintf(stderr, "ERRIMSS_IMSSURITAKEN");
+			fprintf(stderr, "HERCULES_ERR_SERVER_URITAKEN, ret=%d\n", ret);
+			ready(tmp_file_path, "ERROR");
 			return 0;
 		}
 	}

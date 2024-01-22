@@ -22,6 +22,7 @@ FILE_SIZE_PER_CLIENT=$2
 IOR_PATH=/beegfs/home/javier.garciablas/io500/bin
 #spack load mpich@3.2.1%gcc@=9.4.0
 #spack load openmpi@4.1.5
+#spack load openmpi@4.1.5%gcc@9.4.0 arch=linux-ubuntu20.04-broadwell
 spack load mpich@3.2.1%gcc@=9.4.0 arch=linux-ubuntu20.04-zen
 whereis mpiexec
 # spack load \
@@ -81,7 +82,7 @@ MPIEXEC="/beegfs/home/javier.garciablas/spack/opt/spack/linux-ubuntu20.04-zen/gc
 
 set -x
 
-export LD_LIBRARY_PATH=/beegfs/home/javier.garciablas/hercules/build/tools/libhercules_posix.so:$LD_LIBRARY_PATH
+#export LD_LIBRARY_PATH=/beegfs/home/javier.garciablas/hercules/build/tools/libhercules_posix.so:$LD_LIBRARY_PATH
 export LD_PRELOAD=$HERCULES_POSIX_PRELOAD
 
 #LD_PRELOAD=$HERCULES_POSIX_PRELOAD source bash
@@ -93,18 +94,16 @@ export LD_PRELOAD=$HERCULES_POSIX_PRELOAD
 
 #LD_PRELOAD=/beegfs/home/javier.garciablas/hercules/build/tools/libhercules_posix.so LD_DEBUG=symbols,libs LD_DEBUG_OUTPUT=symbol_redirect.txt 
 
-
 ####### FIX COPY A FILE TWICE DON'T OVERWRITE.
 # LD_PRELOAD=/beegfs/home/javier.garciablas/hercules/build/tools/libhercules_posix.so cp hostfile /mnt/hercules/hercules_hostfile
 # LD_PRELOAD=/beegfs/home/javier.garciablas/hercules/build/tools/libhercules_posix.so LD_DEBUG=symbols,libs LD_DEBUG_OUTPUT=symbol_redirect.txt cp hostfile /mnt/hercules/hercules_hostfile
 #######
 
-mkdir /mnt/hercules/directory/
+#mkdir /mnt/hercules/directory/
 #touch /mnt/hercules/file.txt
 #realpath /mnt/hercules/directory/../file.txt
 # touch /mnt/hercules/directory/../file.txt
 # ls -l /mnt/hercules/
-
 
 # cp hostfile /mnt/hercules/hercules_hostfile 
 # cp hostfile /mnt/hercules/hercules_hostfile 
@@ -114,6 +113,13 @@ mkdir /mnt/hercules/directory/
 
 #cp hostfile hostfilex2
 #cp hostfile hostfilex2
+
+cp /beegfs/home/javier.garciablas/hercules/bash/tests/data/wfc1.dat /mnt/hercules/wfc1.dat
+~/hercules/bash/tests/exe_OPEN-READ_Hercules
+
+
+
+#strace -o strace.txt  ~/hercules/bash/tests/exe_OPEN-READ_Beegfs
 
 unset LD_PRELOAD
 

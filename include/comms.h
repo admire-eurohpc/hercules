@@ -162,7 +162,7 @@ void ep_close(ucp_worker_h ucp_worker, ucp_ep_h ep, uint64_t flags);
 int32_t send_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, void * data_struct, int32_t data_type, uint64_t from);
 
 //Method retrieving a serialized dynamic data structure.
-int32_t recv_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, void * data_struct, int32_t data_type, uint64_t dest);
+int32_t recv_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, void * data_struct, int32_t data_type, uint64_t dest, size_t length);
 
 int connect_common(const char *server, uint64_t server_port, sa_family_t af);
 

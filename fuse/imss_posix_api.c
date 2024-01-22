@@ -194,8 +194,10 @@ int imss_refresh(const char *path)
 	ret = get_data(ds, 0, aux);
 	if (ret < 0)
 	{
+		char err_msg[128];
+		sprintf(err_msg, "HERCULES_ERR_REFRESH: %s", path);
 		slog_error("[imss_refresh] HERCULES_ERR_REFRESH, error getting data");
-		perror("HERCULES_ERR_REFRESH");
+		perror(err_msg);
 		return -1;
 	}
 	stats = (struct stat *)aux;
@@ -240,10 +242,10 @@ int imss_getattr(const char *path, struct stat *stbuf)
 
 	// slog_debug("[imss_getattr], IMSS_DATA_BSIZE=%ld, st_blksize=%ld", IMSS_DATA_BSIZE, stbuf->st_blksize);
 	// printf("imss_getattr=%s\n",imss_path);
-	slog_debug("[imss_getattr] before get_type");
+	slog_debug("[imss_getattr] before get_type, imss_path=%s", imss_path);
 	uint32_t type = get_type(imss_path);
-	slog_live("[imss_getattr] get_type(%s):%ld", imss_path, type);
-	if (type == 0)
+	slog_live("[imss_getattr] after get_type(%s):%ld", imss_path, type);
+	if (type == 0) // to check!
 	{
 		strcat(imss_path, "/");
 		// printf("imss_getattr=%s\n",imss_path);
@@ -339,7 +341,7 @@ int imss_getattr(const char *path, struct stat *stbuf)
 
 		return 0;
 	default:
-		return -1;
+		return -ENOENT; // to check!
 	}
 }
 
