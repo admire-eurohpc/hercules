@@ -187,7 +187,7 @@ size_t send_req(ucp_worker_h ucp_worker, ucp_ep_h ep, ucp_address_t *addr, size_
 	msg_len = sizeof(uint64_t) + REQUEST_SIZE + addr_len;
 	// slog_info("[COMM][send_req] msg_len=%ld", msg_len);
 	msg = (msg_req_t *)malloc(msg_len);
-	slog_info("[COMM][send_req] msg_len=%ld, after malloc", msg_len);
+	slog_info("[COMM][send_req] msg_len=%ld, after malloc, errno=%d:%s", msg_len, errno, strerror(errno));
 	//	msg = (msg_req_t *)send_buffer;
 
 	msg->addr_len = addr_len; // imprimir la long de adress_len.
@@ -224,6 +224,7 @@ size_t send_req(ucp_worker_h ucp_worker, ucp_ep_h ep, ucp_address_t *addr, size_
 	}
 
 	free(msg);
+	slog_info("[COMM][send_req] errno=%d:%s", errno, strerror(errno));
 	return msg_len;
 }
 

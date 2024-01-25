@@ -284,8 +284,7 @@ int32_t main(int32_t argc, char **argv)
 	if (args.type == TYPE_DATA_SERVER)
 	{
 		args.stat_host = argv[3];
-		slog_debug("imss_uri = %s stat-host = %s stat-port = %" PRId64 " num-servers = %" PRId64 " deploy-hostfile = %s block-size = %" PRIu64 " (kB) storage-size = %" PRIu64 " (gB)",
-				   args.imss_uri, args.stat_host, args.stat_port, args.num_servers, args.deploy_hostfile, args.block_size, args.storage_size);
+		slog_debug("imss_uri = %s stat-host = %s stat-port = %" PRId64 " num-servers = %" PRId64 " deploy-hostfile = %s block-size = %" PRIu64 " (kB) storage-size = %" PRIu64 " (gB)", args.imss_uri, args.stat_host, args.stat_port, args.num_servers, args.deploy_hostfile, args.block_size, args.storage_size);
 		// bind port number.
 		bind_port = args.port;
 	}
@@ -378,10 +377,10 @@ int32_t main(int32_t argc, char **argv)
 
 			char request[REQUEST_SIZE];
 			sprintf(request, "%" PRIu32 " GET %s", id, "MAIN!QUERRY");
-
+			slog_debug("[main] Request - %s", request);
 			if (send(oob_sock, request, REQUEST_SIZE, 0) < 0)
 			{
-				perror("ERRIMSS_STAT_HELLO");
+				perror("HERCULES_ERR_STAT_HELLO");
 				return -1;
 			}
 
@@ -403,10 +402,6 @@ int32_t main(int32_t argc, char **argv)
 
 			status = ucp_ep_create(ucp_worker, &ep_params, &client_ep);
 
-			// Formated imss uri to be sent to the metadata server.
-			char formated_uri[REQUEST_SIZE];
-			sprintf(formated_uri, "%" PRIu32 " GET 0 %s", id, imss_uri);
-
 			// status = ucp_worker_get_address(ucp_worker, &req_addr, &req_addr_len);
 
 			ucp_worker_attr_t worker_attr;
@@ -420,6 +415,10 @@ int32_t main(int32_t argc, char **argv)
 			ucp_worker_address_query(req_addr, &attr);
 			slog_debug("[srv_worker_thread] Server UID %" PRIu64 ".", attr.worker_uid);
 
+			// Formated imss uri to be sent to the metadata server.
+			char formated_uri[REQUEST_SIZE];
+			sprintf(formated_uri, "%" PRIu32 " GET 0 %s", id, imss_uri);
+			slog_debug("[main] Request - %s", formated_uri);
 			// Send the request.
 			if (send_req(ucp_worker, client_ep, req_addr, req_addr_len, formated_uri) < 0)
 			{
@@ -455,7 +454,8 @@ int32_t main(int32_t argc, char **argv)
 
 		if (imss_exists)
 		{
-			fprintf(stderr, "HERCULES_ERR_SERVER_URITAKEN, ret=%d\n", ret);
+			slog_error("HERCULES_ERR_SERVER_URITAKEN, ret=%d", ret);
+			perror("HERCULES_ERR_SERVER_URITAKEN");
 			ready(tmp_file_path, "ERROR");
 			return 0;
 		}
@@ -613,7 +613,7 @@ int32_t main(int32_t argc, char **argv)
 
 		if ((svr_nodes = fopen(deployfile, "r+")) == NULL)
 		{
-			perror("ERRIMSS_DEPLOYFILE_OPEN");
+			perror("HERCULES_ERR_DEPLOYFILE_OPEN");
 			return -1;
 		}
 
@@ -638,7 +638,7 @@ int32_t main(int32_t argc, char **argv)
 		// Close the file.
 		if (fclose(svr_nodes) != 0)
 		{
-			perror("ERRIMSS_DEPLOYFILE_CLOSE");
+			perror("HERCULES_ERR_DEPLOYFILE_CLOSE");
 			return -1;
 		}
 
@@ -646,9 +646,8 @@ int32_t main(int32_t argc, char **argv)
 		uint32_t id = CLOSE_EP;
 		// Send the created structure to the metadata server.
 		sprintf(key_plus_size, "%" PRIu32 " SET %lu %s", id, (sizeof(imss_info) + my_imss.num_storages * LINE_LENGTH), my_imss.uri_);
-
 		// status = ucp_ep_create(ucp_worker, &ep_params, &client_ep);
-
+		slog_debug("[main] Request - %s", key_plus_size);
 		if (send_req(ucp_worker, client_ep, req_addr, req_addr_len, key_plus_size) < 0)
 		{
 			perror("ERRIMSS_RLSIMSS_SENDADDR");

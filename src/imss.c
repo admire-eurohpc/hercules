@@ -772,15 +772,16 @@ int32_t open_imss(char *imss_uri)
 
 	int32_t not_initialized = 0;
 
-	slog_debug("[IMSS][open_imss] starting function, imss_uri=%s", imss_uri);
+	slog_live("[IMSS][open_imss] starting function, imss_uri=%s", imss_uri);
 	// Retrieve the actual information from the metadata server.
 	int32_t imss_existance = stat_imss(imss_uri, &new_imss.info);
+	slog_live("[IMSS][open_imss] imss_uri=%s, imss_existance=%d", imss_uri, imss_existance);
 	// Check if the requested IMSS did not exist or was already stored in the local vector.
 	switch (imss_existance)
 	{
 	case 0:
 	{
-		slog_fatal("ERRIMSS_OPENIMSS_NOTEXISTS");
+		slog_fatal("HERCULES_ERR_OPEN_IMSS_NOT_EXISTS");
 		return -1;
 	}
 	case 2:
@@ -804,10 +805,9 @@ int32_t open_imss(char *imss_uri)
 	}
 
 	new_imss.conns.peer_addr = (ucp_address_t **)malloc(new_imss.info.num_storages * sizeof(ucp_address_t *));
-	slog_debug("new_imss.info.num_storages=%ld", new_imss.info.num_storages);
+	slog_debug("[IMSS][open_imss] new_imss.info.num_storages=%ld", new_imss.info.num_storages);
 	new_imss.conns.eps = (ucp_ep_h *)malloc(new_imss.info.num_storages * sizeof(ucp_ep_h));
 	new_imss.conns.id = (uint32_t *)malloc(new_imss.info.num_storages * sizeof(uint32_t));
-
 	new_imss.conns.matching_server = -1;
 
 	status = ucp_worker_get_address(ucp_worker_data, &local_addr_data, &local_addr_len_data);
@@ -817,7 +817,6 @@ int32_t open_imss(char *imss_uri)
 	local_data_uid = attr.worker_uid;
 
 	NUM_DATA_SERVERS = new_imss.info.num_storages;
-
 	// Connect to the requested IMSS.
 	for (int32_t i = 0; i < new_imss.info.num_storages; i++)
 	{
@@ -829,8 +828,7 @@ int32_t open_imss(char *imss_uri)
 
 		char request[REQUEST_SIZE];
 		sprintf(request, "%" PRIu32 " GET %s", process_rank, "HELLO!JOIN");
-
-		slog_debug("[open_imss] ip_address=%s:%d", new_imss.info.ips[i], new_imss.info.conn_port);
+		slog_live("[open_imss] ip_address=%s:%d", new_imss.info.ips[i], new_imss.info.conn_port);
 		// fprintf(stderr, "[open_imss] ip_address=%s:%d\n", new_imss.info.ips[i], new_imss.info.conn_port);
 
 		if (send(oob_sock, request, REQUEST_SIZE, 0) < 0)
@@ -941,6 +939,7 @@ int32_t stat_imss(char *imss_uri, imss_info *imss_info_)
 	// slog_debug("[IMSS][stat_imss] imss_uri=%s", imss_uri);
 	if ((imss_found_in = find_imss(imss_uri, &searched_imss)) != -1)
 	{
+		slog_live("[IMSS][stat_imss] imss_found_in=%d", imss_found_in);
 		memcpy(imss_info_, &searched_imss.info, sizeof(imss_info));
 		imss_info_->ips = (char **)malloc((imss_info_->num_storages) * sizeof(char *));
 		for (int32_t i = 0; i < imss_info_->num_storages; i++)
@@ -1220,9 +1219,11 @@ int32_t open_dataset(char *dataset_uri, int opened)
 	// Check if the IMSS storing the dataset exists within the clients session.
 	if ((associated_imss_indx = imss_check(dataset_uri)) == -1)
 	{
-		slog_fatal("ERRIMSS_OPENDATA_IMSSNOTFOUND");
+		slog_fatal("HERCULES_ERR_OPEN_DATASET_NOT_FOUND");
 		return -1;
 	}
+
+	slog_live("[IMSS][open_dataset] associated_imss_indx=%d", associated_imss_indx);
 
 	imss associated_imss;
 	associated_imss = g_array_index(imssd, imss, associated_imss_indx);
@@ -1232,7 +1233,7 @@ int32_t open_dataset(char *dataset_uri, int opened)
 	int32_t stat_dataset_res = stat_dataset(dataset_uri, &new_dataset, opened);
 	if (stat_dataset_res == 0)
 	{
-		slog_warn("HERCULES_ERR_OPENDATASET_NOTEXIST_1: %s, dataset does not exist", dataset_uri);
+		slog_warn("HERCULES_ERR_OPEN_DATASET_NOT_EXIST_1: %s, dataset does not exist", dataset_uri);
 		return -1;
 	}
 
@@ -1265,17 +1266,16 @@ int32_t open_dataset(char *dataset_uri, int opened)
 	case 0:
 	{
 		// slog_fatal("HERCULES_ERR_OPENDATASET_NOTEXISTS: %s", dataset_uri);
-		slog_warn("HERCULES_ERR_OPENDATASET_NOTEXIST_2: %s, dataset does not exist", dataset_uri);
+		slog_warn("HERCULES_ERR_OPEN_DATASET_NOT_EXIST_2: %s, dataset does not exist", dataset_uri);
 		return -1;
 	}
 	case 2:
 	{
 		if (new_dataset.local_conn != -2)
 		{
-			slog_fatal("ERRIMSS_OPENDATASET_ALREADYSTORED");
+			slog_fatal("HERCULES_ERR_OPEN_DATASET_ALREADY_STORED");
 			return -1;
 		}
-
 		not_initialized = 1;
 
 		break;
@@ -1698,34 +1698,43 @@ int32_t open_local_dataset(const char *dataset_uri, int opened)
 	msg_len = send_req(ucp_worker_meta, ep, local_addr_meta, local_addr_len_meta, formated_uri);
 	if (msg_len < 0)
 	{
-		perror("HERCULES_ERR_STATDATASET_SENDREQ");
-		slog_error("HERCULES_ERR_STATDATASET_SENDREQ");
+		perror("HERCULES_ERR_STAT_DATASET_SEND_REQ");
+		slog_error("HERCULES_ERR_STAT_DATASET_SEND_REQ");
 		return -1;
 	}
 
-	int msg_length;
+	size_t msg_length = -1;
+	slog_live("[open_local_dataset] before get_recv_data_length, errno=%d:%s", errno, strerror(errno));
 	msg_length = get_recv_data_length(ucp_worker_meta, local_meta_uid);
+	slog_live("[open_local_dataset] after get_recv_data_length, msg_length=%ld, errno=%d:%s", msg_length, errno, strerror(errno));
 	if (msg_length < 0)
 	{
 		perror("HERCULES_ERR__OPEN_LOCAL_DATASET_INVALID_MSG_LENGTH");
 		return -1;
 	}
 
-	char result[msg_length];
+	// char result[msg_length];
+	slog_live("[open_local_dataset] before malloc, errno=%d:%s", errno, strerror(errno));
+	char *result = (char *)malloc(msg_length * sizeof(char));
+	slog_live("[open_local_dataset] after malloc, errno=%d:%s", errno, strerror(errno));
 	msg_length = recv_data(ucp_worker_meta, ep, result, msg_length, local_meta_uid, 0);
 	if (msg_length < 0)
 	{
+		slog_error("HERCULES_ERR__OPEN_LOCAL_DATASET_RECV_DATA");
 		perror("HERCULES_ERR__OPEN_LOCAL_DATASET_RECV_DATA");
+		free(result);
 		return -1;
 	}
 
-	slog_debug("[open_local_dataset] result=%s, msg_length=%d", result, msg_length);
+	slog_debug("[open_local_dataset] result=%s, msg_length=%d, errno=%d:%s", result, msg_length, errno, strerror(errno));
 	if (!strncmp(result, "OPEN", strlen("OPEN")))
 	{
 		slog_debug("[open_local_dataset] dataset opened = %s", dataset_uri);
+		free(result);
 		return 1;
 	}
 
+	free(result);
 	return 0;
 }
 
@@ -1735,7 +1744,7 @@ int32_t stat_dataset(const char *dataset_uri, dataset_info *dataset_info_, int o
 	int ret = 0;
 	ucp_ep_h ep;
 
-	slog_live("[IMSS][stat_dataset] opened=%d", opened);
+	slog_live("[IMSS][stat_dataset] opened=%d, datasetd->len=%d", opened, datasetd->len);
 
 	// Search for the requested dataset in the local vector.
 	for (int32_t i = 0; i < datasetd->len; i++)
@@ -1816,7 +1825,7 @@ int32_t get_data_location(int32_t dataset_id, int32_t data_id, int32_t op_type)
 		// Retrieve the corresponding dataset_info structure and the associated IMSS.
 		curr_dataset = g_array_index(datasetd, dataset_info, dataset_id);
 		curr_imss = g_array_index(imssd, imss, curr_dataset.imss_d);
-		slog_debug("[IMSS][get_data_location] curr_dataset.uri=%s, curr_dataset.imss_d=%d, curr_dataset.repl_factor=%d, dataset_id=%d", curr_dataset.uri_, curr_dataset.imss_d, curr_dataset.repl_factor, dataset_id);
+		slog_debug("[IMSS][get_data_location] curr_dataset.uri=%s, curr_dataset.imss_d=%d, curr_dataset.repl_factor=%d, dataset_id=%d, dataset->policy=%s", curr_dataset.uri_, curr_dataset.imss_d, curr_dataset.repl_factor, dataset_id, curr_dataset.policy);
 
 		// Set the corresponding.
 		if (set_policy(&curr_dataset) == -1)

@@ -117,6 +117,38 @@ const char *TESTX = "p4x2.save/wfc1.dat";
    TRM = 3;
  */
 
+void print_file_type(struct stat s)
+{
+	slog_live("File type:");
+	switch (s.st_mode & S_IFMT)
+	{
+	case S_IFBLK:
+		slog_live("\tblock device");
+		break;
+	case S_IFCHR:
+		slog_live("\tcharacter device");
+		break;
+	case S_IFDIR:
+		slog_live("\tdirectory");
+		break;
+	case S_IFIFO:
+		slog_live("\tFIFO/pipe");
+		break;
+	case S_IFLNK:
+		slog_live("\tsymlink");
+		break;
+	case S_IFREG:
+		slog_live("\tregular file");
+		break;
+	case S_IFSOCK:
+		slog_live("\tsocket");
+		break;
+	default:
+		slog_live("unknown?");
+		break;
+	}
+}
+
 /*
    -----------	Auxiliar Functions -----------
  */
@@ -126,6 +158,7 @@ void fd_lookup(const char *path, int *fd, struct stat *s, char **aux)
 	// pthread_mutex_lock(&lock_file);
 	*fd = -1;
 	int found = map_search(map, path, fd, s, aux);
+	slog_live("[imss_posix_api] Path=%s, found=%d", path, found);
 	if (!found)
 	{
 		fprintf(stderr, "File not found, %s\n", path);
@@ -268,7 +301,7 @@ int imss_getattr(const char *path, struct stat *stbuf)
 			slog_live("[imss_getattr] n_ent=%d", n_ent);
 			stbuf->st_size = 4;
 			stbuf->st_nlink = 1;
-			stbuf->st_mode = S_IFDIR | 0755;
+			stbuf->st_mode = S_IFDIR | 0775;
 			// Free resources
 			// free(buffer);
 			free(refs);
@@ -334,10 +367,11 @@ int imss_getattr(const char *path, struct stat *stbuf)
 			slog_error("[imss_getattr] Cannot get dataset metadata");
 			return -ENOENT;
 		}
-		slog_debug("[imss_getattr] path=%s, imss_path=%s, file descriptor=%d, file size=%ld", path, imss_path, fd, stbuf->st_size);
+		// stbuf->st_blocks = ceil((double)stbuf->st_size / IMSS_BLKSIZE);
+		stbuf->st_blocks = ceil((double)stbuf->st_size/512.0); // Number 512-byte blocks allocated.
+		slog_debug("[imss_getattr] path=%s, imss_path=%s, file descriptor=%d, file size=%ld, stbuf->st_blocks=%lu", path, imss_path, fd, stbuf->st_size, stbuf->st_blocks);
+		print_file_type(*stbuf);
 
-		// stbuf->st_blocks = ceil((double)stbuf->st_size/512.0);
-		stbuf->st_blocks = ceil((double)stbuf->st_size / IMSS_BLKSIZE);
 
 		return 0;
 	default:
@@ -404,13 +438,13 @@ int imss_readdir(const char *path, void *buf, posix_fill_dir_t filler, off_t off
 	{
 		if (i == 0)
 		{
-			slog_debug("[IMSS][imss_readdir] . y ..\n");
+			slog_debug("[IMSS][imss_readdir] . y ..");
 			filler(buf, "..", NULL, 0);
 			filler(buf, ".", NULL, 0);
 		}
 		else
 		{
-			slog_debug("[IMSS][imss_readdir] %s\n", refs[i]);
+			slog_debug("[IMSS][imss_readdir] %s", refs[i]);
 			// the stbuf is not used after here.
 			// struct stat stbuf;
 			// int error = imss_getattr(refs[i] + 6, &stbuf);
@@ -472,11 +506,13 @@ int imss_open(char *path, uint64_t *fh)
 	char *aux;
 	// Look for the 'file descriptor' of 'imss_path' in the local map.
 	fd_lookup(imss_path, &fd, &stats, &aux);
-	slog_info("[FUSE][imss_posix_api] fd looked up=%d", fd);
+	slog_info("[FUSE][imss_posix_api] imss_path=%s, fd looked up=%d, errno=%d:%s", imss_path, fd, errno, strerror(errno));
 	if (fd >= 0)
 	{
-		open_local_dataset(imss_path, 1);
+		print_file_type(stats);
+		ret = open_local_dataset(imss_path, 1);
 		file_desc = fd;
+		slog_live("[FUSE][imss_posix_api] open_local_dataset, ret=%d, file_desc=%d", ret, file_desc);
 	}
 	else if (fd == -2)
 	{
@@ -487,7 +523,7 @@ int imss_open(char *path, uint64_t *fh)
 		file_desc = open_dataset(imss_path, 1);
 		if (file_desc < 0)
 		{ // dataset was not found.
-			slog_debug("[FUSE][imss_posix_api] dataset was not found, imss_path=%s", imss_path);
+			slog_warn("[FUSE][imss_posix_api] dataset was not found, imss_path=%s", imss_path);
 			*fh = file_desc;
 			// errno = 2;
 			// path = imss_path;
@@ -496,7 +532,7 @@ int imss_open(char *path, uint64_t *fh)
 		}
 		aux = (char *)malloc(IMSS_DATA_BSIZE);
 		ret = get_data(file_desc, 0, (char *)aux);
-		slog_debug("[imss_open] ret=%ld", ret);
+		slog_debug("[imss_open] ret=%ld, errno=%d:%s", ret, errno, strerror(errno));
 		memcpy(&stats, aux, sizeof(struct stat));
 		pthread_mutex_lock(&lock_file);
 		map_put(map, imss_path, file_desc, stats, aux);
@@ -2017,7 +2053,7 @@ int imss_release(const char *path)
 	// Updates the size of the file in the block 0.
 	if (set_data(ds, 0, head, 0, 0) < 0)
 	{
-		fprintf(stderr, "HERCULES_ERR_WRITTING_BLOCK");
+		fprintf(stderr, "HERCULES_ERR_WRITTING_BLOCK\n");
 		slog_error("HERCULES_ERR_WRITTING_BLOCK");
 		pthread_mutex_unlock(&lock);
 		free(rpath);
@@ -2047,9 +2083,9 @@ int imss_close(const char *path, int fd)
 	// When we remove it pass from 3.45 sec to 0.008505 sec.
 	if (ret)
 	{
-			imss_refresh(path);
+		imss_refresh(path);
 	}
-	
+
 	slog_debug("[imss_close] Ending imss_refresh");
 
 	// t = clock() - t;
