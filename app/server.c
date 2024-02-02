@@ -284,19 +284,19 @@ int32_t main(int32_t argc, char **argv)
 	if (args.type == TYPE_DATA_SERVER)
 	{
 		args.stat_host = argv[3];
-		slog_debug("imss_uri = %s stat-host = %s stat-port = %" PRId64 " num-servers = %" PRId64 " deploy-hostfile = %s block-size = %" PRIu64 " (kB) storage-size = %" PRIu64 " (gB)", args.imss_uri, args.stat_host, args.stat_port, args.num_servers, args.deploy_hostfile, args.block_size, args.storage_size);
+		slog_debug("imss_uri = %s stat-host = %s stat-port = %" PRId64 " num-servers = %" PRId64 " deploy-hostfile = %s block-size = %" PRIu64 " (kB) storage-size = %" PRIu64 " (gB, errno=%d:%s", args.imss_uri, args.stat_host, args.stat_port, args.num_servers, args.deploy_hostfile, args.block_size, args.storage_size, errno, strerror(errno));
 		// bind port number.
 		bind_port = args.port;
 	}
 	else
 	{
-		slog_debug("[CLI PARAMS] type = %c port = %" PRId64 " bufsize = %" PRId64 " ", args.type, args.stat_port, args.bufsize);
+		slog_debug("[CLI PARAMS] type = %c port = %" PRId64 " bufsize = %" PRId64 "", args.type, args.stat_port, args.bufsize);
 		// slog_debug("stat-logfile = %s", args.stat_logfile);
 		// bind port number.
 		bind_port = args.stat_port;
 	}
 
-	status = ucp_config_read(NULL, NULL, &config);
+	// status = ucp_config_read(NULL, NULL, &config);
 
 	// buffer size provided
 	buffer_size = args.bufsize;
@@ -304,10 +304,12 @@ int32_t main(int32_t argc, char **argv)
 	imss_uri = (char *)calloc(32, sizeof(char));
 
 	/* Initialize the UCX required objects */
+	slog_info("Before init context");
 	ret = init_context(&ucp_context, config, &ucp_worker, CLIENT_SERVER_SEND_RECV_STREAM);
+	slog_info("After init context");
 	if (ret != 0)
 	{
-		perror("ERRIMSS_INIT_CONTEXT");
+		perror("HERCULES_ERR_INIT_CONTEXT");
 		return -1;
 	}
 
@@ -326,6 +328,7 @@ int32_t main(int32_t argc, char **argv)
 	//  fprintf(stderr, "max_storage_size=%ld\n", max_storage_size);
 
 	// init memory pool
+	slog_info("[main] before sts queue create");
 	mem_pool = StsQueue.create();
 	// figure out how many blocks we need and allocate them
 	num_blocks = max_storage_size / (args.block_size * KB);
@@ -377,7 +380,7 @@ int32_t main(int32_t argc, char **argv)
 
 			char request[REQUEST_SIZE];
 			sprintf(request, "%" PRIu32 " GET %s", id, "MAIN!QUERRY");
-			slog_debug("[main] Request - %s", request);
+			slog_debug("[main] Request - %s, errno=%d:%s", request, errno, strerror(errno));
 			if (send(oob_sock, request, REQUEST_SIZE, 0) < 0)
 			{
 				perror("HERCULES_ERR_STAT_HELLO");
@@ -418,7 +421,7 @@ int32_t main(int32_t argc, char **argv)
 			// Formated imss uri to be sent to the metadata server.
 			char formated_uri[REQUEST_SIZE];
 			sprintf(formated_uri, "%" PRIu32 " GET 0 %s", id, imss_uri);
-			slog_debug("[main] Request - %s", formated_uri);
+			slog_debug("[main] Request - %s, errno=%d:%s", formated_uri, errno, strerror(errno));
 			// Send the request.
 			if (send_req(ucp_worker, client_ep, req_addr, req_addr_len, formated_uri) < 0)
 			{
@@ -647,7 +650,7 @@ int32_t main(int32_t argc, char **argv)
 		// Send the created structure to the metadata server.
 		sprintf(key_plus_size, "%" PRIu32 " SET %lu %s", id, (sizeof(imss_info) + my_imss.num_storages * LINE_LENGTH), my_imss.uri_);
 		// status = ucp_ep_create(ucp_worker, &ep_params, &client_ep);
-		slog_debug("[main] Request - %s", key_plus_size);
+		slog_debug("[main] Request - %s, errno=%d:%s", key_plus_size, errno, strerror(errno));
 		if (send_req(ucp_worker, client_ep, req_addr, req_addr_len, key_plus_size) < 0)
 		{
 			perror("ERRIMSS_RLSIMSS_SENDADDR");

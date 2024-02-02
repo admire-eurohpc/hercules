@@ -206,7 +206,8 @@ export HERCULES_CONF="$FILE"
 ## If hostfiles was not set, then we create a hostfile containing the allocated nodes.
 # if [[ $SLURM -eq "1" ]]; then
 if [[ $SERVERS_HOSTFILES_OPTION -eq "0" ]]; then
-    srun -pernode hostname |sort > hostfile
+    #srun -pernode hostname |sort > hostfile
+    scontrol show hostnames "$SLURM_JOB_NODELIST" > hostfile
 fi
 
 if [ -z "$FILE" ]; then

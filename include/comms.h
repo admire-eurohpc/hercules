@@ -170,7 +170,7 @@ ucs_status_t ucx_wait(ucp_worker_h ucp_worker, struct ucx_context *request, cons
 
 size_t send_stream_addr(ucp_worker_h ucp_worker, ucp_ep_h ep, ucp_address_t *addr, size_t addr_len);
 
-void request_init(void *request);
+static void request_init(void *request);
 
 void flush_cb(void *request, ucs_status_t status);
 

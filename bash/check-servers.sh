@@ -16,7 +16,7 @@ until [ -f $FILE ]; do
     fi
     t=$(($i % 5))
     if [ $t -eq 0 ]; then
-        echo "[+] Waiting for server $SERVER_NUMBER"
+        echo "[+][$HOSTNAME] Waiting for server $SERVER_NUMBER"
     fi
     sleep 1
 done

@@ -204,8 +204,10 @@ int imss_refresh(const char *path)
 	uint32_t ds;
 	int fd;
 	char *aux2;
+	slog_live("[imss_refresh] Before calloc, IMSS_DATA_BSIZE=%ld, errno=%d:%s", IMSS_DATA_BSIZE, errno, strerror(errno));
 	char *imss_path = calloc(MAX_PATH, sizeof(char));
 	char *aux = (char *)malloc(IMSS_DATA_BSIZE);
+	slog_live("[imss_refresh] After malloc, IMSS_DATA_BSIZE=%ld, errno=%d:%s", IMSS_DATA_BSIZE, errno, strerror(errno));
 
 	get_iuri(path, imss_path);
 
@@ -234,7 +236,7 @@ int imss_refresh(const char *path)
 		return -1;
 	}
 	stats = (struct stat *)aux;
-	slog_debug("[imss_refresh] ret=%ld ds=%d, st_size=%ld, st_nlink", ret, ds, stats->st_size, stats->st_nlink);
+	slog_debug("[imss_refresh] ret=%ld ds=%d, st_size=%ld, st_nlink=%d", ret, ds, stats->st_size, stats->st_nlink);
 	map_update(map, imss_path, ds, *stats);
 
 	// 	slog_debug("[imss_refresh] Calling map_search, %s", path);
@@ -2072,13 +2074,13 @@ int imss_close(const char *path, int fd)
 	// t = clock();
 	// TIMING(flush_data(), "[imss_close]flush_data", int32_t);
 	int ret = 0;
-	slog_debug("[imss_close] Calling imss_flush_data");
+	slog_debug("[imss_close] Calling imss_flush_data, errno=%d:%s", errno, strerror(errno));
 	imss_flush_data();
-	slog_debug("[imss_close] Ending imss_flush_data");
+	slog_debug("[imss_close] Ending imss_flush_data, errno=%d:%s", errno, strerror(errno));
 	imss_release(path);
-	slog_debug("[imss_close] Ending imss_release");
+	slog_debug("[imss_close] Ending imss_release, errno=%d:%s", errno, strerror(errno));
 	ret = close_dataset(path, fd);
-	slog_debug("[imss_close] Ending close_dataset");
+	slog_debug("[imss_close] Ending close_dataset, errno=%d:%s", errno, strerror(errno));
 	// imss_refresh is too slow.
 	// When we remove it pass from 3.45 sec to 0.008505 sec.
 	if (ret)
@@ -2086,7 +2088,7 @@ int imss_close(const char *path, int fd)
 		imss_refresh(path);
 	}
 
-	slog_debug("[imss_close] Ending imss_refresh");
+	slog_debug("[imss_close] Ending imss_refresh, errno=%d:%s", errno, strerror(errno));
 
 	// t = clock() - t;
 	// double time_taken = ((double)t) / CLOCKS_PER_SEC; // in seconds

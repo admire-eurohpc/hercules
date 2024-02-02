@@ -262,7 +262,7 @@ void slog(int flag, const char *msg, ...)
     va_end(args);
 
     // if(slg.rank!=-1)
-    sprintf(string, "[%d]\t>\t%s", slg.rank, in_string);
+    sprintf(string, "[%d][%d:%s]\t>\t%s", slg.rank, errno, strerror(errno), in_string);
 
     /* Check logging levels. */
     if (flag <= slg.level || flag <= slg.file_level)

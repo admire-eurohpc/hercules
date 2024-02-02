@@ -1431,6 +1431,7 @@ int32_t release_dataset(int32_t dataset_id)
 int32_t close_dataset(const char *dataset_uri, int fd)
 {
 	ucp_ep_h ep;
+	size_t ret = -1;
 	// Formated dataset uri to be sent to the metadata server.
 	char formated_uri[REQUEST_SIZE];
 
@@ -1441,40 +1442,49 @@ int32_t close_dataset(const char *dataset_uri, int fd)
 
 	sprintf(formated_uri, "%" PRIu32 " GET 7 %s", stat_ids[m_srv], dataset_uri); // delete
 
-	slog_debug("[IMSS][close_dataset] formated_uri='%s'", formated_uri);
-
+	slog_debug("[IMSS][close_dataset] formated_uri='%s', errno=%d:%s", formated_uri, errno, strerror(errno));
 	// Send the request.
-	if (send_req(ucp_worker_meta, ep, local_addr_meta, local_addr_len_meta, formated_uri) < 0)
+	ret = send_req(ucp_worker_meta, ep, local_addr_meta, local_addr_len_meta, formated_uri);
+	slog_debug("[IMSS][close_dataset] after send_req, errno=%d:%s", errno, strerror(errno));
+	if (ret < 0)
 	{
-		perror("ERRIMSS_RLSIMSS_SENDADDR");
+		perror("HERCULES_ERR_SEND_REQ_CLOSE_DATASET");
 		return -1;
 	}
 
-	int msg_length;
+	size_t msg_length;
+	slog_debug("[IMSS][close_dataset] before get_recv_data_length, errno=%d:%s", errno, strerror(errno));
 	msg_length = get_recv_data_length(ucp_worker_meta, local_meta_uid);
+	slog_debug("[IMSS][close_dataset] after get_recv_data_length, msg_length=%ld, errno=%d:%s", msg_length, errno, strerror(errno));
 	if (msg_length < 0)
 	{
-		perror("ERRIMSS_DEL_DATASET_INVALID_MSG_LENGTH");
+		perror("HERCULES_ERR_MSG_LENGTH_CLOSE_DATASET");
 		return -1;
 	}
 
-	char result[msg_length];
+	// char result[msg_length];
+	slog_debug("[delete_dataset] before malloc, msg_length=%ld, errno=%d:%s", msg_length, errno, strerror(errno));
+	char *result = (char *)malloc(sizeof(char) * msg_length);
+	slog_debug("[delete_dataset] after malloc, msg_length=%d, errno=%d:%s", msg_length, errno, strerror(errno));
+	slog_debug("[delete_dataset] before recv_data, errno=%d:%s", errno, strerror(errno));
 	msg_length = recv_data(ucp_worker_meta, ep, result, msg_length, local_meta_uid, 0);
+	slog_debug("[delete_dataset] after recv_data, errno=%d:%s", errno, strerror(errno));
 	if (msg_length < 0)
 	{
-		perror("ERRIMSS_DEL_DATASET_RECV_DATA");
+		perror("HERCULES_ERR_RECV_DATA_CLOSE_DATASET");
 		return -1;
 	}
 
-	slog_debug("[delete_dataset] result=%s, msg_length=%d", result, msg_length);
+	slog_debug("[delete_dataset] result=%s, msg_length=%d, errno=%d:%s", result, msg_length, errno, strerror(errno));
 	// if the file descriptor was the last reference to a file which has been removed using
 	// unlink, the file is deleted.
 	if (!strncmp(result, "DELETE", strlen("DELETE")))
 	{
 		delete_dataset_srv_worker(dataset_uri, fd, 0);
+		free(result);
 		return 0;
 	}
-
+	free(result);
 	return 1;
 }
 
@@ -2459,7 +2469,7 @@ int32_t imss_flush_data()
 // Method retrieving a data element associated to a certain dataset.
 int32_t get_data(int32_t dataset_id, int32_t data_id, char *buffer)
 {
-	slog_debug("[IMSS][get_data] dataset_id=%d, data_id=%d", dataset_id, data_id);
+	slog_debug("[IMSS][get_data] dataset_id=%d, data_id=%d, errno=%d:%s", dataset_id, data_id, errno, strerror(errno));
 	// slog_fatal("Caller name: %pS", __builtin_return_address(0));
 	int32_t n_server;
 
@@ -2504,12 +2514,12 @@ int32_t get_data(int32_t dataset_id, int32_t data_id, char *buffer)
 		// t = clock();
 		//  Key related to the requested data element.
 		sprintf(key_, "GET 0 0 %s$%d", curr_dataset.uri_, data_id);
-		slog_debug("[IMSS][get_data] Request - '%s' to server %ld", key_, repl_servers[i]);
+		slog_debug("[IMSS][get_data] Request - '%s' to server %ld, errno=%d:%s", key_, repl_servers[i], errno, strerror(errno));
 		ep = curr_imss.conns.eps[repl_servers[i]];
 
 		if (send_req(ucp_worker_data, ep, local_addr_data, local_addr_len_data, key_) < 0)
 		{
-			perror("ERRIMSS_RLSIMSS_SENDADDR");
+			perror("HERCULES_ERR_RLSIMSS_SENDADDR");
 			return -1;
 		}
 
@@ -2530,7 +2540,7 @@ int32_t get_data(int32_t dataset_id, int32_t data_id, char *buffer)
 		//	gettimeofday(&start, NULL);
 		// printf("GET_DATA after send petition to read");
 		// Receive data related to the previous read request directly into the buffer.
-		slog_info("[IMSS][get_data] Receiving data");
+		slog_info("[IMSS][get_data] Receiving data, errno=%d:%s", errno, strerror(errno));
 		// t = clock();
 
 		int msg_length;
@@ -2648,7 +2658,7 @@ int32_t get_ndata(int32_t dataset_id, int32_t data_id, void *buffer, size_t to_r
 		{
 			if (errno != EAGAIN)
 			{
-				perror("ERRIMSS_GETDATA_RECV");
+				perror("HERCULES_ERR_GETDATA_RECV");
 				return -1;
 			}
 			else
@@ -2662,7 +2672,7 @@ int32_t get_ndata(int32_t dataset_id, int32_t data_id, void *buffer, size_t to_r
 		}
 		else
 		{
-			slog_debug("[IMSS][get_data]ERRIMSS_NO_KEY_AVAIL");
+			slog_warn("[IMSS][get_data]HERCULES_ERR_NO_KEY_AVAIL");
 		}
 	}
 

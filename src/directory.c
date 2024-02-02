@@ -403,6 +403,7 @@ GTree_getdir(char *desired_dir,
 	// Number of children of the directory node.
 	uint32_t num_children = g_node_n_children(dir_node);
 	*numdir_elems = num_children + 1; //+1 because of the actual directory + childrens
+	slog_info("[GTree_getdir] num_children=%d", num_children);
 
 	// Buffer containing the whole set of elements within a certain directory.
 	// char * dir_elements = (char *) malloc(sizeof(char)*num_elements_indir*URI_);
@@ -410,7 +411,9 @@ GTree_getdir(char *desired_dir,
 	char *aux_dir_elem = dir_elements;
 
 	// Call the serialization function storing all dir elements in the buffer.
+	slog_info("[GTree_getdir] serialize_dir_childrens(dir_node, num_children=%d, &aux_dir_elem)", num_children);
 	serialize_dir_childrens(dir_node, num_children, &aux_dir_elem);
+	slog_info("[GTree_getdir] ending serialize_dir_childrens, aux_dir_elem=%s", aux_dir_elem);
 
 	return dir_elements;
 }
