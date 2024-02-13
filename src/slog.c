@@ -262,7 +262,7 @@ void slog(int flag, const char *msg, ...)
     va_end(args);
 
     // if(slg.rank!=-1)
-    sprintf(string, "[%d][%d:%s]\t>\t%s", slg.rank, errno, strerror(errno), in_string);
+    sprintf(string, "[%d][%ld][%d:%s]\t>\t%s", slg.rank, pthread_self(), errno, strerror(errno), in_string);
 
     /* Check logging levels. */
     if (flag <= slg.level || flag <= slg.file_level)
@@ -302,6 +302,10 @@ void slog(int flag, const char *msg, ...)
             strncpy(color, CLR_GREEN, sizeof(color));
             strncpy(alarm, "TIME", sizeof(alarm));
             slg.to_console = 0;
+            break;
+        case SLOG_FULL:
+            strncpy(color, CLR_BLUE, sizeof(color));
+            strncpy(alarm, "FULL", sizeof(alarm));
             break;
         case SLOG_NONE:
             strncpy(prints, string, sizeof(string));

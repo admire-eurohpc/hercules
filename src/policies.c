@@ -91,18 +91,19 @@ find_server(int32_t n_servers,
 		dataset_info new_dataset;
 		// Dataset metadata request.
 		int32_t stat_dataset_res = stat_dataset(fname, &new_dataset, 0);
-		slog_debug("[find_server] fname=%s, stat_dataset_res=%ld", fname, stat_dataset_res);
 
 		if (stat_dataset_res == 0)
 		{
 			uint16_t crc_ = crc16(fname, strlen(fname));
 			// First server that received a block from the current file.
 			next_server = crc_ % n_servers;
+			slog_debug("[find_server] fname=%s, stat_dataset_res=%ld, next_server=%d, crc_=%d, n_servers=%d", fname, stat_dataset_res, next_server, crc_, n_servers);
 		}
 		else
 		{
 			uint16_t crc_ = crc16(new_dataset.original_name, strlen(new_dataset.original_name));
 			next_server = crc_ % n_servers;
+			slog_debug("[find_server] fname=%s, new_dataset.original_name=%s, stat_dataset_res=%ld, next_server=%d, crc_=%d, n_servers=%d", fname, new_dataset.original_name, stat_dataset_res, next_server, crc_, n_servers);
 		}
 
 		// Next server receiving the following block.

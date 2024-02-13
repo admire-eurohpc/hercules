@@ -383,10 +383,6 @@ runtime=$( echo "$end - $start" | bc -l )
 echo "[-] Data servers started in $runtime seconds"
 
 
-
-export HERCULES_NCPN=$NUM_CLIENTS_PER_NODE
-export HERCULES_NNFC=$NUM_NODES_FOR_CLIENTS
-
 ## Search for the mpi distribution installed.
 for MPI_DS in {"open-mpi","mpich","Intel"}
 do
@@ -418,6 +414,10 @@ case $MPI_DS in
         # exit 1
     ;;
 esac
+
+# set enviroment variables.
+export HERCULES_NCPN=$NUM_CLIENTS_PER_NODE
+export HERCULES_NNFC=$NUM_NODES_FOR_CLIENTS
 
 
 unset META_PORT

@@ -26,6 +26,8 @@
 #ifndef __SLOG_H__
 #define __SLOG_H__
 
+// #define _GNU_SOURCE
+
 /* If include header in CPP code. */
 #ifdef __cplusplus
 extern "C"
@@ -40,6 +42,8 @@ extern "C"
 #include <limits.h>
 #include <errno.h>
 #include <time.h>
+// #include <sys/types.h>
+// #include <unistd.h>
 
 /*
  * SOURCE_THROW_LOCATION macro returns string which
@@ -66,49 +70,51 @@ extern "C"
 #define SLOG_FATAL 6
 #define SLOG_PANIC 7
 #define SLOG_TIME 8
+#define SLOG_FULL 9
 
 #define USESLOG
 #ifdef USESLOG
-    #define slog_none(...) \
-        slog(SLOG_NONE, __VA_ARGS__);
+#define slog_none(...) \
+    slog(SLOG_NONE, __VA_ARGS__);
 
-    #define slog_live(...) \
-        slog(SLOG_LIVE, __VA_ARGS__);
+#define slog_live(...) \
+    slog(SLOG_LIVE, __VA_ARGS__);
 
-    #define slog_info(...) \
-        slog(SLOG_INFO, __VA_ARGS__);
+#define slog_info(...) \
+    slog(SLOG_INFO, __VA_ARGS__);
 
-    #define slog_warn(...) \
-        slog(SLOG_WARN, SOURCE_THROW_LOCATION __VA_ARGS__);
+#define slog_warn(...) \
+    slog(SLOG_WARN, SOURCE_THROW_LOCATION __VA_ARGS__);
 
-	#define slog_debug(...)        \
-        slog(SLOG_DEBUG, __VA_ARGS__);
+#define slog_debug(...) \
+    slog(SLOG_DEBUG, __VA_ARGS__);
 
-    #define slog_error(...) \
-        slog(SLOG_ERROR, SOURCE_THROW_LOCATION __VA_ARGS__);
+#define slog_error(...) \
+    slog(SLOG_ERROR, SOURCE_THROW_LOCATION __VA_ARGS__);
 
-    #define slog_fatal(...) \
-        slog(SLOG_FATAL, SOURCE_THROW_LOCATION __VA_ARGS__);
+#define slog_fatal(...) \
+    slog(SLOG_FATAL, SOURCE_THROW_LOCATION __VA_ARGS__);
 
-    #define slog_panic(...) \
-        slog(SLOG_PANIC, SOURCE_THROW_LOCATION __VA_ARGS__);
+#define slog_panic(...) \
+    slog(SLOG_PANIC, SOURCE_THROW_LOCATION __VA_ARGS__);
 
-    #define slog_time(...) \
-        slog(SLOG_TIME, __VA_ARGS__);
+#define slog_time(...) \
+    slog(SLOG_TIME, __VA_ARGS__);
+    
+#define slog_full(...) \
+    slog(SLOG_FULL, __VA_ARGS__);
 
 #else
-    #define slog_none(...);
-    #define slog_live(...);
-    #define slog_info(...);
-    #define slog_warn(...);
-	#define slog_debug(...);
-    #define slog_error(...);
-    #define slog_fatal(...);
-    #define slog_panic(...);
-    #define slog_time(...);
+#define slog_none(...) ;
+#define slog_live(...) ;
+#define slog_info(...) ;
+#define slog_warn(...) ;
+#define slog_debug(...) ;
+#define slog_error(...) ;
+#define slog_fatal(...) ;
+#define slog_panic(...) ;
+#define slog_time(...) ;
 #endif /* _SLOG */
-
-
 
 /* Definitions for version informations. */
 #define SLOGVERSION_MAJOR 1

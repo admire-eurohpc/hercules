@@ -429,9 +429,9 @@ RETURNS:	 0 - The requested block was successfully retrieved.
 	 */
 	int32_t get_data(int32_t dataset_id, int32_t data_id, char *buffer);
 
-	int32_t get_ndata(int32_t dataset_id, int32_t data_id, void *buffer, size_t to_read, off_t offset);
+	size_t get_ndata(int32_t dataset_id, int32_t data_id, void *buffer, size_t to_read, off_t offset);
 
-	int32_t get_data_mall(int32_t dataset_id, int32_t data_id, char *buffer, size_t to_read, off_t offset, int32_t num_storages);
+	size_t get_data_mall(int32_t dataset_id, int32_t data_id, char *buffer, size_t to_read, off_t offset, int32_t num_storages);
 	/* Method storing a specific data element.
 
 
