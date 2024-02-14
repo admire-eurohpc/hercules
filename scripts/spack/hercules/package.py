@@ -28,16 +28,14 @@ class Hercules(CMakePackage):
 
     # FIXME: Add a proper url for your package's homepage here.
     homepage = "https://gitlab.arcos.inf.uc3m.es/admire/imss.git"
-    url      = "https://gitlab.arcos.inf.uc3m.es/admire/imss/-/raw/master/releases/download/v1.0/imss.tgz"
     git      = "https://gitlab.arcos.inf.uc3m.es/admire/imss.git"
 
     # FIXME: Add a list of GitHub accounts to
     # notify when the package is updated.
     # maintainers = ['github_user1', 'github_user2']
-    maintainers = ['fjblas']
+    maintainers = ['fjblas','gesanche']
 
     version('latest', branch='master')
-    version('1.0', sha256='996ad688508bbbba42c3bc69ea6352834bf3e83708e42397dd4c28b6cff888a7')
 
     # FIXME: Add dependencies if required.
     depends_on('glib')
