@@ -5,6 +5,7 @@
 #include <cstring>
 // #include <sys/stat.h>
 #include <fcntl.h>
+#include <stdint.h>
 
 // to manage logs.
 #include "slog.h"
