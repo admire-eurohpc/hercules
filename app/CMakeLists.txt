@@ -68,6 +68,6 @@ install(FILES ../scripts/hercules DESTINATION bin
         PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ
                     GROUP_EXECUTE GROUP_READ)
 
-install(FILES ../conf/hercules.conf DESTINATION conf
+install(FILES ../conf/hercules.conf.sample DESTINATION conf
         PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ
                     GROUP_EXECUTE GROUP_READ)
