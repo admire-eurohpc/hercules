@@ -219,7 +219,7 @@ char *slog_get(SlogDate *pDate, char *msg, ...)
  * Log exiting process. We save log in file
  * if LOGTOFILE flag is enabled from config.
  */
-void slog(int flag, const char *msg, ...)
+void slog(int flag, char const *caller_name, const char *msg, ...)
 {
     int prev_errno = errno;
 
@@ -262,7 +262,7 @@ void slog(int flag, const char *msg, ...)
     va_end(args);
 
     // if(slg.rank!=-1)
-    sprintf(string, "[%d][%ld][%d:%s]\t>\t%s", slg.rank, pthread_self(), errno, strerror(errno), in_string);
+    sprintf(string, "[%d][%ld][%d:%s][%s]\t>\t%s", getpid(), pthread_self(), errno, strerror(errno), caller_name, in_string);
 
     /* Check logging levels. */
     if (flag <= slg.level || flag <= slg.file_level)
@@ -400,7 +400,7 @@ void slog_init(const char *fname, int lvl, int writeFile, int debugConsole, int 
             (rc = pthread_mutexattr_destroy(&m_attr)))
         {
             fprintf(stderr, "[ERROR] <%s:%d> inside %s(): Can not initialize mutex: %s\n",
-                   __FILE__, __LINE__, __func__, strerror(rc));
+                    __FILE__, __LINE__, __func__, strerror(rc));
             slg.td_safe = 0;
         }
     }

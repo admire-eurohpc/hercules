@@ -18,6 +18,7 @@ static sa_family_t ai_family = AF_INET;
 extern void *map_ep;	  // map_ep used for async write
 extern int32_t is_client; // used to make sure the server doesn't do map_ep stuff
 pthread_mutex_t map_ep_mutex;
+pthread_mutex_t lock_ucx_comm = PTHREAD_MUTEX_INITIALIZER;
 
 void *send_buffer;
 void *recv_buffer;
@@ -69,7 +70,8 @@ int init_worker(ucp_context_h ucp_context, ucp_worker_h *ucp_worker)
 	memset(&worker_params, 0, sizeof(worker_params));
 
 	worker_params.field_mask = UCP_WORKER_PARAM_FIELD_THREAD_MODE;
-	worker_params.thread_mode = UCS_THREAD_MODE_MULTI;
+	// worker_params.thread_mode = UCS_THREAD_MODE_MULTI;
+	worker_params.thread_mode = UCS_THREAD_MODE_SERIALIZED;
 
 	status = ucp_worker_create(ucp_context, &worker_params, ucp_worker);
 	if (status != UCS_OK)
@@ -114,15 +116,16 @@ int init_context(ucp_context_h *ucp_context, ucp_config_t *config, ucp_worker_h 
 	ucp_params.request_size = sizeof(struct ucx_context);
 	ucp_params.request_init = request_init;
 	ucp_params.name = "hercules";
+	ucp_params.mt_workers_shared = UCS_THREAD_MODE_SERIALIZED;
 	slog_info("Before ucp_init");
 	status = ucp_init(&ucp_params, config, ucp_context);
 	// if(errno != 0) {
 	// 	fprintf(stderr, "Error, errno=%d:%s", errno, strerror(errno));
 	// }
 	slog_info("After ucp_init, status=%s", ucs_status_string(status));
-	slog_info("Before ucp_config_release");
+	// slog_info("Before ucp_config_release");
 	ucp_config_release(config);
-	slog_info("After ucp_config_release");
+	// slog_info("After ucp_config_release");
 
 	// ucp_context_print_info(*ucp_context,stderr);
 	if (status != UCS_OK)
@@ -132,19 +135,19 @@ int init_context(ucp_context_h *ucp_context, ucp_config_t *config, ucp_worker_h 
 		ret = -1;
 		goto err;
 	}
-	slog_info("Before init worker");
+	// slog_info("Before init worker");
 	ret = init_worker(*ucp_context, ucp_worker);
-	slog_info("After init worker");
+	// slog_info("After init worker");
 	if (ret != 0)
 	{
 		goto err_cleanup;
 	}
 
-	slog_info("Before ucp_mem_alloc for send buffer");
+	// slog_info("Before ucp_mem_alloc for send buffer");
 	ucp_mem_alloc(*ucp_context, 4 * 1024 * 1024, (void **)&send_buffer);
-	slog_info("After ucp_mem_alloc for send buffer");
+	// slog_info("After ucp_mem_alloc for send buffer");
 	ucp_mem_alloc(*ucp_context, 4 * 1024 * 1024, (void **)&recv_buffer);
-	slog_info("After ucp_mem_alloc for recv buffer");
+	// slog_info("After ucp_mem_alloc for recv buffer");
 
 	// slog_debug("[COMM] Inicializated context result: %d", ret);
 	return ret;
@@ -203,7 +206,7 @@ size_t send_req(ucp_worker_h ucp_worker, ucp_ep_h ep, ucp_address_t *addr, size_
 	// slog_info("[COMM][send_req] msg_len=%ld", msg_len);
 	// slog_info("[COMM][send_req] msg_len=%ld, before malloc", msg_len);
 	msg = (msg_req_t *)malloc(msg_len);
-	slog_info("[COMM][send_req] msg_len=%lu", msg_len);
+	// slog_info("[COMM][send_req] msg_len=%lu", msg_len);
 	//	msg = (msg_req_t *)send_buffer;
 
 	msg->addr_len = addr_len; // imprimir la long de adress_len.
@@ -221,12 +224,12 @@ size_t send_req(ucp_worker_h ucp_worker, ucp_ep_h ep, ucp_address_t *addr, size_
 	// send_param.memory_type  = UCS_MEMORY_TYPE_HOST;
 	send_param.user_data = &ctx;
 
-	slog_info("[COMM][send_req] before ucp_tag_send_nbx");
+	// slog_info("[COMM][send_req] before ucp_tag_send_nbx");
 	request = (struct ucx_context *)ucp_tag_send_nbx(ep, msg, msg_len, tag_req, &send_param);
-	slog_info("[COMM][send_req] after ucp_tag_send_nbx");
-	slog_info("[COMM][send_req] before ucx_wait");
+	// slog_info("[COMM][send_req] after ucp_tag_send_nbx");
+	// slog_info("[COMM][send_req] before ucx_wait");
 	status = ucx_wait(ucp_worker, request, "send", req);
-	slog_info("[COMM][send_req] after ucx_wait");
+	// slog_info("[COMM][send_req] after ucx_wait");
 
 	if (status != UCS_OK)
 	{
@@ -246,9 +249,10 @@ size_t send_req(ucp_worker_h ucp_worker, ucp_ep_h ep, ucp_address_t *addr, size_
 
 size_t get_recv_data_length(ucp_worker_h ucp_worker, uint64_t dest)
 {
+	// pthread_mutex_lock(&lock_ucx_comm);
+
 	ucp_tag_recv_info_t info_tag;
 	ucp_tag_message_h msg_tag;
-
 	// async = 1;
 	do
 	{
@@ -256,11 +260,15 @@ size_t get_recv_data_length(ucp_worker_h ucp_worker, uint64_t dest)
 		msg_tag = ucp_tag_probe_nb(ucp_worker, dest, tag_mask, 0, &info_tag);
 	} while (msg_tag == NULL);
 
+	// pthread_mutex_unlock(&lock_ucx_comm);
+
 	return info_tag.length;
 }
 
 size_t recv_data(ucp_worker_h ucp_worker, ucp_ep_h ep, void *msg, size_t msg_length, uint64_t dest, int async)
 {
+	// pthread_mutex_lock(&lock_ucx_comm);
+
 	// slog_debug("Init recv_data");
 	// ucp_tag_recv_info_t info_tag;
 	// 	ucp_tag_message_h msg_tag;
@@ -326,6 +334,7 @@ size_t recv_data(ucp_worker_h ucp_worker, ucp_ep_h ep, void *msg, size_t msg_len
 
 	// slog_debug("[COMM] Recv tag (%ld bytes).", msg_length);
 	// fprintf(stderr, "[COMM] Recv tag (%ld bytes).\n", msg_length);
+	//  pthread_mutex_unlock(&lock_ucx_comm);
 
 	if (status != UCS_OK)
 	{
@@ -420,11 +429,14 @@ void send_cb(void *request, ucs_status_t status, void *user_data)
  */
 void err_cb_client(void *arg, ucp_ep_h ep, ucs_status_t status)
 {
+	ucs_status_t *arg_status = (ucs_status_t *)arg;
 	// if (status != UCS_ERR_CONNECTION_RESET && status != UCS_ERR_ENDPOINT_TIMEOUT)
 	// {
 	// }
-	slog_error("[COMM] Client error handling callback was invoked with status %d (%s)", status, ucs_status_string(status));
-	fprintf(stderr, "client error handling callback was invoked with status %d (%s)", status, ucs_status_string(status));
+	// slog_error("[COMM] Client error handling callback was invoked with status %d (%s)", status, ucs_status_string(status));
+	// fprintf(stderr, "client error handling callback was invoked with status %d (%s)", status, ucs_status_string(status));
+	slog_error("failure handler called with status %d (%s)\n", status, ucs_status_string(status));
+	*arg_status = status;
 }
 
 void err_cb_server(void *arg, ucp_ep_h ep, ucs_status_t status)

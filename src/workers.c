@@ -1377,15 +1377,15 @@ int stat_worker_helper(p_argv *arguments, char *req)
 					int32_t result = map->delete_metadata_stat_worker(key);
 					slog_debug("[stat_worker_thread][READ_OP][DELETE_OP] delete_metadata_stat_worker=%d", result);
 					GTree_delete((char *)key.c_str());
-					strcpy(release_msg, "DELETE");
+					strcpy(release_msg, "DELETE\0");
 				}
 				else
 				{
-					strcpy(release_msg, "NODELETE");
+					strncpy(release_msg, "NODELETE\0", strlen("NODELETE") + 1);
 				}
 
 				// char release_msg[] = "DELETE\0";
-				if (send_data(arguments->ucp_worker, arguments->server_ep, release_msg, strlen(release_msg), arguments->worker_uid) < 0)
+				if (send_data(arguments->ucp_worker, arguments->server_ep, release_msg, strlen(release_msg) + 1, arguments->worker_uid) < 0)
 				{
 					perror("ERRIMSS_PUBLISH_DELETEMSG");
 					return -1;
@@ -1535,12 +1535,12 @@ int stat_worker_helper(p_argv *arguments, char *req)
 				// }
 				slog_debug("After dataset->n_open=%d, status=%s", dataset->n_open, dataset->status);
 				char release_msg[10]; //= "DELETE\0";
-				strcpy(release_msg, "OPEN\0");
+				strncpy(release_msg, "OPEN", strlen("OPEN") + 1);
 				// int32_t result = map->delete_metadata_stat_worker(key);
 				// slog_debug("[stat_worker_thread][READ_OP][DELETE_OP] delete_metadata_stat_worker=%d", result);
 				// GTree_delete((char *)key.c_str());
 				// char release_msg[] = "CLOSE\0";
-				if (send_data(arguments->ucp_worker, arguments->server_ep, release_msg, strlen(release_msg), arguments->worker_uid) < 0)
+				if (send_data(arguments->ucp_worker, arguments->server_ep, release_msg, strlen(release_msg) + 1, arguments->worker_uid) < 0)
 				{
 					perror("ERRIMSS_PUBLISH_DELETEMSG");
 					return -1;

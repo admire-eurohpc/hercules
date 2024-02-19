@@ -33,7 +33,7 @@ target_link_directories(hercules_posix PUBLIC ${UCX_LIBRARIES})
 
 # target_link_libraries(mount.hercules  ${CMAKE_THREAD_LIBS_INIT} ${GLIB_LIBRARIES} imss_static)
 # target_link_libraries(umount.hercules ${CMAKE_THREAD_LIBS_INIT} ${GLIB_LIBRARIES} imss_static)
-target_link_libraries(hercules_posix ${CMAKE_THREAD_LIBS_INIT} ${GLIB_LIBRARIES} hercules_posix_api imss_shared dl)
+target_link_libraries(hercules_posix ${CMAKE_THREAD_LIBS_INIT} ${GLIB_LIBRARIES} hercules_posix_api imss_shared dl -g -fbounds-check)
 
 
 install(TARGETS hercules_posix DESTINATION lib)

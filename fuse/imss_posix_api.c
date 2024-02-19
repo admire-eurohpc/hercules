@@ -141,7 +141,7 @@ void fd_lookup(const char *path, int *fd, struct stat *s, char **aux)
 		slog_warn("[imss_posix_api][fd_lookup] file not found, %s", path);
 		*fd = -1;
 	}
-	slog_live("[imss_posix_api][fd_lookup] path=%s, found=%d, fd=%d", path, found, *fd);
+	slog_live("[imss_posix_api] path=%s, found=%d, fd=%d", path, found, *fd);
 	// pthread_mutex_unlock(&lock_file);
 }
 
@@ -261,9 +261,9 @@ int imss_getattr(const char *path, struct stat *stbuf)
 
 	// slog_debug("[imss_getattr], IMSS_DATA_BSIZE=%ld, st_blksize=%ld", IMSS_DATA_BSIZE, stbuf->st_blksize);
 	// printf("imss_getattr=%s\n",imss_path);
-	slog_debug("[imss_getattr] before get_type, imss_path=%s", imss_path);
+	slog_debug("before get_type, imss_path=%s", imss_path);
 	int32_t type = get_type(imss_path);
-	slog_live("[imss_getattr] after get_type(%s):%d", imss_path, type);
+	slog_live("after get_type(%s):%d", imss_path, type);
 	// if (type == 0) // to check!
 	// {
 	// 	strcat(imss_path, "/");
@@ -300,7 +300,7 @@ int imss_getattr(const char *path, struct stat *stbuf)
 			return -ENOENT;
 		}
 	case 2: // Case file
-		slog_debug("[imss_getattr] type=%d, imss_path=%s", type, imss_path);
+		slog_debug("type=%d, imss_path=%s", type, imss_path);
 		/*if(stat_dataset(imss_path, &metadata) == -1){
 		  fprintf(stderr, "[IMSS-FUSE]	Cannot get dataset metadata.");
 		  return -ENOENT;
@@ -311,7 +311,7 @@ int imss_getattr(const char *path, struct stat *stbuf)
 		//
 		//
 		fd_lookup(imss_path, &fd, &stats, &aux);
-		slog_debug("[imss_getattr] imss_path=%s, file descriptor=%d", imss_path, fd);
+		slog_debug("imss_path=%s, file descriptor=%d", imss_path, fd);
 
 		if (fd >= 0)
 		{
@@ -348,17 +348,17 @@ int imss_getattr(const char *path, struct stat *stbuf)
 			}
 		}
 
-		slog_debug("[imss_getattr] stats.st_nlink=%lu, stats.st_size=%lu", stats.st_nlink, stats.st_size);
-		if (stats.st_nlink != 0)
+		slog_debug("stats.st_nlink=%lu, stats.st_size=%lu", stats.st_nlink, stats.st_size);
+		// if (stats.st_nlink != 0)
 		{
 			memcpy(stbuf, &stats, sizeof(struct stat));
 		}
-		else
-		{
-			// fprintf(stderr, "[IMSS-FUSE]	Cannot get dataset metadata.");
-			slog_error("[imss_getattr] Cannot get dataset metadata");
-			return -ENOENT;
-		}
+		// else
+		// {
+		// 	// fprintf(stderr, "[IMSS-FUSE]	Cannot get dataset metadata.");
+		// 	slog_error("[imss_getattr] Cannot get dataset metadata");
+		// 	return -ENOENT;
+		// }
 		// stbuf->st_blocks = ceil((double)stbuf->st_size / IMSS_BLKSIZE);
 		stbuf->st_blocks = ceil((double)stbuf->st_size / 512.0); // Number 512-byte blocks allocated.
 		slog_debug("[imss_getattr] path=%s, imss_path=%s, file descriptor=%d, file size=%lu, stbuf->st_blocks=%lu", path, imss_path, fd, stbuf->st_size, stbuf->st_blocks);
@@ -2270,7 +2270,7 @@ int imss_unlink(const char *path)
 		// Those operations must be performed by the server itself when it knows no more process are using the file.
 		// Erase metadata in the backend.
 		ret = delete_dataset(imss_path);
-		slog_debug("[FUSE][imss_posix_api] delete_dataset, ret=%d", ret);
+		slog_debug("[imss_posix_api] delete_dataset, ret=%d", ret);
 
 		switch (ret)
 		{

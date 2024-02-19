@@ -390,7 +390,9 @@ int32_t stat_init(char *stat_hostfile,
 		slog_debug("[IMSS][stat_int] request=%s", request);
 		if (send(oob_sock, request, REQUEST_SIZE, 0) < 0)
 		{
-			perror("ERRIMSS_STAT_HELLO_2");
+			char err_msg[100];
+			sprintf(err_msg, "ERRIMSS_STAT_HELLO_2-%s:%ld", stat_node, port);
+			perror(err_msg);
 			return -1;
 		}
 
@@ -416,7 +418,7 @@ int32_t stat_init(char *stat_hostfile,
 // Method disabling the communication chucp_address_t *peer_addrannel with the metadata server. Besides, the current method releases session-related elements previously initialized.
 int32_t stat_release()
 {
-	slog_debug("[IMSS] Calling stat_release.");
+	slog_live("[IMSS] Calling stat_release.");
 	// Release the underlying set of vectors.
 
 	/*	G_ARRAY_FREE:
@@ -442,10 +444,11 @@ int32_t stat_release()
 		char release_msg[REQUEST_SIZE];
 
 		sprintf(release_msg, "%" PRIu32 " GET 2 RELEASE", process_rank);
-
+		// slog_live("Request - %s", release_msg);
 		if (send_req(ucp_worker_meta, ep, local_addr_meta, local_addr_len_meta, release_msg) == 0)
 		{
-			perror("ERRIMSS_RLSIMSS_SENDADDR");
+			slog_error("HERCULES_ERR_RLSHERCULES_SENDADDR");
+			perror("HERCULES_ERR_RLSHERCULES_SENDADDR");
 			return -1;
 		}
 
@@ -887,7 +890,8 @@ int32_t release_imss(char *imss_uri, uint32_t release_op)
 	int32_t imss_position;
 	if ((imss_position = find_imss(imss_uri, &imss_)) == -1)
 	{
-		slog_fatal("ERRIMSS_RLSIMSS_NOTFOUND");
+		slog_fatal("HERCULES_ERR_RLSHERCULES_NOTFOUND");
+		perror("HERCULES_ERR_RLSHERCULES_NOTFOUND");
 		return -1;
 	}
 
@@ -904,10 +908,10 @@ int32_t release_imss(char *imss_uri, uint32_t release_op)
 			ep = imss_.conns.eps[i];
 
 			sprintf(release_msg, "GET 2 0 RELEASE");
-
 			if (send_req(ucp_worker_data, ep, local_addr_data, local_addr_len_data, release_msg) == 0)
 			{
-				perror("ERRIMSS_RLSIMSS_SENDADDR");
+				slog_error("HERCULES_ERR_RLSHERCULES_SENDADDR");
+				perror("HERCULES_ERR_RLSHERCULES_SENDADDR");
 				return -1;
 			}
 
@@ -2582,6 +2586,8 @@ int32_t get_data(int32_t dataset_id, int32_t data_id, char *buffer)
 			return -1;
 		}
 
+		slog_debug("[IMSS] Request has been sent - '%s' to server %ld", key_, repl_servers[i]);
+
 		/*	gettimeofday(&end, NULL);
 			delta_us = (long) (end.tv_usec - start.tv_usec);
 			printf("[CLIENT] [GET DATA] send petition delta_us=%6.3f",(delta_us/1000.0F));*/
@@ -2600,9 +2606,10 @@ int32_t get_data(int32_t dataset_id, int32_t data_id, char *buffer)
 		// printf("GET_DATA after send petition to read");
 		// Receive data related to the previous read request directly into the buffer.
 		// t = clock();
+		slog_info("[IMSS] Before getting length");
 		size_t msg_length = 0;
 		msg_length = get_recv_data_length(ucp_worker_data, local_data_uid);
-		slog_info("[IMSS][get_data] Receiving data, msg_length=%lu", msg_length);
+		slog_info("[IMSS] Receiving data, msg_length=%lu", msg_length);
 		if (msg_length == 0)
 		{
 			slog_error("ERRIMSS_GET_DATA_INVALID_MSG_LENGTH");
@@ -2612,7 +2619,7 @@ int32_t get_data(int32_t dataset_id, int32_t data_id, char *buffer)
 
 		// size_t length = 0;
 		msg_length = recv_data(ucp_worker_data, ep, buffer, msg_length, local_data_uid, 0);
-		slog_info("[IMSS][get_data] After recv_data, msg_length=%lu", msg_length);
+		slog_info("[IMSS] After recv_data, msg_length=%lu", msg_length);
 		if (msg_length == 0)
 		{
 			if (errno != EAGAIN)
@@ -2635,12 +2642,12 @@ int32_t get_data(int32_t dataset_id, int32_t data_id, char *buffer)
 		// Check if the requested key was correctly retrieved.
 		if (strncmp((const char *)buffer, "$ERRIMSS_NO_KEY_AVAIL$", 22))
 		{
-			slog_info("[IMSS][get_data] OK!, length=%ld", msg_length);
+			slog_info("[IMSS] OK!, length=%ld", msg_length);
 			return (int32_t)msg_length;
 		}
 		else
 		{
-			slog_error("[IMSS][get_data] HERCULES_ERR_NO_KEY_AVAIL");
+			slog_error("[IMSS] HERCULES_ERR_NO_KEY_AVAIL");
 		}
 	}
 

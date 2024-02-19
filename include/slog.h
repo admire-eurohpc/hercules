@@ -43,7 +43,7 @@ extern "C"
 #include <errno.h>
 #include <time.h>
 // #include <sys/types.h>
-// #include <unistd.h>
+#include <unistd.h>
 
 /*
  * SOURCE_THROW_LOCATION macro returns string which
@@ -75,34 +75,34 @@ extern "C"
 #define USESLOG
 #ifdef USESLOG
 #define slog_none(...) \
-    slog(SLOG_NONE, __VA_ARGS__);
+    slog(SLOG_NONE, __func__, __VA_ARGS__);
 
 #define slog_live(...) \
-    slog(SLOG_LIVE, __VA_ARGS__);
+    slog(SLOG_LIVE, __func__, __VA_ARGS__);
 
 #define slog_info(...) \
-    slog(SLOG_INFO, __VA_ARGS__);
+    slog(SLOG_INFO, __func__, __VA_ARGS__);
 
 #define slog_warn(...) \
-    slog(SLOG_WARN, SOURCE_THROW_LOCATION __VA_ARGS__);
+    slog(SLOG_WARN, __func__, SOURCE_THROW_LOCATION __VA_ARGS__);
 
 #define slog_debug(...) \
-    slog(SLOG_DEBUG, __VA_ARGS__);
+    slog(SLOG_DEBUG, __func__, __VA_ARGS__);
 
 #define slog_error(...) \
-    slog(SLOG_ERROR, SOURCE_THROW_LOCATION __VA_ARGS__);
+    slog(SLOG_ERROR, __func__, SOURCE_THROW_LOCATION __VA_ARGS__);
 
 #define slog_fatal(...) \
-    slog(SLOG_FATAL, SOURCE_THROW_LOCATION __VA_ARGS__);
+    slog(SLOG_FATAL, __func__, SOURCE_THROW_LOCATION __VA_ARGS__);
 
 #define slog_panic(...) \
-    slog(SLOG_PANIC, SOURCE_THROW_LOCATION __VA_ARGS__);
+    slog(SLOG_PANIC, __func__, SOURCE_THROW_LOCATION __VA_ARGS__);
 
 #define slog_time(...) \
-    slog(SLOG_TIME, __VA_ARGS__);
-    
+    slog(SLOG_TIME, __func__, __VA_ARGS__);
+
 #define slog_full(...) \
-    slog(SLOG_FULL, __VA_ARGS__);
+    slog(SLOG_FULL, __func__, __VA_ARGS__);
 
 #else
 #define slog_none(...) ;
@@ -203,7 +203,7 @@ extern "C"
      *         (msg) is the user defined message for the current log action.
      * RETURN: (void)
      */
-    void slog(int flag, const char *msg, ...);
+    void slog(int flag, char const *caller_name, const char *msg, ...);
 
     /*
      * FUNCTION: slog_init.
