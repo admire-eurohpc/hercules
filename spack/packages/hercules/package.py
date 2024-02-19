@@ -41,7 +41,7 @@ class Hercules(CMakePackage):
     depends_on('glib')
     depends_on('pcre')
     depends_on('jemalloc')
-    depends_on('ucx mlx5_dv=True openmp=True verbs=True dm=True rc=True thread_multiple=True ucg=True xpmem=True dc=True rdmacm=True knem=True cma=True ib_hw_tm=True rocm=False ud=True')
+    depends_on('ucx mlx5_dv=True openmp=True verbs=True dm=True rc=True thread_multiple=True ucg=True xpmem=False dc=True rdmacm=True knem=True cma=True ib_hw_tm=True rocm=True ud=True')
     depends_on('cmake', type='build')
 
     def cmake_args(self):

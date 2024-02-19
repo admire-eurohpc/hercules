@@ -62,7 +62,8 @@ git clone https://gitlab.arcos.inf.uc3m.es/admire/spack.git
 Now, you can add repositories under the admire namespace:
 
 ```
-spack repo add spack/adhoc-recipes 
+cd hercules
+spack repo add spack
 spack install hercules
 spack load hercules
 ```
