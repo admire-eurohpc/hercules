@@ -70,8 +70,8 @@ int init_worker(ucp_context_h ucp_context, ucp_worker_h *ucp_worker)
 	memset(&worker_params, 0, sizeof(worker_params));
 
 	worker_params.field_mask = UCP_WORKER_PARAM_FIELD_THREAD_MODE;
-	// worker_params.thread_mode = UCS_THREAD_MODE_MULTI;
-	worker_params.thread_mode = UCS_THREAD_MODE_SERIALIZED;
+	worker_params.thread_mode = UCS_THREAD_MODE_MULTI;
+	// worker_params.thread_mode = UCS_THREAD_MODE_SERIALIZED;
 
 	status = ucp_worker_create(ucp_context, &worker_params, ucp_worker);
 	if (status != UCS_OK)
@@ -116,7 +116,7 @@ int init_context(ucp_context_h *ucp_context, ucp_config_t *config, ucp_worker_h 
 	ucp_params.request_size = sizeof(struct ucx_context);
 	ucp_params.request_init = request_init;
 	ucp_params.name = "hercules";
-	ucp_params.mt_workers_shared = UCS_THREAD_MODE_SERIALIZED;
+	// ucp_params.mt_workers_shared = UCS_THREAD_MODE_SERIALIZED;
 	slog_info("Before ucp_init");
 	status = ucp_init(&ucp_params, config, ucp_context);
 	// if(errno != 0) {

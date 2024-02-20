@@ -470,7 +470,7 @@ unset LD_PRELOAD=$HERCULES_POSIX_PRELOAD
     echo -e "#############################################################################
     [!] To stop the services:
     ${RED}
-hercules stop
+hercules stop -f $FILE
     ${NC}
     #############################################################################"
 
