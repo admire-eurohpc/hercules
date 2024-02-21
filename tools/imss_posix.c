@@ -227,31 +227,6 @@ static int (*real_renameat2)(int olddirfd, const char *oldpath, int newdirfd, co
 // static int (*real_getdents)(unsigned int fd, struct linux_dirent *dirp, unsigned int count) = NULL;
 static int (*real_fsync)(int fd) = NULL;
 
-// int getdents(unsigned int fd, struct linux_dirent *dirp, unsigned int count) {
-// 	if (!real_getdents)
-// 		real_getdents = dlsym(RTLD_NEXT, "getdents");
-
-// 	if (!init)
-// 	{
-// 		return real_getdents(fd, dirp, count);
-// 	}
-// 	fprintf(stderr,"POSIX, Calling getdents, fd=%d", fd);
-// 	return real_getdents(fd, dirp, count);
-// }
-
-ssize_t readv(int fd, const struct iovec *iov, int iovcnt)
-{
-	if (!real_readv)
-		real_readv = dlsym(RTLD_NEXT, "readv");
-
-	if (!init)
-	{
-		return real_readv(fd, iov, iovcnt);
-	}
-	fprintf(stderr, "POSIX, Calling readv, fd=%d", fd);
-	return real_readv(fd, iov, iovcnt);
-}
-
 void checkOpenFlags(const char *pathname, int flags)
 {
 	slog_debug("Checking flags");
@@ -1775,6 +1750,79 @@ size_t fwrite(const void *buf, size_t size, size_t count, FILE *fp)
 		slog_full("[POSIX]. Calling real 'fwrite', fd=%d", fd);
 		ret = real_fwrite(buf, size, count, fp);
 		slog_full("[POSIX]. Ending real 'fwrite', fd=%d, ret=%d\n", fd, ret);
+	}
+
+	return ret;
+}
+
+ssize_t readv(int fd, const struct iovec *iov, int iovcnt)
+{
+	if (!real_readv)
+		real_readv = dlsym(RTLD_NEXT, "readv");
+
+	if (!init)
+	{
+		return real_readv(fd, iov, iovcnt);
+	}
+
+	errno = 0;
+	ssize_t ret = -1;
+	char *pathname = map_fd_search_by_val(map_fd, fd);
+	if (pathname != NULL)
+	{
+		unsigned long offset = 0;
+		/* Find the total number of bytes to be written.  */
+		size_t bytes = 0;
+		for (int i = 0; i < iovcnt; ++i)
+		{
+			/* Check for ssize_t overflow.  */
+			if (SSIZE_MAX - bytes < iov[i].iov_len)
+			{
+				errno = EINVAL;
+				return -1;
+			}
+			bytes += iov[i].iov_len;
+		}
+
+		/* Allocate a temporary buffer to hold the data.  We should normally
+		 use alloca since it's faster and does not require synchronization
+		 with other threads.  But we cannot if the amount of memory
+		 required is too large.  */
+		char *buffer;
+		// char *malloced_buffer = NULL;
+
+		// malloced_buffer =
+		buffer = (char *)malloc(bytes);
+		if (buffer == NULL)
+			/* XXX I don't know whether it is acceptable to try writing
+			   the data in chunks.  Probably not so we just fail here.  */
+			return -1;
+
+		/* Read the data */
+		ssize_t bytes_read = read(fd, buffer, bytes);
+		if (bytes_read < 0)
+			return -1;
+
+		/* Copy the data from BUFFER into the memory specified by VECTOR.  */
+		bytes = bytes_read;
+		for (int i = 0; i < iovcnt; ++i)
+		{
+			size_t copy = MIN(iov[i].iov_len, bytes);
+			(void)memcpy((void *)iov[i].iov_base, (void *)buffer, copy);
+			buffer += copy;
+			bytes -= copy;
+			if (bytes == 0)
+				break;
+		}
+
+		ret = bytes_read;
+
+		slog_debug("[POSIX]. Ending Hercules 'readv', pathname=%s, ret=%ld\n", pathname, ret);
+	}
+	else
+	{
+		ret = real_readv(fd, iov, iovcnt);
+		slog_full("[POSIX]. Ending real 'readv', fd=%d", fd);
 	}
 
 	return ret;
@@ -3389,7 +3437,7 @@ int unlink(const char *name)
 			{
 				slog_warn("[POSIX]. Hercules Warning, no file descriptor found for the pathname=%s", new_path);
 				ret = -1;
-				//errno = 
+				// errno =
 			}
 			else
 			{

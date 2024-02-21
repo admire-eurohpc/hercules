@@ -1,20 +1,20 @@
 #!/bin/bash
 
-SCRIPT_NAME=c_slurm.sh
-FILE_SIZE=$((1024*1024*10))
-#FILE_SIZE=$((1024*1024*1))
+SCRIPT_NAME=ior_hercules_slurm.sh
+# FILE_SIZE=$((1024*1024*10))
+FILE_SIZE=$((1024*1024*1))
 ATTACHED=0
 #TEST_TYPE="weak"
 TEST_TYPE="strong"
 TEMPLATE_CONFIG_PATH="../conf/hercules-template.conf"
 
 
-NUM_SERVERS_RANGE=( 1 )
-#NUM_SERVERS_RANGE=( 1 2 4 8 )
-NODES_FOR_CLIENTS_RANGE=( 16 )
-#NODES_FOR_CLIENTS_RANGE=( 1 2 4 8 16 )
+NUM_SERVERS_RANGE=( 16 )
+#NUM_SERVERS_RANGE=( 4 8 16 )
+# NODES_FOR_CLIENTS_RANGE=( 16 )
+NODES_FOR_CLIENTS_RANGE=( 1 2 4 8 16 )
 #CLIENTS_PER_NODE_RANGE=( 1 2 4 8 16 32 )
-CLIENTS_PER_NODE_RANGE=( 32 )
+CLIENTS_PER_NODE_RANGE=( 16 )
 BLOCK_SIZE_RANGE=( 512 )
 
 # set -o xtrace
@@ -68,11 +68,11 @@ do
 
 				## The first job does not have dependencie (do not wait for another job to end). 
 				if [ "$jid" -eq 1 ]; then
-					jid=$(sbatch -N $NUMBER_OF_NODES $SCRIPT_NAME "$CONFIG_PATH" "$FILE_SIZE_PER_CLIENT" | cut -d ' ' -f4)
+					jid=$(sbatch -N $NUMBER_OF_NODES $SCRIPT_NAME "$CONFIG_PATH" "$FILE_SIZE_PER_CLIENT" "$TOTAL_NUMBER_OF_CLIENTS" "$CLIENTS_PER_NODE" | cut -d ' ' -f4)
 					echo $jid
 				## The following jobs wait for the previous job to finish.
 				else
-					jid=$(sbatch --dependency=afterany:"${jid}" -N $NUMBER_OF_NODES $SCRIPT_NAME "$CONFIG_PATH" "$FILE_SIZE_PER_CLIENT" | cut -d ' ' -f4)
+					jid=$(sbatch --dependency=afterany:"${jid}" -N $NUMBER_OF_NODES $SCRIPT_NAME "$CONFIG_PATH" "$FILE_SIZE_PER_CLIENT"  "$TOTAL_NUMBER_OF_CLIENTS" "$CLIENTS_PER_NODE" | cut -d ' ' -f4)
 				fi
 				### exit 0
 				set +x
