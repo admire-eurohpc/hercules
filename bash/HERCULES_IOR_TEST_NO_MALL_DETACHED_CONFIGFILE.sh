@@ -1,8 +1,8 @@
 #!/bin/bash
 
 SCRIPT_NAME=ior_hercules_slurm.sh
-# FILE_SIZE=$((1024*1024*10))
-FILE_SIZE=$((1024*1024*1))
+FILE_SIZE=$((1024*1024*10))
+#FILE_SIZE=$((1024*1024*100))
 ATTACHED=0
 #TEST_TYPE="weak"
 TEST_TYPE="strong"
@@ -12,7 +12,7 @@ TEMPLATE_CONFIG_PATH="../conf/hercules-template.conf"
 NUM_SERVERS_RANGE=( 16 )
 #NUM_SERVERS_RANGE=( 4 8 16 )
 # NODES_FOR_CLIENTS_RANGE=( 16 )
-NODES_FOR_CLIENTS_RANGE=( 1 2 4 8 16 )
+NODES_FOR_CLIENTS_RANGE=( 16 )
 #CLIENTS_PER_NODE_RANGE=( 1 2 4 8 16 32 )
 CLIENTS_PER_NODE_RANGE=( 16 )
 BLOCK_SIZE_RANGE=( 512 )
@@ -50,11 +50,12 @@ do
 					FILE_SIZE_PER_CLIENT=$((FILE_SIZE/TOTAL_NUMBER_OF_CLIENTS))
 				fi
 
-				CONFIG_PATH="../conf/${NUM_SERVERS}s-${NODES_FOR_CLIENTS}nfc-${CLIENTS_PER_NODE}cpd.conf"
+				CONFIG_PATH="../conf/${NUM_SERVERS}s-${NODES_FOR_CLIENTS}nfc-${CLIENTS_PER_NODE}cpd_${BLOCK_SIZE}blocksize.conf"
 				## If the configuration file does not exist then we create one by using a template and modifying the necessary variables.
 				if ! [ -f "$CONFIG_PATH" ]; then
 					
 					cp $TEMPLATE_CONFIG_PATH $TEMPLATE_CONFIG_PATH."_TEMP"
+					sed -i "s/^BLOCK_SIZE = [0-9]*/BLOCK_SIZE = $BLOCK_SIZE/g"  "$TEMPLATE_CONFIG_PATH"
 					sed -i "s/^NUM_DATA_SERVERS = [0-9]/NUM_DATA_SERVERS = $NUM_SERVERS/g"  "$TEMPLATE_CONFIG_PATH"
 					sed -i "s/^NUM_NODES_FOR_CLIENTS = [0-9]/NUM_NODES_FOR_CLIENTS = $NODES_FOR_CLIENTS/g"  "$TEMPLATE_CONFIG_PATH"
 					sed -i "s/^NUM_CLIENTS_PER_NODE = [0-9]/NUM_CLIENTS_PER_NODE = $CLIENTS_PER_NODE/g"  "$TEMPLATE_CONFIG_PATH"
@@ -62,6 +63,8 @@ do
 					cat $TEMPLATE_CONFIG_PATH > "$CONFIG_PATH"
 					cp $TEMPLATE_CONFIG_PATH."_TEMP" $TEMPLATE_CONFIG_PATH
 				fi
+
+				exit 0
 			
 				### continue	FIXED
 				set -x
