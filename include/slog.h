@@ -72,7 +72,7 @@ extern "C"
 #define SLOG_TIME 8
 #define SLOG_FULL 9
 
-#define USESLOG
+// #define USESLOG
 #ifdef USESLOG
 #define slog_none(...) \
     slog(SLOG_NONE, __func__, __VA_ARGS__);
@@ -114,6 +114,7 @@ extern "C"
 #define slog_fatal(...) ;
 #define slog_panic(...) ;
 #define slog_time(...) ;
+#define slog_full(...) ;
 #endif /* _SLOG */
 
 /* Definitions for version informations. */

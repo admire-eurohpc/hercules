@@ -1292,6 +1292,7 @@ int32_t open_dataset(char *dataset_uri, int opened)
 		{
 			slog_fatal("HERCULES_ERR_OPEN_DATASET_ALREADY_STORED");
 			slog_live("new_dataset.local_conn=%d", new_dataset.local_conn);
+			// fprintf(stderr, "HERCULES_ERR_OPEN_DATASET_ALREADY_STORED\n");
 			return -EEXIST;
 			// return -1;
 			// return 0;

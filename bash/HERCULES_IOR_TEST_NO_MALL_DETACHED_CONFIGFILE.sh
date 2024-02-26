@@ -9,8 +9,8 @@ TEST_TYPE="strong"
 TEMPLATE_CONFIG_PATH="../conf/hercules-template.conf"
 
 
-NUM_SERVERS_RANGE=( 16 )
-#NUM_SERVERS_RANGE=( 4 8 16 )
+#NUM_SERVERS_RANGE=( 16 )
+NUM_SERVERS_RANGE=( 1 4 8 16 32)
 # NODES_FOR_CLIENTS_RANGE=( 16 )
 NODES_FOR_CLIENTS_RANGE=( 16 )
 #CLIENTS_PER_NODE_RANGE=( 1 2 4 8 16 32 )
@@ -63,9 +63,6 @@ do
 					cat $TEMPLATE_CONFIG_PATH > "$CONFIG_PATH"
 					cp $TEMPLATE_CONFIG_PATH."_TEMP" $TEMPLATE_CONFIG_PATH
 				fi
-
-				exit 0
-			
 				### continue	FIXED
 				set -x
 

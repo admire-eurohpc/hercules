@@ -132,7 +132,7 @@ void print_file_type(struct stat s, const char *pathname)
 
 void fd_lookup(const char *path, int *fd, struct stat *s, char **aux)
 {
-	// pthread_mutex_lock(&lock_file);
+	pthread_mutex_lock(&lock_file);
 	*fd = -1;
 	int found = map_search(map, path, fd, s, aux);
 	if (found == -1)
@@ -142,7 +142,7 @@ void fd_lookup(const char *path, int *fd, struct stat *s, char **aux)
 		*fd = -1;
 	}
 	slog_live("[imss_posix_api] path=%s, found=%d, fd=%d", path, found, *fd);
-	// pthread_mutex_unlock(&lock_file);
+	pthread_mutex_unlock(&lock_file);
 }
 
 void get_iuri(const char *path, /*output*/ char *uri)
@@ -200,6 +200,7 @@ int imss_refresh(const char *path)
 	else
 	{
 		slog_warn("[imss_refresh] %s", strerror(ENOENT));
+		// fprintf(stderr, "[imss_refresh] File %s not found\n", imss_path);
 		free(imss_path);
 		free(aux);
 		return -ENOENT;
@@ -218,7 +219,8 @@ int imss_refresh(const char *path)
 		return -1;
 	}
 	stats = (struct stat *)aux;
-	slog_debug("[imss_refresh] ret=%ld ds=%d, st_size=%ld, st_nlink=%d", ret, ds, stats->st_size, stats->st_nlink);
+	// fprintf(stderr, "[imss_refresh] path=%s, ret=%d, ds=%d, st_size=%ld, st_nlink=%lu\n", path, ret, ds, stats->st_size, stats->st_nlink);
+	slog_debug("[imss_refresh] ret=%d, ds=%d, st_size=%ld, st_nlink=%lu", ret, ds, stats->st_size, stats->st_nlink);
 	map_update(map, imss_path, ds, *stats);
 
 	// 	slog_debug("[imss_refresh] Calling map_search, %s", path);
@@ -338,7 +340,9 @@ int imss_getattr(const char *path, struct stat *stbuf)
 				pthread_mutex_unlock(&lock_file);
 				// free(aux);
 			}
-			else if(ds == -EEXIST) {
+			else if (ds == -EEXIST)
+			{
+				fprintf(stderr,"[imss_getattr] ds=%d, %s\n", ds, strerror(EEXIST));
 				return 0;
 			}
 			else
@@ -349,10 +353,12 @@ int imss_getattr(const char *path, struct stat *stbuf)
 		}
 
 		slog_debug("stats.st_nlink=%lu, stats.st_size=%lu", stats.st_nlink, stats.st_size);
+		// fprintf(stderr, "[imss_getattr] path=%s, ds=%d, stats.st_nlink=%lu, stats.st_size=%lu\n", path, ds, stats.st_nlink, stats.st_size);
 		// if (stats.st_nlink != 0)
 		{
-			memcpy(stbuf, &stats, sizeof(struct stat));
+			// memcpy(stbuf, &stats, sizeof(struct stat));
 		}
+		stbuf->st_size = stats.st_size;
 		// else
 		// {
 		// 	// fprintf(stderr, "[IMSS-FUSE]	Cannot get dataset metadata.");
@@ -362,6 +368,7 @@ int imss_getattr(const char *path, struct stat *stbuf)
 		// stbuf->st_blocks = ceil((double)stbuf->st_size / IMSS_BLKSIZE);
 		stbuf->st_blocks = ceil((double)stbuf->st_size / 512.0); // Number 512-byte blocks allocated.
 		slog_debug("[imss_getattr] path=%s, imss_path=%s, file descriptor=%d, file size=%lu, stbuf->st_blocks=%lu", path, imss_path, fd, stbuf->st_size, stbuf->st_blocks);
+		// fprintf(stderr, "[imss_getattr] path=%s, imss_path=%s, file descriptor=%d, file size=%lu, stbuf->st_blocks=%lu\n", path, imss_path, fd, stbuf->st_size, stbuf->st_blocks);
 		print_file_type(*stbuf, path);
 
 		return 0;
@@ -498,6 +505,7 @@ int imss_open(char *path, uint64_t *fh)
 	// Look for the 'file descriptor' of 'imss_path' in the local map.
 	fd_lookup(imss_path, &fd, &stats, &aux);
 	slog_info("[FUSE][imss_posix_api] imss_path=%s, fd looked up=%d", imss_path, fd);
+	// fprintf(stderr, "[FUSE][imss_posix_api] imss_path=%s, fd looked up=%d\n", imss_path, fd);
 	if (fd >= 0)
 	{
 		print_file_type(stats, imss_path);
@@ -512,7 +520,8 @@ int imss_open(char *path, uint64_t *fh)
 	else
 	{
 		file_desc = open_dataset(imss_path, 1);
-		if (file_desc < 0)
+		// if (file_desc < 0)
+		if (file_desc != -EEXIST)
 		{ // dataset was not found.
 			slog_warn("[FUSE][imss_posix_api] imss_path=%s, file_desc=%d", imss_path, file_desc);
 			*fh = file_desc;
@@ -521,6 +530,9 @@ int imss_open(char *path, uint64_t *fh)
 			strcpy(path, imss_path);
 			// return -2;
 			return file_desc;
+		}
+		if (file_desc == -EEXIST) {
+			file_desc = 0;
 		}
 		aux = (char *)malloc(IMSS_DATA_BSIZE);
 		ret = get_data(file_desc, 0, (char *)aux);
@@ -2068,16 +2080,16 @@ int imss_close(const char *path, int fd)
 	// TIMING(flush_data(), "[imss_close]flush_data", int32_t);
 	int ret = 0;
 	slog_debug("[imss_close] Calling imss_flush_data");
-	imss_flush_data();
+	// imss_flush_data();
 	slog_debug("[imss_close] Ending imss_flush_data");
-	imss_release(path);
-	slog_debug("[imss_close] Ending imss_release");
+	ret = imss_release(path);
+	slog_debug("[imss_close] Ending imss_release, ret=%d", ret);
 	ret = close_dataset(path, fd);
 	slog_debug("[imss_close] Ending close_dataset, ret=%d", ret);
 	// imss_refresh is too slow.
 	// When we remove it pass from 3.45 sec to 0.008505 sec.
 	if (ret)
-	{
+	{ // if the file was not deleted by the close we update the stat.
 		imss_refresh(path);
 		slog_debug("[imss_close] Ending imss_refresh");
 	}
@@ -2110,6 +2122,7 @@ int imss_create(const char *path, mode_t mode, uint64_t *fh, int opened)
 	if (res < 0)
 	{
 		slog_error("[imss_create] Cannot create new dataset, may already exist.\n");
+		// fprintf(stderr, "[imss_create] Cannot create new dataset %s, may already exist.\n", path);
 		// free(rpath);
 		return res;
 	}
@@ -2134,13 +2147,11 @@ int imss_create(const char *path, mode_t mode, uint64_t *fh, int opened)
 	ds_stat.st_ino = res;
 	ds_stat.st_dev = 0;
 
-
 	// slog_live("[imss_create] IMSS_DATA_BSIZE:%ld, res=%d", IMSS_DATA_BSIZE, res);
 	if (!S_ISDIR(mode))
 		mode |= S_IFREG;
 	ds_stat.st_mode = mode;
 	print_file_type(ds_stat, path);
-
 
 	// Write initial block
 	void *buff = (void *)malloc(IMSS_DATA_BSIZE); //[IMSS_DATA_BSIZE];

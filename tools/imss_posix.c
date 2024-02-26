@@ -941,12 +941,13 @@ int close(int fd)
 	char *pathname = map_fd_search_by_val(map_fd, fd);
 	if (pathname != NULL)
 	{
-		if (release)
+		// if (release)
 		{
 			// pthread_mutex_lock(&system_lock);
 			slog_debug("[POSIX]. Calling Hercules 'close', pathname=%s, fd=%d", pathname, fd);
 			ret = imss_close(pathname, fd);
 			slog_debug("[POSIX]. Ending Hercules 'close', pathname=%s, ret=%d\n", pathname, ret);
+			// fprintf(stderr,"[POSIX]. Ending Hercules 'close', pathname=%s, ret=%d\n", pathname, ret);
 
 			map_fd_update_value(map_fd, pathname, fd, 0);
 		}
@@ -1094,7 +1095,8 @@ int __xstat(int ver, const char *pathname, struct stat *stat_buf)
 			slog_error("[POSIX] Error Hercules '__xstat', %s, %d:%s", pathname, errno, strerror(errno));
 		}
 
-		slog_debug("[POSIX] End Hercules '__xstat', pathname=%s, ver=%d, new_path=%s, ret=%d\n", pathname, ver, new_path, ret);
+		slog_debug("[POSIX] End Hercules '__xstat', pathname=%s, ver=%d, new_path=%s, ret=%d, filesize=%ld\n", pathname, ver, new_path, ret, stat_buf->st_size);
+		// fprintf(stderr,"[POSIX] End Hercules '__xstat', pathname=%s, ver=%d, new_path=%s, ret=%d, filesize=%ld\n", pathname, ver, new_path, ret, stat_buf->st_size);
 		free(new_path);
 	}
 	else
@@ -1770,6 +1772,7 @@ ssize_t readv(int fd, const struct iovec *iov, int iovcnt)
 	char *pathname = map_fd_search_by_val(map_fd, fd);
 	if (pathname != NULL)
 	{
+		fprintf(stderr,"[POSIX]. Calling Hercules 'readv', pathname=%s, ret=%ld\n", pathname, ret);
 		unsigned long offset = 0;
 		/* Find the total number of bytes to be written.  */
 		size_t bytes = 0;
@@ -2400,11 +2403,6 @@ ssize_t generalWrite(const char *pathname, int fd, const void *buf, size_t size,
 		}
 	}
 
-	// char pathname_[1000];
-	// int inf_kk = open(O_CREAT | O_WRONLY, 0600);
-	// write(inf_kk, buf, ret);
-	// close(inf_kk);
-	// pthread_mutex_unlock(&system_lock);
 	return ret;
 }
 
@@ -3202,7 +3200,8 @@ ssize_t read(int fd, void *buf, size_t size)
 		}
 
 		unsigned long offset = 0;
-		slog_debug("[POSIX]. Calling Hercules 'read', pathname=%s, size=%ld, fd=%ld.", pathname, size, fd);
+		slog_debug("[POSIX]. Calling Hercules 'read', pathname=%s, size=%ld, fd=%d.", pathname, size, fd);
+		// fprintf(stderr, "[POSIX]. Calling Hercules 'read', pathname=%s, size=%ld, fd=%d\n", pathname, size, fd);
 
 		if (fd < 0)
 		{
@@ -3232,7 +3231,7 @@ ssize_t read(int fd, void *buf, size_t size)
 		else if (offset > ds_stat_n.st_size)
 		{
 			slog_warn("[POSIX] Trying to read %ld bytes in the gap, offset=%ld >= data_size=%ld", size, offset, ds_stat_n.st_size);
-			// fprintf(stderr,"[POSIX] Trying to read %ld bytes in the gap, offset=%ld >= data_size=%ld\n", size, offset, ds_stat_n.st_size);
+			fprintf(stderr,"[POSIX] Trying to read %ld bytes in the gap, offset=%ld >= data_size=%ld\n", size, offset, ds_stat_n.st_size);
 
 			// memcpy(buf, '0', size);
 			// memset(buf, '\0', size);
