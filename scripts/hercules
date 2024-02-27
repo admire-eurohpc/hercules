@@ -102,7 +102,7 @@ fi
 
 # If slurm is not use, we hope user set three hostfiles (for metadata, data and clients).
 SERVERS_HOSTFILES_OPTION=0
-if [[ "$SLURM" -eq "0" ]]; then
+if [[ "$SLURM" -eq "0" && ! $STATUS = "stop" ]]; then
     if [ ! -z "$DATA_SERVER_FILE" ]; then
         echo "Data server file - $DATA_SERVER_FILE"
         if [ ! -f "$DATA_SERVER_FILE" ]; then

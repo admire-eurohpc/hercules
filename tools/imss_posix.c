@@ -897,19 +897,20 @@ void __attribute__((destructor)) run_me_last()
 {
 	errno = 0;
 	slog_live("Calling 'run_me_last', pid=%d, rank=%d, release=%d", g_pid, rank, release);
+	// sleep(20);
 	if (release == 1)
 	// if (false)
 	{
-		clock_t t_s;
-		double time_taken;
-		t_s = clock();
+		// clock_t t_s;
+		// double time_taken;
+		// t_s = clock();
 		release = -1;
 		slog_live("[POSIX] release_imss()");
 		release_imss("imss://", CLOSE_DETACHED);
 		slog_live("[POSIX] stat_release()");
 		stat_release();
-		t_s = clock() - t_s;
-		time_taken = ((double)t_s) / (CLOCKS_PER_SEC);
+		// t_s = clock() - t_s;
+		// time_taken = ((double)t_s) / (CLOCKS_PER_SEC);
 	}
 	slog_live("End 'run_me_last', pid=%d, release=%d", g_pid, release);
 }
@@ -1119,7 +1120,7 @@ pid_t fork(void)
 	}
 
 	errno = 0;
-	slog_debug("[POSIX] Calling '%s'", __func__);
+	slog_debug("[POSIX] Calling fork");
 	pid_t pid = real_fork();
 
 	if (pid == -1)
@@ -1188,7 +1189,7 @@ pid_t vfork(void)
 	// slog_debug("[POSIX] Ending real '%s', pid=%d", __func__, pid);
 
 	errno = 0;
-	slog_debug("[POSIX] Calling '%s'", __func__);
+	slog_debug("[POSIX] Calling vfork");
 	// pid_t pid = real_vfork();
 	pid_t pid = fork(); // real_fork();
 

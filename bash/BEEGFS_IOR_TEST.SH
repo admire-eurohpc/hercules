@@ -1,8 +1,8 @@
 #!/bin/bash
 
 SCRIPT_NAME="ior_beegfs_slurm.sh"
-FILE_SIZE=$((1024*1024*1))
-# FILE_SIZE=$((1024*1024*10))
+#FILE_SIZE=$((1024*1024*1))
+FILE_SIZE=$((1024*1024*10))
 
 NODES_FOR_CLIENTS_RANGE=( 1 2 4 8 16 32 )
 # NODES_FOR_CLIENTS_RANGE=( 32 )
@@ -40,7 +40,6 @@ do
 				jid=$(sbatch --dependency=afterany:"${jid}" -N $NUMBER_OF_NODES $SCRIPT_NAME "$FILE_SIZE_PER_CLIENT" "$TOTAL_NUMBER_OF_CLIENTS" "$PROCESS_PER_NODE" | cut -d ' ' -f4)
 				echo $jid
 			fi
-			### exit 0
 			set +x
 
 		done

@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=ior_g    # Job name
 #SBATCH --time=01:00:00               # Time limit hrs:min:sec
-#SBATCH --output=logs/beegfs/%j_hercules.log   # Standard output and error log
+#SBATCH --output=logs/beegfs/%j_file_per_process.log   # Standard output and error log
 #SBATCH --mem=0
 #SBATCH --overcommit
 #SBATCH --oversubscribe
@@ -19,7 +19,7 @@ whereis mpiexec
 echo "Running processes, slurm nodes: $SLURM_NNODES"
 # TRANSFER_SIZE=$((1024*1))
 TRANSFER_SIZE=$FILE_SIZE_PER_CLIENT
-COMMAND="$IOR_PATH/ior -t ${TRANSFER_SIZE}kb -b ${FILE_SIZE_PER_CLIENT}kb -s 1 -i 5 -F -k -o /beegfs/home/javier.garciablas/hercules/bash/ior_output/data.txt"
+COMMAND="$IOR_PATH/ior -t ${TRANSFER_SIZE}kb -b ${FILE_SIZE_PER_CLIENT}kb -s 1 -i 5 -F -o /beegfs/home/javier.garciablas/hercules/bash/ior_output/data.txt"
 
 
 set -x

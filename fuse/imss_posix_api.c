@@ -342,7 +342,7 @@ int imss_getattr(const char *path, struct stat *stbuf)
 			}
 			else if (ds == -EEXIST)
 			{
-				fprintf(stderr,"[imss_getattr] ds=%d, %s\n", ds, strerror(EEXIST));
+				fprintf(stderr, "[imss_getattr] ds=%d, %s\n", ds, strerror(EEXIST));
 				return 0;
 			}
 			else
@@ -356,9 +356,9 @@ int imss_getattr(const char *path, struct stat *stbuf)
 		// fprintf(stderr, "[imss_getattr] path=%s, ds=%d, stats.st_nlink=%lu, stats.st_size=%lu\n", path, ds, stats.st_nlink, stats.st_size);
 		// if (stats.st_nlink != 0)
 		{
-			// memcpy(stbuf, &stats, sizeof(struct stat));
+			memcpy(stbuf, &stats, sizeof(struct stat));
 		}
-		stbuf->st_size = stats.st_size;
+		// stbuf->st_size = stats.st_size;
 		// else
 		// {
 		// 	// fprintf(stderr, "[IMSS-FUSE]	Cannot get dataset metadata.");
@@ -520,9 +520,15 @@ int imss_open(char *path, uint64_t *fh)
 	else
 	{
 		file_desc = open_dataset(imss_path, 1);
-		// if (file_desc < 0)
-		if (file_desc != -EEXIST)
-		{ // dataset was not found.
+		switch (file_desc)
+		{
+		case -EEXIST: // file already exists case.
+		{
+			file_desc = 0;
+			break;
+		}
+		case -2: // symbolic link case.
+		{
 			slog_warn("[FUSE][imss_posix_api] imss_path=%s, file_desc=%d", imss_path, file_desc);
 			*fh = file_desc;
 			// errno = 2;
@@ -530,10 +536,15 @@ int imss_open(char *path, uint64_t *fh)
 			strcpy(path, imss_path);
 			// return -2;
 			return file_desc;
+			break;
 		}
-		if (file_desc == -EEXIST) {
-			file_desc = 0;
+		case -1: // no such file or directory case.
+		{
+			return -ENOENT;
+			break;
 		}
+		}
+
 		aux = (char *)malloc(IMSS_DATA_BSIZE);
 		ret = get_data(file_desc, 0, (char *)aux);
 		slog_live("[imss_open] ret=%d, file_desc=%d", ret, file_desc);
