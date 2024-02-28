@@ -1823,6 +1823,7 @@ int32_t stat_dataset(const char *dataset_uri, dataset_info *dataset_info_, int o
 	// Send the request.
 	size_t msg_len = 0;
 	msg_len = send_req(ucp_worker_meta, ep, local_addr_meta, local_addr_len_meta, formated_uri);
+	slog_live("[IMSS][stat_dataset] Request has been sent - %s", formated_uri);
 	if (msg_len == 0)
 	{
 		slog_error("HERCULES_ERR_STAT_DATASET_SEND_REQ");
@@ -1832,6 +1833,7 @@ int32_t stat_dataset(const char *dataset_uri, dataset_info *dataset_info_, int o
 
 	// Get the length of the message to be received.
 	size_t length = 0;
+	slog_live("[IMSS][stat_dataset] getting msg lenght");
 	length = get_recv_data_length(ucp_worker_meta, local_meta_uid);
 	slog_live("[IMSS][stat_dataset] msg lenght=%lu", length);
 	if (length == 0)

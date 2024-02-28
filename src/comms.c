@@ -69,8 +69,8 @@ int init_worker(ucp_context_h ucp_context, ucp_worker_h *ucp_worker)
 
 	memset(&worker_params, 0, sizeof(worker_params));
 
-	worker_params.field_mask = UCP_WORKER_PARAM_FIELD_THREAD_MODE;
-	worker_params.thread_mode = UCS_THREAD_MODE_MULTI;
+	// worker_params.field_mask = UCP_WORKER_PARAM_FIELD_THREAD_MODE;
+	// worker_params.thread_mode = UCS_THREAD_MODE_MULTI;
 	// worker_params.thread_mode = UCS_THREAD_MODE_SERIALIZED;
 
 	status = ucp_worker_create(ucp_context, &worker_params, ucp_worker);

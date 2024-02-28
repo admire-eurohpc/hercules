@@ -27,12 +27,12 @@
 #include <sys/utsname.h>
 #include <sys/epoll.h>
 #include <sys/time.h>
-#include <fcntl.h>
+// #include <fcntl.h>
 // Those are used by reports functions in stat.
 #include <pwd.h>
 #include <sys/sysmacros.h>
 #undef __USE_GNU
-#include <poll.h>
+// #include <poll.h>
 
 #include <sys/ptrace.h>
 
@@ -212,9 +212,9 @@ static ssize_t (*real_writev)(int fd, const struct iovec *iov, int iovcnt) = NUL
 // ssize_t preadv(int fd, const struct iovec *iov, int iovcnt, off_t offset);
 static ssize_t (*real_pwritev)(int fd, const struct iovec *iov, int iovcnt, off_t offset) = NULL;
 static ssize_t (*real_pwrite64)(int fd, const void *buf, size_t count, off64_t offset) = NULL;
-static int (*real_poll)(struct pollfd *fds, nfds_t nfds, int timeout) = NULL;
-static int (*real_ppoll)(struct pollfd *fds, nfds_t nfds, const struct timespec tmo_p, const sigset_t sigmask) = NULL;
-static int (*real_fcntl)(int fd, int cmd, ... /* arg */) = NULL;
+// static int (*real_poll)(struct pollfd *fds, nfds_t nfds, int timeout) = NULL;
+// static int (*real_ppoll)(struct pollfd *fds, nfds_t nfds, const struct timespec tmo_p, const sigset_t sigmask) = NULL;
+// static int (*real_fcntl)(int fd, int cmd, ... /* arg */) = NULL;
 static int (*real_syncfs)(int fd) = NULL;
 static int (*real_posix_fadvise)(int fd, off_t offset, off_t len, int advice) = NULL;
 static int (*real_posix_fadvise64)(int fd, off64_t offset, off64_t len, int advice) = NULL;
@@ -1773,7 +1773,7 @@ ssize_t readv(int fd, const struct iovec *iov, int iovcnt)
 	char *pathname = map_fd_search_by_val(map_fd, fd);
 	if (pathname != NULL)
 	{
-		fprintf(stderr,"[POSIX]. Calling Hercules 'readv', pathname=%s, ret=%ld\n", pathname, ret);
+		fprintf(stderr, "[POSIX]. Calling Hercules 'readv', pathname=%s, ret=%ld\n", pathname, ret);
 		unsigned long offset = 0;
 		/* Find the total number of bytes to be written.  */
 		size_t bytes = 0;
@@ -2002,63 +2002,64 @@ ssize_t pwrite64(int fd, const void *buf, size_t count, off64_t offset)
 	return ret;
 }
 
-int poll(struct pollfd *fds, nfds_t nfds, int timeout)
-{
-	if (!real_poll)
-		real_poll = dlsym(RTLD_NEXT, "poll");
+// int poll(struct pollfd *fds, nfds_t nfds, int timeout)
+// {
+// 	if (!real_poll)
+// 		real_poll = dlsym(RTLD_NEXT, "poll");
 
-	if (!init)
-	{
-		return real_poll(fds, nfds, timeout);
-	}
+// 	if (!init)
+// 	{
+// 		return real_poll(fds, nfds, timeout);
+// 	}
 
-	errno = 0;
-	size_t ret = -1;
-	char *pathname = map_fd_search_by_val(map_fd, fds->fd);
-	if (pathname != NULL)
-	{
-		slog_debug("[POSIX]. Calling Hercules 'poll', pathname=%s, fd=%d", pathname, fds->fd);
-		ret = 0;
-		errno = ETIME;
-		slog_debug("[POSIX]. Ending Hercules 'poll', pathname=%s, fd=%d, ret=%ld,  errno=%d:%s\n", pathname, fds->fd, ret, errno, strerror(errno));
-	}
-	else
-	{
-		// slog_debug("[POSIX]. Calling real 'poll', fd=%d, errno=%d:%s", fds->fd, errno, strerror(errno))
-		ret = real_poll(fds, nfds, timeout);
-		// slog_debug("[POSIX]. Ending real 'poll', fd=%d, errno=%d:%s", fds->fd, errno, strerror(errno))
-	}
-	return ret;
-}
+// 	errno = 0;
+// 	size_t ret = -1;
+// 	int fd = fds->fd;
+// 	char *pathname = map_fd_search_by_val(map_fd, fd);
+// 	if (pathname != NULL)
+// 	{
+// 		slog_debug("[POSIX]. Calling Hercules 'poll', pathname=%s, fd=%d", pathname, fds->fd);
+// 		ret = 0;
+// 		// errno = ETIME;
+// 		slog_debug("[POSIX]. Ending Hercules 'poll', pathname=%s, fd=%d, ret=%ld\n", pathname, fds->fd, ret);
+// 	}
+// 	else
+// 	{
+// 		// slog_debug("[POSIX]. Calling real 'poll', fd=%d, errno=%d:%s", fds->fd, errno, strerror(errno))
+// 		ret = real_poll(fds, nfds, timeout);
+// 		slog_debug("[POSIX]. Ending real 'poll', fd=%d", fds->fd)
+// 	}
+// 	return ret;
+// }
 
-int ppoll(struct pollfd *fds, nfds_t nfds, const struct timespec tmo_p, const sigset_t sigmask)
-{
-	if (!real_ppoll)
-		real_ppoll = dlsym(RTLD_NEXT, "ppoll");
+// int ppoll(struct pollfd *fds, nfds_t nfds, const struct timespec tmo_p, const sigset_t sigmask)
+// {
+// 	if (!real_ppoll)
+// 		real_ppoll = dlsym(RTLD_NEXT, "ppoll");
 
-	if (!init)
-	{
-		return real_ppoll(fds, nfds, tmo_p, sigmask);
-	}
+// 	if (!init)
+// 	{
+// 		return real_ppoll(fds, nfds, tmo_p, sigmask);
+// 	}
 
-	errno = 0;
-	size_t ret = -1;
-	char *pathname = map_fd_search_by_val(map_fd, fds->fd);
-	if (pathname != NULL)
-	{
-		slog_debug("[POSIX]. Calling Hercules 'ppoll', pathname=%s, fd=%d", pathname, fds->fd);
-		ret = 0;
-		errno = ETIME;
-		slog_debug("[POSIX]. Ending Hercules 'ppoll', pathname=%s, fd=%d, ret=%ld,  errno=%d:%s\n", pathname, fds->fd, ret, errno, strerror(errno));
-	}
-	else
-	{
-		// slog_debug("[POSIX]. Calling real 'ppoll', fd=%d, errno=%d:%s", fds->fd, errno, strerror(errno));
-		ret = real_ppoll(fds, nfds, tmo_p, sigmask);
-		// slog_debug("[POSIX]. Ending real 'ppoll', fd=%d, errno=%d:%s", fds->fd, errno, strerror(errno));
-	}
-	return ret;
-}
+// 	errno = 0;
+// 	size_t ret = -1;
+// 	char *pathname = map_fd_search_by_val(map_fd, fds->fd);
+// 	if (pathname != NULL)
+// 	{
+// 		slog_debug("[POSIX]. Calling Hercules 'ppoll', pathname=%s, fd=%d", pathname, fds->fd);
+// 		ret = 0;
+// 		// errno = ETIME;
+// 		slog_debug("[POSIX]. Ending Hercules 'ppoll', pathname=%s, fd=%d, ret=%ld,  errno=%d:%s\n", pathname, fds->fd, ret, errno, strerror(errno));
+// 	}
+// 	else
+// 	{
+// 		// slog_debug("[POSIX]. Calling real 'ppoll', fd=%d, errno=%d:%s", fds->fd, errno, strerror(errno));
+// 		ret = real_ppoll(fds, nfds, tmo_p, sigmask);
+// 		slog_debug("[POSIX]. Ending real 'ppoll', fd=%d", fds->fd);
+// 	}
+// 	return ret;
+// }
 
 int ferror(FILE *fp)
 {
@@ -3232,7 +3233,7 @@ ssize_t read(int fd, void *buf, size_t size)
 		else if (offset > ds_stat_n.st_size)
 		{
 			slog_warn("[POSIX] Trying to read %ld bytes in the gap, offset=%ld >= data_size=%ld", size, offset, ds_stat_n.st_size);
-			fprintf(stderr,"[POSIX] Trying to read %ld bytes in the gap, offset=%ld >= data_size=%ld\n", size, offset, ds_stat_n.st_size);
+			fprintf(stderr, "[POSIX] Trying to read %ld bytes in the gap, offset=%ld >= data_size=%ld\n", size, offset, ds_stat_n.st_size);
 
 			// memcpy(buf, '0', size);
 			// memset(buf, '\0', size);
@@ -5436,212 +5437,145 @@ int posix_fadvise(int fd, off_t offset, off_t len, int advice)
 	return ret;
 }
 
-// int posix_fadvise64(int fd, off64_t offset, off64_t len, int advice)
+
+// int fcntl(int fd, int cmd, ... /* arg */)
 // {
-// 	if (!real_posix_fadvise64)
-// 		real_posix_fadvise64 = dlsym(RTLD_NEXT, "posix_fadvise64");
+// 	if (!real_fcntl)
+// 		real_fcntl = dlsym(RTLD_NEXT, "fcntl");
+// 	// FIX ME!
 
-// 	fprintf(stderr, "Calling 'posix_fadvise64', fd=%d, errno=%d:%s\n", fd, errno, strerror(errno));
-// 	if (init)
+// 	va_list ap;
+// 	void *arg;
+// 	va_start(ap, cmd);
+// 	arg = va_arg(ap, void *);
+// 	va_end(ap);
+
+// 	if (!init)
 // 	{
-// 		slog_debug("Calling posix_fadvise64, fd=%d", fd);
-// 	}
-// 	return real_posix_fadvise64(fd, offset, len, advice);
-// }
-
-int creat(const char *pathname, mode_t mode)
-{
-	if (!real_creat)
-	{
-		real_creat = dlsym(RTLD_NEXT, "creat");
-	}
-	// fprintf(stderr, "TODO: Calling creat, %s\n", pathname);
-	if (!init)
-	{
-		return real_creat(pathname, mode);
-	}
-
-	slog_warn("[POSIX][TODO] Calling real creat, pathname=%s", pathname);
-
-	return real_creat(pathname, mode);
-}
-
-int syncfs(int fd)
-{
-	if (!real_syncfs)
-		real_syncfs = dlsym(RTLD_NEXT, "syncfs");
-
-	if (!init)
-	{
-		return real_syncfs(fd);
-	}
-
-	errno = 0;
-	int ret = 0;
-	char *pathname;
-	if (pathname = map_fd_search_by_val(map_fd, fd))
-	{
-		slog_debug("[POSIX] Calling Hercules syncfs, pathname=%s", pathname);
-	}
-
-	return real_syncfs(fd);
-}
-
-int fcntl(int fd, int cmd, ... /* arg */)
-{
-	if (!real_fcntl)
-		real_fcntl = dlsym(RTLD_NEXT, "fcntl");
-	// FIX ME!
-
-	va_list ap;
-	void *arg;
-	va_start(ap, cmd);
-	arg = va_arg(ap, void *);
-	va_end(ap);
-
-	if (!init)
-	{
-		if (!arg)
-			return real_fcntl(fd, cmd);
-		else
-			return real_fcntl(fd, cmd, arg);
-	}
-
-	errno = 0;
-	int ret = 0;
-	char *pathname = map_fd_search_by_val(map_fd, fd);
-	// if (pathname = map_fd_search_by_val(map_fd, fd))
-	if (pathname != NULL)
-	{
-		slog_debug("[POSIX]. Calling Hercules 'fcntl', pathname=%s, fd=%d", pathname, fd);
-		cmd = FCNTL_ADJUST_CMD(cmd);
-		switch (cmd)
-		{
-		// case F_SETLKW:
-		case F_SETLKW64: // release the existence of record locks.
-			// return SYSCALL_CANCEL(fcntl64, fd, cmd, arg);
-			slog_debug("[POSIX][fcntl] pathname=%s, fd=%d, F_SETLKW", pathname, fd);
-			// ret = 0;//real_fcntl(fd, cmd, arg);
-			ret = -1;
-			errno = EDEADLK;
-			break;
-		case F_OFD_SETLKW:
-		{
-			struct flock *flk = (struct flock *)arg;
-			slog_debug("[POSIX][fcntl] pathname=%s, fd=%d, F_OFD_SETLKW", pathname, fd);
-			// struct flock64 flk64 =
-			// 	{
-			// 		.l_type = flk->l_type,
-			// 		.l_whence = flk->l_whence,
-			// 		.l_start = flk->l_start,
-			// 		.l_len = flk->l_len,
-			// 		.l_pid = flk->l_pid
-			// 	};
-			// return SYSCALL_CANCEL(fcntl64, fd, cmd, &flk64);
-			ret = 0; // real_fcntl(fd, cmd, &flk);
-			break;
-		}
-		case F_OFD_GETLK:
-		case F_OFD_SETLK:
-		{
-			slog_debug("[POSIX][fcntl], pathname=%s, fd=%d, F_OFD_SETLK", pathname, fd);
-			struct flock *flk = (struct flock *)arg;
-			// struct flock64 flk64 =
-			// 	{
-			// 		.l_type = flk->l_type,
-			// 		.l_whence = flk->l_whence,
-			// 		.l_start = flk->l_start,
-			// 		.l_len = flk->l_len,
-			// 		.l_pid = flk->l_pid
-			// 	};
-			int ret = real_fcntl(fd, cmd, &flk); // INLINE_SYSCALL_CALL(fcntl64, fd, cmd, &flk64);
-			if (ret == -1)
-				return -1;
-			if ((off_t)flk->l_start != flk->l_start || (off_t)flk->l_len != flk->l_len)
-			{
-				//__set_errno(EOVERFLOW);
-				errno = EOVERFLOW;
-				return -1;
-			}
-			// flk->l_type = flk64.l_type;
-			// flk->l_whence = flk64.l_whence;
-			// flk->l_start = flk64.l_start;
-			// flk->l_len = flk64.l_len;
-			// flk->l_pid = flk64.l_pid;
-			// return ret;
-			break;
-		}
-		case F_DUPFD_CLOEXEC:
-		{
-			slog_debug("[POSIX][fcntl], pathname=%s, fd=%d, F_DUPFD_CLOEXEC", pathname, fd);
-			// ret = real_fcntl(fd, cmd, arg);
-			ret = dup(fd);
-			break;
-		}
-		/* Since only F_SETLKW{64}/F_OLD_SETLK are cancellation entrypoints and
-	   only OFD locks require LFS handling, all others flags are handled
-	   unmodified by calling __NR_fcntl64.  */
-		default:
-			slog_debug("[POSIX][fcntl], pathname=%s, fd=%d, default", pathname, fd);
-			// ret = real_fcntl(fd, cmd, arg);
-			if (!arg)
-				ret = real_fcntl(fd, cmd);
-			else
-				ret = real_fcntl(fd, cmd, arg);
-			break;
-			// return __fcntl64_nocancel_adjusted(fd, cmd, arg);
-		}
-		slog_debug("[POSIX]. Ending Hercules 'fcntl', pathname=%s, fd=%d, ret=%d, errno=%d:%s\n", pathname, fd, ret, errno, strerror(errno));
-	}
-	else
-	{
-		slog_full("[POSIX]. Calling real 'fcntl', fd=%d", fd);
-		// cmd = FCNTL_ADJUST_CMD(cmd);
-		// switch (cmd)
-		// {
-		// // case F_SETLKW:
-		// case F_SETLKW64: // release the existence of record locks.
-		// 	slog_debug("[POSIX][fcntl] fd=%d, F_SETLKW", fd);
-		// 	break;
-		// case F_OFD_SETLKW:
-		// {
-		// 	struct flock *flk = (struct flock *)arg;
-		// 	slog_debug("[POSIX][fcntl] fd=%d, F_OFD_SETLKW", fd);
-		// 	break;
-		// }
-		// case F_OFD_GETLK:
-		// case F_OFD_SETLK:
-		// {
-		// 	slog_debug("[POSIX][fcntl] fd=%d, F_OFD_SETLK", fd);
-		// 	break;
-		// }
-		// default:
-		// 	slog_debug("[POSIX][fcntl] fd=%d, default", fd);
-		// 	break;
-		// }
-		if (!arg)
-			ret = real_fcntl(fd, cmd);
-		else
-			ret = real_fcntl(fd, cmd, arg);
-		slog_full("[POSIX]. Ending Real 'fcntl', fd=%d, ret=%d", fd, ret);
-	}
-
-	return ret;
-}
-
-// int _openat(int dir_fd, const char *pathname, int flags, ...)
-// {
-// 	real__openat = dlsym(RTLD_NEXT, "_openat");
-// 	int mode = 0;
-
-// 	if (flags & O_CREAT)
-// 	{
-// 		va_list ap;
-// 		va_start(ap, flags);
-// 		mode = va_arg(ap, unsigned);
-// 		va_end(ap);
+// 		if (!arg)
+// 			return real_fcntl(fd, cmd);
+// 		else
+// 			return real_fcntl(fd, cmd, arg);
 // 	}
 
-// 	fprintf(stderr, "Calling _openat %s\n", pathname);
-// 	return real__openat(dir_fd, pathname, flags);
+// 	errno = 0;
+// 	int ret = 0;
+// 	char *pathname = map_fd_search_by_val(map_fd, fd);
+// 	// if (pathname = map_fd_search_by_val(map_fd, fd))
+// 	if (pathname != NULL)
+// 	{
+// 		slog_debug("[POSIX]. Calling Hercules 'fcntl', pathname=%s, fd=%d", pathname, fd);
+// 		cmd = FCNTL_ADJUST_CMD(cmd);
+// 		switch (cmd)
+// 		{
+// 		// case F_SETLKW:
+// 		case F_SETLKW64: // release the existence of record locks.
+// 			// return SYSCALL_CANCEL(fcntl64, fd, cmd, arg);
+// 			slog_debug("[POSIX][fcntl] pathname=%s, fd=%d, F_SETLKW", pathname, fd);
+// 			// ret = 0;//real_fcntl(fd, cmd, arg);
+// 			ret = -1;
+// 			errno = EDEADLK;
+// 			break;
+// 		case F_OFD_SETLKW:
+// 		{
+// 			struct flock *flk = (struct flock *)arg;
+// 			slog_debug("[POSIX][fcntl] pathname=%s, fd=%d, F_OFD_SETLKW", pathname, fd);
+// 			// struct flock64 flk64 =
+// 			// 	{
+// 			// 		.l_type = flk->l_type,
+// 			// 		.l_whence = flk->l_whence,
+// 			// 		.l_start = flk->l_start,
+// 			// 		.l_len = flk->l_len,
+// 			// 		.l_pid = flk->l_pid
+// 			// 	};
+// 			// return SYSCALL_CANCEL(fcntl64, fd, cmd, &flk64);
+// 			ret = 0; // real_fcntl(fd, cmd, &flk);
+// 			break;
+// 		}
+// 		case F_OFD_GETLK:
+// 		case F_OFD_SETLK:
+// 		{
+// 			slog_debug("[POSIX][fcntl], pathname=%s, fd=%d, F_OFD_SETLK", pathname, fd);
+// 			struct flock *flk = (struct flock *)arg;
+// 			// struct flock64 flk64 =
+// 			// 	{
+// 			// 		.l_type = flk->l_type,
+// 			// 		.l_whence = flk->l_whence,
+// 			// 		.l_start = flk->l_start,
+// 			// 		.l_len = flk->l_len,
+// 			// 		.l_pid = flk->l_pid
+// 			// 	};
+// 			int ret = real_fcntl(fd, cmd, &flk); // INLINE_SYSCALL_CALL(fcntl64, fd, cmd, &flk64);
+// 			if (ret == -1)
+// 				return -1;
+// 			if ((off_t)flk->l_start != flk->l_start || (off_t)flk->l_len != flk->l_len)
+// 			{
+// 				//__set_errno(EOVERFLOW);
+// 				errno = EOVERFLOW;
+// 				return -1;
+// 			}
+// 			// flk->l_type = flk64.l_type;
+// 			// flk->l_whence = flk64.l_whence;
+// 			// flk->l_start = flk64.l_start;
+// 			// flk->l_len = flk64.l_len;
+// 			// flk->l_pid = flk64.l_pid;
+// 			// return ret;
+// 			break;
+// 		}
+// 		case F_DUPFD_CLOEXEC:
+// 		{
+// 			slog_debug("[POSIX][fcntl], pathname=%s, fd=%d, F_DUPFD_CLOEXEC", pathname, fd);
+// 			// ret = real_fcntl(fd, cmd, arg);
+// 			ret = dup(fd);
+// 			break;
+// 		}
+// 		/* Since only F_SETLKW{64}/F_OLD_SETLK are cancellation entrypoints and
+// 	   only OFD locks require LFS handling, all others flags are handled
+// 	   unmodified by calling __NR_fcntl64.  */
+// 		default:
+// 			slog_debug("[POSIX][fcntl], pathname=%s, fd=%d, default", pathname, fd);
+// 			// ret = real_fcntl(fd, cmd, arg);
+// 			if (!arg)
+// 				ret = real_fcntl(fd, cmd);
+// 			else
+// 				ret = real_fcntl(fd, cmd, arg);
+// 			break;
+// 			// return __fcntl64_nocancel_adjusted(fd, cmd, arg);
+// 		}
+// 		slog_debug("[POSIX]. Ending Hercules 'fcntl', pathname=%s, fd=%d, ret=%d, errno=%d:%s\n", pathname, fd, ret, errno, strerror(errno));
+// 	}
+// 	else
+// 	{
+// 		slog_full("[POSIX]. Calling real 'fcntl', fd=%d", fd);
+// 		// cmd = FCNTL_ADJUST_CMD(cmd);
+// 		// switch (cmd)
+// 		// {
+// 		// // case F_SETLKW:
+// 		// case F_SETLKW64: // release the existence of record locks.
+// 		// 	slog_debug("[POSIX][fcntl] fd=%d, F_SETLKW", fd);
+// 		// 	break;
+// 		// case F_OFD_SETLKW:
+// 		// {
+// 		// 	struct flock *flk = (struct flock *)arg;
+// 		// 	slog_debug("[POSIX][fcntl] fd=%d, F_OFD_SETLKW", fd);
+// 		// 	break;
+// 		// }
+// 		// case F_OFD_GETLK:
+// 		// case F_OFD_SETLK:
+// 		// {
+// 		// 	slog_debug("[POSIX][fcntl] fd=%d, F_OFD_SETLK", fd);
+// 		// 	break;
+// 		// }
+// 		// default:
+// 		// 	slog_debug("[POSIX][fcntl] fd=%d, default", fd);
+// 		// 	break;
+// 		// }
+// 		if (!arg)
+// 			ret = real_fcntl(fd, cmd);
+// 		else
+// 			ret = real_fcntl(fd, cmd, arg);
+// 		slog_full("[POSIX]. Ending Real 'fcntl', fd=%d, ret=%d", fd, ret);
+// 	}
+
+// 	return ret;
 // }
