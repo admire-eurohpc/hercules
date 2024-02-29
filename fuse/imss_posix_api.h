@@ -49,8 +49,8 @@ int imss_getattr(const char *path, struct stat *stbuf);
 
 int imss_readdir(const char *path, void *buf, posix_fill_dir_t filler, off_t offset);
 int imss_open(char *path, uint64_t *fh);
-int imss_read(const char *path, void *buf, size_t size, off_t offset);
-int imss_sread(const char *path, void *buf, size_t size, off_t offset);
+ssize_t imss_read(const char *path, void *buf, size_t size, off_t offset);
+ssize_t imss_sread(const char *path, void *buf, size_t size, off_t offset);
 int imss_split_readv(const char *path, char *buf, size_t size, off_t offset);
 int imss_vread_prefetch(const char *path, char *buf, size_t size, off_t offset);
 int imss_vread_no_prefetch(const char *path, char *buf, size_t size, off_t offset);

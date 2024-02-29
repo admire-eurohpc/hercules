@@ -336,6 +336,7 @@ int32_t main(int32_t argc, char **argv)
 	for (int i = 0; i < num_blocks; ++i)
 	{
 		void *buffer = (void *)calloc(args.block_size * KB, sizeof(char));
+		// memset(buffer, 0, args.block_size * KB);
 		StsQueue.push(mem_pool, buffer);
 	}
 

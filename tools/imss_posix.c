@@ -3187,7 +3187,7 @@ ssize_t read(int fd, void *buf, size_t size)
 	}
 
 	errno = 0;
-	size_t ret;
+	ssize_t ret;
 	char *pathname = map_fd_search_by_val(map_fd, fd);
 	if (pathname != NULL)
 	{
@@ -3263,10 +3263,8 @@ ssize_t read(int fd, void *buf, size_t size)
 			// fprintf(stderr, "[POSIX] Hercules read, pathname=%s, ret=%ld\n", pathname, ret);
 			// fprintf(stderr, "[POSIX ] READ HERCULES ret=%ld\n", ret);
 		}
-		slog_debug("[POSIX]. End Hercules 'read', pathname=%s, ret=%ld, size=%ld, fd=%d\n", pathname, ret, size, fd);
+		slog_debug("[POSIX]. End Hercules 'read', pathname=%s, ret=%zd, size=%ld, fd=%d\n", pathname, ret, size, fd);
 		// fprintf(stderr, "[POSIX]. Hercules 'read', size=%ld, fd=%d, ret=%lu, offset=%lu, errno=%d:%s\n", size, fd, ret, offset, errno, strerror(errno));
-		// fprintf(stderr,"[POSIX] Hercules buf=%p\n", buf);
-		// pthread_mutex_unlock(&system_lock);
 	}
 	else
 	{
@@ -4814,7 +4812,6 @@ int renameat2(int olddirfd, const char *oldpath, int newdirfd, const char *newpa
 		real_renameat2 = dlsym(RTLD_NEXT, __func__);
 	}
 
-	// fprintf(stderr, "Calling real 'unlinkat', pathname=%s\n", pathname);
 	if (!init)
 	{
 		return real_renameat2(olddirfd, oldpath, newdirfd, newpath, flags);

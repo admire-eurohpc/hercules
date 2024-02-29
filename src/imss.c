@@ -513,6 +513,7 @@ uint32_t get_dir(char *requested_uri, char **buffer, char ***items)
 	ret = recv_dynamic_stream(ucp_worker_meta, ep, elements, BUFFER, local_meta_uid, length);
 	if (ret < 0)
 	{
+		fprintf(stderr,"HERCULES_ERR_GET_DIR_RECV_STREAM, getdir_req = %s, ret=%d, length=%lu\n", getdir_req, ret, length);
 		slog_error("HERCULES_ERR_GET_DIR_RECV_STREAM");
 		perror("HERCULES_ERR_GET_DIR_RECV_STREAM");
 		return -1;
@@ -2658,7 +2659,7 @@ int32_t get_data(int32_t dataset_id, int32_t data_id, char *buffer)
 }
 
 // Method retrieving a data element associated to a certain dataset.
-size_t get_ndata(int32_t dataset_id, int32_t data_id, void *buffer, size_t to_read, off_t offset)
+size_t get_ndata(int32_t dataset_id, int32_t data_id, void *buffer, ssize_t to_read, off_t offset)
 {
 	// slog_debug("[IMSS][get_data]");
 	// slog_fatal("Caller name: %pS", __builtin_return_address(0));
@@ -2704,7 +2705,7 @@ size_t get_ndata(int32_t dataset_id, int32_t data_id, void *buffer, size_t to_re
 		//  Key related to the requested data element.
 		//  sprintf(key_, "GET 0 0 %s$%d", curr_dataset.uri_, data_id);
 		// sprintf(key_, "GET %lu %ld %s$%d %ld", 0l, offset, curr_dataset.uri_, data_id, to_read);
-		sprintf(key_, "GET %lu %ld %s$%d %ld", 0l, offset, curr_dataset.original_name, data_id, to_read);
+		sprintf(key_, "GET %lu %ld %s$%d %zd", 0l, offset, curr_dataset.original_name, data_id, to_read);
 		// slog_info("[IMSS][get_data] Request - '%s'", key_);
 		ep = curr_imss.conns.eps[repl_servers[i]];
 		slog_debug("[get_ndata] Sending request %s", key_);
@@ -2756,7 +2757,7 @@ size_t get_ndata(int32_t dataset_id, int32_t data_id, void *buffer, size_t to_re
 }
 
 // Method retrieving a data element associated to a certain dataset.
-size_t get_data_mall(int32_t dataset_id, int32_t data_id, char *buffer, size_t to_read, off_t offset, int32_t num_storages)
+size_t get_data_mall(int32_t dataset_id, int32_t data_id, char *buffer, ssize_t to_read, off_t offset, int32_t num_storages)
 {
 	// slog_debug("[IMSS][get_data]");
 	// slog_fatal("Caller name: %pS", __builtin_return_address(0));
@@ -2804,7 +2805,7 @@ size_t get_data_mall(int32_t dataset_id, int32_t data_id, char *buffer, size_t t
 		// t = clock();
 		//  Key related to the requested data element.
 		//  sprintf(key_, "GET 0 0 %s$%d", curr_dataset.uri_, data_id);
-		sprintf(key_, "GET %lu %ld %s$%d %ld", 0l, offset, curr_dataset.uri_, data_id, to_read);
+		sprintf(key_, "GET %lu %ld %s$%d %zd", 0l, offset, curr_dataset.uri_, data_id, to_read);
 		// slog_info("[IMSS][get_data] Request - '%s'", key_);
 		ep = curr_imss.conns.eps[repl_servers[i]];
 

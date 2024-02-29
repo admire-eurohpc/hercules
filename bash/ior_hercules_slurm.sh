@@ -52,7 +52,7 @@ whereis mpiexec
 # IOR_PATH=/usr/local/bin
 # export UCX_TLS=ib
 # export UCX_NET_DEVICES=ibs1 # Slow!
-spack load /sxjvb77
+# spack load /sxjvb77
 set -x
 # export UCX_NET_DEVICES="opap6s0:1"
 

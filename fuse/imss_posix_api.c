@@ -576,9 +576,9 @@ int imss_open(char *path, uint64_t *fh)
 	return 0;
 }
 
-int imss_sread(const char *path, void *buf, size_t size, off_t offset)
+ssize_t imss_sread(const char *path, void *buf, size_t size, off_t offset)
 {
-	int ret;
+	// ssize_t ret;
 	int32_t length;
 
 	dataset_info new_dataset;
@@ -598,8 +598,8 @@ int imss_sread(const char *path, void *buf, size_t size, off_t offset)
 	num_of_blk = end_blk - curr_blk;
 
 	// Needed variables
-	size_t to_read = 0;
-	size_t byte_count = 0;
+	ssize_t to_read = 0;
+	ssize_t byte_count = 0;
 	int64_t rbytes;
 
 	int fd;
@@ -721,7 +721,7 @@ int imss_sread(const char *path, void *buf, size_t size, off_t offset)
 
 			// Read the minimum between end_offset and filled (read_ = min(end_offset, filled))
 			to_read = size - byte_count;
-			slog_debug("[imss_read] END BLOCK CASE, to_read=%ld", to_read);
+			slog_debug("[imss_read] END BLOCK CASE, to_read=%zd", to_read);
 			/*struct timeval start, end;
 			  long delta_us;
 			  gettimeofday(&start, NULL);*/
@@ -735,7 +735,7 @@ int imss_sread(const char *path, void *buf, size_t size, off_t offset)
 			// byte_count += pending;
 		}
 		// slog_debug("[imss_read] curr_blk=%ld, reading %" PRIu64 " kilobytes, block_offset=%ld kilobytes, byte_count=%ld", curr_blk, to_read / 1024, block_offset / 1024, byte_count);
-		slog_debug("[imss_read] curr_blk=%ld, reading %ld bytes (%ld kilobytes) with an offset of %ld bytes (%ld kilobytes), byte_count=%ld bytes (%ld kilobytes)", curr_blk, to_read, to_read / 1024, block_offset, block_offset / 1024, byte_count, byte_count / 1024);
+		slog_debug("[imss_read] curr_blk=%ld, reading %ld bytes (%ld kilobytes) with an offset of %ld bytes (%ld kilobytes), byte_count=%zd bytes (%zd kilobytes)", curr_blk, to_read, to_read / 1024, block_offset, block_offset / 1024, byte_count, byte_count / 1024);
 
 		if (to_read <= 0)
 		{
@@ -1363,9 +1363,9 @@ int imss_vread_2x(const char *path, char *buf, size_t size, off_t offset)
 	return byte_count;
 }
 
-int imss_read(const char *path, void *buf, size_t size, off_t offset)
+ssize_t imss_read(const char *path, void *buf, size_t size, off_t offset)
 {
-	int ret;
+	ssize_t ret;
 	// BEST_PERFORMANCE_READ (default 0)
 	if (BEST_PERFORMANCE_READ == 0)
 	{
@@ -2225,10 +2225,10 @@ int imss_rmdir(const char *path)
 	char *imss_path = (char *)calloc(MAX_PATH, sizeof(char));
 	get_iuri(path, imss_path);
 
-	if (imss_path[strlen(imss_path) - 1] != '/')
-	{
-		strcat(imss_path, "/");
-	}
+	// if (imss_path[strlen(imss_path) - 1] != '/')
+	// {
+	// 	strcat(imss_path, "/");
+	// }
 
 	if ((n_ent = get_dir((char *)imss_path, &buffer, &refs)) > 0)
 	{
@@ -2239,6 +2239,7 @@ int imss_rmdir(const char *path)
 	}
 	else
 	{
+		fprintf(stderr, "*** [imss_rmdir] Error getting dir %s, n_ent=%d\n", imss_path, n_ent);
 		free(imss_path);
 		return -ENOENT;
 	}
