@@ -193,30 +193,37 @@ if [[ $SERVERS_HOSTFILES_OPTION -eq "0" ]]; then
     scontrol show hostnames "$SLURM_JOB_NODELIST" > hostfile
 fi
 
+## checks if a configuration file was set.
+if [ -z "$FILE" ]; then
+    ## get current directory has project path.
+    HERCULES_PATH=$(dirname `pwd`)
+else
+    ## get the project path from the configuration file.
+    HERCULES_PATH=$(cat "$FILE" | grep "HERCULES_PATH" | awk '{print $3}')
+fi
+
+if [ ! -e "$HERCULES_PATH" ]; then
+    echo "$HERCULES_PATH does not exist, please check the configuration file: $FILE"
+fi
+
 ## The next line returns 1 if hercules has been loaded by using spack, 0 in other case.
 IS_SPACK=$([ -z $(whereis hercules | awk '{print $2}') ] && echo 0 || echo 1)
 #echo "IS_SPACK=$IS_SPACK"
+# Paths may vary between spack and git.
 if [[ "$IS_SPACK" -eq "1" ]]; then
     echo "Hercules has been loaded with Spack"
-    HERCULES_PATH=$(spack find --paths --loaded hercules | grep hercules | awk '{print $2}')
+    # following line does not work for all spack versions.
+    #HERCULES_PATH=$(spack find --paths --loaded hercules | grep hercules | awk '{print $2}') 
     HERCULES_BUILD_PATH=$HERCULES_PATH/bin
     HERCULES_BASH_PATH=$HERCULES_PATH/bin
     HERCULES_POSIX_PRELOAD="$HERCULES_PATH/lib/libhercules_posix.so"
 else
-    ## checks if a configuration file was set.
-    if [ -z "$FILE" ]; then
-        ## get current directory has project path.
-        HERCULES_PATH=$(dirname `pwd`) 
-    else
-        ## get the project path from the configuration file.
-        HERCULES_PATH=$(cat $FILE | grep "HERCULES_PATH" | awk '{print $3}')
-    fi
-    export HERCULES_PATH=$HERCULES_PATH
     HERCULES_BUILD_PATH=$HERCULES_PATH/build
     HERCULES_BASH_PATH=$HERCULES_PATH/scripts
     HERCULES_POSIX_PRELOAD="$HERCULES_PATH/build/tools/libhercules_posix.so"
 fi
 
+export HERCULES_PATH=$HERCULES_PATH
 echo "Hercules path - $HERCULES_PATH"
 
 

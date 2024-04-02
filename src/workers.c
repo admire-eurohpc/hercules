@@ -6,7 +6,6 @@
 #include <sys/sysinfo.h>
 #include <signal.h>
 #include "imss.h"
-#include "comms.h"
 #include "workers.h"
 #include "directory.h"
 #include "records.hpp"
@@ -111,6 +110,7 @@ void *srv_worker(void *th_argv)
 
 	for (;;)
 	{
+		errno = 0;
 		size_t peer_addr_len;
 		ucp_address_t *peer_addr;
 		ucs_status_t ep_status = UCS_OK;
@@ -143,15 +143,16 @@ void *srv_worker(void *th_argv)
 		recv_param.datatype = ucp_dt_make_contig(1);
 		recv_param.cb.recv = recv_handler;
 
-		request = (struct ucx_context *)TIMING(ucp_tag_msg_recv_nbx(arguments->ucp_worker, msg, info_tag.length, msg_tag, &recv_param), "[srv_worker]ucp_tag_msg_recv_nbx", ucs_status_ptr_t);
+		request = (struct ucx_context *)ucp_tag_msg_recv_nbx(arguments->ucp_worker, msg, info_tag.length, msg_tag, &recv_param);
+		// request = (struct ucx_context *)ucp_tag_recv_nbx(arguments->ucp_worker, msg, info_tag.length, msg_tag, &recv_param);
 
-		status = TIMING(ucx_wait(arguments->ucp_worker, request, "receive", "srv_worker"), "[srv_worker]ucx_wait", ucs_status_t);
+		status = ucx_wait(arguments->ucp_worker, request, "receive", "srv_worker");
 
 		peer_addr_len = msg->addr_len;
 		peer_addr = (ucp_address *)malloc(peer_addr_len);
 		req = msg->request;
 
-		TIMING(memcpy(peer_addr, msg + 1, peer_addr_len), "[srv_worker]memcpy", void *);
+		memcpy(peer_addr, msg + 1, peer_addr_len);
 
 		ucp_worker_address_attr_t attr;
 		attr.field_mask = UCP_WORKER_ADDRESS_ATTR_FIELD_UID;
@@ -186,9 +187,9 @@ void *srv_worker(void *th_argv)
 		arguments->server_ep = ep;
 		arguments->worker_uid = attr.worker_uid;
 
-		char msg_[2024];
-		sprintf(msg_, "[srv_worker] srv_worker_helper req %s", req);
-		TIMING(srv_worker_helper(arguments, req), msg_, int);
+		// char msg_[2024];
+		// sprintf(msg_, "[srv_worker] srv_worker_helper req %s", req);
+		srv_worker_helper(arguments, req);
 		t = clock() - t;
 
 		time_taken = ((double)t) / CLOCKS_PER_SEC; // in seconds
@@ -300,7 +301,7 @@ int srv_worker_helper(p_argv *arguments, const char *req)
 		}
 		case RELEASE:
 		{
-			map_server_eps_erase(map_server_eps, arguments->worker_uid);
+			map_server_eps_erase(map_server_eps, arguments->worker_uid, arguments->ucp_worker);
 			slog_debug("[srv_worker_thread][READ_OP][RELEASE]");
 			// return 0;
 			break;
@@ -1335,7 +1336,7 @@ int stat_worker_helper(p_argv *arguments, char *req)
 		case RELEASE:
 		{
 			slog_debug("[stat_worker_thread][READ_OP][RELEASE] Deleting endpoint with %" PRIu64 "", arguments->worker_uid);
-			map_server_eps_erase(map_server_eps, arguments->worker_uid);
+			map_server_eps_erase(map_server_eps, arguments->worker_uid, arguments->ucp_worker);
 			// ucp_destroy(arguments->ucp_context);
 			slog_debug("[stat_worker_thread][READ_OP][RELEASE] Endpoints deleted ");
 			break;
@@ -1720,7 +1721,8 @@ void *srv_attached_dispatcher(void *th_argv)
 
 	// Variable specifying the ID that will be granted to the next client.
 	uint32_t client_id_ = 0;
-	char req[256];
+	// char req[256];
+	char *req;
 
 	ret = init_worker(arguments->ucp_context, &ucp_data_worker);
 	if (ret != 0)
@@ -1771,25 +1773,30 @@ void *srv_attached_dispatcher(void *th_argv)
 
 		// char mode[msg_length];
 		char *mode = (char *)malloc(msg_length * sizeof(char));
+		req = (char *)malloc(msg_length * sizeof(char));
 		// char mode[MODE_SIZE];
 		msg_length = recv_data(ucp_data_worker, server_ep, req, msg_length, arguments->worker_uid, 0);
 		if (msg_length == 0)
 		{
-			slog_error("ERRIMSS_SRV_DISPATCHER_DATA_RECV_DATA");
-			perror("ERRIMSS_SRV_DISPATCHER_DATA_RECV_DATA");
+			slog_error("HERCULES_ERR_SRV_DISPATCHER_DATA_RECV_DATA");
+			perror("HERCULES_ERR_SRV_DISPATCHER_DATA_RECV_DATA");
 			free(mode);
+			free(req);
 			pthread_exit(NULL);
 		}
+
+		slog_info("Req=%s", req);
 
 		sscanf(req, "%" PRIu32 " %s", &client_id_, mode);
 		char *req_content = strstr(req, mode);
 		req_content += 4;
 
 		uint32_t c_id = client_id_;
-
+		slog_info("req_content=%s", req_content);
 		// Check if the client is requesting connection resources.
 		if (!strncmp(req_content, "HELLO!", 6))
 		{
+			slog_info("Requesting resources, req=%s", req);
 			if (strncmp(req_content, "HELLO!JOIN", 10) != 0)
 			{
 				// Retrieve the buffer size that will be asigned to the current server process.
@@ -1813,17 +1820,21 @@ void *srv_attached_dispatcher(void *th_argv)
 			int32_t port_ = arguments->port + 1 + (client_id_ % IMSS_THREAD_POOL);
 			// Wrap the previous info into the ZMQ message.
 			sprintf(response_, "%d%c%d", port_, '-', client_id_++);
-
+			slog_info("Seding response_=%s", response_);
 			// Send communication specifications.
 			if (send_data(ucp_data_worker, server_ep, response_, RESPONSE_SIZE, arguments->worker_uid) < 0)
 			{
-				perror("ERRIMSS_SRVDISP_SENDBLOCK");
+				perror("HERCULES_ERR_SRVDISP_SENDBLOCK");
 				// ep_flush(server_ep, ucp_data_worker);
 				ep_close(ucp_data_worker, server_ep, UCP_EP_CLOSE_MODE_FLUSH);
+				free(mode);
+				free(req);
 				pthread_exit(NULL);
 			}
 
 			slog_debug("[DATA DISPATCHER] Replied client %s.", response_);
+			free(mode);
+			free(req);
 			continue;
 		}
 		// Check if someone is requesting identity resources.
@@ -1832,14 +1843,18 @@ void *srv_attached_dispatcher(void *th_argv)
 			// Provide the uri of this instance.
 			if (send_data(ucp_data_worker, server_ep, arguments->my_uri, RESPONSE_SIZE, arguments->worker_uid) < 0) // MIRAR
 			{
-				perror("ERRIMSS_WHOREQUEST");
+				perror("ERR_HERCULES_WHOREQUEST");
 				// ep_flush(server_ep, ucp_data_worker);
 				ep_close(ucp_data_worker, server_ep, UCP_EP_CLOSE_MODE_FLUSH);
+				free(mode);
+				free(req);
 				pthread_exit(NULL);
 			}
 		}
 		// context.conn_request = NULL;
 		ep_close(ucp_data_worker, server_ep, UCP_EP_CLOSE_MODE_FLUSH);
+		free(mode);
+		free(req);
 	}
 	pthread_exit(NULL);
 }
@@ -1855,7 +1870,7 @@ void *dispatcher(void *th_argv)
 	char req[REQUEST_SIZE];
 
 	int ret;
-	int sockfd = -1;
+	int server_fd = -1;
 	int listenfd = -1;
 	int optval = 1;
 	char service[8];
@@ -1873,17 +1888,16 @@ void *dispatcher(void *th_argv)
 
 	for (t = res; t != NULL; t = t->ai_next)
 	{
-		sockfd = socket(t->ai_family, t->ai_socktype, t->ai_protocol);
-		if (sockfd < 0)
+		server_fd = socket(t->ai_family, t->ai_socktype, t->ai_protocol);
+		if (server_fd < 0)
 		{
 			continue;
 		}
 
-		ret = setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval));
-		ret = bind(sockfd, t->ai_addr, t->ai_addrlen);
+		ret = setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval));
+		ret = bind(server_fd, t->ai_addr, t->ai_addrlen);
 		if (ret < 0)
 		{
-
 			// perror("Dispatcher Server");
 			ready(tmp_file_path, "ERROR");
 			perror("ERRIMSS_DISPATCHER_COM");
@@ -1891,9 +1905,10 @@ void *dispatcher(void *th_argv)
 		}
 		else if (ret == 0)
 		{
-			ret = listen(sockfd, 0);
+			ret = listen(server_fd, 0);
 			/* Accept next connection */
-			listenfd = sockfd;
+			// listenfd = sockfd;
+			int new_socket = -1;
 			while (1)
 			{
 				ucs_status_t status;
@@ -1901,41 +1916,59 @@ void *dispatcher(void *th_argv)
 
 				slog_debug("[DISPATCHER] Waiting for connection requests.");
 				// fprintf(stderr, "[DISPATCHER] Waiting for connection requests.\n");
-				sockfd = accept(listenfd, NULL, NULL);
-				ret = recv(sockfd, req, REQUEST_SIZE, MSG_WAITALL);
+				new_socket = accept(server_fd, NULL, NULL);
+				if (ret < 0)
+				{
+					slog_error("HERCULES_ERR_ACCEPT_DISPATCHER");
+				}
+				ret = recv(new_socket, req, REQUEST_SIZE, MSG_WAITALL);
+				if (ret < 0)
+				{
+					slog_error("HERCULES_ERR_RECV_DISPATCHER");
+				}
 
 				sscanf(req, "%" PRIu32 " %s", &client_id_, mode);
 
 				char *req_content = strstr(req, mode);
 				req_content += 4;
 
+				slog_debug("[DISPATCHER] req=%s, req_content=%s", req, req_content);
+
 				// Check if the client is requesting connection resources.
 				if (!strncmp(req_content, "HELLO!", 6))
 				{
-					ret = send(sockfd, &local_addr_len[(client % IMSS_THREAD_POOL) + 1], sizeof(local_addr_len[(client % IMSS_THREAD_POOL) + 1]), 0);
-					ret = send(sockfd, local_addr[(client % IMSS_THREAD_POOL) + 1], local_addr_len[(client % IMSS_THREAD_POOL) + 1], 0);
+					ret = send(new_socket, &local_addr_len[(client % IMSS_THREAD_POOL) + 1], sizeof(local_addr_len[(client % IMSS_THREAD_POOL) + 1]), 0);
+					if (ret == -1)
+					{
+						slog_error("HERCULES_ERR_SEND_DISPATCHER_REQ1");
+					}
+					ret = send(new_socket, local_addr[(client % IMSS_THREAD_POOL) + 1], local_addr_len[(client % IMSS_THREAD_POOL) + 1], 0);
+					if (ret == -1)
+					{
+						slog_error("HERCULES_ERR_SEND_DISPATCHER_REQ2");
+					}
 					client++;
 					slog_debug("[DISPATCHER] Replied client.");
 				}
 				else if (!strncmp(req_content, "MAIN!", 5))
 				{
-					ret = send(sockfd, &local_addr_len[1], sizeof(local_addr_len[1]), 0);
-					ret = send(sockfd, local_addr[1], local_addr_len[1], 0);
+					ret = send(new_socket, &local_addr_len[1], sizeof(local_addr_len[1]), 0);
+					ret = send(new_socket, local_addr[1], local_addr_len[1], 0);
 				}
 				// Check if someone is requesting identity resources.
 				else if (*((int32_t *)req) == WHO)
 				{
-					ret = send(sockfd, &local_addr_len[client], sizeof(local_addr_len[client]), 0);
-					ret = send(sockfd, local_addr[client], local_addr_len[client], 0);
+					ret = send(new_socket, &local_addr_len[client], sizeof(local_addr_len[client]), 0);
+					ret = send(new_socket, local_addr[client], local_addr_len[client], 0);
 					slog_debug("[DISPATCHER] Replied client %s.", arguments->my_uri);
 				}
 
 				// MIRAR ucp_worker_release_address(ucp_worker_threads[client_id_ % IMSS_THREAD_POOL], local_addr);
-				close(sockfd);
+				close(new_socket);
 			}
 		}
 	}
-	close(listenfd);
+	close(server_fd);
 
 	pthread_exit(NULL);
 }

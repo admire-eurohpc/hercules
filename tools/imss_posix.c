@@ -303,7 +303,7 @@ char *checkHerculesPath(const char *pathname)
 	// if (!strncmp(pathname, MOUNT_POINT, strlen(pathname) - 1))
 	if (!strncmp(pathname, MOUNT_POINT, MAX(strlen(pathname), strlen(MOUNT_POINT)) - 1))
 	{
-		slog_debug("[HERCULES][checkHerculesPath] pathname=%s, MOUNT_POINT=%s, Success", pathname, MOUNT_POINT);
+		// slog_debug("[HERCULES][checkHerculesPath] pathname=%s, MOUNT_POINT=%s, Success", pathname, MOUNT_POINT);
 		// new_path = calloc(strlen("Success"), sizeof(char));
 		new_path = calloc(strlen("imss://"), sizeof(char));
 		// strcpy(new_path, "Success");
@@ -537,20 +537,20 @@ __attribute__((constructor)) void imss_posix_init(void)
 	slog_init(log_path, IMSS_DEBUG_LEVEL, IMSS_DEBUG_FILE, IMSS_DEBUG_SCREEN, 1, 1, 1, rank);
 	slog_info(",Time(msec), Comment, RetCode");
 
-	slog_debug(" -- IMSS_MOUNT_POINT: %s", MOUNT_POINT);
-	slog_debug(" -- IMSS_ROOT: %s", IMSS_ROOT);
-	slog_debug(" -- IMSS_HOSTFILE: %s", IMSS_HOSTFILE);
-	slog_debug(" -- IMSS_N_SERVERS: %d", N_SERVERS);
-	slog_debug(" -- IMSS_SRV_PORT: %d", IMSS_SRV_PORT);
-	slog_debug(" -- IMSS_BUFFSIZE: %ld", IMSS_BUFFSIZE);
+	slog_debug(" -- HERCULES_MOUNT_POINT: %s", MOUNT_POINT);
+	slog_debug(" -- HERCULES_ROOT: %s", IMSS_ROOT);
+	slog_debug(" -- HERCULES_HOSTFILE: %s", IMSS_HOSTFILE);
+	slog_debug(" -- HERCULES_N_SERVERS: %d", N_SERVERS);
+	slog_debug(" -- HERCULES_SRV_PORT: %d", IMSS_SRV_PORT);
+	slog_debug(" -- HERCULES_BUFFSIZE: %ld", IMSS_BUFFSIZE);
 	slog_debug(" -- META_HOSTFILE: %s", META_HOSTFILE);
-	slog_debug(" -- IMSS_META_PORT: %d", METADATA_PORT);
-	slog_debug(" -- IMSS_META_SERVERS: %d", N_META_SERVERS);
-	slog_debug(" -- IMSS_BLKSIZE: %ld kB", IMSS_BLKSIZE);
-	slog_debug(" -- IMSS_STORAGE_SIZE: %ld GB", STORAGE_SIZE);
-	slog_debug(" -- IMSS_METADATA_FILE: %s", METADATA_FILE);
-	slog_debug(" -- IMSS_DEPLOYMENT: %d", DEPLOYMENT);
-	slog_debug(" -- IMSS_MALLEABILITY: %d", MALLEABILITY);
+	slog_debug(" -- HERCULES_META_PORT: %d", METADATA_PORT);
+	slog_debug(" -- HERCULES_META_SERVERS: %d", N_META_SERVERS);
+	slog_debug(" -- HERCULES_BLKSIZE: %ld kB", IMSS_BLKSIZE);
+	slog_debug(" -- HERCULES_STORAGE_SIZE: %ld GB", STORAGE_SIZE);
+	slog_debug(" -- HERCULES_METADATA_FILE: %s", METADATA_FILE);
+	slog_debug(" -- HERCULES_DEPLOYMENT: %d", DEPLOYMENT);
+	slog_debug(" -- HERCULES_MALLEABILITY: %d", MALLEABILITY);
 	slog_debug(" -- UPPER_BOUND_SERVERS: %d", UPPER_BOUND_SERVERS);
 	slog_debug(" -- LOWER_BOUND_SERVERS: %d", LOWER_BOUND_SERVERS);
 	slog_debug(" -- REPL_FACTOR: %d", REPL_FACTOR);
@@ -570,7 +570,9 @@ __attribute__((constructor)) void imss_posix_init(void)
 		ret = open_imss(IMSS_ROOT);
 		if (ret < 0)
 		{
-			slog_fatal("Error creating IMSS's resources, the process cannot be started");
+			release = 0;
+			slog_fatal("Error creating HERCULES's resources, the process cannot be started");
+			// printf("Error creating HERCULES's resources, the process cannot be started\n");
 			return;
 		}
 	}
@@ -897,7 +899,7 @@ void __attribute__((destructor)) run_me_last()
 {
 	errno = 0;
 	slog_live("Calling 'run_me_last', pid=%d, rank=%d, release=%d", g_pid, rank, release);
-	// sleep(20);
+	// sleep(60);
 	if (release == 1)
 	// if (false)
 	{
@@ -909,6 +911,8 @@ void __attribute__((destructor)) run_me_last()
 		release_imss("imss://", CLOSE_DETACHED);
 		slog_live("[POSIX] stat_release()");
 		stat_release();
+
+		// imss_comm_cleanup();
 		// t_s = clock() - t_s;
 		// time_taken = ((double)t_s) / (CLOCKS_PER_SEC);
 	}
@@ -921,6 +925,7 @@ void check_ld_preload(void)
 	if (LD_PRELOAD == 0)
 	{
 		DPRINT("\nActivating... ld_preload=%d\n\n", LD_PRELOAD);
+		fprintf(stderr, "\nActivating... ld_preload\n");
 		LD_PRELOAD = 1;
 		imss_posix_init();
 	}
@@ -1209,7 +1214,7 @@ pid_t vfork(void)
 	}
 	else
 	{
-		errno = 0;
+		// errno = 0;
 		slog_debug("[POSIX] Parent process, pid=%d", pid);
 		// sleep(120);
 		// slog_debug("[POSIX] Ending '%s'", __func__);
@@ -1333,7 +1338,7 @@ int fstatvfs(int fd, struct statvfs *buf)
 		return real_fstatvfs(fd, buf);
 	}
 
-	fprintf(stderr, "[POSIX][TODO] Calling 'fstatvfs'\n");
+	printf("[POSIX][TODO] Calling 'fstatvfs'\n");
 
 	// errno = 0;
 	int ret = 0;
@@ -1773,7 +1778,7 @@ ssize_t readv(int fd, const struct iovec *iov, int iovcnt)
 	char *pathname = map_fd_search_by_val(map_fd, fd);
 	if (pathname != NULL)
 	{
-		fprintf(stderr, "[POSIX]. Calling Hercules 'readv', pathname=%s, ret=%ld\n", pathname, ret);
+		slog_debug("[POSIX]. Calling Hercules 'readv', pathname=%s, ret=%ld\n", pathname, ret);
 		unsigned long offset = 0;
 		/* Find the total number of bytes to be written.  */
 		size_t bytes = 0;
@@ -5209,42 +5214,42 @@ int access(const char *path, int mode)
 	return ret;
 }
 
-int fsync(int fd)
-{
+// int fsync(int fd)
+// {
 
-	real_fsync = dlsym(RTLD_NEXT, "fsync");
-	if (!init)
-	{
-		return real_fsync(fd);
-	}
-	slog_info("********* [POSIX] Calling fsync ********");
+// 	real_fsync = dlsym(RTLD_NEXT, "fsync");
+// 	if (!init)
+// 	{
+// 		return real_fsync(fd);
+// 	}
+// 	slog_info("********* [POSIX] Calling fsync ********");
 
-	return real_fsync(fd);
-}
+// 	return real_fsync(fd);
+// }
 
-int epoll_ctl(int epfd, int op, int fd, struct epoll_event *event)
-{
-	if (!real_epoll_ctl)
-		real_epoll_ctl = dlsym(RTLD_NEXT, "epoll_ctl");
-	// fprintf(stderr, "Calling 'epoll_ctl'\n");
-	return real_epoll_ctl(epfd, op, fd, event);
-}
+// int epoll_ctl(int epfd, int op, int fd, struct epoll_event *event)
+// {
+// 	if (!real_epoll_ctl)
+// 		real_epoll_ctl = dlsym(RTLD_NEXT, "epoll_ctl");
+// 	// fprintf(stderr, "Calling 'epoll_ctl'\n");
+// 	return real_epoll_ctl(epfd, op, fd, event);
+// }
 
-int change_to_directory(char *newdir, int nolinks, int xattr)
-{
-	if (!real_change_to_directory)
-		real_change_to_directory = dlsym(RTLD_NEXT, "change_to_directory");
-	fprintf(stderr, "Calling change_to_directory\n");
-	return real_change_to_directory(newdir, nolinks, xattr);
-}
+// int change_to_directory(char *newdir, int nolinks, int xattr)
+// {
+// 	if (!real_change_to_directory)
+// 		real_change_to_directory = dlsym(RTLD_NEXT, "change_to_directory");
+// 	fprintf(stderr, "Calling change_to_directory\n");
+// 	return real_change_to_directory(newdir, nolinks, xattr);
+// }
 
-int bindpwd(int no_symlinks)
-{
-	if (!real_bindpwd)
-		real_bindpwd = dlsym(RTLD_NEXT, "bindpwd");
-	fprintf(stderr, "Calling bindpwd\n");
-	return real_bindpwd(no_symlinks);
-}
+// int bindpwd(int no_symlinks)
+// {
+// 	if (!real_bindpwd)
+// 		real_bindpwd = dlsym(RTLD_NEXT, "bindpwd");
+// 	fprintf(stderr, "Calling bindpwd\n");
+// 	return real_bindpwd(no_symlinks);
+// }
 
 // int sys_chdir(const char *filename)
 // {

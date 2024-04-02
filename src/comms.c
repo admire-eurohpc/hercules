@@ -69,14 +69,15 @@ int init_worker(ucp_context_h ucp_context, ucp_worker_h *ucp_worker)
 
 	memset(&worker_params, 0, sizeof(worker_params));
 
-	// worker_params.field_mask = UCP_WORKER_PARAM_FIELD_THREAD_MODE;
+	worker_params.field_mask = UCP_WORKER_PARAM_FIELD_THREAD_MODE;
 	// worker_params.thread_mode = UCS_THREAD_MODE_MULTI;
-	// worker_params.thread_mode = UCS_THREAD_MODE_SERIALIZED;
+	worker_params.thread_mode = UCS_THREAD_MODE_SERIALIZED;
 
 	status = ucp_worker_create(ucp_context, &worker_params, ucp_worker);
 	if (status != UCS_OK)
 	{
-		fprintf(stderr, "failed to ucp_worker_create (%s)", ucs_status_string(status));
+		//fprintf(stderr, "failed to ucp_worker_create (%s)", ucs_status_string(status));
+		slog_error("failed to ucp_worker_create (%s)", ucs_status_string(status));
 		perror("ERRIMSS_WORKER_INIT");
 		ret = -1;
 	}
@@ -116,7 +117,8 @@ int init_context(ucp_context_h *ucp_context, ucp_config_t *config, ucp_worker_h 
 	ucp_params.request_size = sizeof(struct ucx_context);
 	ucp_params.request_init = request_init;
 	ucp_params.name = "hercules";
-	// ucp_params.mt_workers_shared = UCS_THREAD_MODE_SERIALIZED;
+	ucp_params.mt_workers_shared = UCS_THREAD_MODE_SERIALIZED;
+	// ucp_params.mt_workers_shared = UCS_THREAD_MODE_SINGLE;
 	slog_info("Before ucp_init");
 	status = ucp_init(&ucp_params, config, ucp_context);
 	// if(errno != 0) {
@@ -130,7 +132,7 @@ int init_context(ucp_context_h *ucp_context, ucp_config_t *config, ucp_worker_h 
 	// ucp_context_print_info(*ucp_context,stderr);
 	if (status != UCS_OK)
 	{
-		fprintf(stderr, "failed to ucp_init (%s)", ucs_status_string(status));
+		slog_error("failed to ucp_init (%s)", ucs_status_string(status));
 		slog_error("HERCULES_INIT_CONTEXT_UCP_INIT");
 		ret = -1;
 		goto err;
@@ -182,6 +184,7 @@ size_t send_data(ucp_worker_h ucp_worker, ucp_ep_h ep, const void *msg, size_t m
 	send_param.user_data = &ctx;
 
 	request = (struct ucx_context *)ucp_tag_send_nbx(ep, ctx.buffer, msg_len, from, &send_param);
+	// request = (struct ucx_context *)ucp_tag_send_sync_nbx(ep, ctx.buffer, msg_len, from, &send_param);
 	status = ucx_wait(ucp_worker, request, "send", "data");
 
 	/*	if  (UCS_PTR_IS_ERR(request)) {
@@ -226,6 +229,7 @@ size_t send_req(ucp_worker_h ucp_worker, ucp_ep_h ep, ucp_address_t *addr, size_
 
 	// slog_info("[COMM][send_req] before ucp_tag_send_nbx");
 	request = (struct ucx_context *)ucp_tag_send_nbx(ep, msg, msg_len, tag_req, &send_param);
+	// request = (struct ucx_context *)ucp_tag_send_sync_nbx(ep, msg, msg_len, tag_req, &send_param);
 	// slog_info("[COMM][send_req] after ucp_tag_send_nbx");
 	// slog_info("[COMM][send_req] before ucx_wait");
 	status = ucx_wait(ucp_worker, request, "send", req);
@@ -233,8 +237,8 @@ size_t send_req(ucp_worker_h ucp_worker, ucp_ep_h ep, ucp_address_t *addr, size_
 
 	if (status != UCS_OK)
 	{
-		// 	fprintf(stderr, "Connection error\n");
-		//     // free(msg);
+		// slog_error("Connection error\n");
+		free(msg);
 		//     // goto err_ep;
 		// 	ep_close(ucp_worker, ep, UCP_EP_CLOSE_FLAG_FORCE);
 		slog_fatal("[COMM][send_req] Connection error, request=%s", req);
@@ -447,7 +451,7 @@ void err_cb_server(void *arg, ucp_ep_h ep, ucs_status_t status)
 
 	if (status != UCS_ERR_CONNECTION_RESET && status != UCS_ERR_ENDPOINT_TIMEOUT)
 	{
-		fprintf(stderr, "\t [COMM]['%" PRIu64 "'] Server error handling callback was invoked with status %d (%s)\n", worker_uid, status, ucs_status_string(status));
+		// fprintf(stderr, "\t [COMM]['%" PRIu64 "'] Server error handling callback was invoked with status %d (%s)\n", worker_uid, status, ucs_status_string(status));
 	}
 	slog_error("[COMM]['%" PRIu64 "'] server error handling callback was invoked with status %d (%s)", worker_uid, status, ucs_status_string(status));
 }
@@ -667,7 +671,14 @@ int32_t recv_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, void *data_str
 
 	slog_info("[COMM] recv_dynamic_stream start, data_type=%d", data_type);
 	// receive the message from the backend.
-	recv_data(ucp_worker, ep, result, length, dest, 0);
+	size_t ret = recv_data(ucp_worker, ep, result, length, dest, 0);
+	if(ret == 0) {
+		slog_error("HERCULES_RECV_DATA_DYNAMIC_STREAM");
+		perror("HERCULES_RECV_DATA_DYNAMIC_STREAM");
+		free(result);
+		return -1;
+	}
+
 
 	char *msg_data = result;
 	// Formalize the received information.
@@ -744,7 +755,7 @@ int32_t recv_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, void *data_str
 		slog_info(" \t\t receiving STRING or BUFFER %ld", length);
 		if (!strncmp("$ERRIMSS_NO_KEY_AVAIL$", msg_data, 22))
 		{
-			slog_error("[COMM] recv_dynamic_stream end with error %lu", length);
+			slog_error("[COMM] recv_dynamic_stream end with error %lu, msg_data=%s", length, msg_data);
 			free(result);
 			// return length;
 			return -1;
@@ -916,6 +927,9 @@ int connect_common(const char *server, uint64_t server_port, sa_family_t af)
 		sockfd = socket(t->ai_family, t->ai_socktype, t->ai_protocol);
 		if (sockfd < 0)
 		{
+			char err_msg[128] = {"\0"};
+			sprintf(err_msg, "HERCULES_ERR_SOCKET_%s", strerror(errno));
+			perror(err_msg);
 			continue;
 		}
 

@@ -383,6 +383,7 @@ int32_t stat_init(char *stat_hostfile,
 		// slog_debug("[IMSS] stat_client=%s", stat_node);
 		slog_debug("[IMSS][stat_int] i=%d, stat_node=%s, port=%ld, rank=%" PRIu32 "", i, stat_node, port, rank);
 		slog_debug("[IMSS][stat_int] Contacting stat dispatcher at %s:%ld", stat_node, port);
+		// fprintf(stderr,"[IMSS][stat_int] Contacting stat dispatcher at %s:%ld\n", stat_node, port);
 
 		oob_sock = connect_common(stat_node, port, AF_INET);
 
@@ -508,14 +509,15 @@ uint32_t get_dir(char *requested_uri, char **buffer, char ***items)
 		perror("HERCULES_ERR_GET_DIR_GET_RECV_DATA_LENGTH");
 		return -1;
 	}
-	elements = (char *)malloc(length);
+	elements = (char *)malloc(length*sizeof(char));
 	//  Retrieve the set of elements within the requested uri.
 	ret = recv_dynamic_stream(ucp_worker_meta, ep, elements, BUFFER, local_meta_uid, length);
 	if (ret < 0)
 	{
-		fprintf(stderr,"HERCULES_ERR_GET_DIR_RECV_STREAM, getdir_req = %s, ret=%d, length=%lu\n", getdir_req, ret, length);
+		fprintf(stderr, "HERCULES_ERR_GET_DIR_RECV_STREAM , getdir_req = %s, ret=%d, length=%lu\n", getdir_req, ret, length);
 		slog_error("HERCULES_ERR_GET_DIR_RECV_STREAM");
 		perror("HERCULES_ERR_GET_DIR_RECV_STREAM");
+		free(elements);
 		return -1;
 	}
 
@@ -838,6 +840,17 @@ int32_t open_imss(char *imss_uri)
 		int ret = 0;
 
 		oob_sock = connect_common(new_imss.info.ips[i], new_imss.info.conn_port, AF_INET);
+		if (oob_sock < 0)
+		{
+			char err_msg[128];
+			sprintf(err_msg, "HERCULES_ERR_CONNECT_COMMON - i=%d - %s:%d", i, new_imss.info.ips[i], new_imss.info.conn_port);
+			perror(err_msg);
+			return -1;
+		}
+		// else
+		// {
+		// 	printf("Cliente socket fd=%d\n", oob_sock);
+		// }
 
 		char request[REQUEST_SIZE];
 		sprintf(request, "%" PRIu32 " GET %s", process_rank, "HELLO!JOIN");
@@ -846,13 +859,25 @@ int32_t open_imss(char *imss_uri)
 
 		if (send(oob_sock, request, REQUEST_SIZE, 0) < 0)
 		{
-			perror("ERRIMSS_STAT_HELLO_1");
+			perror("HERCULES_ERR_STAT_HELLO_1");
 			return -1;
 		}
 
 		ret = recv(oob_sock, &addr_len, sizeof(addr_len), MSG_WAITALL);
+		if (ret < 0)
+		{
+			perror("HERCULES_ERR_RECV_1_HELLO");
+			close(oob_sock);
+			return -1;
+		}
 		new_imss.conns.peer_addr[i] = (ucp_address *)malloc(addr_len);
 		ret = recv(oob_sock, new_imss.conns.peer_addr[i], addr_len, MSG_WAITALL);
+		if (ret < 0)
+		{
+			perror("HERCULES_ERR_RECV_2_HELLO");
+			close(oob_sock);
+			return -1;
+		}
 		close(oob_sock);
 
 		new_imss.conns.id[i] = i;
@@ -879,7 +904,6 @@ int32_t open_imss(char *imss_uri)
 
 	// Add the created struture into the underlying IMSSs.
 	GInsert(&imssd_pos, &imssd_max_size, (char *)&new_imss, imssd, free_imssd);
-
 	return 0;
 }
 
@@ -917,9 +941,10 @@ int32_t release_imss(char *imss_uri, uint32_t release_op)
 			}
 
 			// ep_close(ucp_worker_data, ep, 0);
+			ep_close(ucp_worker_data, ep, UCP_EP_CLOSE_MODE_FLUSH);
 			// ep_flush(ep, ucp_worker_data);
 
-			ucp_ep_destroy(ep);
+			// ucp_ep_destroy(ep);
 			// ucp_context_destroy(ucp_worker_data);
 		}
 		// ep_flush(ep, ucp_worker_data);
@@ -2757,7 +2782,7 @@ size_t get_ndata(int32_t dataset_id, int32_t data_id, void *buffer, ssize_t to_r
 }
 
 // Method retrieving a data element associated to a certain dataset.
-size_t get_data_mall(int32_t dataset_id, int32_t data_id, char *buffer, ssize_t to_read, off_t offset, int32_t num_storages)
+size_t get_data_mall(int32_t dataset_id, int32_t data_id, void *buffer, ssize_t to_read, off_t offset, int32_t num_storages)
 {
 	// slog_debug("[IMSS][get_data]");
 	// slog_fatal("Caller name: %pS", __builtin_return_address(0));
@@ -2811,7 +2836,7 @@ size_t get_data_mall(int32_t dataset_id, int32_t data_id, char *buffer, ssize_t 
 
 		if (send_req(ucp_worker_data, ep, local_addr_data, local_addr_len_data, key_) == 0)
 		{
-			perror("ERRIMSS_RLSIMSS_SENDADDR");
+			perror("HERCULES_ERR_SENDREQ_MALL");
 			return -1;
 		}
 
@@ -2819,8 +2844,8 @@ size_t get_data_mall(int32_t dataset_id, int32_t data_id, char *buffer, ssize_t 
 		msg_length = get_recv_data_length(ucp_worker_data, local_data_uid);
 		if (msg_length == 0)
 		{
-			slog_error("ERRIMSS_REN_DATASET_DATA_INVALID_MSG_LENGTH");
-			perror("ERRIMSS_REN_DATASET_DATA_INVALID_MSG_LENGTH");
+			slog_error("HERCULES_ERR_REN_DATASET_DATA_INVALID_MSG_LENGTH_MALL");
+			perror("HERCULES_ERR_REN_DATASET_DATA_INVALID_MSG_LENGTH_MALL");
 			return -1;
 		}
 
@@ -2831,7 +2856,8 @@ size_t get_data_mall(int32_t dataset_id, int32_t data_id, char *buffer, ssize_t 
 		{
 			if (errno != EAGAIN)
 			{
-				perror("ERRIMSS_GETDATA_RECV");
+				slog_error("HERCULES_ERR_GETDATA_RECV_MALL");
+				perror("HERCULES_ERR_GETDATA_RECV_MALL");
 				return -1;
 			}
 			else
@@ -3208,7 +3234,7 @@ int32_t get_type(char *uri)
 		return -1;
 	}
 	slog_debug("[IMSS][get_type] length=%ld, NUM_DATA_SERVERS=%d", length, NUM_DATA_SERVERS);
-	result = (char *)malloc(sizeof(char) * length);
+	result = (void *)malloc(sizeof(char) * length);
 
 	ret = recv_dynamic_stream(ucp_worker_meta, ep, result, BUFFER, local_meta_uid, length);
 	slog_debug("[IMSS][get_type] after recv_dynamic_stream ret=%d", ret);

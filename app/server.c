@@ -213,13 +213,13 @@ int32_t main(int32_t argc, char **argv)
 		strcpy(args.deploy_hostfile, aux);
 	}
 
-	if (cfg_get(cfg, "DEBUG_LEVEL"))
+	if (getenv("HERCULES_DEBUG_LEVEL") != NULL)
+	{
+		aux = getenv("HERCULES_DEBUG_LEVEL");
+	}
+	else if (cfg_get(cfg, "DEBUG_LEVEL"))
 	{
 		aux = cfg_get(cfg, "DEBUG_LEVEL");
-	}
-	else if (getenv("IMSS_DEBUG") != NULL)
-	{
-		aux = getenv("IMSS_DEBUG");
 	}
 	else
 	{

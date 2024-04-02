@@ -282,7 +282,7 @@ int imss_getattr(const char *path, struct stat *stbuf)
 	switch (type)
 	{
 	case 0:
-		free(imss_path);
+		// free(imss_path);
 		return -ENOENT;
 	case 1:
 		if ((n_ent = get_dir((char *)imss_path, &buffer, &refs)) != -1)
@@ -342,7 +342,7 @@ int imss_getattr(const char *path, struct stat *stbuf)
 			}
 			else if (ds == -EEXIST)
 			{
-				fprintf(stderr, "[imss_getattr] ds=%d, %s\n", ds, strerror(EEXIST));
+				// fprintf(stderr, "[imss_getattr] ds=%d, %s\n", ds, strerror(EEXIST));
 				return 0;
 			}
 			else
@@ -763,7 +763,7 @@ ssize_t imss_sread(const char *path, void *buf, size_t size, off_t offset)
 
 			slog_debug("[imss_read] i_blk=%ld, num_storages=%ld, N_SERVERS=%ld", i_blk, num_storages, N_SERVERS);
 
-			to_read = get_data_mall(ds, curr_blk, (char *)buf + byte_count, to_read, block_offset, num_storages);
+			to_read = get_data_mall(ds, curr_blk, buf + byte_count, to_read, block_offset, num_storages);
 			i_blk++;
 		}
 		else
@@ -2239,7 +2239,8 @@ int imss_rmdir(const char *path)
 	}
 	else
 	{
-		fprintf(stderr, "*** [imss_rmdir] Error getting dir %s, n_ent=%d\n", imss_path, n_ent);
+		// fprintf(stderr, "*** [imss_rmdir] Error getting dir %s, n_ent=%d\n", imss_path, n_ent);
+		slog_error("[imss_rmdir] Error getting dir %s, n_ent=%d", imss_path, n_ent);
 		free(imss_path);
 		return -ENOENT;
 	}
@@ -2357,7 +2358,8 @@ int imss_utimens(const char *path, const struct timespec tv[2])
 		file_desc = open_dataset(rpath, 0);
 	if (file_desc < 0)
 	{
-		fprintf(stderr, "[IMSS-FUSE]    Cannot open dataset.\n");
+		//fprintf(stderr, "[IMSS-FUSE]    Cannot open dataset.\n");
+		slog_error("[IMSS-FUSE]    Cannot open dataset.");
 	}
 
 	// char *buff = malloc(IMSS_DATA_BSIZE);
@@ -2464,7 +2466,7 @@ int imss_symlinkat(char *new_path_1, char *new_path_2, int _case)
 
 	if (res < 0)
 	{
-		fprintf(stderr, "[imss_create]	Cannot create new dataset.\n");
+		// fprintf(stderr, "[imss_create]	Cannot create new dataset.\n");
 		slog_error("[imss_create] Cannot create new dataset.\n");
 		free(rpath1);
 		free(rpath2);
@@ -2519,7 +2521,8 @@ int imss_flush(const char *path)
 		file_desc = open_dataset(rpath, 0);
 	if (file_desc < 0)
 	{
-		fprintf(stderr, "[IMSS-FUSE]    Cannot open dataset.\n");
+		slog_error("[IMSS-FUSE]    Cannot open dataset.");
+		// fprintf(stderr, "[IMSS-FUSE]    Cannot open dataset.\n");
 		return -EACCES;
 	}
 
@@ -2533,7 +2536,8 @@ int imss_flush(const char *path)
 	pthread_mutex_lock(&lock);
 	if (set_data(file_desc, 0, (char *)buff, 0, 0) < 0)
 	{
-		fprintf(stderr, "[IMSS-FUSE]	Error writing to imss.\n");
+		//fprintf(stderr, "[IMSS-FUSE]	Error writing to imss.\n");
+		slog_error("[IMSS-FUSE]	Error writing to imss.");
 		error_print = -ENOENT;
 		pthread_mutex_unlock(&lock);
 		return -ENOENT;
@@ -2571,8 +2575,8 @@ int imss_chmod(const char *path, mode_t mode)
 		file_desc = open_dataset(rpath, 0);
 	if (file_desc < 0)
 	{
-
-		fprintf(stderr, "[IMSS-FUSE]    Cannot open dataset.\n");
+		slog_error("[IMSS-FUSE]    Cannot open dataset.");
+		// fprintf(stderr, "[IMSS-FUSE]    Cannot open dataset.\n");
 	}
 
 	pthread_mutex_lock(&lock);
@@ -2619,8 +2623,8 @@ int imss_chown(const char *path, uid_t uid, gid_t gid)
 		file_desc = open_dataset(rpath, 0);
 	if (file_desc < 0)
 	{
-
-		fprintf(stderr, "[IMSS-FUSE]    Cannot open dataset.\n");
+		slog_error("[IMSS-FUSE]    Cannot open dataset.");
+		// fprintf(stderr, "[IMSS-FUSE]    Cannot open dataset.\n");
 	}
 
 	pthread_mutex_lock(&lock);
