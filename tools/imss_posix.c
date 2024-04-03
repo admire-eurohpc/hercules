@@ -90,7 +90,7 @@ pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t lock2 = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t system_lock = PTHREAD_MUTEX_INITIALIZER;
 
-#define MAX_PATH 256
+#define MAX_PATH 1024
 // char *aux_refresh;
 // char *imss_path_refresh;
 
@@ -98,8 +98,8 @@ int LD_PRELOAD = 0;
 void *map;
 void *map_prefetch;
 
-char MOUNT_POINT[32];
-char HERCULES_PATH[256];
+char MOUNT_POINT[512];
+char HERCULES_PATH[512];
 void *map_fd;
 
 uint32_t rank = -1;
@@ -311,9 +311,7 @@ char *checkHerculesPath(const char *pathname)
 	}
 	else
 	{
-		// ResolvePath(pathname, real_pathname);
-		// fprintf(stderr,"real_pathname=%s\n", real_pathname);
-		// if (!strncmp(real_pathname, MOUNT_POINT, strlen(MOUNT_POINT) - 1) || (real_pathname[0] != '/' && !strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT) - 1)))
+		// 
 		if (!strncmp(pathname, MOUNT_POINT, strlen(MOUNT_POINT) - 1) || (pathname[0] != '/' && !strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT) - 1)))
 		{
 			// if (pathname[0] == '.')
@@ -399,7 +397,7 @@ prefetch_function(void *th_argv)
 
 char *convert_path(const char *name)
 {
-	char *path = calloc(256, sizeof(char));
+	char *path = calloc(1024, sizeof(char));
 	strcpy(path, name);
 	size_t len = strlen(MOUNT_POINT);
 	// remove MOUNT_POINT prefix from the path.
@@ -412,7 +410,7 @@ char *convert_path(const char *name)
 		}
 	}
 
-	char *new_path = calloc(256, sizeof(char));
+	char *new_path = calloc(1024, sizeof(char));
 
 	// seeks initial slashes "/" in the path.
 	len = strlen(path);
