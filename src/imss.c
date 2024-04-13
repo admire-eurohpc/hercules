@@ -199,7 +199,7 @@ int32_t imss_check(char *dataset_uri)
 		int32_t imss_uri_len = strlen(imss_.info.uri_);
 		// int32_t dataset_uri_len = strlen(dataset_uri);
 		// int32_t length = MAX(dataset_uri_len, imss_uri_len);
-		// slog_live("[imss_check] data_uri=%s, imss_.info.uri_=%s, max_length=%d", dataset_uri, imss_.info.uri_, length);
+		slog_live("[imss_check] data_uri=%s, imss_.info.uri_=%s, imss_uri_len=%d", dataset_uri, imss_.info.uri_, imss_uri_len);
 		// if ((imss_uri_len > 0) && !strncmp(dataset_uri, imss_.info.uri_, length))
 		if ((imss_uri_len > 0) && !strncmp(dataset_uri, imss_.info.uri_, imss_uri_len))
 			return i;
@@ -211,9 +211,11 @@ int32_t imss_check(char *dataset_uri)
 int32_t find_imss(char *imss_uri, imss *imss_)
 {
 	// Search for a certain IMSS within the vector.
+	slog_live("imssd->len=%d", imssd->len);
 	for (int32_t i = 0; i < imssd->len; i++)
 	{
 		*imss_ = g_array_index(imssd, imss, i);
+		slog_live("imss_uri=%s, imss_->info.uri_=%s", imss_uri, imss_->info.uri_);
 		if (!strncmp(imss_uri, imss_->info.uri_, URI_))
 			return i;
 	}
@@ -499,29 +501,29 @@ uint32_t get_dir(char *requested_uri, char **buffer, char ***items)
 
 	// char elements[43264];
 	// FIX: TRY USING DYNAMIC MEMORY.
-	char *elements; // = (char *)malloc(45000);
+	void *elements; // = (char *)malloc(45000);
 	// Get the length of the message to be received.
-	size_t length = 0;
-	length = get_recv_data_length(ucp_worker_meta, local_meta_uid);
-	if (length == 0)
-	{
-		slog_error("HERCULES_ERR_GET_DIR_GET_RECV_DATA_LENGTH");
-		perror("HERCULES_ERR_GET_DIR_GET_RECV_DATA_LENGTH");
-		return -1;
-	}
-	elements = (char *)malloc(length*sizeof(char));
+	size_t length = -1;
+	// length = get_recv_data_length(ucp_worker_meta, local_meta_uid);
+	// if (length == 0)
+	// {
+	// 	slog_error("HERCULES_ERR_GET_DIR_GET_RECV_DATA_LENGTH");
+	// 	perror("HERCULES_ERR_GET_DIR_GET_RECV_DATA_LENGTH");
+	// 	return -1;
+	// }
+	// elements = (char *)malloc(length*sizeof(char));
 	//  Retrieve the set of elements within the requested uri.
-	ret = recv_dynamic_stream(ucp_worker_meta, ep, elements, BUFFER, local_meta_uid, length);
+	ret = recv_dynamic_stream_opt(ucp_worker_meta, ep, &elements, BUFFER, local_meta_uid, length);
 	if (ret < 0)
 	{
 		fprintf(stderr, "HERCULES_ERR_GET_DIR_RECV_STREAM , getdir_req = %s, ret=%d, length=%lu\n", getdir_req, ret, length);
 		slog_error("HERCULES_ERR_GET_DIR_RECV_STREAM");
 		perror("HERCULES_ERR_GET_DIR_RECV_STREAM");
-		free(elements);
+		// free(elements);
 		return -1;
 	}
 
-	if (!strncmp("$ERRIMSS_NO_KEY_AVAIL$", elements, 22))
+	if (!strncmp("$ERRIMSS_NO_KEY_AVAIL$", (const char *)elements, 22))
 	{
 		slog_error("HERCULES_ERR_GET_DIR_NODIR");
 		return -1;
@@ -542,7 +544,7 @@ uint32_t get_dir(char *requested_uri, char **buffer, char ***items)
 	// slog_debug("[IMSS][get_dir] malloc items");
 
 	// Identify each element within the buffer provided.
-	char *curr = elements;
+	char *curr = (char *)elements;
 	for (int32_t i = 0; i < num_elements; i++)
 	{
 		// slog_debug("[IMSS][get_dir] item %d -- calloc", i);
@@ -565,212 +567,211 @@ uint32_t get_dir(char *requested_uri, char **buffer, char ***items)
 /**********************************************************************************/
 
 // Method initializing an IMSS deployment.
-int32_t init_imss(char *imss_uri,
-				  char *hostfile,
-				  char *meta_hostfile,
-				  int32_t n_servers,
-				  uint16_t conn_port,
-				  uint64_t buff_size,
-				  uint32_t deployment,
-				  char *binary_path,
-				  uint16_t metadata_port)
-{
-	int ret = 0;
-	imss_info aux_imss;
-	ucp_config_t *config;
-	ucs_status_t status;
+// int32_t init_imss(char *imss_uri,
+// 				  char *hostfile,
+// 				  char *meta_hostfile,
+// 				  int32_t n_servers,
+// 				  uint16_t conn_port,
+// 				  uint64_t buff_size,
+// 				  uint32_t deployment,
+// 				  char *binary_path,
+// 				  uint16_t metadata_port)
+// {
+// 	int ret = 0;
+// 	imss_info aux_imss;
+// 	ucp_config_t *config;
+// 	ucs_status_t status;
 
-	if (getenv("IMSS_DEBUG") != NULL)
-	{
-		IMSS_DEBUG = 1;
-	}
+// 	if (getenv("IMSS_DEBUG") != NULL)
+// 	{
+// 		IMSS_DEBUG = 1;
+// 	}
 
-	// Check if the new IMSS uri has been already assigned.
-	int32_t existing_imss = stat_imss(imss_uri, &aux_imss);
-	if (existing_imss)
-	{
-		slog_fatal("ERRIMSS_INITIMSS_ALREADYEXISTS");
-		return -1;
-	}
-	// Once it has been notified that no other IMSS instance had the same URI, the deployment will be performed in case of a DETACHED instance.
-	if (deployment == DETACHED)
-	{
-		if (!binary_path)
-		{
-			slog_fatal("ERRIMSS_INITIMSS_NOBINARY");
-			return -1;
-		}
+// 	// Check if the new IMSS uri has been already assigned.
+// 	int32_t existing_imss = stat_imss(imss_uri, &aux_imss);
+// 	if (existing_imss)
+// 	{
+// 		slog_fatal("ERRIMSS_INITIMSS_ALREADYEXISTS");
+// 		return -1;
+// 	}
+// 	// Once it has been notified that no other IMSS instance had the same URI, the deployment will be performed in case of a DETACHED instance.
+// 	if (deployment == DETACHED)
+// 	{
+// 		if (!binary_path)
+// 		{
+// 			slog_fatal("ERRIMSS_INITIMSS_NOBINARY");
+// 			return -1;
+// 		}
 
-		char *command = (char *)calloc(2048, sizeof(char));
+// 		char *command = (char *)calloc(2048, sizeof(char));
 
-		FILE *in_file = fopen(meta_hostfile, "r");
-		if (!in_file)
-		{
-			perror("fopen");
-			return 0;
-		}
-		struct stat sb;
-		if (stat(meta_hostfile, &sb) == -1)
-		{
-			perror("stat");
-			return 0;
-		}
+// 		FILE *in_file = fopen(meta_hostfile, "r");
+// 		if (!in_file)
+// 		{
+// 			perror("fopen");
+// 			return 0;
+// 		}
+// 		struct stat sb;
+// 		if (stat(meta_hostfile, &sb) == -1)
+// 		{
+// 			perror("stat");
+// 			return 0;
+// 		}
 
-		char *textRead = (char *)malloc(sb.st_size);
-		int i = 1;
+// 		char *textRead = (char *)malloc(sb.st_size);
+// 		int i = 1;
 
-		while (fscanf(in_file, "%[^\n] ", textRead) != EOF)
-		{
-			// printf("Line %d is  %s",i, textRead);
-			// sprintf(command, "mpirun -np %d -hostfile %s %s %s %d %lu %s %d %d %s %d &", n_servers, hostfile, binary_path, imss_uri, conn_port, buff_size, textRead,metadata_port, n_servers ,hostfile, IMSS_THREAD_POOL);
-			i++;
-		}
-		fclose(in_file);
-		// Original
-		// sprintf(command, "mpirun -np %d -f %s %s %s %d %lu foo %d %d %s &", n_servers, hostfile, binary_path, imss_uri, conn_port, buff_size, 0, n_servers, "");
-		// sprintf(command, "mpirun -np %d -hostfile %s %s %s %d %lu foo %d %d %s &", n_servers, hostfile, binary_path, imss_uri, conn_port, buff_size, 0, n_servers, "");
+// 		while (fscanf(in_file, "%[^\n] ", textRead) != EOF)
+// 		{
+// 			// printf("Line %d is  %s",i, textRead);
+// 			// sprintf(command, "mpirun -np %d -hostfile %s %s %s %d %lu %s %d %d %s %d &", n_servers, hostfile, binary_path, imss_uri, conn_port, buff_size, textRead,metadata_port, n_servers ,hostfile, IMSS_THREAD_POOL);
+// 			i++;
+// 		}
+// 		fclose(in_file);
+// 		// Original
+// 		// sprintf(command, "mpirun -np %d -f %s %s %s %d %lu foo %d %d %s &", n_servers, hostfile, binary_path, imss_uri, conn_port, buff_size, 0, n_servers, "");
+// 		// sprintf(command, "mpirun -np %d -hostfile %s %s %s %d %lu foo %d %d %s &", n_servers, hostfile, binary_path, imss_uri, conn_port, buff_size, 0, n_servers, "");
 
-		// Imss server(data)
-		// mpirun -np $num_servers -f $imss_hostfile $server_binary $imss_uri $imss_port_number $imss_buffer_size $metadata_server_address $metadata_server_port $num_servers $imss_hostfile $io_threads &
-		//["imss://", "5555", "1048576000", "compute-6-2", "5569", "1", "./hostfile", "1"]
-		// sprintf(command, "mpirun -np %d -hostfile %s %s %s %d %lu %s %d %d %s %d &", n_servers, hostfile, binary_path, imss_uri, conn_port, buff_size, meta_hostfile, metadata_port, n_servers ,hostfile, IMSS_THREAD_POOL);
-		sprintf(command, "mpirun.mpich -np %d -f %s %s %s %d %lu %s %d %d %s %d &", 2, hostfile, binary_path, imss_uri, conn_port, buff_size, textRead, metadata_port, 2, hostfile, IMSS_THREAD_POOL);
+// 		// Imss server(data)
+// 		// mpirun -np $num_servers -f $imss_hostfile $server_binary $imss_uri $imss_port_number $imss_buffer_size $metadata_server_address $metadata_server_port $num_servers $imss_hostfile $io_threads &
+// 		//["imss://", "5555", "1048576000", "compute-6-2", "5569", "1", "./hostfile", "1"]
+// 		// sprintf(command, "mpirun -np %d -hostfile %s %s %s %d %lu %s %d %d %s %d &", n_servers, hostfile, binary_path, imss_uri, conn_port, buff_size, meta_hostfile, metadata_port, n_servers ,hostfile, IMSS_THREAD_POOL);
+// 		sprintf(command, "mpirun.mpich -np %d -f %s %s %s %d %lu %s %d %d %s %d &", 2, hostfile, binary_path, imss_uri, conn_port, buff_size, textRead, metadata_port, 2, hostfile, IMSS_THREAD_POOL);
 
-		sprintf(command, "mpirun -np %d -hostfile %s %s %s %d %lu %s %d %d", n_servers, hostfile, binary_path, imss_uri, conn_port, buff_size, "compute-6-2", 5569, n_servers);
+// 		sprintf(command, "mpirun -np %d -hostfile %s %s %s %d %lu %s %d %d", n_servers, hostfile, binary_path, imss_uri, conn_port, buff_size, "compute-6-2", 5569, n_servers);
 
-		printf("command=%s", command);
-		// Perform the deployment (FROM LINUX MAN PAGES: "system() returns after the command has been completed").
-		if (system(command) == -1)
-		{
-			perror("ERRIMSS_INITIMSS_DEPLOY");
-			return -1;
-		}
-		free(command);
-	}
-	// IMSS creation.
+// 		printf("command=%s", command);
+// 		// Perform the deployment (FROM LINUX MAN PAGES: "system() returns after the command has been completed").
+// 		if (system(command) == -1)
+// 		{
+// 			perror("ERRIMSS_INITIMSS_DEPLOY");
+// 			return -1;
+// 		}
+// 		free(command);
+// 	}
+// 	// IMSS creation.
 
-	imss new_imss;
-	strcpy(new_imss.info.uri_, imss_uri);
-	new_imss.info.num_storages = n_servers;
-	new_imss.info.conn_port = conn_port;
-	new_imss.info.type = 'I';
+// 	imss new_imss;
+// 	strcpy(new_imss.info.uri_, imss_uri);
+// 	new_imss.info.num_storages = n_servers;
+// 	new_imss.info.conn_port = conn_port;
+// 	new_imss.info.type = 'I';
 
-	if (deployment == ATTACHED)
-		new_imss.info.conn_port = connection_port;
+// 	if (deployment == ATTACHED)
+// 		new_imss.info.conn_port = connection_port;
 
-	new_imss.info.ips = (char **)malloc(n_servers * sizeof(char *));
+// 	new_imss.info.ips = (char **)malloc(n_servers * sizeof(char *));
 
-	// Resources required to connect to the corresponding IMSS.
-	new_imss.conns.peer_addr = (ucp_address_t **)malloc(n_servers * sizeof(ucp_address_t *));
-	new_imss.conns.eps = (ucp_ep_h *)malloc(n_servers * sizeof(ucp_ep_h));
+// 	// Resources required to connect to the corresponding IMSS.
+// 	new_imss.conns.peer_addr = (ucp_address_t **)malloc(n_servers * sizeof(ucp_address_t *));
+// 	new_imss.conns.eps = (ucp_ep_h *)malloc(n_servers * sizeof(ucp_ep_h));
 
-	// FILE entity managing the IMSS hostfile.
-	FILE *svr_nodes;
-	// Open the file containing the IMSS server nodes.
-	if ((svr_nodes = fopen(hostfile, "r+")) == NULL)
-	{
-		perror("ERRIMSS_OPEN_FILE");
-		return -1;
-	}
-	// Number of characters successfully read from the line.
-	int n_chars;
+// 	// FILE entity managing the IMSS hostfile.
+// 	FILE *svr_nodes;
+// 	// Open the file containing the IMSS server nodes.
+// 	if ((svr_nodes = fopen(hostfile, "r+")) == NULL)
+// 	{
+// 		perror("ERRIMSS_OPEN_FILE");
+// 		return -1;
+// 	}
+// 	// Number of characters successfully read from the line.
+// 	int n_chars;
 
-	new_imss.conns.matching_server = -1;
+// 	new_imss.conns.matching_server = -1;
 
-	new_imss.conns.id = (uint32_t *)malloc(n_servers * sizeof(uint32_t));
+// 	new_imss.conns.id = (uint32_t *)malloc(n_servers * sizeof(uint32_t));
 
-	status = ucp_worker_get_address(ucp_worker_data, &local_addr_data, &local_addr_len_data);
-	ucp_worker_address_attr_t attr;
-	attr.field_mask = UCP_WORKER_ADDRESS_ATTR_FIELD_UID;
-	ucp_worker_address_query(local_addr_data, &attr);
-	local_meta_uid = attr.worker_uid;
+// 	status = ucp_worker_get_address(ucp_worker_data, &local_addr_data, &local_addr_len_data);
+// 	ucp_worker_address_attr_t attr;
+// 	attr.field_mask = UCP_WORKER_ADDRESS_ATTR_FIELD_UID;
+// 	ucp_worker_address_query(local_addr_data, &attr);
+// 	local_meta_uid = attr.worker_uid;
 
-	// Connect to all servers.
-	for (int i = 0; i < n_servers; i++)
-	{
-		ucs_status_t status;
-		int oob_sock;
-		ucp_address_t *peer_addr;
-		size_t addr_len;
-		ucp_ep_params_t ep_params;
-		ucs_status_t ep_status = UCS_OK;
+// 	// Connect to all servers.
+// 	for (int i = 0; i < n_servers; i++)
+// 	{
+// 		ucs_status_t status;
+// 		int oob_sock;
+// 		ucp_address_t *peer_addr;
+// 		size_t addr_len;
+// 		ucp_ep_params_t ep_params;
+// 		ucs_status_t ep_status = UCS_OK;
 
-		// Allocate resources in the metadata structure so as to store the current IMSS's IP.
-		(new_imss.info.ips)[i] = (char *)malloc(LINE_LENGTH);
-		size_t l_size = LINE_LENGTH;
-		// Save IMSS metadata deployment.
-		n_chars = getline(&((new_imss.info.ips)[i]), &l_size, svr_nodes);
+// 		// Allocate resources in the metadata structure so as to store the current IMSS's IP.
+// 		(new_imss.info.ips)[i] = (char *)malloc(LINE_LENGTH);
+// 		size_t l_size = LINE_LENGTH;
+// 		// Save IMSS metadata deployment.
+// 		n_chars = getline(&((new_imss.info.ips)[i]), &l_size, svr_nodes);
 
-		// Erase the new line character ('') from the string.
-		((new_imss.info.ips)[i])[n_chars - 1] = '\0';
+// 		// Erase the new line character ('') from the string.
+// 		((new_imss.info.ips)[i])[n_chars - 1] = '\0';
 
-		// Save the current socket value when the IMSS ip matches the clients' one.
-		if (!strncmp((new_imss.info.ips)[i], client_node, len_client_node) || !strncmp((new_imss.info.ips)[i], client_ip, strlen(new_imss.info.ips[i])))
-		{
-			new_imss.conns.matching_server = i;
-			strcpy(att_deployment, imss_uri);
-		}
-		// Create the connection to the IMSS server dispatcher thread.
-		slog_debug("[IMSS] imss_init: Contacting dispatcher at %s:%d", (new_imss.info.ips)[i], new_imss.info.conn_port);
+// 		// Save the current socket value when the IMSS ip matches the clients' one.
+// 		if (!strncmp((new_imss.info.ips)[i], client_node, len_client_node) || !strncmp((new_imss.info.ips)[i], client_ip, strlen(new_imss.info.ips[i])))
+// 		{
+// 			new_imss.conns.matching_server = i;
+// 			strcpy(att_deployment, imss_uri);
+// 		}
+// 		// Create the connection to the IMSS server dispatcher thread.
+// 		slog_debug("[IMSS] imss_init: Contacting dispatcher at %s:%d", (new_imss.info.ips)[i], new_imss.info.conn_port);
 
-		process_rank = CLOSE_EP;
+// 		process_rank = CLOSE_EP;
 
-		oob_sock = connect_common((new_imss.info.ips)[i], new_imss.info.conn_port, AF_INET);
+// 		oob_sock = connect_common((new_imss.info.ips)[i], new_imss.info.conn_port, AF_INET);
 
-		char request[REQUEST_SIZE];
-		sprintf(request, "%" PRIu32 " GET HELLO! %ld %s", process_rank, buff_size, imss_uri);
+// 		char request[REQUEST_SIZE];
+// 		sprintf(request, "%" PRIu32 " GET HELLO! %ld %s", process_rank, buff_size, imss_uri);
 
-		if (send(oob_sock, request, REQUEST_SIZE, 0) < 0)
-		{
-			perror("ERRIMSS_STAT_HELLO_0");
-			return -1;
-		}
+// 		if (send(oob_sock, request, REQUEST_SIZE, 0) < 0)
+// 		{
+// 			perror("ERRIMSS_STAT_HELLO_0");
+// 			return -1;
+// 		}
 
-		ret = recv(oob_sock, &addr_len, sizeof(addr_len), MSG_WAITALL);
-		new_imss.conns.peer_addr[i] = (ucp_address *)malloc(addr_len);
-		ret = recv(oob_sock, new_imss.conns.peer_addr[i], addr_len, MSG_WAITALL);
-		close(oob_sock);
+// 		ret = recv(oob_sock, &addr_len, sizeof(addr_len), MSG_WAITALL);
+// 		new_imss.conns.peer_addr[i] = (ucp_address *)malloc(addr_len);
+// 		ret = recv(oob_sock, new_imss.conns.peer_addr[i], addr_len, MSG_WAITALL);
+// 		close(oob_sock);
 
-		client_create_ep(ucp_worker_data, &new_imss.conns.eps[i], curr_imss.conns.peer_addr[i]);
-	}
-	// Close the file.
-	if (fclose(svr_nodes) != 0)
-	{
-		perror("ERR_CLOSE_FILE");
-		return -1;
-	}
+// 		client_create_ep(ucp_worker_data, &new_imss.conns.eps[i], curr_imss.conns.peer_addr[i]);
+// 	}
+// 	// Close the file.
+// 	if (fclose(svr_nodes) != 0)
+// 	{
+// 		perror("ERR_CLOSE_FILE");
+// 		return -1;
+// 	}
 
-	// Discover the metadata server that shall deal with the new IMSS instance.
-	uint32_t m_srv = discover_stat_srv(new_imss.info.uri_);
-	ucp_ep_h ep = stat_eps[m_srv];
+// 	// Discover the metadata server that shall deal with the new IMSS instance.
+// 	uint32_t m_srv = discover_stat_srv(new_imss.info.uri_);
+// 	ucp_ep_h ep = stat_eps[m_srv];
 
-	// Send the created structure to the metadata server.
-	char key_plus_size[REQUEST_SIZE];
-	sprintf(key_plus_size, "%" PRIu32 " SET %lu %s", stat_ids[m_srv], (sizeof(imss_info) + new_imss.info.num_storages * LINE_LENGTH), new_imss.info.uri_);
+// 	// Send the created structure to the metadata server.
+// 	char key_plus_size[REQUEST_SIZE];
+// 	sprintf(key_plus_size, "%" PRIu32 " SET %lu %s", stat_ids[m_srv], (sizeof(imss_info) + new_imss.info.num_storages * LINE_LENGTH), new_imss.info.uri_);
 
-	if (send_req(ucp_worker_meta, ep, local_addr_data, local_addr_len_data, key_plus_size) == 0)
-	{
-		perror("ERRIMSS_RLSIMSS_SENDADDR");
-		return -1;
-	}
+// 	if (send_req(ucp_worker_meta, ep, local_addr_data, local_addr_len_data, key_plus_size) == 0)
+// 	{
+// 		perror("ERRIMSS_RLSIMSS_SENDADDR");
+// 		return -1;
+// 	}
 
-	// Send the new IMSS metadata structure to the metadata server entity.
-	if (send_dynamic_stream(ucp_worker_meta, ep, (void *)&new_imss.info, IMSS_INFO, local_meta_uid) < 0)
-		return -1;
+// 	// Send the new IMSS metadata structure to the metadata server entity.
+// 	if (send_dynamic_stream(ucp_worker_meta, ep, (void *)&new_imss.info, IMSS_INFO, local_meta_uid) < 0)
+// 		return -1;
 
-	// Add the created struture into the underlying IMSS vector.
-	GInsert(&imssd_pos, &imssd_max_size, (char *)&new_imss, imssd, free_imssd);
+// 	// Add the created struture into the underlying IMSS vector.
+// 	GInsert(&imssd_pos, &imssd_max_size, (char *)&new_imss, imssd, free_imssd);
 
-	return 0;
-}
+// 	return 0;
+// }
 
 // Method initializing the required resources to make use of an existing IMSS.
 int32_t open_imss(char *imss_uri)
 {
 	// New IMSS structure storing the entity to be created.
 	imss new_imss;
-
-	ucp_config_t *config;
+	// ucp_config_t *config;
 	ucs_status_t status;
 
 	// if (getenv("IMSS_DEBUG") != NULL)
@@ -818,9 +819,9 @@ int32_t open_imss(char *imss_uri)
 		return -1;
 	}
 	}
+	slog_debug("[IMSS][open_imss] new_imss.info.num_storages=%ld", new_imss.info.num_storages);
 
 	new_imss.conns.peer_addr = (ucp_address_t **)malloc(new_imss.info.num_storages * sizeof(ucp_address_t *));
-	slog_debug("[IMSS][open_imss] new_imss.info.num_storages=%ld", new_imss.info.num_storages);
 	new_imss.conns.eps = (ucp_ep_h *)malloc(new_imss.info.num_storages * sizeof(ucp_ep_h));
 	new_imss.conns.id = (uint32_t *)malloc(new_imss.info.num_storages * sizeof(uint32_t));
 	new_imss.conns.matching_server = -1;
@@ -1010,22 +1011,24 @@ int32_t stat_imss(char *imss_uri, imss_info *imss_info_)
 	}
 
 	// Get the length of the message to be received.
-	size_t length = 0;
-	length = get_recv_data_length(ucp_worker_meta, local_meta_uid);
-	if (length == 0)
-	{
-		slog_error("HERCULES_ERR_STAT_IMSS_GET_RECV_DATA_LENGTH");
-		perror("HERCULES_ERR_STAT_IMSS_GET_RECV_DATA_LENGTH");
-		return -1;
-	}
-	ret = recv_dynamic_stream(ucp_worker_meta, ep, (char *)imss_info_, IMSS_INFO, local_meta_uid, length);
-
-	slog_debug("[IMSS][stat_imss] End");
+	size_t length = -1;
+	void *request = NULL;
+	// length = get_recv_data_length(ucp_worker_meta, local_meta_uid);
+	// if (length == 0)
+	// {
+	// 	slog_error("HERCULES_ERR_STAT_IMSS_GET_RECV_DATA_LENGTH");
+	// 	perror("HERCULES_ERR_STAT_IMSS_GET_RECV_DATA_LENGTH");
+	// 	return -1;
+	// }
+	ret = recv_dynamic_stream_opt(ucp_worker_meta, ep, &request, IMSS_INFO, local_meta_uid, length);
+	slog_debug("[IMSS][stat_imss] End, ret=%d", ret);
 	// if (ret < sizeof(imss_info))
 	if (ret == -1)
 	{
 		return 0;
 	}
+	// imss_info_ = (imss_info *)request;
+	memcpy(imss_info_, request, sizeof(imss_info));
 	return 1;
 }
 
@@ -1439,18 +1442,19 @@ int32_t release_dataset(int32_t dataset_id)
 			return -1;
 		}
 
-		size_t msg_length = 0;
+		size_t msg_length = -1;
 		// char update_result[RESPONSE_SIZE];
-		msg_length = get_recv_data_length(ucp_worker_meta, local_meta_uid);
-		if (msg_length == 0)
-		{
-			slog_error("ERRIMSS_REL_DATASET_INVALID_MSG_LENGTH");
-			perror("ERRIMSS_REL_DATASET_INVALID_MSG_LENGTH");
-			return -1;
-		}
+		// msg_length = get_recv_data_length(ucp_worker_meta, local_meta_uid);
+		// if (msg_length == 0)
+		// {
+		// 	slog_error("ERRIMSS_REL_DATASET_INVALID_MSG_LENGTH");
+		// 	perror("ERRIMSS_REL_DATASET_INVALID_MSG_LENGTH");
+		// 	return -1;
+		// }
 
-		char update_result[msg_length];
-		msg_length = recv_data(ucp_worker_meta, ep, update_result, msg_length, local_meta_uid, 0);
+		// char update_result[msg_length];
+		void *update_result = NULL;
+		msg_length = recv_data_opt(ucp_worker_meta, ep, &update_result, msg_length, local_meta_uid, 0);
 		if (msg_length == 0)
 		{
 			slog_error("ERRIMSS_REL_DATASET_RECV_UPDATERES");
@@ -1458,18 +1462,22 @@ int32_t release_dataset(int32_t dataset_id)
 			return -1;
 		}
 
-		if (strcmp(update_result, "UPDATED!"))
+		if (strcmp((const char *)update_result, "UPDATED!"))
 		{
 			perror("ERRIMSS_RELDATASET_UPDATE");
+			// Free the message received from the metadata server.
+			free(update_result);
 			return -1;
 		}
 
 		// Free the data locations vector.
 		free(release_dataset.data_locations);
-		// Freem the monitoring vector.
+		// Free the monitoring vector.
 		free(release_dataset.blocks_written);
 		free(release_dataset.num_blocks_written);
 		free(update_msg);
+		// Free the message received from the metadata server.
+		free(update_result);
 	}
 
 	g_array_remove_index(datasetd, dataset_id);
@@ -1505,36 +1513,37 @@ int32_t close_dataset(const char *dataset_uri, int fd)
 		return -1;
 	}
 
-	size_t msg_length = 0;
+	size_t msg_length = -1;
 	// slog_debug("[IMSS][close_dataset] before get_recv_data_length");
-	msg_length = get_recv_data_length(ucp_worker_meta, local_meta_uid);
-	slog_debug("[IMSS][close_dataset] get_recv_data_length, msg_length=%lu", msg_length);
-	if (msg_length == 0)
-	{
-		slog_error("HERCULES_ERR_MSG_LENGTH_CLOSE_DATASET");
-		perror("HERCULES_ERR_MSG_LENGTH_CLOSE_DATASET");
-		return -1;
-	}
+	// msg_length = get_recv_data_length(ucp_worker_meta, local_meta_uid);
+	// slog_debug("[IMSS][close_dataset] get_recv_data_length, msg_length=%lu", msg_length);
+	// if (msg_length == 0)
+	// {
+	// 	slog_error("HERCULES_ERR_MSG_LENGTH_CLOSE_DATASET");
+	// 	perror("HERCULES_ERR_MSG_LENGTH_CLOSE_DATASET");
+	// 	return -1;
+	// }
 
 	// char result[msg_length];
 	// slog_debug("[delete_dataset] before malloc, msg_length=%ld", msg_length);
-	char *result = (char *)malloc(msg_length * sizeof(char));
+	// char *result = (char *)malloc(msg_length * sizeof(char));
+	void *result = NULL;
 	slog_debug("[close_dataset] after malloc, msg_length=%lu", msg_length);
 	// slog_debug("[delete_dataset] before recv_data");
-	msg_length = recv_data(ucp_worker_meta, ep, result, msg_length, local_meta_uid, 0);
+	msg_length = recv_data_opt(ucp_worker_meta, ep, &result, msg_length, local_meta_uid, 0);
 	slog_debug("[close_dataset] after recv_data, msg_length=%lu", msg_length);
 	if (msg_length == 0)
 	{
 		slog_error("HERCULES_ERR_RECV_DATA_CLOSE_DATASET");
 		perror("HERCULES_ERR_RECV_DATA_CLOSE_DATASET");
-		free(result);
+		// free(result);
 		return -1;
 	}
 
 	slog_debug("[close_dataset] result=%s, msg_length=%d", result, msg_length);
 	// if the file descriptor was the last reference to a file which has been removed using
 	// unlink, the file is deleted.
-	if (!strncmp(result, "DELETE", strlen("DELETE")))
+	if (!strncmp((const char *)result, "DELETE", strlen("DELETE")))
 	{
 		delete_dataset_srv_worker(dataset_uri, fd, 0);
 		free(result);
@@ -1576,28 +1585,33 @@ int32_t delete_dataset(const char *dataset_uri)
 	// }
 	// slog_debug("[IMSS][delete_dataset] response=%s", result);
 
-	int msg_length;
-	msg_length = get_recv_data_length(ucp_worker_meta, local_meta_uid);
-	if (msg_length < 0)
+	size_t msg_length = 0;
+	// msg_length = get_recv_data_length(ucp_worker_meta, local_meta_uid);
+	// if (msg_length < 0)
+	// {
+	// 	perror("ERRIMSS_DEL_DATASET_INVALID_MSG_LENGTH");
+	// 	return -1;
+	// }
+
+	// char result[msg_length];
+	void *result = NULL;
+	msg_length = recv_data_opt(ucp_worker_meta, ep, &result, msg_length, local_meta_uid, 0);
+	if (msg_length == 0)
 	{
-		perror("ERRIMSS_DEL_DATASET_INVALID_MSG_LENGTH");
+		perror("ERR_HERCULES_DEL_DATASET_RECV_DATA");
+		slog_error("ERR_HERCULES_DEL_DATASET_RECV_DATA");
 		return -1;
 	}
 
-	char result[msg_length];
-	msg_length = recv_data(ucp_worker_meta, ep, result, msg_length, local_meta_uid, 0);
-	if (msg_length < 0)
+	slog_debug("[delete_dataset] result=%s, msg_length=%d", (const char *)result, msg_length);
+	if (!strncmp((const char *)result, "NODELETE", strlen("NODELETE")))
 	{
-		perror("ERRIMSS_DEL_DATASET_RECV_DATA");
-		return -1;
-	}
-
-	slog_debug("[delete_dataset] result=%s, msg_length=%d", result, msg_length);
-	if (!strncmp(result, "NODELETE", strlen("NODELETE")))
-	{
+		// free the message received from the metadata server.
+		free(result);
 		return 1;
 	}
-
+	// free the message received from the metadata server.
+	free(result);
 	return 0;
 }
 
@@ -1661,22 +1675,23 @@ int32_t rename_dataset_metadata_dir_dir(char *old_dir, char *rdir_dest)
 	// }
 
 	size_t msg_length = 0;
-	msg_length = get_recv_data_length(ucp_worker_meta, local_meta_uid);
-	if (msg_length == 0)
-	{
-		slog_error("ERRIMSS_REN_DATASET_METADATA_DIR_DIR_INVALID_MSG_LENGTH");
-		perror("ERRIMSS_REN_DATASET_METADATA_DIR_DIR_INVALID_MSG_LENGTH");
-		return -1;
-	}
+	// msg_length = get_recv_data_length(ucp_worker_meta, local_meta_uid);
+	// if (msg_length == 0)
+	// {
+	// 	slog_error("ERRIMSS_REN_DATASET_METADATA_DIR_DIR_INVALID_MSG_LENGTH");
+	// 	perror("ERRIMSS_REN_DATASET_METADATA_DIR_DIR_INVALID_MSG_LENGTH");
+	// 	return -1;
+	// }
 
 	// char result[msg_length];
-	char *result = (char *)malloc(msg_length * sizeof(char));
-	msg_length = recv_data(ucp_worker_meta, ep, result, msg_length, local_meta_uid, 0);
+	// char *result = (char *)malloc(msg_length * sizeof(char));
+	void *result = NULL;
+	msg_length = recv_data_opt(ucp_worker_meta, ep, &result, msg_length, local_meta_uid, 0);
 	if (msg_length == 0)
 	{
 		slog_error("ERRIMSS_REN_DATASET_METADATA_DIR_DIR_RECV_DATA");
 		perror("ERRIMSS_REN_DATASET_METADATA_DIR_DIR_RECV_DATA");
-		free(result);
+		// free(result);
 		return -1;
 	}
 	free(result);
@@ -1729,23 +1744,24 @@ rename_dataset_metadata(char *old_dataset_uri, char *new_dataset_uri)
 	// }
 
 	size_t msg_length = 0;
-	msg_length = get_recv_data_length(ucp_worker_meta, local_meta_uid);
-	slog_live("[rename_dataset_metadata]  get_recv_data_length, msg_length=%lu", msg_length);
-	if (msg_length == 0)
-	{
-		slog_error("ERRIMSS_REN_DATASET_INVALID_MSG_LENGTH");
-		perror("ERRIMSS_REN_DATASET_INVALID_MSG_LENGTH");
-		return -1;
-	}
+	// msg_length = get_recv_data_length(ucp_worker_meta, local_meta_uid);
+	// slog_live("[rename_dataset_metadata]  get_recv_data_length, msg_length=%lu", msg_length);
+	// if (msg_length == 0)
+	// {
+	// 	slog_error("ERRIMSS_REN_DATASET_INVALID_MSG_LENGTH");
+	// 	perror("ERRIMSS_REN_DATASET_INVALID_MSG_LENGTH");
+	// 	return -1;
+	// }
 
 	// char result[msg_length];
-	char *result = (char *)malloc(msg_length * sizeof(char));
-	msg_length = recv_data(ucp_worker_meta, ep, result, msg_length, local_meta_uid, 0);
+	// char *result = (char *)malloc(msg_length * sizeof(char));
+	void *result = NULL;
+	msg_length = recv_data_opt(ucp_worker_meta, ep, &result, msg_length, local_meta_uid, 0);
 	if (msg_length == 0)
 	{
 		slog_error("ERRIMSS_REN_DATASET_RECV_DATA");
 		perror("ERRIMSS_REN_DATASET_RECV_DATA");
-		free(result);
+		// free(result);
 		return -1;
 	}
 
@@ -1783,30 +1799,32 @@ int32_t open_local_dataset(const char *dataset_uri, int opened)
 
 	size_t msg_length = 0;
 	// slog_live("[open_local_dataset] before get_recv_data_length");
-	msg_length = get_recv_data_length(ucp_worker_meta, local_meta_uid);
-	slog_live("[open_local_dataset] after get_recv_data_length, msg_length=%ld", msg_length);
-	if (msg_length == 0)
-	{
-		slog_error("HERCULES_ERR__OPEN_LOCAL_DATASET_INVALID_MSG_LENGTH");
-		perror("HERCULES_ERR__OPEN_LOCAL_DATASET_INVALID_MSG_LENGTH");
-		return -1;
-	}
+	// msg_length = get_recv_data_length(ucp_worker_meta, local_meta_uid);
+	// slog_live("[open_local_dataset] after get_recv_data_length, msg_length=%ld", msg_length);
+	// if (msg_length == 0)
+	// {
+	// 	slog_error("HERCULES_ERR__OPEN_LOCAL_DATASET_INVALID_MSG_LENGTH");
+	// 	perror("HERCULES_ERR__OPEN_LOCAL_DATASET_INVALID_MSG_LENGTH");
+	// 	return -1;
+	// }
 
 	// char result[msg_length];
 	// slog_live("[open_local_dataset] before malloc, errno=%d:%s", errno, strerror(errno));
-	char *result = (char *)malloc(msg_length * sizeof(char));
+	// char *result = (char *)malloc(msg_length * sizeof(char));
+	void *result = NULL;
 	// slog_live("[open_local_dataset] after malloc, errno=%d:%s", errno, strerror(errno));
-	msg_length = recv_data(ucp_worker_meta, ep, result, msg_length, local_meta_uid, 0);
+	// msg_length = recv_data(ucp_worker_meta, ep, result, msg_length, local_meta_uid, 0);
+	msg_length = recv_data_opt(ucp_worker_meta, ep, &result, msg_length, local_meta_uid, 0);
 	if (msg_length == 0)
 	{
 		slog_error("HERCULES_ERR__OPEN_LOCAL_DATASET_RECV_DATA");
 		perror("HERCULES_ERR__OPEN_LOCAL_DATASET_RECV_DATA");
-		free(result);
+		// free(result);
 		return -1;
 	}
 
 	slog_debug("[open_local_dataset] result=%s, msg_length=%lu", result, msg_length);
-	if (!strncmp(result, "OPEN", strlen("OPEN")))
+	if (!strncmp((const char *)result, "OPEN", strlen("OPEN")))
 	{
 		slog_debug("[open_local_dataset] dataset opened = %s", dataset_uri);
 		free(result);
@@ -1859,18 +1877,18 @@ int32_t stat_dataset(const char *dataset_uri, dataset_info *dataset_info_, int o
 
 	// Get the length of the message to be received.
 	size_t length = 0;
-	slog_live("[IMSS][stat_dataset] getting msg lenght");
-	length = get_recv_data_length(ucp_worker_meta, local_meta_uid);
-	slog_live("[IMSS][stat_dataset] msg lenght=%lu", length);
-	if (length == 0)
-	{
-		slog_error("HERCULES_ERR_STAT_DATASET_GET_RECV_DATA_LENGTH");
-		perror("HERCULES_ERR_STAT_DATASET_GET_RECV_DATA_LENGTH");
-		return -1;
-	}
+	// slog_live("[IMSS][stat_dataset] getting msg lenght");
+	// length = get_recv_data_length(ucp_worker_meta, local_meta_uid);
+	// slog_live("[IMSS][stat_dataset] msg lenght=%lu", length);
+	// if (length == 0)
+	// {
+	// 	slog_error("HERCULES_ERR_STAT_DATASET_GET_RECV_DATA_LENGTH");
+	// 	perror("HERCULES_ERR_STAT_DATASET_GET_RECV_DATA_LENGTH");
+	// 	return -1;
+	// }
 
 	// Receive the associated structure.
-	ret = recv_dynamic_stream(ucp_worker_meta, ep, dataset_info_, DATASET_INFO, local_meta_uid, length);
+	ret = recv_dynamic_stream_opt(ucp_worker_meta, ep, (void **)&dataset_info_, DATASET_INFO, local_meta_uid, length);
 
 	// if (ret < sizeof(dataset_info))
 	if (ret < 0)
@@ -1990,22 +2008,23 @@ int32_t rename_dataset_srv_worker_dir_dir(char *old_dir, char *rdir_dest,
 		// }
 
 		size_t msg_length = 0;
-		msg_length = get_recv_data_length(ucp_worker_data, local_data_uid);
-		if (msg_length == 0)
-		{
-			slog_error("ERRIMSS_REN_DATASET_DATA_DIR_DIR_INVALID_MSG_LENGTH");
-			perror("ERRIMSS_REN_DATASET_DATA_DIR_DIR_INVALID_MSG_LENGTH");
-			return -1;
-		}
+		// msg_length = get_recv_data_length(ucp_worker_data, local_data_uid);
+		// if (msg_length == 0)
+		// {
+		// 	slog_error("ERRIMSS_REN_DATASET_DATA_DIR_DIR_INVALID_MSG_LENGTH");
+		// 	perror("ERRIMSS_REN_DATASET_DATA_DIR_DIR_INVALID_MSG_LENGTH");
+		// 	return -1;
+		// }
 
-		// char result[msg_length];
-		char *result = (char *)malloc(msg_length * sizeof(char));
-		msg_length = recv_data(ucp_worker_data, ep, result, msg_length, local_data_uid, 0);
+		// // char result[msg_length];
+		// char *result = (char *)malloc(msg_length * sizeof(char));
+		void *result = NULL;
+		msg_length = recv_data_opt(ucp_worker_data, ep, &result, msg_length, local_data_uid, 0);
 		if (msg_length == 0)
 		{
 			slog_error("ERRIMSS_REN_DATASET_DATA_DIR_DIR_RECV_DATA");
 			perror("ERRIMSS_REN_DATASET_DATA_DIR_DIR_RECV_DATA");
-			free(result);
+			// free(result);
 			return -1;
 		}
 
@@ -2073,28 +2092,29 @@ int32_t rename_dataset_srv_worker(char *old_dataset_uri, char *new_dataset_uri,
 		// }
 
 		size_t msg_length = 0;
-		msg_length = get_recv_data_length(ucp_worker_data, local_data_uid);
-		slog_live("[rename_dataset_srv_worker] get_recv_data_length, msg_length=%lu", msg_length);
-		if (msg_length == 0)
-		{
-			slog_error("ERRIMSS_REN_DATASET_DATA_INVALID_MSG_LENGTH");
-			perror("ERRIMSS_REN_DATASET_DATA_INVALID_MSG_LENGTH");
-			return -1;
-		}
+		// msg_length = get_recv_data_length(ucp_worker_data, local_data_uid);
+		// slog_live("[rename_dataset_srv_worker] get_recv_data_length, msg_length=%lu", msg_length);
+		// if (msg_length == 0)
+		// {
+		// 	slog_error("ERRIMSS_REN_DATASET_DATA_INVALID_MSG_LENGTH");
+		// 	perror("ERRIMSS_REN_DATASET_DATA_INVALID_MSG_LENGTH");
+		// 	return -1;
+		// }
 
 		// char result[msg_length];
 		slog_live("[rename_dataset_srv_worker] before malloc");
-		char *result = (char *)malloc(msg_length * sizeof(char));
+		// char *result = (char *)malloc(msg_length * sizeof(char));
+		void *result = NULL;
 		slog_live("[rename_dataset_srv_worker] after malloc");
-		msg_length = recv_data(ucp_worker_data, ep, result, msg_length, local_data_uid, 0);
+		msg_length = recv_data_opt(ucp_worker_data, ep, &result, msg_length, local_data_uid, 0);
 		slog_live("[rename_dataset_srv_worker] after recv_data, msg_length=%lu", msg_length);
-		free(result);
 		if (msg_length == 0)
 		{
 			slog_error("ERRIMSS_REN_DATASET_DATA_RECV_DATA");
 			perror("ERRIMSS_REN_DATASET_DATA_RECV_DATA");
 			return -1;
 		}
+		free(result);
 
 		// Important to update
 		strcpy(curr_dataset.uri_, new_dataset_uri);
@@ -2151,22 +2171,23 @@ int32_t delete_dataset_srv_worker(const char *dataset_uri, int32_t dataset_id, i
 		}
 
 		size_t msg_length = 0;
-		msg_length = get_recv_data_length(ucp_worker_data, local_data_uid);
-		if (msg_length == 0)
-		{
-			perror("HERCULES_ERR_DELETE_DATASET_INVALID_MSG_LENGTH");
-			return -1;
-		}
+		// msg_length = get_recv_data_length(ucp_worker_data, local_data_uid);
+		// if (msg_length == 0)
+		// {
+		// 	perror("HERCULES_ERR_DELETE_DATASET_INVALID_MSG_LENGTH");
+		// 	return -1;
+		// }
 
-		// char result[msg_length];
-		char *result = (char *)malloc(msg_length * sizeof(char));
-		msg_length = recv_data(ucp_worker_data, ep, result, msg_length, local_data_uid, 0);
-		free(result);
+		// // char result[msg_length];
+		// char *result = (char *)malloc(msg_length * sizeof(char));
+		void *result = NULL;
+		msg_length = recv_data_opt(ucp_worker_data, ep, &result, msg_length, local_data_uid, 0);
 		if (msg_length == 0)
 		{
 			perror("HERCULES_ERR_DELETE_DATASET_RECV_DATA");
 			return -1;
 		}
+		free(result);
 	}
 
 	return 0;
@@ -2276,15 +2297,15 @@ int32_t readv_multiple(int32_t dataset_id,
 		}
 
 		size_t msg_length = 0;
-		msg_length = get_recv_data_length(ucp_worker_data, local_data_uid);
-		if (msg_length == 0)
-		{
-			perror("ERRIMSS_REN_DATASET_DATA_DIR_DIR_INVALID_MSG_LENGTH");
-			return -1;
-		}
+		// msg_length = get_recv_data_length(ucp_worker_data, local_data_uid);
+		// if (msg_length == 0)
+		// {
+		// 	perror("ERRIMSS_REN_DATASET_DATA_DIR_DIR_INVALID_MSG_LENGTH");
+		// 	return -1;
+		// }
 
 		// Receive data related to the previous read request directly into the buffer.
-		msg_length = recv_data(ucp_worker_data, ep, buffer, msg_length, local_data_uid, 0);
+		msg_length = recv_data(ucp_worker_data, ep, (void **)&buffer, msg_length, local_data_uid, 0);
 		if (msg_length == 0)
 		{
 			if (errno != EAGAIN)
@@ -2299,8 +2320,10 @@ int32_t readv_multiple(int32_t dataset_id,
 		// Check if the requested key was correctly retrieved.
 		if (strncmp((const char *)buffer, "$ERRIMSS_NO_KEY_AVAIL$", 22))
 		{
+			free(buffer);
 			return 0;
 		}
+		free(buffer);
 	}
 
 	// slog_fatal( "ERRIMSS_GETDATA_UNAVAIL");
@@ -2414,14 +2437,14 @@ void *split_readv(void *th_argv)
 		// Receive data related to the previous read request directly into the buffer.
 
 		size_t msg_length = 0;
-		msg_length = get_recv_data_length(ucp_worker_data, local_data_uid);
-		if (msg_length == 0)
-		{
-			perror("ERRIMSS_SPLIT_READ_INVALID_MSG_LENGTH");
-			pthread_exit(NULL);
-		}
+		// msg_length = get_recv_data_length(ucp_worker_data, local_data_uid);
+		// if (msg_length == 0)
+		// {
+		// 	perror("ERRIMSS_SPLIT_READ_INVALID_MSG_LENGTH");
+		// 	pthread_exit(NULL);
+		// }
 
-		msg_length = recv_data(ucp_worker_data, ep, arguments->buffer, msg_length, local_data_uid, 0);
+		msg_length = recv_data(ucp_worker_data, ep, (void **)&arguments->buffer, msg_length, local_data_uid, 0);
 		if (msg_length == 0)
 		{
 			if (errno != EAGAIN)
@@ -2439,6 +2462,7 @@ void *split_readv(void *th_argv)
 		// Check if the requested key was correctly retrieved.
 		if (strncmp((const char *)arguments->buffer, "$ERRIMSS_NO_KEY_AVAIL$", 22))
 		{
+			free(arguments->buffer);
 		}
 	}
 	pthread_exit(NULL);
@@ -2557,7 +2581,7 @@ int32_t imss_flush_data()
 }
 
 // Method retrieving a data element associated to a certain dataset.
-int32_t get_data(int32_t dataset_id, int32_t data_id, char *buffer)
+int32_t get_data(int32_t dataset_id, int32_t data_id, void *buffer)
 {
 	slog_debug("[IMSS][get_data] dataset_id=%d, data_id=%d", dataset_id, data_id);
 	// slog_fatal("Caller name: %pS", __builtin_return_address(0));
@@ -2637,17 +2661,17 @@ int32_t get_data(int32_t dataset_id, int32_t data_id, char *buffer)
 		// t = clock();
 		slog_info("[IMSS] Before getting length");
 		size_t msg_length = 0;
-		msg_length = get_recv_data_length(ucp_worker_data, local_data_uid);
-		slog_info("[IMSS] Receiving data, msg_length=%lu", msg_length);
-		if (msg_length == 0)
-		{
-			slog_error("ERRIMSS_GET_DATA_INVALID_MSG_LENGTH");
-			perror("ERRIMSS_GET_DATA_INVALID_MSG_LENGTH");
-			return -EINVAL;
-		}
+		// msg_length = get_recv_data_length(ucp_worker_data, local_data_uid);
+		// slog_info("[IMSS] Receiving data, msg_length=%lu", msg_length);
+		// if (msg_length == 0)
+		// {
+		// 	slog_error("ERRIMSS_GET_DATA_INVALID_MSG_LENGTH");
+		// 	perror("ERRIMSS_GET_DATA_INVALID_MSG_LENGTH");
+		// 	return -EINVAL;
+		// }
 
 		// size_t length = 0;
-		msg_length = recv_data(ucp_worker_data, ep, buffer, msg_length, local_data_uid, 0);
+		msg_length = recv_data_opt(ucp_worker_data, ep, &buffer, msg_length, local_data_uid, 0);
 		slog_info("[IMSS] After recv_data, msg_length=%lu", msg_length);
 		if (msg_length == 0)
 		{
@@ -2676,6 +2700,7 @@ int32_t get_data(int32_t dataset_id, int32_t data_id, char *buffer)
 		}
 		else
 		{
+			free(buffer);
 			slog_error("[IMSS] HERCULES_ERR_NO_KEY_AVAIL");
 		}
 	}
@@ -2741,18 +2766,18 @@ size_t get_ndata(int32_t dataset_id, int32_t data_id, void *buffer, ssize_t to_r
 		}
 
 		size_t msg_length = 0;
-		msg_length = get_recv_data_length(ucp_worker_data, local_data_uid);
-		slog_info("[IMSS][get_ndata] Receiving data, msg_length=%lu", msg_length);
-		if (msg_length == 0)
-		{
-			slog_error("HERCULES_ERR_REN_DATASET_DATA_INVALID_MSG_LENGTH");
-			perror("HERCULES_ERR_REN_DATASET_DATA_INVALID_MSG_LENGTH");
-			return -1;
-		}
+		// msg_length = get_recv_data_length(ucp_worker_data, local_data_uid);
+		// slog_info("[IMSS][get_ndata] Receiving data, msg_length=%lu", msg_length);
+		// if (msg_length == 0)
+		// {
+		// 	slog_error("HERCULES_ERR_REN_DATASET_DATA_INVALID_MSG_LENGTH");
+		// 	perror("HERCULES_ERR_REN_DATASET_DATA_INVALID_MSG_LENGTH");
+		// 	return -1;
+		// }
 
 		// Receive data related to the previous read request directly into the buffer.
 		// size_t length = 0;
-		msg_length = recv_data(ucp_worker_data, ep, buffer, msg_length, local_data_uid, 0);
+		msg_length = recv_data_opt(ucp_worker_data, ep, &buffer, msg_length, local_data_uid, 0);
 		slog_debug("[IMSS][get_ndata] After request data, length=%lu", msg_length);
 		if (msg_length == 0)
 		{
@@ -2774,6 +2799,7 @@ size_t get_ndata(int32_t dataset_id, int32_t data_id, void *buffer, ssize_t to_r
 		}
 		else
 		{
+			free(buffer);
 			slog_warn("[IMSS][get_data]HERCULES_ERR_NO_KEY_AVAIL");
 		}
 	}
@@ -2841,17 +2867,17 @@ size_t get_data_mall(int32_t dataset_id, int32_t data_id, void *buffer, ssize_t 
 		}
 
 		size_t msg_length = 0;
-		msg_length = get_recv_data_length(ucp_worker_data, local_data_uid);
-		if (msg_length == 0)
-		{
-			slog_error("HERCULES_ERR_REN_DATASET_DATA_INVALID_MSG_LENGTH_MALL");
-			perror("HERCULES_ERR_REN_DATASET_DATA_INVALID_MSG_LENGTH_MALL");
-			return -1;
-		}
+		// msg_length = get_recv_data_length(ucp_worker_data, local_data_uid);
+		// if (msg_length == 0)
+		// {
+		// 	slog_error("HERCULES_ERR_REN_DATASET_DATA_INVALID_MSG_LENGTH_MALL");
+		// 	perror("HERCULES_ERR_REN_DATASET_DATA_INVALID_MSG_LENGTH_MALL");
+		// 	return -1;
+		// }
 
 		// Receive data related to the previous read request directly into the buffer.
 		// size_t length = 0;
-		msg_length = recv_data(ucp_worker_data, ep, buffer, msg_length, local_data_uid, 0);
+		msg_length = recv_data_opt(ucp_worker_data, ep, &buffer, msg_length, local_data_uid, 0);
 		if (msg_length == 0)
 		{
 			if (errno != EAGAIN)
@@ -2872,6 +2898,7 @@ size_t get_data_mall(int32_t dataset_id, int32_t data_id, void *buffer, ssize_t 
 		}
 		else
 		{
+			free(buffer);
 			slog_debug("[IMSS][get_data]ERRIMSS_NO_KEY_AVAIL");
 		}
 	}
@@ -3179,9 +3206,12 @@ char **get_dataloc(const char *dataset,
 	return machines;
 }
 
+pthread_mutex_t lock_op = PTHREAD_MUTEX_INITIALIZER;
+
 // Method specifying the type (DATASET or IMSS INSTANCE) of a provided URI.
 int32_t get_type(char *uri)
 {
+	pthread_mutex_lock(&lock_op);
 	ucp_ep_h ep;
 	// Formated uri to be sent to the metadata server.
 	char formated_uri[REQUEST_SIZE];
@@ -3200,6 +3230,7 @@ int32_t get_type(char *uri)
 	// Send the request.
 	if (send_req(ucp_worker_meta, ep, local_addr_meta, local_addr_len_meta, formated_uri) == 0)
 	{
+		pthread_mutex_unlock(&lock_op);
 		slog_error("HERCULES_ERR_GET_TYPE_SEND_ADDR");
 		perror("HERCULES_ERR_GET_TYPE_SEND_ADDR");
 		return -1;
@@ -3225,24 +3256,25 @@ int32_t get_type(char *uri)
 	// char result[res_size];
 	void *result = NULL; // = (char *)malloc(sizeof(char) * res_size);
 	// Get the length of the message to be received.
-	size_t length = -1;
-	length = get_recv_data_length(ucp_worker_meta, local_meta_uid);
-	if (length == 0)
-	{
-		slog_error("HERCULES_ERR_GET_TYPE_GET_RECV_DATA_LENGTH");
-		perror("HERCULES_ERR_GET_TYPE_GET_RECV_DATA_LENGTH");
-		return -1;
-	}
-	slog_debug("[IMSS][get_type] length=%ld, NUM_DATA_SERVERS=%d", length, NUM_DATA_SERVERS);
-	result = (void *)malloc(sizeof(char) * length);
+	size_t length = 0;
+	// length = get_recv_data_length(ucp_worker_meta, local_meta_uid);
+	// if (length == 0)
+	// {
+	// 	slog_error("HERCULES_ERR_GET_TYPE_GET_RECV_DATA_LENGTH");
+	// 	perror("HERCULES_ERR_GET_TYPE_GET_RECV_DATA_LENGTH");
+	// 	return -1;
+	// }
+	// slog_debug("[IMSS][get_type] length=%ld, NUM_DATA_SERVERS=%d", length, NUM_DATA_SERVERS);
+	// result = (void *)malloc(sizeof(char) * length);
 
-	ret = recv_dynamic_stream(ucp_worker_meta, ep, result, BUFFER, local_meta_uid, length);
+	ret = recv_dynamic_stream_opt(ucp_worker_meta, ep, &result, BUFFER, local_meta_uid, length);
 	slog_debug("[IMSS][get_type] after recv_dynamic_stream ret=%d", ret);
 	if (ret < 0)
 	{
+		pthread_mutex_unlock(&lock_op);
 		slog_fatal("HERCULES_ERR_GET_TYPE_RECV_STREAM");
 		// perror("HERCULES_ERR_GET_TYPE_RECV_STREAM");
-		free(result);
+		// free(result);
 		return -1;
 	}
 
@@ -3263,6 +3295,7 @@ int32_t get_type(char *uri)
 	{
 		ret = 0;
 	}
+	pthread_mutex_unlock(&lock_op);
 
 	free(result);
 	// return 0;

@@ -226,6 +226,10 @@ static int (*real_renameat2)(int olddirfd, const char *oldpath, int newdirfd, co
 // static int (*real_fstatat)(int dir_fd, const char *pathname, struct stat *buf, int flags) = NULL;
 // static int (*real_getdents)(unsigned int fd, struct linux_dirent *dirp, unsigned int count) = NULL;
 static int (*real_fsync)(int fd) = NULL;
+static int (*real_pthread_create)(pthread_t *restrict thread,
+								  const pthread_attr_t *restrict attr,
+								  void *(*start_routine)(void *),
+								  void *restrict arg) = NULL;
 
 void checkOpenFlags(const char *pathname, int flags)
 {
@@ -311,7 +315,7 @@ char *checkHerculesPath(const char *pathname)
 	}
 	else
 	{
-		// 
+		//
 		if (!strncmp(pathname, MOUNT_POINT, strlen(MOUNT_POINT) - 1) || (pathname[0] != '/' && !strncmp(workdir, MOUNT_POINT, strlen(MOUNT_POINT) - 1)))
 		{
 			// if (pathname[0] == '.')
@@ -602,6 +606,9 @@ __attribute__((constructor)) void imss_posix_init(void)
 	}
 
 	slog_debug("[CLIENT %d] ready!\n", rank);
+
+	slog_debug("IMSS EXIST=%d", is_alive(IMSS_ROOT));
+
 	// fprintf(stderr, "[CLIENT %d] ready!\n", rank);
 
 	// sleep(10);
@@ -5150,6 +5157,7 @@ int access(const char *path, int mode)
 	char *new_path = checkHerculesPath(path);
 	if (new_path != NULL)
 	{
+		pthread_mutex_lock(&system_lock);
 		struct stat stat_buf;
 		int permissions = 0;
 		slog_debug("[POSIX]. Calling Hercules 'access', new_path=%s", new_path);
@@ -5197,7 +5205,7 @@ int access(const char *path, int mode)
 					ret = -1;
 			}
 		}
-
+		pthread_mutex_unlock(&system_lock);
 		slog_debug("[POSIX]. End Hercules 'access', new_path=%s ret=%d\n", new_path, ret);
 		// fprintf(stderr, "[POSIX]. End Hercules 'access', new_path=%s ret=%d, errno=%d:%s.\n", new_path, ret, errno, strerror(errno));
 		free(new_path);
@@ -5393,6 +5401,26 @@ int fchdir(int fd)
 // 	return real_ptrace(__request);
 // }
 
+// int pthread_create(pthread_t *restrict thread,
+// 				   const pthread_attr_t *restrict attr,
+// 				   void *(*start_routine)(void *),
+// 				   void *restrict arg)
+// {
+// 	if (!real_pthread_create)
+// 		real_pthread_create = dlsym(RTLD_NEXT, __func__);
+
+// 	// fprintf(stderr, "Calling 'pthread_create', fd=%d, errno=%d:%s\n", fd, errno, strerror(errno));
+// 	if (!init)
+// 	{
+// 		// slog_debug("Calling pthread_create, fd=%d", fd);
+// 		return real_pthread_create(thread, attr, start_routine, arg);
+// 	}
+
+// 	fprintf(stderr, "Calling 'pthread_create'\n");
+
+// 	return real_pthread_create(thread, attr, start_routine, arg);
+// }
+
 int posix_fadvise(int fd, off_t offset, off_t len, int advice)
 {
 	if (!real_posix_fadvise)
@@ -5436,7 +5464,6 @@ int posix_fadvise(int fd, off_t offset, off_t len, int advice)
 
 	return ret;
 }
-
 
 // int fcntl(int fd, int cmd, ... /* arg */)
 // {

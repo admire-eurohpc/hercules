@@ -330,6 +330,8 @@ RETURNS:	> 0 - Number identifying the retrieved dataset among the client's sessi
 	 */
 	int32_t open_dataset(char *dataset_uri, int opened);
 
+	int32_t imss_check(char *dataset_uri);
+
 	/*Method deleting a dataset.
 
 RETURNS:	 0 - Release operation took place successfully.

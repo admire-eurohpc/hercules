@@ -435,15 +435,15 @@ int32_t main(int32_t argc, char **argv)
 
 			// Get the length of the message to be received.
 			size_t length = 0;
-			length = get_recv_data_length(ucp_worker, attr.worker_uid);
-			if (length == 0)
-			{
-				slog_error("HERCULES_ERR__GET_RECV_DATA_LENGTH");
-				perror("HERCULES_ERR__GET_RECV_DATA_LENGTH");
-				return -1;
-			}
+			// length = get_recv_data_length(ucp_worker, attr.worker_uid);
+			// if (length == 0)
+			// {
+			// 	slog_error("HERCULES_ERR__GET_RECV_DATA_LENGTH");
+			// 	perror("HERCULES_ERR__GET_RECV_DATA_LENGTH");
+			// 	return -1;
+			// }
 			// Receive the associated structure.
-			ret = recv_dynamic_stream(ucp_worker, client_ep, &imss_info_, BUFFER, attr.worker_uid, length);
+			ret = recv_dynamic_stream_opt(ucp_worker, client_ep, (void **)&imss_info_, BUFFER, attr.worker_uid, length);
 			// fprintf(stderr, "Server %d, ret=%d, sizeof(imss_info)=%ld\n", args.id, ret, sizeof(imss_info));
 			// if (ret > sizeof(imss_info))
 			if (ret != -1)
@@ -617,7 +617,9 @@ int32_t main(int32_t argc, char **argv)
 
 		if ((svr_nodes = fopen(deployfile, "r+")) == NULL)
 		{
-			perror("HERCULES_ERR_DEPLOYFILE_OPEN");
+			char err_msg[512];
+			sprintf(err_msg, "HERCULES_ERR_DEPLOYFILE_OPEN:%s", deployfile);
+			perror(err_msg);
 			return -1;
 		}
 

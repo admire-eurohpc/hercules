@@ -139,6 +139,7 @@ size_t send_req(ucp_worker_h ucp_worker, ucp_ep_h ep, ucp_address_t *addr, size_
 size_t send_data(ucp_worker_h ucp_worker, ucp_ep_h ep, const void *msg, size_t msg_len, uint64_t from);
 size_t get_recv_data_length(ucp_worker_h ucp_worker,  uint64_t dest);
 size_t recv_data(ucp_worker_h ucp_worker, ucp_ep_h ep, void *msg, size_t msg_length,  uint64_t dest, int async);
+size_t recv_data_opt(ucp_worker_h ucp_worker, ucp_ep_h ep, void **msg, size_t msg_length, uint64_t dest, int async);
 size_t recv_req(ucp_worker_h ucp_worker, ucp_ep_h ep, char *msg);
 ucs_status_t request_wait(ucp_worker_h ucp_worker, void *request, send_req_t *ctx);
 void stream_recv_cb(void *request, ucs_status_t status, size_t length, void *user_data);
@@ -163,6 +164,7 @@ int32_t send_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, void * data_st
 
 //Method retrieving a serialized dynamic data structure.
 int32_t recv_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, void * data_struct, int32_t data_type, uint64_t dest, size_t length);
+int32_t recv_dynamic_stream_opt(ucp_worker_h ucp_worker, ucp_ep_h ep, void **data_struct, int32_t data_type, uint64_t dest, size_t length);  
 
 int connect_common(const char *server, uint64_t server_port, sa_family_t af);
 

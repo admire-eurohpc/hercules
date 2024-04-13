@@ -265,7 +265,7 @@ int srv_worker_helper(p_argv *arguments, const char *req)
 		{
 		case READ_OP:
 		{
-			int ret = map->get(key, &address_, &block_size_rtvd);
+			int32_t ret = map->get(key, &address_, &block_size_rtvd);
 			// Check if there was an associated block to the key.
 			if (ret == 0)
 			{
@@ -273,7 +273,8 @@ int srv_worker_helper(p_argv *arguments, const char *req)
 				ret = send_dynamic_stream(arguments->ucp_worker, arguments->server_ep, err_code, STRING, arguments->worker_uid);
 				if (ret < 0)
 				{
-					perror("ERRIMSS_WORKER_SENDERR");
+					slog_error("ERR_HERCULES_WORKER_SEND_READ_OP");
+					perror("ERR_HERCULES_WORKER_SEND_READ_OP");
 					return -1;
 				}
 			}
@@ -292,8 +293,8 @@ int srv_worker_helper(p_argv *arguments, const char *req)
 				slog_debug("[srv_worker_thread][READ_OP][READ_OP] send_data, ret_send_data=%lu", ret_send_data);
 				if (ret_send_data == 0)
 				{
-					slog_error("ERRIMSS_WORKER_SENDBLOCK");
-					perror("ERRIMSS_WORKER_SENDBLOCK");
+					slog_error("ERR_HERCULES_WORKER_SENDBLOCK");
+					perror("ERR_HERCULES_WORKER_SENDBLOCK");
 					return -1;
 				}
 			}
@@ -511,29 +512,29 @@ int srv_worker_helper(p_argv *arguments, const char *req)
 
 				size_t msg_size = stoi(key.substr(0, found));
 
-				char *msg = (char *)calloc(msg_size, sizeof(char));
-
+				// char *msg = (char *)calloc(msg_size, sizeof(char));
+				void *msg = NULL;
 				size_t msg_length = 0;
-				msg_length = get_recv_data_length(arguments->ucp_worker, arguments->worker_uid);
-				if (msg_length == 0)
-				{
-					slog_error("ERRIMSS_DATA_WORKER_INVALID_MSG_LENGTH");
-					perror("ERRIMSS_DATA_WORKER_INVALID_MSG_LENGTH");
-					free(msg);
-					return -1;
-				}
+				// msg_length = get_recv_data_length(arguments->ucp_worker, arguments->worker_uid);
+				// if (msg_length == 0)
+				// {
+				// 	slog_error("ERRIMSS_DATA_WORKER_INVALID_MSG_LENGTH");
+				// 	perror("ERRIMSS_DATA_WORKER_INVALID_MSG_LENGTH");
+				// 	free(msg);
+				// 	return -1;
+				// }
 
-				msg_length = recv_data(arguments->ucp_worker, arguments->server_ep, msg, msg_length, arguments->worker_uid, 0);
+				msg_length = recv_data_opt(arguments->ucp_worker, arguments->server_ep, &msg, msg_length, arguments->worker_uid, 0);
 				// Send the requested block.
 				if (msg_length == 0)
 				{
 					slog_error("ERRIMSS_DATA_WORKER_RECV_DATA");
 					perror("ERRIMSS_DATA_WORKER_RECV_DATA");
-					free(msg);
+					// free(msg);
 					return -1;
 				}
 
-				key = msg;
+				key = (char *)msg;
 				found = key.find('$');
 				int amount = stoi(key.substr(0, found));
 				int size = amount * blocksize;
@@ -571,6 +572,7 @@ int srv_worker_helper(p_argv *arguments, const char *req)
 						// Send the error code block.
 						if (send_dynamic_stream(arguments->ucp_worker, arguments->server_ep, err_code, STRING, arguments->worker_uid) < 0)
 						{
+							free(msg);
 							return -1;
 							pthread_exit(NULL);
 						}
@@ -583,6 +585,7 @@ int srv_worker_helper(p_argv *arguments, const char *req)
 				// Send the requested block.
 				if (ret < 0)
 				{
+					free(msg);
 					perror("ERRIMSS_WORKER_SENDBLOCK");
 					return -1;
 				}
@@ -649,19 +652,20 @@ int srv_worker_helper(p_argv *arguments, const char *req)
 
 			int size = stoi(key);
 
-			char *buf = (char *)malloc(size);
+			// char *buf = (char *)malloc(size);
+			char *buf = NULL;
 
-			size_t msg_length;
-			msg_length = get_recv_data_length(arguments->ucp_worker, arguments->worker_uid);
-			if (msg_length == 0)
-			{
-				slog_error("ERRIMSS_DATA_WORKER_WORKER_OP_1_INVALID_MSG_LENGTH");
-				perror("ERRIMSS_DATA_WORKER_WORKER_OP_1_INVALID_MSG_LENGTH");
-				return -1;
-			}
+			size_t msg_length = 0;
+			// msg_length = get_recv_data_length(arguments->ucp_worker, arguments->worker_uid);
+			// if (msg_length == 0)
+			// {
+			// 	slog_error("ERRIMSS_DATA_WORKER_WORKER_OP_1_INVALID_MSG_LENGTH");
+			// 	perror("ERRIMSS_DATA_WORKER_WORKER_OP_1_INVALID_MSG_LENGTH");
+			// 	return -1;
+			// }
 
 			// Receive all blocks into the buffer.
-			msg_length = recv_data(arguments->ucp_worker, arguments->server_ep, buf, msg_length, arguments->worker_uid, 0);
+			msg_length = recv_data_opt(arguments->ucp_worker, arguments->server_ep, (void **)&buf, msg_length, arguments->worker_uid, 0);
 			if (msg_length == 0)
 			{
 				slog_error("ERRIMSS_DATA_WORKER_WORKER_OP_1_RECV_DATA");
@@ -800,19 +804,20 @@ int srv_worker_helper(p_argv *arguments, const char *req)
 			slog_debug("rest=%s", key.c_str());
 
 			// Receive all blocks into the buffer.
-			char *buf = (char *)malloc(size);
+			// char *buf = (char *)malloc(size);
+			void *buf = NULL;
 
 			size_t msg_length = 0;
-			msg_length = get_recv_data_length(arguments->ucp_worker, arguments->worker_uid);
-			if (msg_length == 0)
-			{
-				slog_error("ERRIMSS_WORKER_DATA_WRITE_OP_2_INVALID_MSG_LENGTH");
-				perror("ERRIMSS_WORKER_DATA_WRITE_OP_2_INVALID_MSG_LENGTH");
-				return -1;
-			}
+			// msg_length = get_recv_data_length(arguments->ucp_worker, arguments->worker_uid);
+			// if (msg_length == 0)
+			// {
+			// 	slog_error("ERRIMSS_WORKER_DATA_WRITE_OP_2_INVALID_MSG_LENGTH");
+			// 	perror("ERRIMSS_WORKER_DATA_WRITE_OP_2_INVALID_MSG_LENGTH");
+			// 	return -1;
+			// }
 
 			// int size_recv = -1;
-			msg_length = recv_data(arguments->ucp_worker, arguments->server_ep, buf, msg_length, arguments->worker_uid, 0);
+			msg_length = recv_data_opt(arguments->ucp_worker, arguments->server_ep, &buf, msg_length, arguments->worker_uid, 0);
 			if (msg_length == 0)
 			{
 				slog_error("ERRIMSS_WORKER_DATA_WRITE_OP_2_RECV_DATA");
@@ -842,7 +847,7 @@ int srv_worker_helper(p_argv *arguments, const char *req)
 				{
 					// If don't exist
 					char *buffer = (char *)aligned_alloc(1024, blocksize);
-					memcpy(buffer, buf + byte_count, blocksize);
+					memcpy(buffer, (char *)buf + byte_count, blocksize);
 					// printf("Salida buffer part=%c",buffer[100]);
 					insert_successful = map->put(element, buffer, block_size_recv);
 					if (insert_successful != 0)
@@ -854,12 +859,13 @@ int srv_worker_helper(p_argv *arguments, const char *req)
 				else
 				{
 					// If already exits
-					memcpy(address_, buf + byte_count, blocksize);
+					memcpy(address_, (char *)buf + byte_count, blocksize);
 					// printf("Alreadt exitsSalida buffer part=%c",buf[100]);
 				}
 				byte_count = byte_count + blocksize;
 				// printf("Nodename	-%s byte_count=%d",detect.nodename,byte_count);
 			}
+			free(buf);
 		}
 		else
 		{
@@ -965,25 +971,26 @@ int srv_worker_helper(p_argv *arguments, const char *req)
 					struct stat *old, *latest;
 
 					// TODO: make sure this works
-					void *buffer = (void *)malloc(block_size_recv);
+					void *buffer = NULL;
+					// void *buffer = (void *)malloc(block_size_recv);
 
 					// TIMING(recv_data(arguments->ucp_worker, arguments->server_ep, buffer, arguments->worker_uid, 0), "[srv_worker_thread][WRITE_OP] recv_data Updating block $0");
 					size_t msg_length = 0;
-					msg_length = get_recv_data_length(arguments->ucp_worker, arguments->worker_uid);
-					if (msg_length == 0)
-					{
-						slog_error("ERRIMSS_DATA_WORKER_WRITE_BLOCK_0_INVALID_MSG_LENGTH");
-						perror("ERRIMSS_DATA_WORKER_WRITE_BLOCK_0_INVALID_MSG_LENGTH");
-						free(buffer);
-						return -1;
-					}
+					// msg_length = get_recv_data_length(arguments->ucp_worker, arguments->worker_uid);
+					// if (msg_length == 0)
+					// {
+					// 	slog_error("ERRIMSS_DATA_WORKER_WRITE_BLOCK_0_INVALID_MSG_LENGTH");
+					// 	perror("ERRIMSS_DATA_WORKER_WRITE_BLOCK_0_INVALID_MSG_LENGTH");
+					// 	free(buffer);
+					// 	return -1;
+					// }
 
-					msg_length = recv_data(arguments->ucp_worker, arguments->server_ep, buffer, msg_length, arguments->worker_uid, 0);
+					msg_length = recv_data_opt(arguments->ucp_worker, arguments->server_ep, &buffer, msg_length, arguments->worker_uid, 0);
 					if (msg_length == 0)
 					{
 						slog_error("ERRIMSS_DATA_WORKER_WRITE_BLOCK_0_RECV_DATA");
 						perror("ERRIMSS_DATA_WORKER_WRITE_BLOCK_0_RECV_DATA");
-						free(buffer);
+						// free(buffer);
 						return -1;
 					}
 
@@ -1569,16 +1576,16 @@ int stat_worker_helper(p_argv *arguments, char *req)
 			slog_debug("[STAT WORKER] Recv dynamic buffer size %ld", block_size_recv);
 			// Get the length of the message to be received.
 			size_t length = -1;
-			length = get_recv_data_length(arguments->ucp_worker, arguments->worker_uid);
-			if (length == 0)
-			{
-				slog_error("HERCULES_ERR_METADATA_WORKER_GET_RECV_DATA_LENGTH_SET_OP");
-				perror("HERCULES_ERR_METADATA_WORKER_GET_RECV_DATA_LENGTH_SET_OP");
-				return -1;
-			}
+			// length = get_recv_data_length(arguments->ucp_worker, arguments->worker_uid);
+			// if (length == 0)
+			// {
+			// 	slog_error("HERCULES_ERR_METADATA_WORKER_GET_RECV_DATA_LENGTH_SET_OP");
+			// 	perror("HERCULES_ERR_METADATA_WORKER_GET_RECV_DATA_LENGTH_SET_OP");
+			// 	return -1;
+			// }
 			// Receive the block into the buffer.
-			void *buffer = (void *)malloc(block_size_recv);
-			recv_dynamic_stream(arguments->ucp_worker, arguments->server_ep, buffer, BUFFER, arguments->worker_uid, length);
+			void *buffer = NULL; //= (void *)malloc(block_size_recv);
+			length = recv_dynamic_stream_opt(arguments->ucp_worker, arguments->server_ep, &buffer, BUFFER, arguments->worker_uid, length);
 			slog_debug("[STAT WORKER] END Recv dynamic");
 
 			int32_t insert_successful = -1;
@@ -1621,23 +1628,24 @@ int stat_worker_helper(p_argv *arguments, char *req)
 			case LOCAL_DATASET_UPDATE:
 			{
 				size_t msg_length = 0;
-				msg_length = get_recv_data_length(arguments->ucp_worker, arguments->worker_uid);
-				if (msg_length == 0)
-				{
-					slog_error("HERCULES_ERR_METADATA_WORKER_GET_RECV_DATA_LENGTH_SET_OP");
-					perror("HERCULES_ERR_METADATA_WORKER_GET_RECV_DATA_LENGTH_SET_OP");
-					// perror("ERRIMSS_METADATA_LOCAL_DATASET_UPDATE_INVALID_MSG_LENGTH");
-					return -1;
-				}
-				// void data_ref[msg_length];
-				void *data_ref = malloc(msg_length);
+				// msg_length = get_recv_data_length(arguments->ucp_worker, arguments->worker_uid);
+				// if (msg_length == 0)
+				// {
+				// 	slog_error("HERCULES_ERR_METADATA_WORKER_GET_RECV_DATA_LENGTH_SET_OP");
+				// 	perror("HERCULES_ERR_METADATA_WORKER_GET_RECV_DATA_LENGTH_SET_OP");
+				// 	// perror("ERRIMSS_METADATA_LOCAL_DATASET_UPDATE_INVALID_MSG_LENGTH");
+				// 	return -1;
+				// }
+				// // void data_ref[msg_length];
+				// void *data_ref = malloc(msg_length);
+				void *data_ref;
 				// char data_ref[REQUEST_SIZE];
-				msg_length = recv_data(arguments->ucp_worker, arguments->server_ep, data_ref, msg_length, arguments->worker_uid, 0);
+				msg_length = recv_data(arguments->ucp_worker, arguments->server_ep, &data_ref, msg_length, arguments->worker_uid, 0);
 				if (msg_length == 0)
 				{
 					slog_error("HERCULES_ERR_METADATA_WORKER_RECV_DATA_SET_OP");
 					perror("HERCULES_ERR_METADATA_WORKER_RECV_DATA_SET_OP");
-					free(data_ref);
+					// free(data_ref);
 					// perror("ERRIMSS_METADATA_LOCAL_DATASET_UPDATE_RECV_DATA");
 					return -1;
 				}
@@ -1667,8 +1675,10 @@ int stat_worker_helper(p_argv *arguments, char *req)
 					slog_error("HERCULES_ERR_METADATA_WORKER_SEND_DATA_SET_OP");
 					perror("HERCULES_ERR_METADATA_WORKER_SEND_DATA_SET_OP");
 					// perror("ERRIMSS_WORKER_DATALOCATANSWER2");
+					free(data_ref);
 					return -1;
 				}
+				free(data_ref);
 
 				break;
 			}
@@ -1677,19 +1687,28 @@ int stat_worker_helper(p_argv *arguments, char *req)
 			{
 				slog_debug("[STAT_WORKER] Updating existing dataset %s.", key.c_str());
 				// Get the length of the message to be received.
-				size_t length = -1;
-				length = get_recv_data_length(arguments->ucp_worker, arguments->worker_uid);
-				if (length == 0)
+				size_t length = 0;
+				int32_t ret = -1;
+				// length = get_recv_data_length(arguments->ucp_worker, arguments->worker_uid);
+				// if (length == 0)
+				// {
+				// 	slog_error("HERCULES_ERR_METADATA_WORKER_GET_RECV_DATA_LENGTH_UPDATE_DATASET");
+				// 	perror("HERCULES_ERR_METADATA_WORKER_GET_RECV_DATA_LENGTH_UPDATE_DATASET");
+				// 	return -1;
+				// }
+				// Clear the corresponding memory region.
+				// void *buffer = (void *)malloc(block_size_recv);
+				void *buffer = NULL;
+				// Receive the block into the buffer.
+				ret = recv_dynamic_stream_opt(arguments->ucp_worker, arguments->server_ep, &buffer, BUFFER, arguments->worker_uid, length);
+				if (ret < 0)
 				{
-					slog_error("HERCULES_ERR_METADATA_WORKER_GET_RECV_DATA_LENGTH_UPDATE_DATASET");
-					perror("HERCULES_ERR_METADATA_WORKER_GET_RECV_DATA_LENGTH_UPDATE_DATASET");
+					slog_error("ERR_HERCULES_UPDATING_EXISTING_DATASET");
+					perror("ERR_HERCULES_UPDATING_EXISTING_DATASET");
 					return -1;
 				}
-				// Clear the corresponding memory region.
-				void *buffer = (void *)malloc(block_size_recv);
-				// Receive the block into the buffer.
-				recv_dynamic_stream(arguments->ucp_worker, arguments->server_ep, buffer, BUFFER, arguments->worker_uid, length);
 				free(buffer);
+
 				slog_debug("[STAT_WORKER] End Updating existing dataset %s.", key.c_str());
 				break;
 			}
@@ -1763,28 +1782,28 @@ void *srv_attached_dispatcher(void *th_argv)
 
 		// Save the identity of the requesting client.
 		size_t msg_length = 0;
-		msg_length = get_recv_data_length(ucp_data_worker, arguments->worker_uid);
-		if (msg_length == 0)
-		{
-			slog_error("ERRIMSS_SRV_DISPATCHER_INVALID_MSG_LENGTH");
-			perror("ERRIMSS_SRV_DISPATCHER_INVALID_MSG_LENGTH");
-			pthread_exit(NULL);
-		}
+		// msg_length = get_recv_data_length(ucp_data_worker, arguments->worker_uid);
+		// if (msg_length == 0)
+		// {
+		// 	slog_error("ERRIMSS_SRV_DISPATCHER_INVALID_MSG_LENGTH");
+		// 	perror("ERRIMSS_SRV_DISPATCHER_INVALID_MSG_LENGTH");
+		// 	pthread_exit(NULL);
+		// }
 
 		// char mode[msg_length];
-		char *mode = (char *)malloc(msg_length * sizeof(char));
-		req = (char *)malloc(msg_length * sizeof(char));
+		// req = (char *)malloc(msg_length * sizeof(char));
 		// char mode[MODE_SIZE];
-		msg_length = recv_data(ucp_data_worker, server_ep, req, msg_length, arguments->worker_uid, 0);
+		msg_length = recv_data_opt(ucp_data_worker, server_ep, (void **)&req, msg_length, arguments->worker_uid, 0);
 		if (msg_length == 0)
 		{
 			slog_error("HERCULES_ERR_SRV_DISPATCHER_DATA_RECV_DATA");
 			perror("HERCULES_ERR_SRV_DISPATCHER_DATA_RECV_DATA");
-			free(mode);
-			free(req);
+			// free(mode);
+			// free(req);
 			pthread_exit(NULL);
 		}
 
+		char *mode = (char *)malloc(msg_length * sizeof(char));
 		slog_info("Req=%s", req);
 
 		sscanf(req, "%" PRIu32 " %s", &client_id_, mode);
@@ -1917,7 +1936,7 @@ void *dispatcher(void *th_argv)
 				slog_debug("[DISPATCHER] Waiting for connection requests.");
 				// fprintf(stderr, "[DISPATCHER] Waiting for connection requests.\n");
 				new_socket = accept(server_fd, NULL, NULL);
-				if (ret < 0)
+				if (new_socket < 0)
 				{
 					slog_error("HERCULES_ERR_ACCEPT_DISPATCHER");
 				}

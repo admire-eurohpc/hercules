@@ -160,6 +160,15 @@ void get_iuri(const char *path, /*output*/ char *uri)
 	}
 }
 
+/**
+ * @brief Checks if an Hercules instance exists.
+ * @param instance_name name of the Hercules instance.
+ * @return 1 if it exists, -1 in other case. 
+ */
+int is_alive(char *instance_name) {
+	return imss_check(instance_name);
+}
+
 /*
    -----------	FUSE IMSS implementation -----------
  */
