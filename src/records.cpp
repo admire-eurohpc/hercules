@@ -99,7 +99,10 @@ int32_t map_records::get(std::string key, void **add_, uint64_t *size_)
 	return 1;
 }
 
-// Method renaming from stat_worker
+/***
+ * @brief Method renaming from stat_worker
+ * @return 1 in case of success or 0 in case of error. 
+*/
 int32_t map_records::rename_metadata_stat_worker(std::string old_key, std::string new_key)
 {
 	// Map iterator that will be searching for the key.
@@ -112,19 +115,22 @@ int32_t map_records::rename_metadata_stat_worker(std::string old_key, std::strin
 	// Check if the value did exist within the map.
 	if (it == buffer.end())
 	{
+		// 0 if the key does not exist.
 		return 0;
 	}
 	else
 	{
-
 		imss_info_ *data = (imss_info_ *)it->second.first;
 		strcpy(data->uri_, new_key.c_str());
+		// Unlinks the node that contains the element pointed to by position and returns a node handle that owns it.
 		auto node = buffer.extract(old_key);
+		// Update with the new key.
 		node.key() = new_key;
+		// Insert the node with the new key.
 		buffer.insert(std::move(node));
 	}
 
-	// Return the address associated to the record.
+	// 1 if the key exist.
 	return 1;
 }
 

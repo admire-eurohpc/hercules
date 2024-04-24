@@ -70,9 +70,8 @@ int init_worker(ucp_context_h ucp_context, ucp_worker_h *ucp_worker)
 	memset(&worker_params, 0, sizeof(worker_params));
 
 	worker_params.field_mask = UCP_WORKER_PARAM_FIELD_THREAD_MODE;
-	// worker_params.thread_mode = UCS_THREAD_MODE_MULTI;
-	worker_params.thread_mode = UCS_THREAD_MODE_SERIALIZED;
-	// worker_params.thread_mode = UCS_THREAD_MODE_SINGLE;
+	worker_params.thread_mode = UCS_THREAD_MODE_MULTI;
+	// worker_params.thread_mode = UCS_THREAD_MODE_SERIALIZED;
 
 	status = ucp_worker_create(ucp_context, &worker_params, ucp_worker);
 	if (status != UCS_OK)
@@ -161,6 +160,10 @@ err:
 	return ret;
 }
 
+/***
+ * @brief send data to the endpoint specified in "ep".
+ * @return number of bytes sent on success, on error, 0 is returned.
+ */
 size_t send_data(ucp_worker_h ucp_worker, ucp_ep_h ep, const void *msg, size_t msg_len, uint64_t from)
 {
 	ucs_status_t status;
@@ -199,6 +202,10 @@ size_t send_data(ucp_worker_h ucp_worker, ucp_ep_h ep, const void *msg, size_t m
 	return msg_len;
 }
 
+/**
+ * @brief Send a request to an endpoint specified by "ep".
+ * @return Number of bytes sent on success, on error 0 is returned.
+ */
 size_t send_req(ucp_worker_h ucp_worker, ucp_ep_h ep, ucp_address_t *addr, size_t addr_len, char *req)
 {
 	ucs_status_t status;
@@ -257,7 +264,7 @@ size_t send_req(ucp_worker_h ucp_worker, ucp_ep_h ep, ucp_address_t *addr, size_
 
 size_t get_recv_data_length(ucp_worker_h ucp_worker, uint64_t dest)
 {
-	//	pthread_mutex_lock(&lock_ucx_comm);
+	pthread_mutex_lock(&lock_ucx_comm);
 
 	ucp_tag_recv_info_t info_tag;
 	ucp_tag_message_h msg_tag;
@@ -273,6 +280,10 @@ size_t get_recv_data_length(ucp_worker_h ucp_worker, uint64_t dest)
 	return info_tag.length;
 }
 
+/**
+ * @brief Fill "msg" with the message received from the server. "msg" must be allocated.
+ * @return number of bytes received, on error 0 is returned.
+ */
 size_t recv_data(ucp_worker_h ucp_worker, ucp_ep_h ep, void *msg, size_t msg_length, uint64_t dest, int async)
 {
 	// pthread_mutex_lock(&lock_ucx_comm);
@@ -348,10 +359,13 @@ size_t recv_data(ucp_worker_h ucp_worker, ucp_ep_h ep, void *msg, size_t msg_len
 
 	if (status != UCS_OK)
 	{
-		slog_error("[COMM] HERCULES_RECV_DATA_ERRR, msg_length=%lu", msg_length);
+		slog_error("[COMM] HERCULES_RECV_DATA_ERR, msg_length=%lu", msg_length);
+		pthread_mutex_unlock(&lock_ucx_comm);
 		// return -1;
 		return 0;
 	}
+
+	pthread_mutex_unlock(&lock_ucx_comm);
 
 	return msg_length;
 }
@@ -366,7 +380,7 @@ size_t recv_data(ucp_worker_h ucp_worker, ucp_ep_h ep, void *msg, size_t msg_len
  * @param msg_length
  * @param dest
  * @param async
- * @return bytes of the message received or 0 on error.
+ * @return number of bytes received, on error 0 is returned.
  */
 size_t recv_data_opt(ucp_worker_h ucp_worker, ucp_ep_h ep, void **msg, size_t msg_length, uint64_t dest, int async)
 {
@@ -388,15 +402,20 @@ size_t recv_data_opt(ucp_worker_h ucp_worker, ucp_ep_h ep, void **msg, size_t ms
 		ucp_worker_progress(ucp_worker);
 		msg_tag = ucp_tag_probe_nb(ucp_worker, dest, tag_mask, 0, &info_tag);
 	} while (msg_tag == NULL);
-	pthread_mutex_unlock(&lock_ucx_comm);
 	msg_length = info_tag.length;
 	slog_debug("[COMM] Probe tag (%lu bytes)", msg_length);
 	if (msg_length <= 0)
 	{
+		pthread_mutex_unlock(&lock_ucx_comm);
 		perror("ERROR_GETTING_MESSAGE_LENGTH");
+		slog_error("ERROR_GETTING_MESSAGE_LENGTH");
 		return 0;
 	}
-	*msg = (void *)malloc(msg_length);
+	if (*msg == NULL)
+	{
+		slog_live("Allocating memory=%lu", msg_length);
+		*msg = (void *)malloc(msg_length);
+	}
 
 	/*
 	   for (;;) {
@@ -451,10 +470,12 @@ size_t recv_data_opt(ucp_worker_h ucp_worker, ucp_ep_h ep, void **msg, size_t ms
 	{
 		slog_error("[COMM] HERCULES_RECV_DATA_ERR, msg_length=%lu", msg_length);
 		free(*msg);
+		pthread_mutex_unlock(&lock_ucx_comm);
 		// return -1;
 		return 0;
 	}
 
+	pthread_mutex_unlock(&lock_ucx_comm);
 	return msg_length;
 }
 
@@ -745,6 +766,8 @@ int32_t send_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, void *data_str
 		slog_debug("[COMM] \t\t msg size=%ld ", msg_size);
 	}
 	}
+
+	// if (send_data(ucp_worker, ep, info_buffer, msg_size, from) < 0)
 	msg_size = send_data(ucp_worker, ep, info_buffer, msg_size, from);
 	if (msg_size <= 0)
 	{
@@ -757,7 +780,10 @@ int32_t send_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, void *data_str
 	return msg_size;
 }
 
-// Method retrieving a serialized dynamic data structure.
+/**
+ * @brief  Method retrieving a serialized dynamic data structure.
+ * @return bytes of the message received or -1 on error.
+ */
 int32_t recv_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, void *data_struct, int32_t data_type, uint64_t dest, size_t length)
 {
 	// size_t length = -1;
@@ -874,7 +900,7 @@ int32_t recv_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, void *data_str
 	}
 	}
 	slog_info("[COMM] recv_dynamic_stream end %lu", length);
-	free(result);
+	// free(result);
 	return length;
 }
 
@@ -919,7 +945,8 @@ int32_t recv_dynamic_stream_opt(ucp_worker_h ucp_worker, ucp_ep_h ep, void **dat
 		return -1;
 	}
 
-	*data_struct = (void *)malloc(length * sizeof(imss_info));
+	if(*data_struct == NULL)
+		*data_struct = (void *)malloc(length * sizeof(imss_info));
 
 	char *msg_data = (char *)result;
 	// Formalize the received information.

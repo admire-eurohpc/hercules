@@ -121,6 +121,7 @@ GTree_search(GNode *parent_node,
 int32_t
 GTree_rename(char *old_desired_data, char *new_desired_data)
 {
+	int ret = -1; // to error handling.
 	// Closest node to the one requested (or even the requested one itself).
 	GNode *closest_node;
 
@@ -128,17 +129,20 @@ GTree_rename(char *old_desired_data, char *new_desired_data)
 	slog_debug("[GTree] old_desired_data=%s, new_desired_data=%s", old_desired_data, new_desired_data);
 	if (GTree_search(tree_root, old_desired_data, &closest_node) == 1)
 	{
-		slog_debug("\t[GTree] closest_node->data=%s", old_desired_data, new_desired_data);
+		slog_debug("\t[GTree] closest_node->data=%s", (char *)closest_node->data);
+		// If the searched name (old data) and the data of the node in the tree are equals, 
+		// we remove the node from the tree, and insert the new one.
 		if (strcmp(old_desired_data, (char *)closest_node->data) == 0)
 		{
 			g_node_destroy(closest_node);
-			GTree_insert(new_desired_data);
+			ret = GTree_insert(new_desired_data);
+			slog_debug("GTree_insert=%d", ret);
 		}
 	}
 	else
 	{
-		fprintf(stderr, "Rename Error not found:%s\n", old_desired_data);
-		slog_debug("Rename Error not found:%s", old_desired_data);
+		//fprintf(stderr, "Rename Error not found:%s\n", old_desired_data);
+		slog_error("Rename Error not found:%s", old_desired_data);
 		return 0;
 	}
 
@@ -237,11 +241,13 @@ GTree_insert(char *desired_data)
 			memcpy(data_search, desired_data, strlen(desired_data));
 		}
 		char *father = (char *)calloc(256, sizeof(char));
+		// Devuelve un puntero a la última aparición de '/' en serie. Si no se encuentra el carácter especificado, se devuelve un puntero NULL.
 		char *lastson = strrchr(data_search, '/');
 		int copy = (strlen(data_search) - strlen(lastson));
 
 		memcpy(father, &data_search[0], copy + 1);
-
+		slog_live("desired_data=%s, data_search=%s, lastson=%s, father=%s", desired_data, data_search, lastson, father);
+		// Compares the data on the current node (last_parent) against the Hercules instance (e.g., imss://Makefile and imss://).
 		if (strncmp((char *)last_parent->data, father, strlen((char *)father)) == 0 && strlen((char *)last_parent->data) == strlen(father))
 		{
 			closest_node = last_parent;
@@ -279,7 +285,7 @@ GTree_insert(char *desired_data)
 	for (int32_t i = 0; i < more_chars; i++)
 	{
 		int32_t new_position = closest_data_length + i;
-		slog_debug("[Gtree] path=%s, new_position=%d, i=%d", desired_data, new_position, i);
+		slog_debug("[Gtree] path=%s, new_position=%d, i=%d, %c", desired_data, new_position, i, desired_data[new_position]);
 
 		if ((desired_data[new_position] == '/') || (i == (more_chars - 1)))
 		{
@@ -411,6 +417,7 @@ GTree_getdir(char *desired_dir,
 	char *aux_dir_elem = dir_elements;
 
 	// Call the serialization function storing all dir elements in the buffer.
+	// TO CHECK!
 	slog_info("[GTree_getdir] serialize_dir_childrens(dir_node, num_children=%d, &aux_dir_elem)", num_children);
 	serialize_dir_childrens(dir_node, num_children, &aux_dir_elem);
 	slog_info("[GTree_getdir] ending serialize_dir_childrens, aux_dir_elem=%s", aux_dir_elem);

@@ -420,19 +420,36 @@ The current function does not allocate memory.
 				   int64_t start_offset,
 				   int64_t size);
 
-	/* Method retrieving a data element associated to a certain dataset.
-
-RECEIVES:	dataset_id - Number identifying the concerned dataset among the client's session.
-data_id    - Data block number identifying the data block to be retrieved.
-buffer     - Memory address where the requested block will be received. WARNING: memory must have been allocated.
-
-RETURNS:	 0 - The requested block was successfully retrieved.
--1 - In case of error.
+	/**
+	 * @brief Method retrieving a data element associated to a certain dataset.
+	 * @param dataset_id - Number identifying the concerned dataset among the client's session.
+	 * @param data_id    - Data block number identifying the data block to be retrieved.
+	 * @param buffer     - Memory address where the requested block will be received. WARNING: memory must have been allocated.
+	 * @returns 0 if the requested block was successfully retrieved, 0 if the requested block was not find in the remote server,
+	 * or -1 in case of error.
 	 */
-	int32_t get_data(int32_t dataset_id, int32_t data_id, char *buffer);
+	int32_t get_data(int32_t dataset_id, int32_t data_id, void *buffer);
 
+	/**
+	 * @brief Method retrieving a data element associated to a certain dataset starting in an offset.
+	 * @param dataset_id - Number identifying the concerned dataset among the client's session.
+	 * @param data_id    - Data block number identifying the data block to be retrieved.
+	 * @param buffer     - Memory address where the requested block will be received. WARNING: memory must have been allocated.
+	 * @param offset	 - Offset of the requested block.
+	 * @returns 0 if the requested block was successfully retrieved, 0 if the requested block was not find in the remote server,
+	 * or -1 in case of error.
+	 */
 	size_t get_ndata(int32_t dataset_id, int32_t data_id, void *buffer, ssize_t to_read, off_t offset);
 
+	/**
+	 * @brief Method used during malleability to retrieving a data element associated to a certain dataset starting in an offset.
+	 * @param dataset_id - Number identifying the concerned dataset among the client's session.
+	 * @param data_id    - Data block number identifying the data block to be retrieved.
+	 * @param buffer     - Memory address where the requested block will be received. WARNING: memory must have been allocated.
+	 * @param offset	 - Offset of the requested block.
+	 * @returns 0 if the requested block was successfully retrieved, 0 if the requested block was not find in the remote server,
+	 * or -1 in case of error.
+	 */
 	size_t get_data_mall(int32_t dataset_id, int32_t data_id, void *buffer, ssize_t to_read, off_t offset, int32_t num_storages);
 	/* Method storing a specific data element.
 

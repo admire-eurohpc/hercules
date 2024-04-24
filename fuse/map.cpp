@@ -6,6 +6,7 @@
 // #include <sys/stat.h>
 #include <fcntl.h>
 #include <stdint.h>
+#include <mutex>
 
 // to manage logs.
 #include "slog.h"
@@ -16,6 +17,9 @@ extern uint64_t IMSS_BLKSIZE;
 
 using std::string;
 typedef std::map<std::string, struct elements> Map;
+
+// for sincronization in the map.
+std::mutex map_lock;
 
 struct elements {
 	int fd;
@@ -31,12 +35,14 @@ extern "C" {
 
 	// Insert the element "p = {v,stat,aux}" with key "k" to the map "map".
 	void map_put(void* map, char* k, int v, struct stat stat, char * aux) {
+		std::unique_lock<std::mutex> lck(map_lock);
 		Map* m = reinterpret_cast<Map*> (map);
 		struct elements p = {v,stat,aux};
 		m->insert(std::pair<std::string, struct elements>(std::string(k),p));
 	}
 
 	void map_update(void* map, const char* k, int v, struct stat stat) {
+		std::unique_lock<std::mutex> lck(map_lock);
 		Map* m = reinterpret_cast<Map*> (map);
 		auto search = m->find(std::string(k));
 		search->second.stat  = stat;
@@ -45,6 +51,7 @@ extern "C" {
 	// Removes the element with key "k" from the map "map".
 	// int map_erase(void* map, char* k) {
 	void map_erase(void* map, char* k) {
+		std::unique_lock<std::mutex> lck(map_lock);
 		Map* m = reinterpret_cast<Map*> (map);
 		//int ret = 0;
 		auto search = m->find(std::string(k));
@@ -60,6 +67,7 @@ extern "C" {
 	}
 
 	int map_search(void* map, const char* k, int *v, struct stat *stat, char ** aux) {
+		std::unique_lock<std::mutex> lck(map_lock);
 		Map* m = reinterpret_cast<Map*> (map);
 		auto search = m->find(std::string(k));
 
@@ -76,6 +84,7 @@ extern "C" {
 	}
 
 	int map_rename(void* map, const char * oldname, const char * newname) {
+		std::unique_lock<std::mutex> lck(map_lock);
 		Map* m = reinterpret_cast<Map*> (map);
 		auto node = m->extract(oldname);
 		node.key() = newname;
@@ -85,6 +94,7 @@ extern "C" {
 	}
 
 	int map_rename_dir_dir(void* map, const char * old_dir, const char * rdir_dest) {
+		std::unique_lock<std::mutex> lck(map_lock);
 		Map* m = reinterpret_cast<Map*> (map);
 
 		std::vector<string> vec;

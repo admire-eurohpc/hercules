@@ -74,7 +74,10 @@ set_policy(dataset_info *dataset)
 	return 0;
 }
 
-// Method retrieving the server that will receive the following message attending a policy.
+/**
+ * @brief Method retrieving the server that will receive the following message attending a policy.
+ * @return next server number (positive integer, >= 0) to send the operation according to the policy, on error -1 is returned, 
+*/
 int32_t
 find_server(int32_t n_servers,
 			int32_t n_msg,
