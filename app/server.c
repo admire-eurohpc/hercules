@@ -555,7 +555,7 @@ int32_t main(int32_t argc, char **argv)
 			{
 				// Notify thread error deployment.
 				ready(tmp_file_path, "ERROR");
-				perror("ERRIMSS_DISPATCHER_DEPLOY");
+				perror("ERR_HERCULES_DISPATCHER_DEPLOY");
 				return -1;
 			}
 		}
@@ -588,7 +588,7 @@ int32_t main(int32_t argc, char **argv)
 				if (pthread_create(&threads[i], NULL, srv_worker, (void *)&arguments[i]) == -1)
 				{
 					// Notify thread error deployment.
-					perror("ERRIMSS_SRVWORKER_DEPLOY");
+					perror("ERRHERCULES__SRVWORKER_DEPLOY");
 					return -1;
 				}
 			}
@@ -683,22 +683,11 @@ int32_t main(int32_t argc, char **argv)
 		// final deployment time.
 		t = clock() - t;
 		time_taken = ((double)t) / (CLOCKS_PER_SEC);
-		// printf("[%c-server %d] Deployment time %f\n", args.type, args.id, time_taken);
-		// if (!args.id)
-		// 	fprintf(stderr, "ServerID,'Deployment time (s)'\n");
-
-		// fprintf(stderr, "tmp_file_path=%s\n", tmp_file_path);
 
 		ready(tmp_file_path, "OK");
-
-		// fprintf(stderr,"Servidor activo\n");
-
-		// printf("%d,%f\n", args.id, time_taken);
-		// fflush(stdout);
-
 		if (pthread_join(threads[i], NULL) != 0)
 		{
-			perror("ERRIMSS_SRVTH_JOIN");
+			perror("ERR_HERCULES_SERVER_THREAD_JOIN");
 			return -1;
 		}
 		unlink(tmp_file_path);

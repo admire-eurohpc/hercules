@@ -390,13 +390,22 @@ int32_t stat_init(char *stat_hostfile,
 		// fprintf(stderr,"[IMSS][stat_int] Contacting stat dispatcher at %s:%ld\n", stat_node, port);
 
 		oob_sock = connect_common(stat_node, port, AF_INET);
+		if (oob_sock<0)
+		{
+			char err_msg[100];
+			sprintf(err_msg, "ERR_HERCULES_CONNECT-%s:%ld", stat_node, port);
+			perror(err_msg);
+			return -1;
+		}
+		
+
 
 		sprintf(request, "%" PRIu32 " GET HELLO!", rank);
 		slog_debug("[IMSS][stat_int] request=%s", request);
 		if (send(oob_sock, request, REQUEST_SIZE, 0) < 0)
 		{
 			char err_msg[100];
-			sprintf(err_msg, "ERRIMSS_STAT_HELLO_2-%s:%ld", stat_node, port);
+			sprintf(err_msg, "ERR_HERCULES_STAT_HELLO_2-%s:%ld", stat_node, port);
 			perror(err_msg);
 			return -1;
 		}

@@ -566,7 +566,8 @@ __attribute__((constructor)) void imss_posix_init(void)
 	{
 		// In case of error notify and exit
 		slog_error("Stat init failed, cannot connect to Metadata server.");
-		return;
+		//return;
+		exit(1);
 	}
 
 	if (DEPLOYMENT == 2)
