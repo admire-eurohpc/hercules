@@ -446,6 +446,8 @@ int getLevel(char *str)
         ret = SLOG_PANIC;
     if (!strcmp(str, "SLOG_TIME"))
         ret = SLOG_TIME;
+    if (!strcmp(str, "SLOG_FULL"))
+        ret = SLOG_FULL;
 
     if (ret == -1)
     {

@@ -180,7 +180,7 @@ static int (*real_ferror)(FILE *fp) = NULL;
 static int (*real_feof)(FILE *fp) = NULL;
 static long int (*real_ftell)(FILE *fp) = NULL;
 static void (*real_rewind)(FILE *stream) = NULL;
-static void *(*real_mmap)(void *addr, size_t length, int prot, int flags, int fd, off_t offset) = NULL;
+// static void *(*real_mmap)(void *addr, size_t length, int prot, int flags, int fd, off_t offset) = NULL;
 static int (*real_symlink)(const char *name1, const char *name2) = NULL;
 static int (*real_symlinkat)(const char *name1, int fd, const char *name2) = NULL;
 static int (*real_chdir)(const char *pathname) = NULL;
@@ -2101,7 +2101,6 @@ ssize_t pwrite64(int fd, const void *buf, size_t count, off64_t offset)
 // 	return ret;
 // }
 
-
 void clearerr(FILE *fp)
 {
 	if (!real_clearerr)
@@ -2118,7 +2117,7 @@ void clearerr(FILE *fp)
 	if (pathname != NULL)
 	{
 		slog_debug("[POSIX]. Calling Hercules 'clearerr', pathname=%s", pathname);
-		fp->_flags &= ~(_IO_ERR_SEEN|_IO_EOF_SEEN);
+		fp->_flags &= ~(_IO_ERR_SEEN | _IO_EOF_SEEN);
 		slog_debug("[POSIX]. End Hercules 'clearerr', pathname=%s\n", pathname);
 	}
 	else
@@ -2126,7 +2125,6 @@ void clearerr(FILE *fp)
 		real_clearerr(fp);
 	}
 }
-
 
 int ferror(FILE *fp)
 {
@@ -2177,9 +2175,12 @@ int feof(FILE *fp)
 		slog_debug("[POSIX]. Calling Hercules 'feof', pathname=%s", pathname);
 		// if ((fp->_flags & _IO_EOF_SEEN) != 0)
 		// ret = _IO_feof_unlocked(fp);
-		if((fp->_flags & _IO_EOF_SEEN) != 0){
+		if ((fp->_flags & _IO_EOF_SEEN) != 0)
+		{
 			ret = 1;
-		} else {
+		}
+		else
+		{
 			ret = 0;
 		}
 
@@ -3240,19 +3241,19 @@ ssize_t write(int fd, const void *buf, size_t size)
 	return ret;
 }
 
-void *mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)
-{
-	fprintf(stderr, "[POSIX] Calling 'mmap', addr=%p\n", &addr);
-	if (!real_mmap)
-		real_mmap = dlsym(RTLD_NEXT, "mmap");
+// void *mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)
+// {
+// 	fprintf(stderr, "[POSIX] Calling 'mmap', addr=%p\n", &addr);
+// 	if (!real_mmap)
+// 		real_mmap = dlsym(RTLD_NEXT, "mmap");
 
-	if (init)
-	{
-		slog_debug("[POSIX %d] Calling Real 'mmap'", rank);
-	}
+// 	if (init)
+// 	{
+// 		slog_debug("[POSIX %d] Calling Real 'mmap'", rank);
+// 	}
 
-	return mmap(addr, length, prot, flags, fd, offset);
-}
+// 	return mmap(addr, length, prot, flags, fd, offset);
+// }
 
 ssize_t read(int fd, void *buf, size_t size)
 {
@@ -3527,36 +3528,12 @@ int unlink(const char *name)
 		slog_debug("[POSIX]. Ending Hercules 'unlink', type %d, new_path=%s, ret=%d\n", type, new_path, ret);
 		free(new_path);
 	}
-	// else if (!strncmp(name, "imss://", strlen("imss://"))) // TO REVIEW!
-	// {
-	// 	slog_debug("[POSIX]. Calling 'unlink' op 2, name=%s.", name);
-	// 	// fprintf(stderr, "[POSIX]. Calling 'unlink' op 2, name=%s\n", name);
-	// 	char *pathname = (char *)calloc(256, sizeof(char));
-	// 	strcpy(pathname, name);
-	// 	int32_t type = get_type(pathname);
-	// 	if (type == 0)
-	// 	{
-	// 		strcat(pathname, "/");
-	// 		type = get_type(pathname);
-
-	// 		if (type == 2)
-	// 		{
-	// 			ret = imss_rmdir(pathname);
-	// 		}
-	// 	}
-	// 	else
-	// 	{
-	// 		ret = imss_unlink(pathname);
-	// 	}
-	// 	free(pathname);
-	// }
 	else
 	{
 		slog_full("[POSIX]. Calling Real 'unlink', name=%s", name);
 		ret = real_unlink(name);
 		slog_full("[POSIX]. Ending Real 'unlink', name=%s, ret=%d", name, ret);
 	}
-	// fprintf(stderr, "Ending unlink, name=%s\n", name);
 
 	return ret;
 }

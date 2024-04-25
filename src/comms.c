@@ -208,6 +208,7 @@ size_t send_data(ucp_worker_h ucp_worker, ucp_ep_h ep, const void *msg, size_t m
  */
 size_t send_req(ucp_worker_h ucp_worker, ucp_ep_h ep, ucp_address_t *addr, size_t addr_len, char *req)
 {
+	
 	ucs_status_t status;
 	struct ucx_context *request;
 	size_t msg_len;
@@ -264,14 +265,16 @@ size_t send_req(ucp_worker_h ucp_worker, ucp_ep_h ep, ucp_address_t *addr, size_
 
 size_t get_recv_data_length(ucp_worker_h ucp_worker, uint64_t dest)
 {
-	pthread_mutex_lock(&lock_ucx_comm);
+	//pthread_mutex_lock(&lock_ucx_comm);
 
 	ucp_tag_recv_info_t info_tag;
 	ucp_tag_message_h msg_tag;
 	// async = 1;
 	do
 	{
+		/* Progressing before probe to update the state */
 		ucp_worker_progress(ucp_worker);
+		/* Probing incoming events in non-block mode */
 		msg_tag = ucp_tag_probe_nb(ucp_worker, dest, tag_mask, 0, &info_tag);
 	} while (msg_tag == NULL);
 
@@ -360,12 +363,12 @@ size_t recv_data(ucp_worker_h ucp_worker, ucp_ep_h ep, void *msg, size_t msg_len
 	if (status != UCS_OK)
 	{
 		slog_error("[COMM] HERCULES_RECV_DATA_ERR, msg_length=%lu", msg_length);
-		pthread_mutex_unlock(&lock_ucx_comm);
+		// pthread_mutex_unlock(&lock_ucx_comm);
 		// return -1;
 		return 0;
 	}
 
-	pthread_mutex_unlock(&lock_ucx_comm);
+	// pthread_mutex_unlock(&lock_ucx_comm);
 
 	return msg_length;
 }
