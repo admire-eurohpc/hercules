@@ -36,6 +36,7 @@ class Hercules(CMakePackage):
     maintainers = ['fjblas','gesanche']
 
     version('latest', branch='master')
+    version('debug', branch='Debug')
 
     # FIXME: Add dependencies if required.
     depends_on('glib')
