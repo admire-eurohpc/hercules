@@ -66,6 +66,7 @@ int32_t IMSS_DEBUG_SCREEN = 0;
 int IMSS_DEBUG_LEVEL = SLOG_FATAL;
 
 extern int32_t MALLEABILITY;
+extern int32_t MALLEABILITY_TYPE;
 extern int32_t UPPER_BOUND_SERVERS;
 extern int32_t LOWER_BOUND_SERVERS;
 
@@ -555,6 +556,7 @@ __attribute__((constructor)) void imss_posix_init(void)
 	slog_debug(" -- HERCULES_METADATA_FILE: %s", METADATA_FILE);
 	slog_debug(" -- HERCULES_DEPLOYMENT: %d", DEPLOYMENT);
 	slog_debug(" -- HERCULES_MALLEABILITY: %d", MALLEABILITY);
+	slog_debug(" -- HERCULES_MALLEABILITY_TYPE: %d", MALLEABILITY_TYPE);
 	slog_debug(" -- UPPER_BOUND_SERVERS: %d", UPPER_BOUND_SERVERS);
 	slog_debug(" -- LOWER_BOUND_SERVERS: %d", LOWER_BOUND_SERVERS);
 	slog_debug(" -- REPL_FACTOR: %d", REPL_FACTOR);
@@ -743,6 +745,9 @@ int getConfiguration()
 
 	if (cfg_get(cfg, "MALLEABILITY"))
 		MALLEABILITY = atoi(cfg_get(cfg, "MALLEABILITY"));
+
+	if (cfg_get(cfg, "MALLEABILITY_TYPE"))
+		MALLEABILITY_TYPE = atoi(cfg_get(cfg, "MALLEABILITY_TYPE"));
 
 	if (cfg_get(cfg, "UPPER_BOUND_MALLEABILITY"))
 		UPPER_BOUND_SERVERS = atoi(cfg_get(cfg, "UPPER_BOUND_MALLEABILITY"));
@@ -3069,11 +3074,11 @@ int fseek(FILE *stream, long int offset, int whence)
 			{
 				// ret = offset + ds_stat_n.st_size;
 				ret = ds_stat_n.st_size;
-				slog_debug("Updating offset to %ld", ret);
+				slog_debug("Updating offset to %ld, nlinks=%lu", ret, ds_stat_n.st_nlink);	
 				map_fd_update_value(map_fd, pathname, fd, ret);
 			}
 		}
-		slog_debug("[POSIX]. Ending Hercules 'fseek', ret=%ld, errno=%d:%s\n", ret, errno, strerror(errno));
+		slog_debug("[POSIX]. Ending Hercules 'fseek', ret=%ld\n");
 		if (ret >= 0)
 		{
 			ret = 0;
@@ -3479,7 +3484,7 @@ int unlink(const char *name)
 	char *new_path = checkHerculesPath(name);
 	if (new_path != NULL)
 	{
-		slog_debug("[POSIX]. Calling Hercules 'unlink', new_path=%s", new_path);
+		slog_debug("[POSIX]. Calling Hercules 'unlink', name=%s, new_path=%s", name, new_path);
 		// fprintf(stderr, "[POSIX]. Calling Hercules 'unlink', new_path=%s\n", new_path);
 		int32_t type = get_type(new_path);
 		// slog_debug("[POSIX][unlink] type=%d, new_path=%s", type, new_path);
@@ -3526,7 +3531,7 @@ int unlink(const char *name)
 			}
 		}
 
-		slog_debug("[POSIX]. Ending Hercules 'unlink', type %d, new_path=%s, ret=%d\n", type, new_path, ret);
+		slog_debug("[POSIX]. Ending Hercules 'unlink', type=%d, new_path=%s, ret=%d\n", type, new_path, ret);
 		free(new_path);
 	}
 	else
@@ -4848,7 +4853,7 @@ int unlinkat(int dir_fd, const char *pathname, int flags)
 			}
 		}
 
-		slog_debug("[POSIX] Ending Hercules 'unlinkat', ret=%d, errno=%d:%s\n", ret, errno, strerror(errno));
+		slog_debug("[POSIX] Ending Hercules 'unlinkat', ret=%d\n", ret);
 		if (new_path != NULL)
 			free(new_path);
 	}
@@ -5208,7 +5213,7 @@ int access(const char *path, int mode)
 		pthread_mutex_lock(&system_lock);
 		struct stat stat_buf;
 		int permissions = 0;
-		slog_debug("[POSIX]. Calling Hercules 'access', new_path=%s", new_path);
+		slog_debug("Calling Hercules 'access', new_path=%s", new_path);
 		// fprintf(stderr, "[POSIX]. Calling Hercules 'access', new_path=%s\n", new_path);
 		ret = imss_refresh(new_path);
 		// if (ret < 0)

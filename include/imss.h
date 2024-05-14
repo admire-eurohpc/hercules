@@ -336,7 +336,7 @@ RETURNS:	> 0 - Number identifying the retrieved dataset among the client's sessi
 
 RETURNS:	 0 - Release operation took place successfully.
 -1 - In case of error.*/
-	int32_t delete_dataset(const char *dataset_uri);
+	int32_t delete_dataset(const char *dataset_uri, int32_t dataset_id);
 
 	int32_t close_dataset(const char *dataset_uri, int fd);
 

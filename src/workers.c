@@ -91,6 +91,42 @@ int ready(char *tmp_file_path, const char *msg)
 	}
 	return 0;
 }
+
+// int write_2_disk(char *filename)
+// {
+// 	char disk_path[PATH_MAX];
+// 	sprintf(disk_path, "/beegfs/home/javier.garciablas/hercules/bash/disk/%s", filename);
+// 	int file_fd = open(disk_path, O_CREAT | O_WRONLY | O_TRUNC, 0600);
+// 	if (file_fd < 0)
+// 	{
+// 		// fprintf(stderr, "Error opening file %s on the server, fd=%d\n", my_path, fd_);
+// 		perror("ERR_HERCULES_OPEN_DISK");
+// 		slog_error("ERR_HERCULES_OPEN_DISK");
+// 		return -1;
+// 	}
+// 	ssize_t bytes = write(file_fd, buffer, block_size_recv);
+// 	if (bytes < 0)
+// 	{
+// 		perror("ERR_HERCULES_WRITE_DISK");
+// 		slog_error("ERR_HERCULES_WRITE_DISK");
+// 		ret = close(file_fd);
+// 		if (ret < 0)
+// 		{
+// 			perror("ERR_HERCULES_CLOSE_DISK");
+// 			slog_error("ERR_HERCULES_CLOSE_DISK");
+// 		}
+// 		return -1;
+// 	}
+// 	ret = close(file_fd);
+// 	if (ret < 0)
+// 	{
+// 		perror("ERR_HERCULES_CLOSE_DISK");
+// 		slog_error("ERR_HERCULES_CLOSE_DISK");
+// 		return -1;
+// 	}
+// 	return 0;
+// }
+
 // Thread method attending client read-write data requests.
 void *srv_worker(void *th_argv)
 {
@@ -291,7 +327,9 @@ int srv_worker_helper(p_argv *arguments, const char *req)
 				{
 					to_read = block_size_rtvd;
 				}
-				slog_debug("[srv_worker_thread][READ_OP][READ_OP] Send the requested block with key=%s, block_offset=%ld, block_size_rtvd=%ld kb, to_read=%ld kb", key.c_str(), block_offset, block_size_rtvd / 1024, to_read / 1024);
+				struct stat *stats;
+				stats = (struct stat *)address_;
+				slog_debug("[srv_worker_thread][READ_OP][READ_OP] Send the requested block with key=%s, block_offset=%ld, block_size_rtvd=%ld kb, to_read=%ld kb, stat->st_nlink=%lu", key.c_str(), block_offset, block_size_rtvd / 1024, to_read / 1024, stats->st_nlink);
 				size_t ret_send_data = 0;
 				ret_send_data = send_data(arguments->ucp_worker, arguments->server_ep, (char *)address_ + block_offset, to_read, arguments->worker_uid);
 				// fprintf(stderr,"\tblock_size_rtvd=%ld, address_=%s\n", block_size_rtvd, address_);
@@ -315,8 +353,16 @@ int srv_worker_helper(p_argv *arguments, const char *req)
 		case DELETE_OP:
 		{
 			slog_debug("DELETE_OP");
-			slog_debug("Caleaning %s", key);
+			slog_debug("Cleaning %s", key.c_str());
 			map->cleaning_specific(key);
+			char release_msg[] = "DELETE\0";
+			ret = send_data(arguments->ucp_worker, arguments->server_ep, release_msg, strlen(release_msg) + 1, arguments->worker_uid);
+			if (ret == 0)
+			{
+				perror("ERR_HERCULES_PUBLISH_DELETEOP");
+				slog_error("ERR_HERCULES_PUBLISH_DELETEOP");
+				return -1;
+			}
 			break;
 		}
 		case RENAME_OP:
@@ -618,10 +664,9 @@ int srv_worker_helper(p_argv *arguments, const char *req)
 		}
 		break;
 	}
-		// More messages will arrive to the socket.
+	// More messages will arrive to the socket.
 	case WRITE_OP:
 	{
-		// std::cout <<"WRITE_OP key:" << key << '';
 		int op;
 		std::size_t found = key.find(' ');
 		std::size_t found2 = key.find("[OP]=");
@@ -633,7 +678,6 @@ int srv_worker_helper(p_argv *arguments, const char *req)
 			key.erase(0, found + 1);
 		}
 
-		// if (found!=std::string::npos){
 		if (found != std::string::npos && found2 == std::string::npos)
 		{
 			std::string path = key.substr(0, found);
@@ -909,7 +953,6 @@ int srv_worker_helper(p_argv *arguments, const char *req)
 				}
 
 				// void *aux_buf = (char *)buffer + block_offset;
-
 				msg_length = recv_data(arguments->ucp_worker, arguments->server_ep, (char *)buffer + block_offset, msg_length, arguments->worker_uid, 1);
 				if (msg_length == 0)
 				{
@@ -927,40 +970,17 @@ int srv_worker_helper(p_argv *arguments, const char *req)
 				slog_debug("[srv_worker_thread][WRITE_OP] ****[PUT, block_size_recv=%ld, BLOCK_SIZE=%lu, msg_length=%lu]********* key=%s", block_size_recv, BLOCK_SIZE, msg_length, key.c_str());
 				// TODO: should this be block_size_recv or a different size? block_size_recv might not be the full block size
 				// insert_successful = map->put(key, buffer, block_size_recv);
-				//  fprintf(stderr, "BLOCK_SIZE=%ld", BLOCK_SIZE);
 				insert_successful = map->put(key, buffer, BLOCK_SIZE);
 
-				// if (!strncmp(key.c_str() + 7, TESTX, strlen(TESTX)))
-				// {
-				// 	// fprintf(stderr, "Compare is equal on the read client, %s-%s\n", my_path, TESTX);
-				// 	char my_path[1000];
-				// 	sprintf(my_path, "/beegfs/home/javier.garciablas/gsanchez/lbellen1/phonon_cpu_best/ph-step-tbd/out_test/%s_server_write", key.c_str() + 7);
-				// 	int fd_ = open(my_path, O_CREAT | O_WRONLY | O_TRUNC, 0600);
-				// 	if (fd_ < 0)
-				// 	{
-				// 		fprintf(stderr, "Error opening file %s on the server, fd=%d\n", my_path, fd_);
-				// 	}
-				// 	int w = write(fd_, buffer, block_size_recv);
-				// 	close(fd_);
-				// }
-				//
-
 				slog_debug("[srv_worker_thread][WRITE_OP] insert_successful %d key=%s", insert_successful, key.c_str());
-				// map->get(key, &address_, &block_size_rtvd);
-				// fprintf(stderr,"****[PUT2]********* key=%s\n",  key.c_str());
-
 				tr = clock() - tr;
-
 				double time_taken = ((double)tr) / CLOCKS_PER_SEC; // in seconds
-																   // slog_info("[srv_worker_helper] put time %f s", time_taken);
-
-				// fprintf(stderr, "-- %s\n", buffer);
 
 				// Include the new record in the tracking structure.
 				if (insert_successful != 0)
 				{
-					perror("ERRIMSS_WORKER_MAPPUT");
-					slog_error("ERRIMSS_WORKER_MAPPUT");
+					perror("ERR_HERCULES_WORKER_MAPPUT");
+					slog_error("ERR_HERCULES_WORKER_MAPPUT");
 					return -1;
 				}
 
@@ -970,32 +990,28 @@ int srv_worker_helper(p_argv *arguments, const char *req)
 			// if the block was already stored:
 			else
 			{
-				// fprintf(stderr,"[srv_worker_thread][WRITE_OP] Key find %s\n", key.c_str());
 				slog_debug("[srv_worker_thread][WRITE_OP] Key find %s", key.c_str());
 				// Receive the block into the buffer.
-				// fprintf(stderr, "---- %s\n", address_);
 				std::size_t found = key.find("$0");
 				if (found != std::string::npos)
-				{
+				{ // block 0.
 					slog_debug("[srv_worker_thread][WRITE_OP] Updating block $0 (%d)", block_size_rtvd);
 					struct stat *old, *latest;
-
-					// TODO: make sure this works
-
-					// TIMING(recv_data(arguments->ucp_worker, arguments->server_ep, buffer, arguments->worker_uid, 0), "[srv_worker_thread][WRITE_OP] recv_data Updating block $0");
+					// TODO: make sure this works.
 					size_t msg_length = 0;
 					msg_length = get_recv_data_length(arguments->ucp_worker, arguments->worker_uid);
 					if (msg_length == 0)
 					{
-						slog_error("ERRIMSS_DATA_WORKER_WRITE_BLOCK_0_INVALID_MSG_LENGTH");
 						perror("ERRIMSS_DATA_WORKER_WRITE_BLOCK_0_INVALID_MSG_LENGTH");
+						slog_error("ERRIMSS_DATA_WORKER_WRITE_BLOCK_0_INVALID_MSG_LENGTH");
 						return -1;
 					}
+					slog_live("msg_length=%lu", msg_length);
 					// void *buffer = malloc(block_size_recv);
 					void *buffer = malloc(msg_length);
 					msg_length = recv_data(arguments->ucp_worker, arguments->server_ep, buffer, msg_length, arguments->worker_uid, 0);
 					// msg_length = recv_data_opt(arguments->ucp_worker, arguments->server_ep, &buffer, msg_length, arguments->worker_uid, 0);
-					slog_live("msg_length=%lu", msg_length);
+					// slog_live("msg_length=%lu", msg_length);
 					if (msg_length == 0)
 					{
 						perror("ERRIMSS_DATA_WORKER_WRITE_BLOCK_0_RECV_DATA");
@@ -1008,19 +1024,17 @@ int srv_worker_helper(p_argv *arguments, const char *req)
 					latest = (struct stat *)buffer;
 					slog_debug("[srv_worker_thread] File size new %ld old %ld", latest->st_size, old->st_size);
 					latest->st_size = std::max(latest->st_size, old->st_size);
-					slog_debug("[srv_worker_thread] buffer->st_size: %ld, block_offset=%ld", latest->st_size, block_offset);
-					slog_debug("[srv_worker_thread] old->st_nlink: %ld, new->st_nlink: %ld", old->st_nlink, latest->st_nlink);
+					// slog_debug("[srv_worker_thread] buffer->st_size: %ld, block_offset=%ld", latest->st_size, block_offset);
+					slog_debug("[srv_worker_thread] buffer->st_size: %ld, block_offset=%ld, old->st_nlink: %ld, new->st_nlink: %ld", latest->st_size, block_offset, old->st_nlink, latest->st_nlink);
 
 					// TODO: make sure this works
 					// memcpy((char *)address_ + block_offset, buffer, block_size_recv);
 					memcpy((char *)address_ + block_offset, buffer, msg_length);
 					// TODO: should we update this block's size in the map?
-
-					// slog_debug("address_=%x", address_);
-					// free(buffer);
+					free(buffer);
 				}
 				else
-				{
+				{ // non block 0.
 					// TIMING(recv_data(arguments->ucp_worker, arguments->server_ep, address_, arguments->worker_uid, 1), ("[srv_worker_thread][WRITE_OP] recv_data Updated non 0 existing block"));
 					slog_debug("[srv_worker_thread][WRITE_OP] Updated non 0 existing block, key.c_str(): %s", key.c_str());
 					size_t msg_length = 0;
@@ -1396,7 +1410,7 @@ int stat_worker_helper(p_argv *arguments, char *req)
 					int32_t result = map->delete_metadata_stat_worker(key);
 					slog_debug("[stat_worker_thread][READ_OP][DELETE_OP] delete_metadata_stat_worker=%d", result);
 					GTree_delete((char *)key.c_str());
-					strcpy(release_msg, "DELETE\0");
+					strncpy(release_msg, "DELETE\0", strlen("DELETE\0") + 1);
 				}
 				else
 				{
@@ -1404,6 +1418,7 @@ int stat_worker_helper(p_argv *arguments, char *req)
 				}
 
 				// char release_msg[] = "DELETE\0";
+				slog_debug("release_msg=%s", release_msg);
 				if (send_data(arguments->ucp_worker, arguments->server_ep, release_msg, strlen(release_msg) + 1, arguments->worker_uid) == 0)
 				{
 					perror("ERR_HERCULES_PUBLISH_DELETEMSG");
@@ -1494,9 +1509,13 @@ int stat_worker_helper(p_argv *arguments, char *req)
 				// switch (operation)
 				// {
 				// case 1: // file opened.
-				slog_debug("Before dataset->n_open=%d", dataset->n_open);
-				dataset->n_open -= 1;
-				slog_debug("File closed");
+				slog_debug("Closing file, dataset->n_open=%d", dataset->n_open);
+				if (dataset->n_open > 0)
+				{
+					dataset->n_open -= 1;
+				}
+
+				// slog_debug("File closed");
 				// break;
 				// default:
 				// 	break;
@@ -1640,6 +1659,9 @@ int stat_worker_helper(p_argv *arguments, char *req)
 				// perror("ERRIMSS_STATWORKER_GTREEINSERT");
 				return -1;
 			}
+
+			// copy the block into disk.
+
 			// Update the pointer.
 			arguments->pt += block_size_recv;
 			slog_debug("[STAT WORKER] Dataset %s has been created.", key.c_str());
