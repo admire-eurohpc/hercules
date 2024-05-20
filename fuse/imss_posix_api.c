@@ -271,7 +271,7 @@ int imss_refresh(const char *path)
 		char err_msg[128];
 		sprintf(err_msg, "HERCULES_ERR_REFRESH: %s", path);
 		slog_error("[imss_refresh] %s", err_msg);
-		//perror(err_msg);
+		// perror(err_msg);
 		free(imss_path);
 		// free(aux);
 		return -1;
@@ -348,7 +348,7 @@ int imss_getattr(const char *path, struct stat *stbuf)
 		pthread_mutex_unlock(&lock_file);
 		map_release_prefetch(map_prefetch, path);
 		return -ENOENT;
-	case 1:
+	case 1: // Directory case?
 		if ((n_ent = get_dir((char *)imss_path, &buffer, &refs)) != -1)
 		{
 			slog_live("[imss_getattr] n_ent=%d", n_ent);
@@ -517,6 +517,7 @@ int imss_readdir(const char *path, void *buf, posix_fill_dir_t filler, off_t off
 			// if (!error)
 			{
 				char *last = refs[i] + strlen(refs[i]) - 1;
+				slog_info("last=%s", last);
 				if (last[0] == '/')
 				{
 					last[0] = '\0';
@@ -531,6 +532,7 @@ int imss_readdir(const char *path, void *buf, posix_fill_dir_t filler, off_t off
 				}
 
 				// filler(buf, refs[i] + offset + 1, &stbuf, 0); // original
+				slog_info("refs[i] + offset + 1=%s", refs[i] + offset + 1);
 				filler(buf, refs[i] + offset + 1, NULL, 0);
 				// filler(buf, refs[i], NULL, 0);
 			}
@@ -2136,31 +2138,35 @@ int imss_release(const char *path)
 	return 0;
 }
 
+/**
+ * @brief Closes the dataset on the backend and delete it when the dataset status is "dest" and no more process has the file open.
+ * @return 1 if the file was correctly closed,
+ * 0 if the file was deleted (e.g., file has been removed using unlink),
+ * on error -1 is returned.
+ */
 int imss_close(const char *path, int fd)
 {
 	// clock_t t;
 	// t = clock();
-	// TIMING(flush_data(), "[imss_close]flush_data", int32_t);
 	int ret = 0;
-	slog_debug("[imss_close] Calling imss_flush_data");
-	imss_flush_data();
-	slog_debug("[imss_close] Ending imss_flush_data");
+	slog_debug("Calling imss_flush_data");
+	// imss_flush_data();	
+	slog_debug("Ending imss_flush_data");
 	ret = imss_release(path);
-	slog_debug("[imss_close] Ending imss_release, ret=%d", ret);
+	slog_debug("Ending imss_release, ret=%d", ret);
 	ret = close_dataset(path, fd);
-	slog_debug("[imss_close] Ending close_dataset, ret=%d", ret);
+	slog_debug("Ending close_dataset, ret=%d", ret);
 	// imss_refresh is too slow.
 	// When we remove it pass from 3.45 sec to 0.008505 sec.
 	if (ret)
 	{ // if the file was not deleted by the close we update the stat.
 		imss_refresh(path);
-		slog_debug("[imss_close] Ending imss_refresh");
+		slog_debug("Ending imss_refresh");
 	}
 
 	// t = clock() - t;
 	// double time_taken = ((double)t) / CLOCKS_PER_SEC; // in seconds
-	// slog_info("[imss_close] time total %f s", time_taken);
-	return 0;
+	return ret;
 }
 
 int imss_create(const char *path, mode_t mode, uint64_t *fh, int opened)
@@ -2210,7 +2216,6 @@ int imss_create(const char *path, mode_t mode, uint64_t *fh, int opened)
 	ds_stat.st_ino = res;
 	ds_stat.st_dev = 0;
 
-	// slog_live("[imss_create] IMSS_DATA_BSIZE:%ld, res=%d", IMSS_DATA_BSIZE, res);
 	if (!S_ISDIR(mode))
 		mode |= S_IFREG;
 	ds_stat.st_mode = mode;
@@ -2266,7 +2271,11 @@ int imss_releasedir(const char *path)
 	return 0;
 }
 
-// Remove directory
+/**
+ * @brief Deletes a directory, which must be empty.
+ * https://man7.org/linux/man-pages/man2/rmdir.2.html
+ * @return 0 on success. On error, the value of errno is returned.
+*/
 int imss_rmdir(const char *path)
 {
 
@@ -2376,14 +2385,11 @@ int imss_unlink(const char *path)
 			map_release_prefetch(map_prefetch, path);
 			// *******************************
 			ret = release_dataset(ds);
-			slog_debug("relese_dataset ret=%d", ret);
+			slog_debug("[imss_posix_api] relese_dataset ret=%d", ret);
 			if (ret < 0)
 			{
 				slog_error("ERR_HERCULES_RELEASE_DATASET");
 			}
-
-			// delete the dataset in the data server.
-			
 
 			break;
 		}
@@ -2452,19 +2458,15 @@ int imss_utimens(const char *path, const struct timespec tv[2])
 	return 0;
 }
 
+/**
+ * @brief creates a directory.
+*/
 int imss_mkdir(const char *path, mode_t mode)
 {
-	// char *rpath = (char *)calloc(MAX_PATH, sizeof(char));
 	uint64_t fi;
 	int ret = -1;
-	// strcpy(rpath, path);
-	// if (path[strlen(path) - 1] != '/')
-	// {
-	// 	strcat(rpath, "/");
-	// }
-	// imss_create(rpath, mode | S_IFDIR, &fi);
+	// opened is equals to 2 to indicate this was not created with a 'open' syscall.
 	ret = imss_create(path, mode | S_IFDIR, &fi, 2);
-	// free(rpath);
 	return ret;
 }
 

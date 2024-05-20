@@ -122,6 +122,7 @@ typedef struct
 	// URI identifying a certain dataset.
 	char uri_[URI_];
 	// Byte specifying the type of structure.
+	// L = Local, D = Distributed.
 	char type; // = 'D';
 	// Policy that was followed in order to write the dataset.
 	char policy[8];
@@ -555,6 +556,8 @@ RETURNS:	0 - Resources were released successfully.
 	int32_t imss_flush_data();
 
 	int32_t imss_comm_cleanup();
+
+	void close_ucx_endpoint(ucp_worker_h worker, ucp_ep_h ep);
 
 #ifdef __cplusplus
 }

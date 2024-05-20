@@ -345,6 +345,7 @@ int srv_worker_helper(p_argv *arguments, const char *req)
 		}
 		case RELEASE:
 		{
+			// sleep(10);
 			map_server_eps_erase(map_server_eps, arguments->worker_uid, arguments->ucp_worker);
 			slog_debug("[srv_worker_thread][READ_OP][RELEASE]");
 			// return 0;
@@ -1368,6 +1369,7 @@ int stat_worker_helper(p_argv *arguments, char *req)
 		case RELEASE:
 		{
 			slog_debug("[stat_worker_thread][READ_OP][RELEASE] Deleting endpoint with %" PRIu64 "", arguments->worker_uid);
+			// sleep(10);
 			map_server_eps_erase(map_server_eps, arguments->worker_uid, arguments->ucp_worker);
 			// ucp_destroy(arguments->ucp_context);
 			slog_debug("[stat_worker_thread][READ_OP][RELEASE] Endpoints deleted ");

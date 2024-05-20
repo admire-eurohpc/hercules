@@ -35,7 +35,7 @@ void *stat_mon; // Metadata monitoring socket.
 
 uint32_t NUM_DATA_SERVERS;
 
-int32_t __thread current_dataset;			// Dataset whose policy has been set last.
+int32_t __thread current_dataset;	// Dataset whose policy has been set last.
 dataset_info __thread curr_dataset; // Currently managed dataset.
 imss __thread curr_imss;
 
@@ -390,15 +390,13 @@ int32_t stat_init(char *stat_hostfile,
 		// fprintf(stderr,"[IMSS][stat_int] Contacting stat dispatcher at %s:%ld\n", stat_node, port);
 
 		oob_sock = connect_common(stat_node, port, AF_INET);
-		if (oob_sock<0)
+		if (oob_sock < 0)
 		{
 			char err_msg[100];
 			sprintf(err_msg, "ERR_HERCULES_CONNECT-%s:%ld", stat_node, port);
 			perror(err_msg);
 			return -1;
 		}
-		
-
 
 		sprintf(request, "%" PRIu32 " GET HELLO!", rank);
 		slog_debug("[IMSS][stat_int] request=%s", request);
@@ -458,7 +456,6 @@ int32_t stat_release()
 	{
 		ucp_ep_h ep = stat_eps[i];
 		char release_msg[REQUEST_SIZE];
-
 		sprintf(release_msg, "%" PRIu32 " GET 2 RELEASE", process_rank);
 		// slog_live("Request - %s", release_msg);
 		if (send_req(ucp_worker_meta, ep, local_addr_meta, local_addr_len_meta, release_msg) == 0)
@@ -469,12 +466,23 @@ int32_t stat_release()
 			return -1;
 		}
 
+		close_ucx_endpoint(ucp_worker_meta, ep);
+
 		// ep_flush(ep, ucp_worker_meta);
-		ucp_ep_destroy(ep);
+		// //  ucp_ep_destroy(ep);
 		// ucp_context_destroy(ucp_worker_meta);
 		// ep_close(ucp_worker_meta, ep, 0);
 		free(stat_addr[i]);
 	}
+
+	// Optionally, flush the worker
+	ucs_status_t status = ucp_worker_flush(ucp_worker_meta);
+	if (status != UCS_OK)
+	{
+		fprintf(stderr, "Failed to flush worker: %s\n", ucs_status_string(status));
+	}
+	// Destroy the worker
+	ucp_worker_destroy(ucp_worker_meta);
 
 	// ucp_worker_destroy(ucp_worker_meta);
 	free(stat_eps);
@@ -929,6 +937,23 @@ int32_t open_imss(char *imss_uri)
 	return 0;
 }
 
+// Function to flush and close the endpoint
+void close_ucx_endpoint(ucp_worker_h worker, ucp_ep_h ep)
+{
+	// Flush the endpoint to ensure all outstanding operations are completed
+	ucs_status_t status = ucp_ep_flush(ep);
+	if (status != UCS_OK)
+	{
+		fprintf(stderr, "Failed to flush endpoint: %s\n", ucs_status_string(status));
+	}
+
+	// Destroy the endpoint
+	ucp_ep_destroy(ep);
+
+	// Optionally, progress the worker
+	// ucp_worker_progress(worker);
+}
+
 // Method releasing client-side and/or server-side resources related to a certain IMSS instance.
 int32_t release_imss(char *imss_uri, uint32_t release_op)
 {
@@ -937,33 +962,39 @@ int32_t release_imss(char *imss_uri, uint32_t release_op)
 	int32_t imss_position;
 	if ((imss_position = find_imss(imss_uri, &imss_)) == -1)
 	{
-		slog_fatal("HERCULES_ERR_RLSHERCULES_NOTFOUND");
 		perror("HERCULES_ERR_RLSHERCULES_NOTFOUND");
+		slog_fatal("HERCULES_ERR_RLSHERCULES_NOTFOUND");
 		return -1;
 	}
 
 	// Release the set of connections to the corresponding IMSS.
-
+	pthread_mutex_lock(&lock_network);
+	slog_live("imss_position=%d, num_storages=%d", imss_position, imss_.info.num_storages);
+	// sleep(1);
 	for (int32_t i = 0; i < imss_.info.num_storages; i++)
 	{
 		// Request IMSS instance closure per server if the instance is a DETACHED one and the corresponding argumet was provided.
 		if (release_op == CLOSE_DETACHED)
 		{
-			char release_msg[REQUEST_SIZE];
+			//char release_msg[REQUEST_SIZE];
 			ucp_ep_h ep;
 
 			ep = imss_.conns.eps[i];
 
-			sprintf(release_msg, "GET 2 0 RELEASE");
+			//sprintf(release_msg, "GET 2 0 RELEASE");
+			char release_msg[] = "GET 2 0 RELEASE\0";
+			slog_live("release_msg=%s to server %d", release_msg, i);
 			if (send_req(ucp_worker_data, ep, local_addr_data, local_addr_len_data, release_msg) == 0)
 			{
-				slog_error("HERCULES_ERR_RLSHERCULES_SENDADDR");
+				pthread_mutex_unlock(&lock_network);
 				perror("HERCULES_ERR_RLSHERCULES_SENDADDR");
+				slog_error("HERCULES_ERR_RLSHERCULES_SENDADDR");
 				return -1;
 			}
+			close_ucx_endpoint(ucp_worker_data, ep);
 
 			// ep_close(ucp_worker_data, ep, 0);
-			ep_close(ucp_worker_data, ep, UCP_EP_CLOSE_MODE_FLUSH);
+			//  // ep_close(ucp_worker_data, ep, UCP_EP_CLOSE_MODE_FLUSH);
 			// ep_flush(ep, ucp_worker_data);
 
 			// ucp_ep_destroy(ep);
@@ -973,6 +1004,14 @@ int32_t release_imss(char *imss_uri, uint32_t release_op)
 		// ep_flush(imss_.conns.eps_[i], ucp_worker_data);
 		free(imss_.info.ips[i]);
 	}
+	// Optionally, flush the worker
+	ucs_status_t status = ucp_worker_flush(ucp_worker_data);
+	if (status != UCS_OK)
+	{
+		fprintf(stderr, "Failed to flush worker: %s\n", ucs_status_string(status));
+	}
+	// Destroy the worker
+	ucp_worker_destroy(ucp_worker_data);
 
 	free(imss_.info.ips);
 	free(curr_imss.conns.eps);
@@ -984,6 +1023,8 @@ int32_t release_imss(char *imss_uri, uint32_t release_op)
 
 	if (!memcmp(att_deployment, imss_uri, URI_))
 		memset(att_deployment, '\0', URI_);
+
+	pthread_mutex_unlock(&lock_network);
 
 	return 0;
 }
@@ -1168,7 +1209,7 @@ int32_t create_dataset(char *dataset_uri,
 	new_dataset.local_conn = associated_imss.conns.matching_server;
 	new_dataset.size = 0;
 
-	if (opened)
+	if (opened == 1)
 	{ // the dataset is created by an 'open' syscall.
 		new_dataset.n_open = 1;
 	}
@@ -1612,7 +1653,7 @@ int32_t close_dataset(const char *dataset_uri, int fd)
 }
 
 // Method deleting a dataset.
-int32_t delete_dataset(const char *dataset_uri,  int32_t dataset_id)
+int32_t delete_dataset(const char *dataset_uri, int32_t dataset_id)
 {
 	pthread_mutex_lock(&lock_network);
 	ucp_ep_h ep;
@@ -2790,7 +2831,7 @@ int32_t get_data(int32_t dataset_id, int32_t data_id, void *buffer)
 			return -1;
 		}
 
-		slog_debug("[IMSS] Request has been sent - '%s' to server %ld", key_, repl_servers[i]);
+		// slog_debug("[IMSS] Request has been sent - '%s' to server %ld", key_, repl_servers[i]);
 
 		/*	gettimeofday(&end, NULL);
 			delta_us = (long) (end.tv_usec - start.tv_usec);
