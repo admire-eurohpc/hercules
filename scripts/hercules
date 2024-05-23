@@ -186,13 +186,6 @@ echo "Reading configuration from $FILE"
 export HERCULES_CONF="$FILE"
 
 
-## If hostfiles was not set, then we create a hostfile containing the allocated nodes.
-# if [[ $SLURM -eq "1" ]]; then
-if [[ $SERVERS_HOSTFILES_OPTION -eq "0" ]]; then
-    #srun -pernode hostname |sort > hostfile
-    scontrol show hostnames "$SLURM_JOB_NODELIST" > hostfile
-fi
-
 ## checks if a configuration file was set.
 if [ -z "$FILE" ]; then
     ## get current directory has project path.
@@ -262,6 +255,12 @@ then
 fi
 
 
+## If hostfiles was not set, then we create a hostfile containing the allocated nodes.
+# if [[ $SLURM -eq "1" ]]; then
+if [[ $SERVERS_HOSTFILES_OPTION -eq "0" ]]; then
+    #srun -pernode hostname |sort > hostfile
+    scontrol show hostnames "$SLURM_JOB_NODELIST" > hostfile
+fi
 
 
 echo HERCULES_MOUNT_POINT - "$HERCULES_MOUNT_POINT" - HERCULES_BLOCK_SIZE - "$HERCULES_BLOCK_SIZE"

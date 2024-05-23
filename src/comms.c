@@ -114,6 +114,7 @@ int init_context(ucp_context_h *ucp_context, ucp_config_t *config, ucp_worker_h 
 							UCP_PARAM_FIELD_REQUEST_INIT |
 							UCP_PARAM_FIELD_NAME;
 	ucp_params.features = UCP_FEATURE_TAG;
+	ucp_params.features |= UCP_FEATURE_WAKEUP;
 	ucp_params.request_size = sizeof(struct ucx_context);
 	ucp_params.request_init = request_init;
 	ucp_params.name = "hercules";

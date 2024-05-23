@@ -167,13 +167,45 @@ void *srv_worker(void *th_argv)
 		double time_taken;
 		t = clock();
 
-		do
+		// do
+		// {
+		// 	/* Progressing before probe to update the state */
+		// 	TIMING(ucp_worker_progress(arguments->ucp_worker), "[srv_worker]ucp_worker_progress", unsigned int);
+		// 	/* Probing incoming events in non-block mode */
+		// 	msg_tag = ucp_tag_probe_nb(arguments->ucp_worker, tag_req, tag_mask, 1, &info_tag);
+		// } while (msg_tag == NULL);
+		ucs_status_t status;
+		/* Receive test string from server */
+		for (;;)
 		{
-			/* Progressing before probe to update the state */
-			TIMING(ucp_worker_progress(arguments->ucp_worker), "[srv_worker]ucp_worker_progress", unsigned int);
 			/* Probing incoming events in non-block mode */
 			msg_tag = ucp_tag_probe_nb(arguments->ucp_worker, tag_req, tag_mask, 1, &info_tag);
-		} while (msg_tag == NULL);
+			if (msg_tag != NULL)
+			{
+				/* Message arrived */
+				break;
+			}
+			else if (ucp_worker_progress(arguments->ucp_worker))
+			{
+				/* Some events were polled; try again without going to sleep */
+				continue;
+			}
+			/* If we got here, ucp_worker_progress() returned 0, so we can sleep.
+			 * Following blocked methods used to polling internal file descriptor
+			 * to make CPU idle and don't spin loop
+			 */
+			// if (ucp_test_mode == TEST_MODE_WAIT)
+			{
+				/* Polling incoming events*/
+				status = ucp_worker_wait(arguments->ucp_worker);
+				// CHKERR_JUMP(status != UCS_OK, "ucp_worker_wait\n", err_ep);
+			}
+			// else if (ucp_test_mode == TEST_MODE_EVENTFD)
+			// {
+			// 	status = test_poll_wait(ucp_worker);
+			// 	CHKERR_JUMP(status != UCS_OK, "test_poll_wait\n", err_ep);
+			// }
+		}
 
 		slog_debug("[srv_worker] Message length=%ld bytes.", info_tag.length);
 		msg = (msg_req_t *)malloc(info_tag.length);
@@ -1085,6 +1117,7 @@ void *garbage_collector(void *th_argv)
 	pthread_exit(NULL);
 }
 
+
 // Thread method attending client read-write metadata requests.
 void *stat_worker(void *th_argv)
 {
@@ -1109,13 +1142,38 @@ void *stat_worker(void *th_argv)
 		msg_req_t *msg;
 		ucp_request_param_t recv_param;
 
-		do
+		ucs_status_t status;
+		/* Receive test string from server */
+		for (;;)
 		{
-			/* Progressing before probe to update the state */
-			ucp_worker_progress(arguments->ucp_worker);
 			/* Probing incoming events in non-block mode */
 			msg_tag = ucp_tag_probe_nb(arguments->ucp_worker, tag_req, tag_mask, 1, &info_tag);
-		} while (msg_tag == NULL);
+			if (msg_tag != NULL)
+			{
+				/* Message arrived */
+				break;
+			}
+			else if (ucp_worker_progress(arguments->ucp_worker))
+			{
+				/* Some events were polled; try again without going to sleep */
+				continue;
+			}
+			/* If we got here, ucp_worker_progress() returned 0, so we can sleep.
+			 * Following blocked methods used to polling internal file descriptor
+			 * to make CPU idle and don't spin loop
+			 */
+			// if (ucp_test_mode == TEST_MODE_WAIT)
+			{
+				/* Polling incoming events*/
+				status = ucp_worker_wait(arguments->ucp_worker);
+				// CHKERR_JUMP(status != UCS_OK, "ucp_worker_wait\n", err_ep);
+			}
+			// else if (ucp_test_mode == TEST_MODE_EVENTFD)
+			// {
+			// 	status = test_poll_wait(ucp_worker);
+			// 	CHKERR_JUMP(status != UCS_OK, "test_poll_wait\n", err_ep);
+			// }
+		}
 
 		msg = (msg_req_t *)malloc(info_tag.length); // Should the msg memory be free?
 		memset(msg, 0, info_tag.length);

@@ -3165,7 +3165,8 @@ int32_t set_data(int32_t dataset_id, int32_t data_id, const void *buffer, size_t
 			pthread_mutex_unlock(&lock_network);
 			perror("HERCULES_ERR_SET_REQ_SEND_REQ");
 			slog_error("HERCULES_ERR_SET_REQ_SEND_REQ");
-			return -1;
+			//return -1;
+			exit(-1);
 		}
 
 		// send the data to the data server of the current dataset.

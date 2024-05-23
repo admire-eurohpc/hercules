@@ -482,7 +482,7 @@ int32_t main(int32_t argc, char **argv)
 
 		if (pthread_mutex_init(&tree_mut, NULL) != 0)
 		{
-			perror("ERRIMSS_TREEMUT_INIT");
+			perror("ERR_HERCULES_TREEMUT_INIT");
 			pthread_exit(NULL);
 		}
 	}
