@@ -99,8 +99,9 @@ int32_t imss_comm_cleanup()
 	ucp_worker_release_address(ucp_worker_meta, local_addr_meta);
 	ucp_worker_release_address(ucp_worker_data, local_addr_data);
 
-	// ucp_worker_destroy(ucp_worker_meta);
-	// ucp_worker_destroy(ucp_worker_data);
+	// Following lines were comment.
+	ucp_worker_destroy(ucp_worker_meta);
+	ucp_worker_destroy(ucp_worker_data);
 
 	ucp_cleanup(ucp_context_client);
 
@@ -492,10 +493,10 @@ int32_t stat_release()
 }
 
 // Method discovering which metadata server is in charge of a certain URI.
-uint32_t discover_stat_srv(char *_uri)
+uint32_t discover_stat_srv(const char *_uri)
 {
 	// Calculate a crc from the provided URI.
-	uint64_t crc_ = crc64(0, (unsigned char *)_uri, strlen(_uri));
+	uint64_t crc_ = crc64(0, (const unsigned char *)_uri, strlen(_uri));
 
 	// Return the metadata server within the set that shall deal with the former entity.
 	return crc_ % n_stat_servers;
@@ -952,6 +953,11 @@ void close_ucx_endpoint(ucp_worker_h worker, ucp_ep_h ep)
 
 	// Optionally, progress the worker
 	// ucp_worker_progress(worker);
+}
+
+void ucx_cleanup(){ 
+	ucp_worker_destroy(ucp_worker_data);
+
 }
 
 // Method releasing client-side and/or server-side resources related to a certain IMSS instance.
@@ -2008,10 +2014,7 @@ int32_t stat_dataset(const char *dataset_uri, dataset_info *dataset_info_, int o
 	}
 
 	// Get the length of the message to be received.
-	// size_t length = 0;
-	// slog_live("[IMSS][stat_dataset] getting msg lenght");
 	msg_len = get_recv_data_length(ucp_worker_meta, local_meta_uid);
-	// slog_live("[IMSS][stat_dataset] msg lenght=%lu", msg_len);
 	if (msg_len == 0)
 	{
 		pthread_mutex_unlock(&lock_network);
@@ -2034,10 +2037,9 @@ int32_t stat_dataset(const char *dataset_uri, dataset_info *dataset_info_, int o
 		free(data);
 		return 0;
 	}
+	pthread_mutex_unlock(&lock_network);
 	memcpy(dataset_info_, data, sizeof(dataset_info));
 	free(data);
-	pthread_mutex_unlock(&lock_network);
-
 	return 1;
 }
 
@@ -3436,7 +3438,7 @@ char **get_dataloc(const char *dataset,
 // pthread_mutex_t lock_op = PTHREAD_MUTEX_INITIALIZER;
 
 // Method specifying the type (DATASET or IMSS INSTANCE) of a provided URI.
-int32_t get_type(char *uri)
+int32_t get_type(const char *uri)
 {
 	// pthread_mutex_lock(&lock_op);
 	ucp_ep_h ep;

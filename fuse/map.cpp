@@ -60,7 +60,7 @@ extern "C"
 
 	// Removes the element with key "k" from the map "map".
 	// int map_erase(void* map, char* k) {
-	void map_erase(void *map, char *k)
+	void map_erase(void *map, const char *k)
 	{
 		std::unique_lock<std::mutex> lck(map_lock);
 		Map *m = reinterpret_cast<Map *>(map);

@@ -1314,7 +1314,7 @@ int stat_worker_helper(p_argv *arguments, char *req)
 			free(buffer);
 			break;
 		}
-		case READ_OP:
+		case READ_OP:	
 		{
 			// printf("STAT_WORKER READ_OP");
 			// Check if there was an associated block to the key.

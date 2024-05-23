@@ -510,7 +510,7 @@ RETURNS:	0 - No entity associated to the URI provided exists.
 2 - The URI provided corresponds to a dataset.
 -1 - In case of error.
 	 */
-	int32_t get_type(char *uri);
+	int32_t get_type(const char *uri);
 
 	// Method retriving list of servers to read.
 	int32_t
