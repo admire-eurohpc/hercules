@@ -319,6 +319,7 @@ for node in ${meta_hosts[@]}
 do    
     RM="rm /tmp/m-hercules-$i"
     COMMAND="$HERCULES_BUILD_PATH/hercules_server m $i"
+    echo "$COMMAND"
     ## If slurm is not being used, we deploy the service by connecting
     ## to the node via ssh.
     if [[ "$SLURM" -eq "0" ]]; then
@@ -378,6 +379,7 @@ do
     # echo "[+] Running data server $i in $node..."
     RM="rm /tmp/d-hercules-$i"
     COMMAND="$HERCULES_BUILD_PATH/hercules_server d $i ${meta_hosts[0]}"
+    echo "$COMMAND"
     if [[ "$SLURM" -eq "0" ]]; then
         # ssh $node "$RM; cd $HERCULES_BASH_PATH &&  $COMMAND &"
         echo "[ + ] Removing temporal files on $node"

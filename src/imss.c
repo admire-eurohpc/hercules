@@ -21,8 +21,6 @@
 #include <time.h>
 #include <inttypes.h>
 
-#include <ucp/api/ucp.h>
-
 /**********************************************************************************/
 /******************************** GLOBAL VARIABLES ********************************/
 /**********************************************************************************/
@@ -246,6 +244,120 @@ delete_imss(char *imss_uri,
 /********************* METADATA SERVICE MANAGEMENT FUNCTIONS  *********************/
 /**********************************************************************************/
 
+void set_sock_addr(const char *address_str, struct sockaddr_storage *saddr, uint16_t server_port)
+{
+	fprintf(stderr, "Connecting to %s:%d\n", address_str, server_port);
+	struct sockaddr_in *sa_in;
+	struct sockaddr_in6 *sa_in6;
+
+	/* The server will listen on INADDR_ANY */
+	memset(saddr, 0, sizeof(*saddr));
+
+	switch (AF_INET)
+	{
+	case AF_INET:
+		sa_in = (struct sockaddr_in *)saddr;
+		if (address_str != NULL)
+		{
+			inet_pton(AF_INET, address_str, &sa_in->sin_addr);
+		}
+		else
+		{
+			sa_in->sin_addr.s_addr = INADDR_ANY;
+		}
+		sa_in->sin_family = AF_INET;
+		sa_in->sin_port = htons(server_port);
+		break;
+	case AF_INET6:
+		sa_in6 = (struct sockaddr_in6 *)saddr;
+		if (address_str != NULL)
+		{
+			inet_pton(AF_INET6, address_str, &sa_in6->sin6_addr);
+		}
+		else
+		{
+			sa_in6->sin6_addr = in6addr_any;
+		}
+		sa_in6->sin6_family = AF_INET6;
+		sa_in6->sin6_port = htons(server_port);
+		break;
+	default:
+		fprintf(stderr, "Invalid address family");
+		break;
+	}
+}
+
+static ucs_status_t start_client(ucp_worker_h ucp_worker,
+								 const char *address_str, ucp_ep_h *client_ep)
+{
+	ucp_ep_params_t ep_params;
+	struct sockaddr_storage connect_addr;
+	ucs_status_t status;
+
+	set_sock_addr(address_str, &connect_addr, 8501);
+
+	/*
+	 * Endpoint field mask bits:
+	 * UCP_EP_PARAM_FIELD_FLAGS             - Use the value of the 'flags' field.
+	 * UCP_EP_PARAM_FIELD_SOCK_ADDR         - Use a remote sockaddr to connect
+	 *                                        to the remote peer.
+	 * UCP_EP_PARAM_FIELD_ERR_HANDLING_MODE - Error handling mode - this flag
+	 *                                        is temporarily required since the
+	 *                                        endpoint will be closed with
+	 *                                        UCP_EP_CLOSE_MODE_FORCE which
+	 *                                        requires this mode.
+	 *                                        Once UCP_EP_CLOSE_MODE_FORCE is
+	 *                                        removed, the error handling mode
+	 *                                        will be removed.
+	 */
+	ep_params.field_mask = UCP_EP_PARAM_FIELD_FLAGS |
+						   UCP_EP_PARAM_FIELD_SOCK_ADDR |
+						   UCP_EP_PARAM_FIELD_ERR_HANDLER |
+						   UCP_EP_PARAM_FIELD_ERR_HANDLING_MODE;
+	ep_params.err_mode = UCP_ERR_HANDLING_MODE_PEER;
+	ep_params.err_handler.cb = err_cb;
+	ep_params.err_handler.arg = NULL;
+	ep_params.flags = UCP_EP_PARAMS_FLAGS_CLIENT_SERVER;
+	ep_params.sockaddr.addr = (struct sockaddr *)&connect_addr;
+	ep_params.sockaddr.addrlen = sizeof(connect_addr);
+
+	status = ucp_ep_create(ucp_worker, &ep_params, client_ep);
+	if (status != UCS_OK)
+	{
+		fprintf(stderr, "failed to connect to %s (%s)\n", address_str,
+				ucs_status_string(status));
+	}
+
+	fprintf(stderr, "status=%s\n", ucs_status_string(status));
+
+	return status;
+}
+
+static int run_client(ucp_worker_h ucp_worker, char *server_addr,
+					  send_recv_type_t send_recv_type)
+{
+	ucp_ep_h client_ep;
+	ucs_status_t status;
+	int ret = -1;
+
+	status = start_client(ucp_worker, server_addr, &client_ep);
+	if (status != UCS_OK)
+	{
+		fprintf(stderr, "failed to start client (%s)\n", ucs_status_string(status));
+		ret = -1;
+		// goto out;
+		return ret;
+	}
+
+	ret = client_server_do_work(ucp_worker, client_ep, send_recv_type, 0);
+
+	/* Close the endpoint to the server */
+	ep_close(ucp_worker, client_ep, UCP_EP_CLOSE_FLAG_FORCE);
+
+out:
+	return ret;
+}
+
 // Method creating a communication channel with the IMSS metadata server. Besides, the stat_imss method initializes a set of elements that will be used through the session.
 int32_t stat_init(char *stat_hostfile,
 				  uint64_t port,
@@ -289,6 +401,17 @@ int32_t stat_init(char *stat_hostfile,
 		perror("HERCULES_ERR_INIT_WORKER");
 		return -1;
 	}
+
+	/* UCP objects */
+	ucp_context_h ucp_context;
+	ucp_worker_h ucp_worker;
+	init_context_ori(&ucp_context, &ucp_worker, CLIENT_SERVER_SEND_RECV_TAG);
+
+	// char server_address[] = "192.168.201.156";
+	// // char server_address[] = "broadwell-001";
+	// run_client(ucp_worker, server_address, CLIENT_SERVER_SEND_RECV_TAG);
+	// ucp_worker_destroy(ucp_worker);
+	// ucp_cleanup(ucp_context);
 
 	memset(&empty_dataset, 0, sizeof(dataset_info));
 	memset(&empty_imss, 0, sizeof(imss));
@@ -803,18 +926,6 @@ int32_t open_imss(char *imss_uri)
 	// ucp_config_t *config;
 	ucs_status_t status;
 
-	// if (getenv("IMSS_DEBUG") != NULL)
-	// {
-	// 	IMSS_DEBUG = 1;
-	// }
-
-	// if (IMSS_DEBUG)
-	// {
-	// 	//		status = ucp_config_read(NULL, NULL, &config);
-	// 	//		ucp_config_print(config, stderr, NULL, UCS_CONFIG_PRINT_CONFIG);
-	// 	//		ucp_config_release(config);
-	// }
-
 	int32_t not_initialized = 0;
 
 	slog_live("[IMSS][open_imss] starting function, imss_uri=%s", imss_uri);
@@ -869,6 +980,8 @@ int32_t open_imss(char *imss_uri)
 		size_t addr_len;
 		int ret = 0;
 
+		fprintf(stderr, "Connecting to %s:%d", new_imss.info.ips[i], new_imss.info.conn_port);
+
 		oob_sock = connect_common(new_imss.info.ips[i], new_imss.info.conn_port, AF_INET);
 		if (oob_sock < 0)
 		{
@@ -878,10 +991,6 @@ int32_t open_imss(char *imss_uri)
 			perror(err_msg);
 			return -1;
 		}
-		// else
-		// {
-		// 	printf("Cliente socket fd=%d\n", oob_sock);
-		// }
 
 		char request[REQUEST_SIZE];
 		sprintf(request, "%" PRIu32 " GET %s", process_rank, "HELLO!JOIN");
@@ -955,9 +1064,9 @@ void close_ucx_endpoint(ucp_worker_h worker, ucp_ep_h ep)
 	// ucp_worker_progress(worker);
 }
 
-void ucx_cleanup(){ 
+void ucx_cleanup()
+{
 	ucp_worker_destroy(ucp_worker_data);
-
 }
 
 // Method releasing client-side and/or server-side resources related to a certain IMSS instance.
@@ -982,12 +1091,12 @@ int32_t release_imss(char *imss_uri, uint32_t release_op)
 		// Request IMSS instance closure per server if the instance is a DETACHED one and the corresponding argumet was provided.
 		if (release_op == CLOSE_DETACHED)
 		{
-			//char release_msg[REQUEST_SIZE];
+			// char release_msg[REQUEST_SIZE];
 			ucp_ep_h ep;
 
 			ep = imss_.conns.eps[i];
 
-			//sprintf(release_msg, "GET 2 0 RELEASE");
+			// sprintf(release_msg, "GET 2 0 RELEASE");
 			char release_msg[] = "GET 2 0 RELEASE\0";
 			slog_live("release_msg=%s to server %d", release_msg, i);
 			if (send_req(ucp_worker_data, ep, local_addr_data, local_addr_len_data, release_msg) == 0)
@@ -3165,7 +3274,7 @@ int32_t set_data(int32_t dataset_id, int32_t data_id, const void *buffer, size_t
 			pthread_mutex_unlock(&lock_network);
 			perror("HERCULES_ERR_SET_REQ_SEND_REQ");
 			slog_error("HERCULES_ERR_SET_REQ_SEND_REQ");
-			//return -1;
+			// return -1;
 			exit(-1);
 		}
 

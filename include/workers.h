@@ -55,12 +55,15 @@ typedef struct {
 	ucp_address_t * peer_address;
 	uint64_t worker_uid;
 	char *tmp_file_path;
+	const char *req;
 } p_argv;
 
 
 //Thread method attending client data requests.
 void * srv_worker (void * th_argv);
-int srv_worker_helper (p_argv *arguments, const char * req);
+// int srv_worker_helper (p_argv *arguments, const char * req);
+// void* srv_worker_helper(void *th_argv);
+int srv_worker_helper(void *th_argv);
 
 
 
@@ -72,7 +75,7 @@ void * stat_worker (void * th_argv);
 int stat_worker_helper (p_argv *arguments, char * req);
 
 //Dispatcher thread method distributing clients among the pool server threads.
-void * srv_attached_dispatcher (void * th_argv);
+// void * srv_attached_dispatcher (void * th_argv);
 
 //Dispatcher thread method distributing clients among the pool of metadata server threads.
 void * dispatcher (void * th_argv);

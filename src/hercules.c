@@ -141,11 +141,11 @@ void * imss_server(void *arg_) {
 	arguments[0].port = (arg.port)++;
 
 	// Deploy a thread distributing incomming clients among all ports.
-	if (pthread_create(&threads[0], NULL, srv_attached_dispatcher, (void *)&arguments[0]) == -1)
-	{
-		perror("HERCULES_ERR_SRVDISPATCHER_DEPLOY");
-		pthread_exit(NULL);
-	}
+	// if (pthread_create(&threads[0], NULL, srv_attached_dispatcher, (void *)&arguments[0]) == -1)
+	// {
+	// 	perror("HERCULES_ERR_SRVDISPATCHER_DEPLOY");
+	// 	pthread_exit(NULL);
+	// }
 
 	// Wait until the buffer size is provided.
 

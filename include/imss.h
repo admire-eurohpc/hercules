@@ -52,6 +52,8 @@ extern int32_t IMSS_DEBUG;
 #define DPRINT(...)
 #endif
 
+#define TAG 0xCAFE
+
 /**
  * Macro to measure the time spend by function_to_call.
  * char*::print_comment: comment to be concatenated to the elapsed time.
@@ -558,6 +560,8 @@ RETURNS:	0 - Resources were released successfully.
 	int32_t imss_comm_cleanup();
 
 	void close_ucx_endpoint(ucp_worker_h worker, ucp_ep_h ep);
+
+	void set_sock_addr(const char *address_str, struct sockaddr_storage *saddr, uint16_t server_port);
 
 #ifdef __cplusplus
 }

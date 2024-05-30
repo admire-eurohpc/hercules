@@ -55,6 +55,7 @@ int IMSS_THREAD_POOL = 1;
 
 int32_t main(int32_t argc, char **argv)
 {
+	// setenv("UCX_TLS", "rc", 1);
 	// Print off a hello world message
 	struct cfg_struct *cfg;
 	// clock_t t;
@@ -382,7 +383,7 @@ int32_t main(int32_t argc, char **argv)
 
 			char request[REQUEST_SIZE];
 			sprintf(request, "%" PRIu32 " GET %s", id, "MAIN!QUERRY");
-			slog_debug("[main] Request - %s, errno=%d:%s", request, errno, strerror(errno));
+			slog_debug("[main] Request - %s", request);
 			if (send(oob_sock, request, REQUEST_SIZE, 0) < 0)
 			{
 				perror("HERCULES_ERR_STAT_HELLO");
@@ -459,6 +460,7 @@ int32_t main(int32_t argc, char **argv)
 					free(imss_info_.ips[i]);
 				free(imss_info_.ips);
 			}
+			// free(imss_info_);
 		}
 
 		if (imss_exists)
@@ -529,9 +531,9 @@ int32_t main(int32_t argc, char **argv)
 	if (args.type == TYPE_DATA_SERVER)
 		region_locks = (pthread_mutex_t *)calloc(args.thread_pool, sizeof(pthread_mutex_t));
 
-	ucp_worker_threads = (ucp_worker_h *)malloc((args.thread_pool + 1) * sizeof(ucp_worker_h));
-	local_addr = (ucp_address_t **)malloc((args.thread_pool + 1) * sizeof(ucp_address_t *));
-	local_addr_len = (size_t *)malloc((args.thread_pool + 1) * sizeof(size_t));
+	ucp_worker_threads = (ucp_worker_h *)malloc((args.thread_pool) * sizeof(ucp_worker_h));
+	local_addr = (ucp_address_t **)malloc((args.thread_pool) * sizeof(ucp_address_t *));
+	local_addr_len = (size_t *)malloc((args.thread_pool) * sizeof(size_t));
 
 	// Execute all threads.
 	for (int32_t i = 0; i < (args.thread_pool + 1); i++)
@@ -561,20 +563,21 @@ int32_t main(int32_t argc, char **argv)
 		}
 		else
 		{
-			ret = init_worker(ucp_context, &ucp_worker_threads[i]);
+			int indx = i - 1;
+			ret = init_worker(ucp_context, &ucp_worker_threads[indx]);
 			if (ret != 0)
 			{
 				return -1;
 			}
 
-			arguments[i].ucp_worker = ucp_worker_threads[i];
+			arguments[i].ucp_worker = ucp_worker_threads[indx];
 
 			// status = ucp_worker_get_address(ucp_worker_threads[i], &local_addr[i], &local_addr_len[i]);
 			ucp_worker_attr_t worker_attr;
 			worker_attr.field_mask = UCP_WORKER_ATTR_FIELD_ADDRESS;
-			status = ucp_worker_query(ucp_worker_threads[i], &worker_attr);
-			local_addr_len[i] = worker_attr.address_length;
-			local_addr[i] = worker_attr.address;
+			status = ucp_worker_query(ucp_worker_threads[indx], &worker_attr);
+			local_addr_len[indx] = worker_attr.address_length;
+			local_addr[indx] = worker_attr.address;
 
 			// Add the reference to the map into the set of thread arguments.
 			arguments[i].map = map;
@@ -588,7 +591,7 @@ int32_t main(int32_t argc, char **argv)
 				if (pthread_create(&threads[i], NULL, srv_worker, (void *)&arguments[i]) == -1)
 				{
 					// Notify thread error deployment.
-					perror("ERRHERCULES__SRVWORKER_DEPLOY");
+					perror("ERR_HERCULES_SRV_WORKER_DEPLOY");
 					return -1;
 				}
 			}
@@ -599,7 +602,7 @@ int32_t main(int32_t argc, char **argv)
 				if (pthread_create(&threads[i], NULL, stat_worker, (void *)&arguments[i]) == -1)
 				{
 					// Notify thread error deployment.
-					perror("ERRIMSS_STATWORKER_DEPLOY");
+					perror("ERR_HERCULES_STAT_WORKER_DEPLOY");
 					return -1;
 				}
 			}
@@ -617,7 +620,7 @@ int32_t main(int32_t argc, char **argv)
 		my_imss.num_storages = num_servers;
 		my_imss.conn_port = bind_port;
 		my_imss.type = 'I'; // extremely important
-		// FILE entity managing the IMSS deployfile.
+		// FILE entity managing the HERCULES deployfile.
 		FILE *svr_nodes;
 
 		if ((svr_nodes = fopen(deployfile, "r+")) == NULL)
@@ -636,7 +639,7 @@ int32_t main(int32_t argc, char **argv)
 			(my_imss.ips)[i] = (char *)calloc(LINE_LENGTH, sizeof(char));
 			size_t l_size = LINE_LENGTH;
 
-			// Save IMSS metadata deployment.
+			// Save HERCULES metadata deployment.
 			n_chars = getline(&((my_imss.ips)[i]), &l_size, svr_nodes);
 
 			// Erase the new line character ('') from the string.
@@ -649,7 +652,7 @@ int32_t main(int32_t argc, char **argv)
 		// Close the file.
 		if (fclose(svr_nodes) != 0)
 		{
-			perror("HERCULES_ERR_DEPLOYFILE_CLOSE");
+			perror("ERR_HERCULES_DEPLOYFILE_CLOSE");
 			return -1;
 		}
 
@@ -658,15 +661,15 @@ int32_t main(int32_t argc, char **argv)
 		// Send the created structure to the metadata server.
 		sprintf(key_plus_size, "%" PRIu32 " SET %lu %s", id, (sizeof(imss_info) + my_imss.num_storages * LINE_LENGTH), my_imss.uri_);
 		// status = ucp_ep_create(ucp_worker, &ep_params, &client_ep);
-		slog_debug("[main] Request - %s, errno=%d:%s", key_plus_size, errno, strerror(errno));
+		slog_debug("[main] Request - %s", key_plus_size);
 		if (send_req(ucp_worker, client_ep, req_addr, req_addr_len, key_plus_size) == 0)
 		{
-			perror("ERRIMSS_RLSIMSS_SENDADDR");
+			perror("ERR_HERCULES_RLSIMSS_SENDADDR");
 			return -1;
 		}
 
 		slog_debug("[SERVER] Creating IMSS_INFO at metadata server. ");
-		// Send the new IMSS metadata structure to the metadata server entity.
+		// Send the new HERCULES metadata structure to the metadata server entity.
 		if (send_dynamic_stream(ucp_worker, client_ep, (char *)&my_imss, IMSS_INFO, attr.worker_uid) == -1)
 			return -1;
 

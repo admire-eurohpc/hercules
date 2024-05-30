@@ -451,15 +451,6 @@ char *convert_path(const char *name)
 	// add the URL to the new path.
 	strcat(new_path, "imss://");
 
-	// fprintf(stderr, "updated path=%s, desplacements=%ld\n", path, desplacements);
-	// if (!strncmp(path, "/", strlen("/")))
-	// {
-	// 	strcat(new_path, "imss:/");
-	// }
-	// else
-	// {
-	// 	strcat(new_path, "imss://");
-	// }
 	// add the path to the new_path, which has the URL prefix.
 	if (desplacements < len)
 	{
@@ -472,16 +463,10 @@ char *convert_path(const char *name)
 
 __attribute__((constructor)) void imss_posix_init(void)
 {
+	// setenv("UCX_TLS", "rc", 1);
 	errno = 0;
-	// double init_time = 0.0, finish_time = 0.0;
-	// double time_taken = 0.0;
-	// init_time = clock();
-	// time(&init_time);
-
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
-
-	// double begin = (tv.tv_sec) * 1000 + (tv.tv_usec) / 1000;
 
 	map_fd = map_fd_create();
 
@@ -504,7 +489,7 @@ __attribute__((constructor)) void imss_posix_init(void)
 	{
 		exit(EXIT_FAILURE);
 	}
-	
+
 	IMSS_DATA_BSIZE = IMSS_BLKSIZE * KB; // block size in bytes.
 	// Hercules init -- Attached deploy
 	if (DEPLOYMENT == 1)
@@ -517,9 +502,6 @@ __attribute__((constructor)) void imss_posix_init(void)
 		}
 	}
 
-	// fprintf(stderr, "[%d] ************ Calling constructor, HERCULES_PATH=%s, pid=%d, init=%d ************\n", rank, HERCULES_PATH, getpid(), init);
-
-	// sprintf(log_path, "%s/client.%02d-%02d.%d", HERCULES_PATH, tm.tm_hour, tm.tm_min, rank); // originial.
 	// log init.
 	time_t t = time(NULL);
 	struct tm tm = *localtime(&t);
@@ -535,7 +517,7 @@ __attribute__((constructor)) void imss_posix_init(void)
 	slog_debug(" -- HERCULES_HOSTFILE: %s", IMSS_HOSTFILE);
 	slog_debug(" -- HERCULES_N_SERVERS: %d", N_SERVERS);
 	slog_debug(" -- HERCULES_SRV_PORT: %d", IMSS_SRV_PORT);
-	slog_debug(" -- HERCULES_BUFFSIZE: %ld", IMSS_BUFFSIZE);
+	slog_debug(" -- HERCULES_BUFFSIZE: %ld GB", IMSS_BUFFSIZE);
 	slog_debug(" -- META_HOSTFILE: %s", META_HOSTFILE);
 	slog_debug(" -- HERCULES_META_PORT: %d", METADATA_PORT);
 	slog_debug(" -- HERCULES_META_SERVERS: %d", N_META_SERVERS);
@@ -560,6 +542,8 @@ __attribute__((constructor)) void imss_posix_init(void)
 		// return;
 		exit(1);
 	}
+
+	// exit(1);
 
 	// if (DEPLOYMENT == 2 && release == 1)
 	if (DEPLOYMENT == 2)
@@ -2493,7 +2477,7 @@ ssize_t generalWrite(const char *pathname, int fd, const void *buf, size_t size,
 		slog_debug("current size=%ld", ds_stat_n.st_size);
 
 		// imss_getattr(pathname, &ds_stat_n);
-		//if (ret < 0)
+		// if (ret < 0)
 		if (fd_lkup == -1)
 		{
 			// errno = -ret;
@@ -3440,7 +3424,7 @@ ssize_t pread(int fd, void *buf, size_t count, off_t offset)
 		// }
 		// else
 		{
-			//ret = imss_read(pathname, buf, count, offset);
+			// ret = imss_read(pathname, buf, count, offset);
 			ret = imss_sread(pathname, buf, count, offset);
 			// The file offset is not changed.
 		}

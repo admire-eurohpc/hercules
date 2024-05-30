@@ -70,8 +70,9 @@ int init_worker(ucp_context_h ucp_context, ucp_worker_h *ucp_worker)
 	memset(&worker_params, 0, sizeof(worker_params));
 
 	worker_params.field_mask = UCP_WORKER_PARAM_FIELD_THREAD_MODE;
-	worker_params.thread_mode = UCS_THREAD_MODE_MULTI;
+	// worker_params.thread_mode = UCS_THREAD_MODE_MULTI;
 	// worker_params.thread_mode = UCS_THREAD_MODE_SERIALIZED;
+	worker_params.thread_mode = UCS_THREAD_MODE_SINGLE;
 
 	status = ucp_worker_create(ucp_context, &worker_params, ucp_worker);
 	if (status != UCS_OK)
@@ -83,6 +84,27 @@ int init_worker(ucp_context_h ucp_context, ucp_worker_h *ucp_worker)
 	}
 
 	// slog_debug("[COMM] Inicializated worker result: %d", ret);
+	return ret;
+}
+
+int init_worker_ori(ucp_context_h ucp_context, ucp_worker_h *ucp_worker)
+{
+	ucp_worker_params_t worker_params;
+	ucs_status_t status;
+	int ret = 0;
+
+	memset(&worker_params, 0, sizeof(worker_params));
+
+	worker_params.field_mask = UCP_WORKER_PARAM_FIELD_THREAD_MODE;
+	worker_params.thread_mode = UCS_THREAD_MODE_SINGLE;
+
+	status = ucp_worker_create(ucp_context, &worker_params, ucp_worker);
+	if (status != UCS_OK)
+	{
+		fprintf(stderr, "failed to ucp_worker_create (%s)\n", ucs_status_string(status));
+		ret = -1;
+	}
+
 	return ret;
 }
 
@@ -115,11 +137,13 @@ int init_context(ucp_context_h *ucp_context, ucp_config_t *config, ucp_worker_h 
 							UCP_PARAM_FIELD_NAME;
 	ucp_params.features = UCP_FEATURE_TAG;
 	ucp_params.features |= UCP_FEATURE_WAKEUP;
+	// ucp_params.features |= UCP_FEATURE_RMA;
 	ucp_params.request_size = sizeof(struct ucx_context);
 	ucp_params.request_init = request_init;
 	ucp_params.name = "hercules";
-	ucp_params.mt_workers_shared = UCS_THREAD_MODE_SERIALIZED;
-	// ucp_params.mt_workers_shared = UCS_THREAD_MODE_SINGLE;
+	// ucp_params.mt_workers_shared = UCS_THREAD_MODE_MULTI;
+	// ucp_params.mt_workers_shared = UCS_THREAD_MODE_SERIALIZED;
+	ucp_params.mt_workers_shared = UCS_THREAD_MODE_SINGLE;
 	slog_info("Before ucp_init");
 	status = ucp_init(&ucp_params, config, ucp_context);
 	// if(errno != 0) {
@@ -153,6 +177,54 @@ int init_context(ucp_context_h *ucp_context, ucp_config_t *config, ucp_worker_h 
 	// slog_info("After ucp_mem_alloc for recv buffer");
 
 	// slog_debug("[COMM] Inicializated context result: %d", ret);
+	return ret;
+
+err_cleanup:
+	ucp_cleanup(*ucp_context);
+err:
+	return ret;
+}
+
+int init_context_ori(ucp_context_h *ucp_context, ucp_worker_h *ucp_worker, send_recv_type_t send_recv_type)
+{
+	/* UCP objects */
+	ucp_params_t ucp_params;
+	ucs_status_t status;
+	int ret = 0;
+
+	memset(&ucp_params, 0, sizeof(ucp_params));
+
+	/* UCP initialization */
+	ucp_params.field_mask = UCP_PARAM_FIELD_FEATURES | UCP_PARAM_FIELD_NAME;
+	ucp_params.name = "client_server";
+
+	if (send_recv_type == CLIENT_SERVER_SEND_RECV_STREAM)
+	{
+		ucp_params.features = UCP_FEATURE_STREAM;
+	}
+	else if (send_recv_type == CLIENT_SERVER_SEND_RECV_TAG)
+	{
+		ucp_params.features = UCP_FEATURE_TAG;
+	}
+	else
+	{
+		ucp_params.features = UCP_FEATURE_AM;
+	}
+
+	status = ucp_init(&ucp_params, NULL, ucp_context);
+	if (status != UCS_OK)
+	{
+		fprintf(stderr, "failed to ucp_init (%s)\n", ucs_status_string(status));
+		ret = -1;
+		goto err;
+	}
+
+	ret = init_worker_ori(*ucp_context, ucp_worker);
+	if (ret != 0)
+	{
+		goto err_cleanup;
+	}
+
 	return ret;
 
 err_cleanup:
@@ -209,7 +281,7 @@ size_t send_data(ucp_worker_h ucp_worker, ucp_ep_h ep, const void *msg, size_t m
  */
 size_t send_req(ucp_worker_h ucp_worker, ucp_ep_h ep, ucp_address_t *addr, size_t addr_len, char *req)
 {
-	
+
 	ucs_status_t status;
 	struct ucx_context *request;
 	size_t msg_len;
@@ -266,18 +338,45 @@ size_t send_req(ucp_worker_h ucp_worker, ucp_ep_h ep, ucp_address_t *addr, size_
 
 size_t get_recv_data_length(ucp_worker_h ucp_worker, uint64_t dest)
 {
-	//pthread_mutex_lock(&lock_ucx_comm);
+	// pthread_mutex_lock(&lock_ucx_comm);
 
 	ucp_tag_recv_info_t info_tag;
 	ucp_tag_message_h msg_tag;
 	// async = 1;
-	do
+	// do
+	// {
+	// 	/* Progressing before probe to update the state */
+	// 	ucp_worker_progress(ucp_worker);
+	// 	/* Probing incoming events in non-block mode */
+	// 	msg_tag = ucp_tag_probe_nb(ucp_worker, dest, tag_mask, 0, &info_tag);
+	// } while (msg_tag == NULL);
+
+	ucs_status_t status;
+	/* Receive test string from server */
+	for (;;)
 	{
-		/* Progressing before probe to update the state */
-		ucp_worker_progress(ucp_worker);
 		/* Probing incoming events in non-block mode */
 		msg_tag = ucp_tag_probe_nb(ucp_worker, dest, tag_mask, 0, &info_tag);
-	} while (msg_tag == NULL);
+		if (msg_tag != NULL)
+		{
+			/* Message arrived */
+			break;
+		}
+		else if (ucp_worker_progress(ucp_worker))
+		{
+			/* Some events were polled; try again without going to sleep */
+			continue;
+		}
+		/* If we got here, ucp_worker_progress() returned 0, so we can sleep.
+		 * Following blocked methods used to polling internal file descriptor
+		 * to make CPU idle and don't spin loop
+		 */
+		// if (ucp_test_mode == TEST_MODE_WAIT)
+		{
+			/* Polling incoming events*/
+			status = ucp_worker_wait(ucp_worker);
+		}
+	}
 
 	// pthread_mutex_unlock(&lock_ucx_comm);
 
@@ -558,7 +657,9 @@ void recv_handler(void *request, ucs_status_t status,
  */
 void send_cb(void *request, ucs_status_t status, void *user_data)
 {
+	fprintf(stderr, "Calling %s\n", __func__);
 	common_cb(user_data, "send_cb");
+	fprintf(stderr, "Ending %s\n", __func__);
 }
 
 /**
@@ -591,7 +692,8 @@ void err_cb_server(void *arg, ucp_ep_h ep, ucs_status_t status)
 
 void common_cb(void *user_data, const char *type_str)
 {
-	send_req_t *ctx;
+	// send_req_t *ctx;
+	test_req_t *ctx;
 
 	if (user_data == NULL)
 	{
@@ -599,10 +701,10 @@ void common_cb(void *user_data, const char *type_str)
 		return;
 	}
 
-	ctx = (send_req_t *)user_data;
+	ctx = (test_req_t *)user_data;
 	ctx->complete = 1;
-	if (ctx->buffer)
-		free(ctx->buffer);
+	// if (ctx->buffer)
+	// 	free(ctx->buffer);
 }
 
 void flush_cb(void *request, ucs_status_t status)
@@ -686,7 +788,10 @@ ucs_status_t client_create_ep(ucp_worker_h worker, ucp_ep_h *ep, ucp_address_t *
 	return status;
 }
 
-// Method sending a data structure with dynamic memory allocation fields.
+/**
+ * @brief Method sending a data structure with dynamic memory allocation fields.
+ * @return msg_size on success, -1 in case of error.
+*/
 int32_t send_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, void *data_struct, int32_t data_type, uint64_t from)
 {
 	// Buffer containing the structures' information.
@@ -949,7 +1054,7 @@ int32_t recv_dynamic_stream_opt(ucp_worker_h ucp_worker, ucp_ep_h ep, void **dat
 		return -1;
 	}
 
-	if(*data_struct == NULL)
+	if (*data_struct == NULL)
 		*data_struct = (void *)malloc(length * sizeof(imss_info));
 
 	char *msg_data = (char *)result;
@@ -1107,16 +1212,29 @@ void ep_close(ucp_worker_h ucp_worker, ucp_ep_h ep, uint64_t flags)
 		} while (status == UCS_INPROGRESS);
 		ucp_request_free(close_req);
 	}
-	else
+	else if (UCS_PTR_STATUS(close_req) != UCS_OK)
 	{
-		status = UCS_PTR_STATUS(close_req);
-	}
-
-	if (status != UCS_OK)
-	{
-		slog_error("Failed to close ep %p", (void *)ep);
 		fprintf(stderr, "failed to close ep %p\n", (void *)ep);
 	}
+	// if (UCS_PTR_IS_PTR(close_req))
+	// {
+	// 	do
+	// 	{
+	// 		ucp_worker_progress(ucp_worker);
+	// 		status = ucp_request_check_status(close_req);
+	// 	} while (status == UCS_INPROGRESS);
+	// 	ucp_request_free(close_req);
+	// }
+	// else
+	// {
+	// 	status = UCS_PTR_STATUS(close_req);
+	// }
+
+	// if (status != UCS_OK)
+	// {
+	// 	slog_error("Failed to close ep %p", (void *)ep);
+	// 	fprintf(stderr, "failed to close ep %p\n", (void *)ep);
+	// }
 }
 
 ucs_status_t ep_flush(ucp_ep_h ep, ucp_worker_h worker)
@@ -1293,4 +1411,366 @@ ucs_status_t worker_flush(ucp_worker_h worker)
 	ucp_worker_fence(worker);
 	ucp_worker_flush_nb(worker, 0, flush_cb);
 	return UCS_OK;
+}
+
+// UCX Communcation Test
+inline int generate_test_string(char *str, int size)
+{
+	char *tmp_str;
+	int i;
+
+	tmp_str = (char *)calloc(1, size);
+
+	for (i = 0; i < (size - 1); ++i)
+	{
+		tmp_str[i] = 'A' + (i % 26);
+	}
+
+	memcpy(str, tmp_str, size);
+
+	free(tmp_str);
+	return 0;
+}
+
+int fill_buffer(ucp_dt_iov_t *iov)
+{
+	int ret = 0;
+	size_t idx;
+
+	for (idx = 0; idx < iov_cnt; idx++)
+	{
+		ret = generate_test_string((char *)iov[idx].buffer, iov[idx].length);
+		if (ret != 0)
+		{
+			break;
+		}
+	}
+	CHKERR_ACTION(ret != 0, "generate test string", return -1;);
+	return 0;
+}
+
+void buffer_free(ucp_dt_iov_t *iov)
+{
+	size_t idx;
+
+	for (idx = 0; idx < iov_cnt; idx++)
+	{
+		free(iov[idx].buffer);
+	}
+}
+
+int buffer_malloc(ucp_dt_iov_t *iov)
+{
+	size_t idx;
+
+	for (idx = 0; idx < iov_cnt; idx++)
+	{
+		iov[idx].length = test_string_length;
+		iov[idx].buffer = malloc(iov[idx].length);
+		if (iov[idx].buffer == NULL)
+		{
+			free(iov);
+			return -1;
+		}
+	}
+
+	return 0;
+}
+
+int fill_request_param(ucp_dt_iov_t *iov, int is_client,
+					   void **msg, size_t *msg_length,
+					   test_req_t *ctx, ucp_request_param_t *param)
+{
+	fprintf(stderr, "filling request param\n");
+	CHKERR_ACTION(buffer_malloc(iov) != 0, "allocate memory", return -1;);
+
+	if (is_client && (fill_buffer(iov) != 0))
+	{
+		free(iov);
+		return -1;
+	}
+
+	*msg = (iov_cnt == 1) ? iov[0].buffer : iov;
+	*msg_length = (iov_cnt == 1) ? iov[0].length : iov_cnt;
+
+	ctx->complete = 0;
+	param->op_attr_mask = UCP_OP_ATTR_FIELD_CALLBACK |
+						  UCP_OP_ATTR_FIELD_DATATYPE |
+						  UCP_OP_ATTR_FIELD_USER_DATA;
+	param->datatype = (iov_cnt == 1) ? ucp_dt_make_contig(1) : UCP_DATATYPE_IOV;
+	param->user_data = ctx;
+
+	return 0;
+}
+
+void tag_recv_cb(void *request, ucs_status_t status, const ucp_tag_recv_info_t *info, void *user_data)
+{
+	fprintf(stderr, "Calling %s\n", __func__);
+	common_cb(user_data, "tag_recv_cb");
+}
+
+ucs_status_t request_wait_ori(ucp_worker_h ucp_worker, void *request, test_req_t *ctx)
+{
+	ucs_status_t status;
+
+	/* if operation was completed immediately */
+	if (request == NULL)
+	{
+		return UCS_OK;
+	}
+
+	if (UCS_PTR_IS_ERR(request))
+	{
+		return UCS_PTR_STATUS(request);
+	}
+	fprintf(stderr, "Waiting to complete the operation, ctx->complete=%d\n", ctx->complete);
+	while (ctx->complete == 0)
+	{
+		ucp_worker_progress(ucp_worker);
+	}
+	fprintf(stderr, "Operationg completed, ctx->complete=%d\n", ctx->complete);
+	status = ucp_request_check_status(request);
+	fprintf(stderr, "Request status=%s\n", ucs_status_string(status));
+
+	ucp_request_free(request);
+
+	return status;
+}
+
+void print_iov(const ucp_dt_iov_t *iov)
+{
+	char *msg = (char *)alloca(test_string_length);
+	size_t idx;
+
+	for (idx = 0; idx < iov_cnt; idx++)
+	{
+		/* In case of Non-System memory */
+		memcpy(msg, iov[idx].buffer, test_string_length);
+		printf("%s.\n", msg);
+	}
+}
+
+void print_result(int is_server, const ucp_dt_iov_t *iov, int current_iter)
+{
+	if (is_server)
+	{
+		printf("Server: iteration #%d\n", (current_iter + 1));
+		printf("UCX data message was received\n");
+		printf("\n\n----- UCP TEST SUCCESS -------\n\n");
+	}
+	else
+	{
+		printf("Client: iteration #%d\n", (current_iter + 1));
+		printf("\n\n------------------------------\n\n");
+	}
+
+	print_iov(iov);
+
+	printf("\n\n------------------------------\n\n");
+}
+
+int request_finalize_ori(ucp_worker_h ucp_worker, void *request,
+						 test_req_t *ctx, int is_server, ucp_dt_iov_t *iov,
+						 int current_iter)
+{
+	int ret = 0;
+	ucs_status_t status;
+
+	status = request_wait_ori(ucp_worker, request, ctx);
+	if (status != UCS_OK)
+	{
+		fprintf(stderr, "unable to %s UCX message (%s)\n",
+				is_server ? "receive" : "send", ucs_status_string(status));
+		ret = -1;
+		goto release_iov;
+	}
+	/* Print the output of the first, last and every PRINT_INTERVAL iteration */
+	if ((current_iter == 0) || (current_iter == (num_iterations - 1)) ||
+		!((current_iter + 1) % (PRINT_INTERVAL)))
+	{
+		fprintf(stderr, "Printing output\n");
+		print_result(is_server, iov, current_iter);
+	}
+
+release_iov:
+	buffer_free(iov);
+	return ret;
+}
+
+int send_recv_tag(ucp_worker_h ucp_worker, ucp_ep_h ep, int is_server,
+				  int current_iter)
+{
+	ucp_dt_iov_t *iov = (ucp_dt_iov_t *)alloca(iov_cnt * sizeof(ucp_dt_iov_t));
+	ucp_request_param_t param;
+	void *request;
+	size_t msg_length;
+	void *msg;
+	test_req_t ctx;
+
+	memset(iov, 0, iov_cnt * sizeof(*iov));
+
+	if (fill_request_param(iov, !is_server, &msg, &msg_length, &ctx, &param) != 0)
+	{
+		return -1;
+	}
+
+	if (!is_server)
+	{
+		/* Client sends a message to the server using the Tag-Matching API */
+		fprintf(stderr, "Client is sending a message\n");
+		param.cb.send = send_cb;
+		request = ucp_tag_send_nbx(ep, msg, msg_length, TAG, &param);
+	}
+	else
+	{
+		fprintf(stderr, "Server is receiving a message\n");
+		/* Server receives a message from the client using the Tag-Matching API */
+		param.cb.recv = tag_recv_cb;
+		request = ucp_tag_recv_nbx(ucp_worker, msg, msg_length, TAG, 0, &param);
+	}
+	fprintf(stderr, "Message %s\n", is_server ? "recv" : "send");
+
+	// return request_finalize_ori(ucp_worker, (test_req_t *)request, &ctx, is_server, iov, current_iter);
+	return request_finalize_ori(ucp_worker, request, &ctx, is_server, iov, current_iter);
+}
+
+int client_server_communication(ucp_worker_h worker, ucp_ep_h ep,
+								send_recv_type_t send_recv_type,
+								int is_server, int current_iter)
+{
+	int ret;
+
+	switch (send_recv_type)
+	{
+	// case CLIENT_SERVER_SEND_RECV_STREAM:
+	//     /* Client-Server communication via Stream API */
+	//     ret = send_recv_stream(worker, ep, is_server, current_iter);
+	//     break;
+	case CLIENT_SERVER_SEND_RECV_TAG:
+		/* Client-Server communication via Tag-Matching API */
+		ret = send_recv_tag(worker, ep, is_server, current_iter);
+		break;
+	// case CLIENT_SERVER_SEND_RECV_AM:
+	//     /* Client-Server communication via AM API. */
+	//     ret = send_recv_am(worker, ep, is_server, current_iter);
+	//     break;
+	default:
+		fprintf(stderr, "unknown send-recv type %d\n", send_recv_type);
+		return -1;
+	}
+
+	return ret;
+}
+
+ucs_status_t ucp_am_data_cb(void *arg, const void *header, size_t header_length,
+							void *data, size_t length,
+							const ucp_am_recv_param_t *param)
+{
+	ucp_dt_iov_t *iov;
+	size_t idx;
+	size_t offset;
+
+	if (length != iov_cnt * test_string_length)
+	{
+		fprintf(stderr, "received wrong data length %ld (expected %ld)",
+				length, iov_cnt * test_string_length);
+		return UCS_OK;
+	}
+
+	if (header_length != 0)
+	{
+		fprintf(stderr, "received unexpected header, length %ld", header_length);
+	}
+
+	am_data_desc.complete = 1;
+
+	if (param->recv_attr & UCP_AM_RECV_ATTR_FLAG_RNDV)
+	{
+		/* Rendezvous request arrived, data contains an internal UCX descriptor,
+		 * which has to be passed to ucp_am_recv_data_nbx function to confirm
+		 * data transfer.
+		 */
+		am_data_desc.is_rndv = 1;
+		am_data_desc.desc = data;
+		return UCS_INPROGRESS;
+	}
+
+	/* Message delivered with eager protocol, data should be available
+	 * immediately
+	 */
+	am_data_desc.is_rndv = 0;
+
+	iov = (ucp_dt_iov_t *)am_data_desc.recv_buf;
+	offset = 0;
+	for (idx = 0; idx < iov_cnt; idx++)
+	{
+		memcpy(iov[idx].buffer, UCS_PTR_BYTE_OFFSET(data, offset),
+			   iov[idx].length);
+		offset += iov[idx].length;
+	}
+
+	return UCS_OK;
+}
+
+ucs_status_t register_am_recv_callback(ucp_worker_h worker)
+{
+	ucp_am_handler_param_t param;
+
+	param.field_mask = UCP_AM_HANDLER_PARAM_FIELD_ID |
+					   UCP_AM_HANDLER_PARAM_FIELD_CB |
+					   UCP_AM_HANDLER_PARAM_FIELD_ARG;
+	param.id = TEST_AM_ID;
+	param.cb = ucp_am_data_cb;
+	param.arg = worker; /* not used in our callback */
+
+	return ucp_worker_set_am_recv_handler(worker, &param);
+}
+
+void err_cb(void *arg, ucp_ep_h ep, ucs_status_t status)
+{
+	fprintf(stderr, "error handling callback was invoked with status %d (%s)\n",
+			status, ucs_status_string(status));
+	connection_closed = 1;
+}
+
+int client_server_do_work(ucp_worker_h ucp_worker, ucp_ep_h ep, send_recv_type_t send_recv_type, int is_server)
+{
+	int i, ret = 0;
+	ucs_status_t status;
+
+	connection_closed = 0;
+
+	for (i = 0; i < num_iterations; i++)
+	{
+		ret = client_server_communication(ucp_worker, ep, send_recv_type,
+										  is_server, i);
+		if (ret != 0)
+		{
+			fprintf(stderr, "%s failed on iteration #%d\n",
+					(is_server ? "server" : "client"), i + 1);
+			goto out;
+		}
+	}
+	fprintf(stderr, "%d/%d messages sent\n", i, num_iterations);
+
+	/* FIN message in reverse direction to acknowledge delivery */
+	ret = client_server_communication(ucp_worker, ep, send_recv_type,
+									  !is_server, i + 1);
+	if (ret != 0)
+	{
+		fprintf(stderr, "%s failed on FIN message\n",
+				(is_server ? "server" : "client"));
+		goto out;
+	}
+
+	fprintf(stderr, "%s FIN message\n", is_server ? "sent" : "received");
+
+	/* Server waits until the client closed the connection after receiving FIN */
+	// while (is_server && !connection_closed)
+	// {
+	// 	ucp_worker_progress(ucp_worker);
+	// }
+
+out:
+	return ret;
 }

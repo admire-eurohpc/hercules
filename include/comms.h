@@ -1,19 +1,18 @@
 #ifndef COMMS
 #define COMMS
 
-#define IMSS_INFO	 0
+#define IMSS_INFO 0
 #define DATASET_INFO 1
-#define STRING       2
-#define BUFFER       4
-#define MSG          5
+#define STRING 2
+#define BUFFER 4
+#define MSG 5
 
-#define REQUEST_SIZE    1024
-#define RESPONSE_SIZE   1024
-#define MODE_SIZE        4
-#define BUFFER_SIZE     4*1024*1024
+#define REQUEST_SIZE 1024
+#define RESPONSE_SIZE 1024
+#define MODE_SIZE 4
+#define BUFFER_SIZE 4 * 1024 * 1024
 
-#define CLOSE_EP       9999999
-
+#define CLOSE_EP 9999999
 
 #include "queue.h"
 #include <arpa/inet.h> /* inet_addr */
@@ -28,117 +27,119 @@
 // to manage logs.
 #include "slog.h"
 
-extern int32_t  IMSS_DEBUG;
+extern int32_t IMSS_DEBUG;
 
-#define IP_STRING_LEN          50
-#define PORT_STRING_LEN        8
+#define IP_STRING_LEN 50
+#define PORT_STRING_LEN 8
 
-static const ucp_tag_t tag_req      = 0x1337a880u;
-static const ucp_tag_t tag_data     = 0x2337a880u;
-static const ucp_tag_t tag_reply     = 0x3337a880u;
+static const ucp_tag_t tag_req = 0x1337a880u;
+static const ucp_tag_t tag_data = 0x2337a880u;
+static const ucp_tag_t tag_reply = 0x3337a880u;
 static const ucp_tag_t tag_mask = UINT64_MAX;
 
 /**
-* Macro to measure the time spend by function_to_call.
-* char*::print_comment: comment to be concatenated to the elapsed time.
-*/
+ * Macro to measure the time spend by function_to_call.
+ * char*::print_comment: comment to be concatenated to the elapsed time.
+ */
 
-
-
-typedef enum {
-    CLIENT_SERVER_SEND_RECV_STREAM  = UCS_BIT(0),
-    CLIENT_SERVER_SEND_RECV_TAG     = UCS_BIT(1),
-    CLIENT_SERVER_SEND_RECV_AM      = UCS_BIT(2),
+typedef enum
+{
+    CLIENT_SERVER_SEND_RECV_STREAM = UCS_BIT(0),
+    CLIENT_SERVER_SEND_RECV_TAG = UCS_BIT(1),
+    CLIENT_SERVER_SEND_RECV_AM = UCS_BIT(2),
     CLIENT_SERVER_SEND_RECV_DEFAULT = CLIENT_SERVER_SEND_RECV_STREAM
 } send_recv_type_t;
-
 
 /**
  * Server's application context to be used in the user's connection request
  * callback.
  * It holds the server's listener and the handle to an incoming connection request.
  */
-typedef struct ucx_server_ctx {
-	int num_conn;
-	StsHeader *conn_request;
-    ucp_listener_h              listener;
-
+// typedef struct ucx_server_ctx {
+// 	int num_conn;
+// 	StsHeader *conn_request;
+//     ucp_listener_h              listener;
+// } ucx_server_ctx_t;
+typedef struct ucx_server_ctx
+{
+    volatile ucp_conn_request_h conn_request;
+    ucp_listener_h listener;
 } ucx_server_ctx_t;
 
 /**
  * Stream request context. Holds a value to indicate whether or not the
  * request is completed.
  */
-typedef struct send_req {
+typedef struct send_req
+{
     int complete;
-    void * buffer;
+    void *buffer;
 } send_req_t;
 
 /**
  * Used in ep_close() to finalize write requests.
  * Structure used to store requests that need to be finalized.
  */
-typedef struct ucx_async {
-    send_req_t *    request;
-    send_req_t      ctx;
-    char *          tmp_msg;
+typedef struct ucx_async
+{
+    send_req_t *request;
+    send_req_t ctx;
+    char *tmp_msg;
 } ucx_async_t;
 
-
-typedef struct msg {
-     size_t size;
-     void * data;
+typedef struct msg
+{
+    size_t size;
+    void *data;
 } msg_t;
 
 typedef struct msg_req
 {
-	uint64_t addr_len;
+    uint64_t addr_len;
     char request[REQUEST_SIZE];
 } msg_req_t;
 
-
-
-struct ucx_context {
-	int             completed;
+struct ucx_context
+{
+    int completed;
 };
-
 
 typedef struct worker_info
 {
-	uint64_t              worker_uid;
-	char		server_type;
+    uint64_t worker_uid;
+    char server_type;
 } worker_info_t;
 
-#define CHKERR_ACTION(_cond, _msg, _action) \
-    do { \
-        if (_cond) { \
+#define CHKERR_ACTION(_cond, _msg, _action)          \
+    do                                               \
+    {                                                \
+        if (_cond)                                   \
+        {                                            \
             fprintf(stderr, "Failed to %s\n", _msg); \
-            _action; \
-        } \
+            _action;                                 \
+        }                                            \
     } while (0)
-
 
 #define CHKERR_JUMP(_cond, _msg, _label) \
     CHKERR_ACTION(_cond, _msg, goto _label)
 
-
-#define CHKERR_JUMP_RETVAL(_cond, _msg, _label, _retval) \
-    do { \
-        if (_cond) { \
+#define CHKERR_JUMP_RETVAL(_cond, _msg, _label, _retval)                       \
+    do                                                                         \
+    {                                                                          \
+        if (_cond)                                                             \
+        {                                                                      \
             fprintf(stderr, "Failed to %s, return value %d\n", _msg, _retval); \
-            goto _label; \
-        } \
+            goto _label;                                                       \
+        }                                                                      \
     } while (0)
 
-
-
 int init_worker(ucp_context_h ucp_context, ucp_worker_h *ucp_worker);
-int init_context(ucp_context_h *ucp_context,  ucp_config_t *config, ucp_worker_h *ucp_worker, send_recv_type_t send_recv_type);
+int init_context(ucp_context_h *ucp_context, ucp_config_t *config, ucp_worker_h *ucp_worker, send_recv_type_t send_recv_type);
 int request_finalize(ucp_worker_h ucp_worker, send_req_t *request, send_req_t *ctx);
-size_t send_req(ucp_worker_h ucp_worker, ucp_ep_h ep, ucp_address_t *addr, size_t addr_len, char * request);
+size_t send_req(ucp_worker_h ucp_worker, ucp_ep_h ep, ucp_address_t *addr, size_t addr_len, char *request);
 size_t send_data(ucp_worker_h ucp_worker, ucp_ep_h ep, const void *msg, size_t msg_len, uint64_t from);
-size_t get_recv_data_length(ucp_worker_h ucp_worker,  uint64_t dest);
-size_t recv_data(ucp_worker_h ucp_worker, ucp_ep_h ep, void *msg, size_t msg_length,  uint64_t dest, int async);
+size_t get_recv_data_length(ucp_worker_h ucp_worker, uint64_t dest);
+size_t recv_data(ucp_worker_h ucp_worker, ucp_ep_h ep, void *msg, size_t msg_length, uint64_t dest, int async);
 size_t recv_data_opt(ucp_worker_h ucp_worker, ucp_ep_h ep, void **msg, size_t msg_length, uint64_t dest, int async);
 size_t recv_req(ucp_worker_h ucp_worker, ucp_ep_h ep, char *msg);
 ucs_status_t request_wait(ucp_worker_h ucp_worker, void *request, send_req_t *ctx);
@@ -158,16 +159,18 @@ ucs_status_t ep_flush(ucp_ep_h ep, ucp_worker_h worker);
 ucs_status_t client_create_ep(ucp_worker_h worker, ucp_ep_h *ep, ucp_address_t *peer_addr);
 void ep_close(ucp_worker_h ucp_worker, ucp_ep_h ep, uint64_t flags);
 
-
-//Method sending a data structure with dynamic memory allocation fields.
-int32_t send_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, void * data_struct, int32_t data_type, uint64_t from);
+/**
+ * @brief Method sending a data structure with dynamic memory allocation fields.
+ * @return msg_size on success, -1 in case of error.
+*/
+int32_t send_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, void *data_struct, int32_t data_type, uint64_t from);
 
 /**
  * @brief  Method retrieving a serialized dynamic data structure.
  * @return bytes of the message received or -1 on error.
  */
-int32_t recv_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, void * data_struct, int32_t data_type, uint64_t dest, size_t length);
-int32_t recv_dynamic_stream_opt(ucp_worker_h ucp_worker, ucp_ep_h ep, void **data_struct, int32_t data_type, uint64_t dest, size_t length);  
+int32_t recv_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, void *data_struct, int32_t data_type, uint64_t dest, size_t length);
+int32_t recv_dynamic_stream_opt(ucp_worker_h ucp_worker, ucp_ep_h ep, void **data_struct, int32_t data_type, uint64_t dest, size_t length);
 
 int connect_common(const char *server, uint64_t server_port, sa_family_t af);
 
@@ -184,4 +187,48 @@ ucs_status_t flush_ep(ucp_worker_h worker, ucp_ep_h ep);
 ucs_status_t ucp_mem_alloc(ucp_context_h ucp_context, size_t length, void **address_p);
 
 ucs_status_t worker_flush(ucp_worker_h worker);
+
+// For UCX Communication test.
+
+#define TEST_AM_ID 0
+#define PRINT_INTERVAL 2000
+
+static long test_string_length = 16;
+static long iov_cnt = 1;
+static int connection_closed = 1;
+static	int num_iterations = 1;
+
+
+typedef struct test_req
+{
+    int complete;
+} test_req_t;
+
+static struct
+{
+    volatile int complete;
+    int is_rndv;
+    void *desc;
+    void *recv_buf;
+} am_data_desc = {0, 0, NULL, NULL};
+
+int client_server_do_work(ucp_worker_h ucp_worker, ucp_ep_h ep, send_recv_type_t send_recv_type, int is_server);
+int generate_test_string(char *str, int size);
+int fill_buffer(ucp_dt_iov_t *iov);
+void buffer_free(ucp_dt_iov_t *iov);
+int buffer_malloc(ucp_dt_iov_t *iov);
+int fill_request_param(ucp_dt_iov_t *iov, int is_client, void **msg, size_t *msg_length, test_req_t *ctx, ucp_request_param_t *param);
+void tag_recv_cb(void *request, ucs_status_t status, const ucp_tag_recv_info_t *info, void *user_data);
+ucs_status_t request_wait_ori(ucp_worker_h ucp_worker, void *request, test_req_t *ctx);
+void print_iov(const ucp_dt_iov_t *iov);
+void print_result(int is_server, const ucp_dt_iov_t *iov, int current_iter);
+int request_finalize_ori(ucp_worker_h ucp_worker, test_req_t *request, test_req_t *ctx, int is_server, ucp_dt_iov_t *iov, int current_iter);
+int send_recv_tag(ucp_worker_h ucp_worker, ucp_ep_h ep, int is_server, int current_iter);
+int client_server_communication(ucp_worker_h worker, ucp_ep_h ep, send_recv_type_t send_recv_type, int is_server, int current_iter);
+ucs_status_t ucp_am_data_cb(void *arg, const void *header, size_t header_length, void *data, size_t length, const ucp_am_recv_param_t *param);
+ucs_status_t register_am_recv_callback(ucp_worker_h worker);
+void err_cb(void *arg, ucp_ep_h ep, ucs_status_t status);
+int init_context_ori(ucp_context_h *ucp_context, ucp_worker_h *ucp_worker, send_recv_type_t send_recv_type);
+int init_worker_ori(ucp_context_h ucp_context, ucp_worker_h *ucp_worker);
+
 #endif
