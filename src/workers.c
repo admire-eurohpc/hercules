@@ -169,179 +169,6 @@ err:
 	return ret;
 }
 
-void set_sock_addr_server(const char *address_str, struct sockaddr_storage *saddr, uint16_t server_port)
-{
-	struct sockaddr_in *sa_in;
-	struct sockaddr_in6 *sa_in6;
-
-	/* The server will listen on INADDR_ANY */
-	memset(saddr, 0, sizeof(*saddr));
-
-	switch (AF_INET)
-	{
-	case AF_INET:
-		sa_in = (struct sockaddr_in *)saddr;
-		if (address_str != NULL)
-		{
-			inet_pton(AF_INET, address_str, &sa_in->sin_addr);
-		}
-		else
-		{
-			sa_in->sin_addr.s_addr = INADDR_ANY;
-		}
-		sa_in->sin_family = AF_INET;
-		sa_in->sin_port = htons(server_port);
-		break;
-	case AF_INET6:
-		sa_in6 = (struct sockaddr_in6 *)saddr;
-		if (address_str != NULL)
-		{
-			inet_pton(AF_INET6, address_str, &sa_in6->sin6_addr);
-		}
-		else
-		{
-			sa_in6->sin6_addr = in6addr_any;
-		}
-		sa_in6->sin6_family = AF_INET6;
-		sa_in6->sin6_port = htons(server_port);
-		break;
-	default:
-		fprintf(stderr, "Invalid address family");
-		break;
-	}
-}
-
-static char *sockaddr_get_ip_str(const struct sockaddr_storage *sock_addr,
-								 char *ip_str, size_t max_size)
-{
-	struct sockaddr_in addr_in;
-	struct sockaddr_in6 addr_in6;
-
-	switch (sock_addr->ss_family)
-	{
-	case AF_INET:
-		memcpy(&addr_in, sock_addr, sizeof(struct sockaddr_in));
-		inet_ntop(AF_INET, &addr_in.sin_addr, ip_str, max_size);
-		return ip_str;
-	case AF_INET6:
-		memcpy(&addr_in6, sock_addr, sizeof(struct sockaddr_in6));
-		inet_ntop(AF_INET6, &addr_in6.sin6_addr, ip_str, max_size);
-		return ip_str;
-	default:
-		return NULL;
-	}
-}
-
-static char *sockaddr_get_port_str(const struct sockaddr_storage *sock_addr,
-								   char *port_str, size_t max_size)
-{
-	struct sockaddr_in addr_in;
-	struct sockaddr_in6 addr_in6;
-	char err[] = "Invalid address family";
-
-	switch (sock_addr->ss_family)
-	{
-	case AF_INET:
-		memcpy(&addr_in, sock_addr, sizeof(struct sockaddr_in));
-		snprintf(port_str, max_size, "%d", ntohs(addr_in.sin_port));
-		return port_str;
-	case AF_INET6:
-		memcpy(&addr_in6, sock_addr, sizeof(struct sockaddr_in6));
-		snprintf(port_str, max_size, "%d", ntohs(addr_in6.sin6_port));
-		return port_str;
-	default:
-		return NULL;
-	}
-}
-
-static void server_conn_handle_cb(ucp_conn_request_h conn_request, void *arg)
-{
-	ucx_server_ctx_t *context = (ucx_server_ctx_t *)arg;
-	ucp_conn_request_attr_t attr;
-	char ip_str[IP_STRING_LEN];
-	char port_str[PORT_STRING_LEN];
-	ucs_status_t status;
-
-	attr.field_mask = UCP_CONN_REQUEST_ATTR_FIELD_CLIENT_ADDR;
-	status = ucp_conn_request_query(conn_request, &attr);
-	if (status == UCS_OK)
-	{
-		fprintf(stderr, "Server received a connection request from client at address %s:%s\n",
-				sockaddr_get_ip_str(&attr.client_address, ip_str, sizeof(ip_str)),
-				sockaddr_get_port_str(&attr.client_address, port_str, sizeof(port_str)));
-	}
-	else if (status != UCS_ERR_UNSUPPORTED)
-	{
-		fprintf(stderr, "failed to query the connection request (%s)\n",
-				ucs_status_string(status));
-	}
-
-	if (context->conn_request == NULL)
-	{
-		context->conn_request = conn_request;
-	}
-	else
-	{
-		/* The server is already handling a connection request from a client,
-		 * reject this new one */
-		fprintf(stderr, "Rejecting a connection request. "
-						"Only one client at a time is supported.\n");
-		status = ucp_listener_reject(context->listener, conn_request);
-		if (status != UCS_OK)
-		{
-			fprintf(stderr, "server failed to reject a connection request: (%s)\n",
-					ucs_status_string(status));
-		}
-	}
-}
-
-static ucs_status_t start_server(ucp_worker_h ucp_worker, ucx_server_ctx_t *context, ucp_listener_h *listener_p, const char *address_str, uint16_t server_port)
-{
-	struct sockaddr_storage listen_addr;
-	ucp_listener_params_t params;
-	ucp_listener_attr_t attr;
-	ucs_status_t status;
-	char ip_str[IP_STRING_LEN];
-	char port_str[PORT_STRING_LEN];
-
-	set_sock_addr_server(address_str, &listen_addr, server_port);
-
-	params.field_mask = UCP_LISTENER_PARAM_FIELD_SOCK_ADDR |
-						UCP_LISTENER_PARAM_FIELD_CONN_HANDLER;
-	params.sockaddr.addr = (const struct sockaddr *)&listen_addr;
-	params.sockaddr.addrlen = sizeof(listen_addr);
-	params.conn_handler.cb = server_conn_handle_cb;
-	params.conn_handler.arg = context;
-
-	/* Create a listener on the server side to listen on the given address.*/
-	status = ucp_listener_create(ucp_worker, &params, listener_p);
-	if (status != UCS_OK)
-	{
-		fprintf(stderr, "failed to listen (%s)\n", ucs_status_string(status));
-		goto out;
-	}
-
-	/* Query the created listener to get the port it is listening on. */
-	attr.field_mask = UCP_LISTENER_ATTR_FIELD_SOCKADDR;
-	status = ucp_listener_query(*listener_p, &attr);
-	if (status != UCS_OK)
-	{
-		fprintf(stderr, "failed to query the listener (%s)\n",
-				ucs_status_string(status));
-		ucp_listener_destroy(*listener_p);
-		goto out;
-	}
-
-	fprintf(stderr, "server is listening on IP %s port %s\n",
-			sockaddr_get_ip_str(&attr.sockaddr, ip_str, IP_STRING_LEN),
-			sockaddr_get_port_str(&attr.sockaddr, port_str, PORT_STRING_LEN));
-
-	fprintf(stderr, "Waiting for connection...\n");
-
-out:
-	return status;
-}
-
 // Thread method attending client read-write data requests.
 void *srv_worker(void *th_argv)
 {
@@ -375,6 +202,13 @@ void *srv_worker(void *th_argv)
 	ucp_worker_h ucp_data_worker;
 	ucp_ep_h server_ep;
 	ucs_status_t status;
+	ucp_address_t *peer_addr;
+	size_t peer_addr_len;
+	ucp_request_param_t recv_param;
+	void *request = NULL;
+	// void *msg;
+    // struct msg *msg = NULL;
+	msg_req_t * msg;
 	int ret;
 
 	/* Create a data worker (to be used for data exchange between the server
@@ -390,6 +224,7 @@ void *srv_worker(void *th_argv)
 	context.conn_request = NULL;
 
 	// char server_add[] = "192.168.201.162";
+	// FIX: add dynamic address.
 	char server_add[] = "broadwell-001";
 	start_server(ucp_worker, &context, &context.listener, server_add, arguments->port + 1);
 
@@ -400,13 +235,36 @@ void *srv_worker(void *th_argv)
 		 * If there are multiple clients for which the server's connection request
 		 * callback is invoked, i.e. several clients are trying to connect in
 		 * parallel, the server will handle only the first one and reject the rest */
+		ucp_tag_message_h msg_tag;
+		ucp_tag_recv_info_t info_tag;
 		while (context.conn_request == NULL)
 		{
 			ucp_worker_progress(ucp_worker);
 		}
 
-		fprintf(stderr, "Creating endpoint\n");
+		
+		ucp_tag_probe_nb(ucp_worker, tag_req, tag_mask, 1, &info_tag);
+		
+		msg = (struct msg *)malloc(info_tag.length);
 
+		CHKERR_ACTION(msg == NULL, "allocate memory\n", ret = -1; continue;);
+
+		peer_addr_len = msg->addr_len;
+		peer_addr = (ucp_address_t *)malloc(peer_addr_len);
+
+		if (peer_addr == NULL)
+		{
+			fprintf(stderr, "unable to allocate memory for peer address\n");
+			free(msg);
+			ret = -1;
+			continue;
+		}
+
+		memcpy(peer_addr, msg + 1, peer_addr_len);
+
+		free(msg);
+
+		fprintf(stderr, "Creating endpoint\n");
 		/* Server creates an ep to the client on the data worker.
 		 * This is not the worker the listener was created on.
 		 * The client side should have initiated the connection, leading
@@ -420,13 +278,61 @@ void *srv_worker(void *th_argv)
 			// goto err_listener;
 		}
 		fprintf(stderr, "Endpoint created\n");
+
 		/* The server waits for all the iterations to complete before moving on
 		 * to the next client */
-		ret = client_server_do_work(ucp_data_worker, server_ep, CLIENT_SERVER_SEND_RECV_TAG, 1);
-		// if (ret != 0)
-		// {
-		// 	goto err_ep;
-		// }
+		// ret = client_server_do_work(ucp_data_worker, server_ep, CLIENT_SERVER_SEND_RECV_TAG, 1);
+		//  if (ret != 0)
+		//  {
+		//  	goto err_ep;
+		//  }
+
+		// recv_param.op_attr_mask = UCP_OP_ATTR_FIELD_CALLBACK |
+		// 						  UCP_OP_ATTR_FIELD_DATATYPE;
+
+		// recv_param.datatype = ucp_dt_make_contig(1);
+		// recv_param.cb.recv = recv_handler;
+
+		// 		param.op_attr_mask = UCP_OP_ATTR_FIELD_CALLBACK |
+		// 					 UCP_OP_ATTR_FIELD_DATATYPE |
+		// 					 UCP_OP_ATTR_FIELD_USER_DATA;
+		// param.datatype = ucp_dt_make_contig(1);
+		// param.user_data = ctx;
+		// param.cb.recv = tag_recv_cb;
+
+		test_req_t ctx;
+		ctx.complete = 0;
+		recv_param.op_attr_mask = UCP_OP_ATTR_FIELD_CALLBACK |
+								  UCP_OP_ATTR_FIELD_DATATYPE |
+								  UCP_OP_ATTR_FIELD_USER_DATA;
+		//   UCP_OP_ATTR_FLAG_NO_IMM_CMPL;
+		recv_param.datatype = ucp_dt_make_contig(1);
+		recv_param.user_data = &ctx;
+		recv_param.cb.recv = tag_recv_cb;
+		request = ucp_tag_msg_recv_nbx(ucp_data_worker, msg, info_tag.length, msg_tag, &recv_param);
+
+		status = request_wait_ori(ucp_data_worker, request, ctx);
+		if (status != UCS_OK)
+		{
+			fprintf(stderr, "unable to %s UCX message (%s)\n",
+					1 ? "receive" : "send", ucs_status_string(status));
+			ret = -1;
+			continue;
+		}
+
+		ucp_worker_address_attr_t attr;
+		attr.field_mask = UCP_WORKER_ADDRESS_ATTR_FIELD_UID;
+		ucp_worker_address_query(peer_addr, &attr);
+
+		arguments->peer_address = peer_addr;
+		arguments->server_ep = server_ep;
+		arguments->worker_uid = attr.worker_uid;
+		arguments->req = (const char *)request;
+
+		p_argv *local_arguments = (p_argv *)malloc(sizeof(p_argv));
+		memcpy(local_arguments, arguments, sizeof(p_argv));
+
+		srv_worker_helper(local_arguments);
 
 		/* Close the endpoint to the client */
 		ep_close(ucp_data_worker, server_ep, UCP_EP_CLOSE_FLAG_FORCE);
@@ -436,48 +342,6 @@ void *srv_worker(void *th_argv)
 
 		fprintf(stderr, "Waiting for connection...\n");
 	}
-
-	// /* Server is always up listening */
-	// while (1)
-	// {
-	//     /* Wait for the server to receive a connection request from the client.
-	//      * If there are multiple clients for which the server's connection request
-	//      * callback is invoked, i.e. several clients are trying to connect in
-	//      * parallel, the server will handle only the first one and reject the rest */
-	//     while (context.conn_request == NULL)
-	//     {
-	//         ucp_worker_progress(ucp_worker);
-	//     }
-
-	//     /* Server creates an ep to the client on the data worker.
-	//      * This is not the worker the listener was created on.
-	//      * The client side should have initiated the connection, leading
-	//      * to this ep's creation */
-	//     status = server_create_ep(ucp_data_worker, context.conn_request,
-	//                               &server_ep);
-	//     if (status != UCS_OK)
-	//     {
-	//         ret = -1;
-	//         goto err_listener;
-	//     }
-
-	//     /* The server waits for all the iterations to complete before moving on
-	//      * to the next client */
-	//     ret = client_server_do_work(ucp_data_worker, server_ep, send_recv_type,
-	//                                 1);
-	//     if (ret != 0)
-	//     {
-	//         goto err_ep;
-	//     }
-
-	//     /* Close the endpoint to the client */
-	//     ep_close(ucp_data_worker, server_ep, UCP_EP_CLOSE_FLAG_FORCE);
-
-	//     /* Reinitialize the server's context to be used for the next client */
-	//     context.conn_request = NULL;
-
-	//     printf("Waiting for connection...\n");
-	// }
 
 	// for (;;)
 	// {
@@ -2279,11 +2143,13 @@ void *dispatcher(void *th_argv)
 		// Check if the client is requesting connection resources.
 		if (!strncmp(req_content, "HELLO!", 6))
 		{
+			// send the worker address lenght.
 			ret = send(new_socket, &local_addr_len[(client % IMSS_THREAD_POOL)], sizeof(local_addr_len[(client % IMSS_THREAD_POOL)]), 0);
 			if (ret == -1)
 			{
 				slog_error("ERR_HERCULES_DISPATCHER_SEND1");
 			}
+			// send the worker address.
 			ret = send(new_socket, local_addr[(client % IMSS_THREAD_POOL)], local_addr_len[(client % IMSS_THREAD_POOL)], 0);
 			if (ret == -1)
 			{

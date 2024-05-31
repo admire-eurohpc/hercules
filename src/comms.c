@@ -11,6 +11,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <inttypes.h>
+#include <arpa/inet.h>
 
 static sa_family_t ai_family = AF_INET;
 
@@ -791,7 +792,7 @@ ucs_status_t client_create_ep(ucp_worker_h worker, ucp_ep_h *ep, ucp_address_t *
 /**
  * @brief Method sending a data structure with dynamic memory allocation fields.
  * @return msg_size on success, -1 in case of error.
-*/
+ */
 int32_t send_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, void *data_struct, int32_t data_type, uint64_t from)
 {
 	// Buffer containing the structures' information.
@@ -1317,6 +1318,7 @@ int connect_common(const char *server, uint64_t server_port, sa_family_t af)
 
 	for (t = res; t != NULL; t = t->ai_next)
 	{
+
 		sockfd = socket(t->ai_family, t->ai_socktype, t->ai_protocol);
 		if (sockfd < 0)
 		{
@@ -1325,7 +1327,9 @@ int connect_common(const char *server, uint64_t server_port, sa_family_t af)
 			perror(err_msg);
 			continue;
 		}
-
+		struct sockaddr_in *addr;
+		addr = (struct sockaddr_in *)t->ai_addr;
+		fprintf(stderr, "IP %s\n", inet_ntoa((struct in_addr)addr->sin_addr));
 		if (server != NULL)
 		{
 			if (connect(sockfd, t->ai_addr, t->ai_addrlen) == 0)
@@ -1597,8 +1601,7 @@ release_iov:
 	return ret;
 }
 
-int send_recv_tag(ucp_worker_h ucp_worker, ucp_ep_h ep, int is_server,
-				  int current_iter)
+int send_recv_tag(ucp_worker_h ucp_worker, ucp_ep_h ep, int is_server, int current_iter)
 {
 	ucp_dt_iov_t *iov = (ucp_dt_iov_t *)alloca(iov_cnt * sizeof(ucp_dt_iov_t));
 	ucp_request_param_t param;
@@ -1634,9 +1637,7 @@ int send_recv_tag(ucp_worker_h ucp_worker, ucp_ep_h ep, int is_server,
 	return request_finalize_ori(ucp_worker, request, &ctx, is_server, iov, current_iter);
 }
 
-int client_server_communication(ucp_worker_h worker, ucp_ep_h ep,
-								send_recv_type_t send_recv_type,
-								int is_server, int current_iter)
+int client_server_communication(ucp_worker_h worker, ucp_ep_h ep, send_recv_type_t send_recv_type, int is_server, int current_iter)
 {
 	int ret;
 
@@ -1773,4 +1774,275 @@ int client_server_do_work(ucp_worker_h ucp_worker, ucp_ep_h ep, send_recv_type_t
 
 out:
 	return ret;
+}
+
+void set_sock_addr(const char *address_str, struct sockaddr_storage *saddr, uint64_t server_port, int is_server)
+{
+	fprintf(stderr, "Connecting to %s:%lu\n", address_str, server_port);
+	struct sockaddr_in *sa_in;
+	struct sockaddr_in6 *sa_in6;
+	char service[8];
+	struct addrinfo hints, *res;
+
+	/* The server will listen on INADDR_ANY */
+	memset(saddr, 0, sizeof(*saddr));
+
+	switch (AF_INET)
+	{
+	case AF_INET:
+		sa_in = (struct sockaddr_in *)saddr;
+		snprintf(service, sizeof(service), "%lu", server_port);
+		memset(&hints, 0, sizeof(hints));
+		hints.ai_flags = (address_str == NULL) ? AI_PASSIVE : 0;
+		hints.ai_family = AF_INET;
+		hints.ai_socktype = SOCK_STREAM;
+		if (address_str != NULL)
+		{
+			getaddrinfo(address_str, service, &hints, &res);
+
+			struct sockaddr_in *addr;
+			addr = (struct sockaddr_in *)res->ai_addr;
+			// char* ip_address = inet_ntoa((struct in_addr)addr->sin_addr);
+
+			// char *str;//[INET_ADDRSTRLEN];
+			// inet_ntop(AF_INET, &(sa_in->sin_addr), str, INET_ADDRSTRLEN);
+			// str = inet_ntoa(sa_in->sin_addr);
+			char *ip_address = NULL;
+			if (!is_server)
+			{
+				ip_address = inet_ntoa((struct in_addr)addr->sin_addr); // inet_ntoa((struct in_addr)sa_in->sin_addr);
+				fprintf(stderr, "** IP %s\n", ip_address);
+			}
+			else
+			{
+				ip_address = (char *)address_str;
+			}
+
+			// fprintf(stderr, "** IP %s, IP2 %s\n", ip_address, str);
+
+			inet_pton(AF_INET, ip_address, &sa_in->sin_addr);
+		}
+		else
+		{
+			sa_in->sin_addr.s_addr = INADDR_ANY;
+		}
+		sa_in->sin_family = AF_INET;
+		sa_in->sin_port = htons(server_port);
+		// fprintf(stderr, "**** IP %s\n", inet_ntoa((struct in_addr)sa_in->sin_addr));
+		break;
+	case AF_INET6:
+		sa_in6 = (struct sockaddr_in6 *)saddr;
+		if (address_str != NULL)
+		{
+			inet_pton(AF_INET6, address_str, &sa_in6->sin6_addr);
+		}
+		else
+		{
+			sa_in6->sin6_addr = in6addr_any;
+		}
+		sa_in6->sin6_family = AF_INET6;
+		sa_in6->sin6_port = htons(server_port);
+		break;
+	default:
+		fprintf(stderr, "Invalid address family");
+		break;
+	}
+}
+
+ucs_status_t start_client(ucp_worker_h ucp_worker, const char *address_str, uint64_t port, ucp_ep_h *client_ep)
+{
+	ucp_ep_params_t ep_params;
+	struct sockaddr_storage connect_addr;
+	ucs_status_t status;
+
+	set_sock_addr(address_str, &connect_addr, port, 0);
+
+	/*
+	 * Endpoint field mask bits:
+	 * UCP_EP_PARAM_FIELD_FLAGS             - Use the value of the 'flags' field.
+	 * UCP_EP_PARAM_FIELD_SOCK_ADDR         - Use a remote sockaddr to connect
+	 *                                        to the remote peer.
+	 * UCP_EP_PARAM_FIELD_ERR_HANDLING_MODE - Error handling mode - this flag
+	 *                                        is temporarily required since the
+	 *                                        endpoint will be closed with
+	 *                                        UCP_EP_CLOSE_MODE_FORCE which
+	 *                                        requires this mode.
+	 *                                        Once UCP_EP_CLOSE_MODE_FORCE is
+	 *                                        removed, the error handling mode
+	 *                                        will be removed.
+	 */
+	ep_params.field_mask = UCP_EP_PARAM_FIELD_FLAGS |
+						   UCP_EP_PARAM_FIELD_SOCK_ADDR |
+						   UCP_EP_PARAM_FIELD_ERR_HANDLER |
+						   UCP_EP_PARAM_FIELD_ERR_HANDLING_MODE;
+	ep_params.err_mode = UCP_ERR_HANDLING_MODE_PEER;
+	ep_params.err_handler.cb = err_cb;
+	ep_params.err_handler.arg = NULL;
+	ep_params.flags = UCP_EP_PARAMS_FLAGS_CLIENT_SERVER;
+	ep_params.sockaddr.addr = (struct sockaddr *)&connect_addr;
+	ep_params.sockaddr.addrlen = sizeof(connect_addr);
+
+	status = ucp_ep_create(ucp_worker, &ep_params, client_ep);
+	if (status != UCS_OK)
+	{
+		fprintf(stderr, "failed to connect to %s (%s)\n", address_str,
+				ucs_status_string(status));
+	}
+
+	// fprintf(stderr, "status=%s\n", ucs_status_string(status));
+
+	return status;
+}
+
+int run_client(ucp_worker_h ucp_worker, char *server_addr, uint64_t port, send_recv_type_t send_recv_type)
+{
+	ucp_ep_h client_ep;
+	ucs_status_t status;
+	int ret = -1;
+
+	status = start_client(ucp_worker, server_addr, port, &client_ep);
+	if (status != UCS_OK)
+	{
+		fprintf(stderr, "failed to start client (%s)\n", ucs_status_string(status));
+		ret = -1;
+		// goto out;
+		return ret;
+	}
+
+	ret = client_server_do_work(ucp_worker, client_ep, send_recv_type, 0);
+
+	/* Close the endpoint to the server */
+	ep_close(ucp_worker, client_ep, UCP_EP_CLOSE_FLAG_FORCE);
+
+out:
+	return ret;
+}
+
+ucs_status_t start_server(ucp_worker_h ucp_worker, ucx_server_ctx_t *context, ucp_listener_h *listener_p, const char *address_str, uint64_t server_port)
+{
+	struct sockaddr_storage listen_addr;
+	ucp_listener_params_t params;
+	ucp_listener_attr_t attr;
+	ucs_status_t status;
+	char ip_str[IP_STRING_LEN];
+	char port_str[PORT_STRING_LEN];
+
+	set_sock_addr(address_str, &listen_addr, server_port, 1);
+
+	params.field_mask = UCP_LISTENER_PARAM_FIELD_SOCK_ADDR |
+						UCP_LISTENER_PARAM_FIELD_CONN_HANDLER;
+	params.sockaddr.addr = (const struct sockaddr *)&listen_addr;
+	params.sockaddr.addrlen = sizeof(listen_addr);
+	params.conn_handler.cb = server_conn_handle_cb;
+	params.conn_handler.arg = context;
+
+	/* Create a listener on the server side to listen on the given address.*/
+	status = ucp_listener_create(ucp_worker, &params, listener_p);
+	if (status != UCS_OK)
+	{
+		fprintf(stderr, "failed to listen (%s)\n", ucs_status_string(status));
+		goto out;
+	}
+
+	/* Query the created listener to get the port it is listening on. */
+	attr.field_mask = UCP_LISTENER_ATTR_FIELD_SOCKADDR;
+	status = ucp_listener_query(*listener_p, &attr);
+	if (status != UCS_OK)
+	{
+		fprintf(stderr, "failed to query the listener (%s)\n",
+				ucs_status_string(status));
+		ucp_listener_destroy(*listener_p);
+		goto out;
+	}
+
+	fprintf(stderr, "server is listening on IP %s port %s\n",
+			sockaddr_get_ip_str(&attr.sockaddr, ip_str, IP_STRING_LEN),
+			sockaddr_get_port_str(&attr.sockaddr, port_str, PORT_STRING_LEN));
+
+	fprintf(stderr, "Waiting for connection...\n");
+
+out:
+	return status;
+}
+
+static void server_conn_handle_cb(ucp_conn_request_h conn_request, void *arg)
+{
+	ucx_server_ctx_t *context = (ucx_server_ctx_t *)arg;
+	ucp_conn_request_attr_t attr;
+	char ip_str[IP_STRING_LEN];
+	char port_str[PORT_STRING_LEN];
+	ucs_status_t status;
+
+	attr.field_mask = UCP_CONN_REQUEST_ATTR_FIELD_CLIENT_ADDR;
+	status = ucp_conn_request_query(conn_request, &attr);
+	if (status == UCS_OK)
+	{
+		fprintf(stderr, "Server received a connection request from client at address %s:%s\n",
+				sockaddr_get_ip_str(&attr.client_address, ip_str, sizeof(ip_str)),
+				sockaddr_get_port_str(&attr.client_address, port_str, sizeof(port_str)));
+	}
+	else if (status != UCS_ERR_UNSUPPORTED)
+	{
+		fprintf(stderr, "failed to query the connection request (%s)\n",
+				ucs_status_string(status));
+	}
+
+	if (context->conn_request == NULL)
+	{
+		context->conn_request = conn_request;
+	}
+	else
+	{
+		/* The server is already handling a connection request from a client,
+		 * reject this new one */
+		fprintf(stderr, "Rejecting a connection request. "
+						"Only one client at a time is supported.\n");
+		status = ucp_listener_reject(context->listener, conn_request);
+		if (status != UCS_OK)
+		{
+			fprintf(stderr, "server failed to reject a connection request: (%s)\n",
+					ucs_status_string(status));
+		}
+	}
+}
+
+char *sockaddr_get_ip_str(const struct sockaddr_storage *sock_addr, char *ip_str, size_t max_size)
+{
+	struct sockaddr_in addr_in;
+	struct sockaddr_in6 addr_in6;
+
+	switch (sock_addr->ss_family)
+	{
+	case AF_INET:
+		memcpy(&addr_in, sock_addr, sizeof(struct sockaddr_in));
+		inet_ntop(AF_INET, &addr_in.sin_addr, ip_str, max_size);
+		return ip_str;
+	case AF_INET6:
+		memcpy(&addr_in6, sock_addr, sizeof(struct sockaddr_in6));
+		inet_ntop(AF_INET6, &addr_in6.sin6_addr, ip_str, max_size);
+		return ip_str;
+	default:
+		return NULL;
+	}
+}
+
+char *sockaddr_get_port_str(const struct sockaddr_storage *sock_addr, char *port_str, size_t max_size)
+{
+	struct sockaddr_in addr_in;
+	struct sockaddr_in6 addr_in6;
+	char err[] = "Invalid address family";
+
+	switch (sock_addr->ss_family)
+	{
+	case AF_INET:
+		memcpy(&addr_in, sock_addr, sizeof(struct sockaddr_in));
+		snprintf(port_str, max_size, "%d", ntohs(addr_in.sin_port));
+		return port_str;
+	case AF_INET6:
+		memcpy(&addr_in6, sock_addr, sizeof(struct sockaddr_in6));
+		snprintf(port_str, max_size, "%d", ntohs(addr_in6.sin6_port));
+		return port_str;
+	default:
+		return NULL;
+	}
 }

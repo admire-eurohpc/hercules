@@ -230,5 +230,12 @@ ucs_status_t register_am_recv_callback(ucp_worker_h worker);
 void err_cb(void *arg, ucp_ep_h ep, ucs_status_t status);
 int init_context_ori(ucp_context_h *ucp_context, ucp_worker_h *ucp_worker, send_recv_type_t send_recv_type);
 int init_worker_ori(ucp_context_h ucp_context, ucp_worker_h *ucp_worker);
+void set_sock_addr(const char *address_str, struct sockaddr_storage *saddr, uint64_t server_port, int is_server);
+ucs_status_t start_client(ucp_worker_h ucp_worker, const char *address_str, uint64_t port, ucp_ep_h *client_ep);
+int run_client(ucp_worker_h ucp_worker, char *server_addr, uint64_t port, send_recv_type_t send_recv_type);
+ucs_status_t start_server(ucp_worker_h ucp_worker, ucx_server_ctx_t *context, ucp_listener_h *listener_p, const char *address_str, uint64_t server_port);
+static void server_conn_handle_cb(ucp_conn_request_h conn_request, void *arg);
+char *sockaddr_get_ip_str(const struct sockaddr_storage *sock_addr, char *ip_str, size_t max_size);
+char *sockaddr_get_port_str(const struct sockaddr_storage *sock_addr, char *port_str, size_t max_size);
 
 #endif
