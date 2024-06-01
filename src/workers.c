@@ -169,6 +169,224 @@ err:
 	return ret;
 }
 
+typedef struct
+{
+	ucp_worker_h worker;
+	ucp_ep_h client_ep;
+	p_argv arguments;
+} thread_arg_t;
+
+void *handle_client(void *arg)
+{
+	thread_arg_t *thread_arg = (thread_arg_t *)arg;
+
+	ucp_worker_h ucp_worker = thread_arg->worker;
+	ucp_ep_h client_ep = thread_arg->client_ep;
+	p_argv arguments = thread_arg->arguments;
+
+	ucp_ep_params_t ep_params;
+	ucp_address_t *peer_addr;
+	size_t peer_addr_len;
+	ucs_status_t ep_status = UCS_OK;
+	// ucp_ep_h ep;
+	ucp_tag_message_h msg_tag;
+	ucp_tag_recv_info_t info_tag;
+	ucp_request_param_t recv_param;
+	ucs_status_t status;
+
+	struct ucx_context *request = NULL;
+	ucs_status_ptr_t request_x;
+	char *req;
+	msg_req_t *msg;
+	int ret = 0;
+
+	// Handling client communication would go here
+	// For demonstration purposes, we'll just print a message and close the endpoint
+	fprintf(stderr, "Handling client in thread\n");
+	do
+	{
+		ucp_worker_progress(ucp_worker);
+		/* Probing incoming events in non-block mode */
+		msg_tag = ucp_tag_probe_nb(ucp_worker, tag_req, tag_mask, 1, &info_tag);
+	} while (msg_tag == NULL);
+	// char recv_buffer[1024];
+	// while (1) {
+	//     msg_tag = ucp_tag_probe_nb(ucp_worker, tag_req, tag_mask, 1, &info_tag);
+	//     if (msg_tag != NULL) {
+	//         request_x = ucp_tag_msg_recv_nb(ucp_worker, recv_buffer, info_tag.length, ucp_dt_make_contig(1), msg_tag, NULL);
+	//         if (UCS_PTR_IS_ERR(request_x)) {
+	//             fprintf(stderr, "Unable to receive UCX message\n");
+	//             break;
+	//         }
+	//         while (ucp_request_check_status(request_x) == UCS_INPROGRESS) {
+	//             ucp_worker_progress(ucp_worker);
+	//         }
+	//         printf("Received message: %s\n", recv_buffer);
+	//         ucp_request_free(request_x);
+	//     }
+	//     ucp_worker_progress(ucp_worker);
+	// }
+	// exit(0);
+
+	// slog_debug("New req, message length=%ld bytes.", info_tag.length);
+	// info_tag.length = 1000;
+	fprintf(stderr, "New req, message length=%ld bytes.\n", info_tag.length);
+	msg = (msg_req_t *)malloc(info_tag.length);
+
+	recv_param.op_attr_mask = UCP_OP_ATTR_FIELD_CALLBACK |
+							  UCP_OP_ATTR_FIELD_DATATYPE;
+
+	recv_param.datatype = ucp_dt_make_contig(1);
+	recv_param.cb.recv = recv_handler;
+
+	// request = (struct ucx_context *)ucp_tag_msg_recv_nbx(ucp_worker, msg, info_tag.length, msg_tag, &recv_param);
+	request = (struct ucx_context *)ucp_tag_msg_recv_nbx(ucp_worker, msg, info_tag.length, msg_tag, &recv_param);
+	fprintf(stderr, "Waiting to complete recv\n");
+	status = ucx_wait(ucp_worker, request, "receive", "srv_worker");
+	peer_addr_len = msg->addr_len;
+	peer_addr = (ucp_address *)malloc(peer_addr_len);
+	req = msg->request;
+
+	memcpy(peer_addr, msg + 1, peer_addr_len);
+
+	ucp_worker_address_attr_t attr;
+	attr.field_mask = UCP_WORKER_ADDRESS_ATTR_FIELD_UID;
+	ucp_worker_address_query(peer_addr, &attr);
+	slog_debug("[srv_worker_thread] Receiving request from %" PRIu64 ".", attr.worker_uid);
+
+	// //  look for this peer_addr in the map and get the ep
+	// ret = map_server_eps_search(map_server_eps, attr.worker_uid, &ep);
+	// // create ep if it's not in the map
+	// if (ret < 0)
+	// {
+	// 	// ucp_ep_h new_ep;
+	// 	ep_params.address = peer_addr;
+	// 	ep_params.user_data = &ep_status;
+	// 	// struct worker_info *worker_info = (struct worker_info*)malloc(sizeof(struct worker_info));
+	// 	// worker_info->worker_uid = attr.worker_uid;
+	// 	// worker_info->server_type = 'd';
+	// 	// ep_params.err_handler.arg = &worker_info;
+	// 	ep_params.err_handler.arg = &attr.worker_uid;
+
+	// 	status = ucp_ep_create(ucp_worker, &ep_params, &ep);
+	// 	// add ep to the map
+	// 	map_server_eps_put(map_server_eps, attr.worker_uid, ep);
+	// }
+	// else
+	// {
+	// 	slog_debug("\t[srv_worker]['%" PRIu64 "] Endpoint already exist'", attr.worker_uid);
+	// 	// fprintf(stderr, "\t[d]['%" PRIu64 "] Endpoint already exist'\n", attr.worker_uid);
+	// }
+
+	arguments.peer_address = peer_addr;
+	// arguments.server_ep = ep;
+	arguments.server_ep = client_ep; // FIX = this is provisional until map_servers_eps is implemented.
+	arguments.worker_uid = attr.worker_uid;
+	arguments.req = req;
+	fprintf(stderr, "Attending request %s\n", req);
+	srv_worker_helper(&arguments);
+
+	free(peer_addr);
+
+	ucp_ep_close_nb(client_ep, UCP_EP_CLOSE_MODE_FLUSH);
+
+	return NULL;
+}
+
+void server_accept_cb(ucp_conn_request_h conn_request, void *arg)
+{
+	// ucp_worker_h worker = (ucp_worker_h)arg;
+	// ucp_context_h ucp_context = (ucp_context_h)arg;
+	p_argv *arguments = (p_argv *)arg;
+
+	ucp_ep_h client_ep;
+	ucp_ep_params_t ep_params;
+	ucs_status_t status;
+	ucp_worker_h ucp_data_worker;
+	ucp_context_h ucp_context = arguments->ucp_context;
+
+	/* Create a data worker (to be used for data exchange between the server
+	 * and the client after the connection between them was established) */
+	init_worker_ori(ucp_context, &ucp_data_worker);
+	// if (ret != 0)
+	// {
+	// 	// goto err;
+	// 	// exit(NULL);
+	// }
+
+	ep_params.field_mask = UCP_EP_PARAM_FIELD_CONN_REQUEST;
+	ep_params.conn_request = conn_request;
+
+	status = ucp_ep_create(ucp_data_worker, &ep_params, &client_ep);
+	if (status != UCS_OK)
+	{
+		fprintf(stderr, "Failed to create endpoint: %s\n", ucs_status_string(status));
+		return;
+	}
+
+	pthread_t thread;
+	thread_arg_t *thread_arg = (thread_arg_t *)malloc(sizeof(thread_arg_t));
+	thread_arg->worker = ucp_data_worker;
+	thread_arg->client_ep = client_ep;
+	arguments->ucp_worker = ucp_data_worker;
+	arguments->client_ep = client_ep;
+
+	memcpy(&thread_arg->arguments, arguments, sizeof(p_argv));
+	//thread_arg->arguments = arguments;
+
+	pthread_create(&thread, NULL, handle_client, thread_arg);
+	pthread_join(thread, NULL);
+	// pthread_detach(thread);
+}
+
+ucs_status_t start_server(ucp_worker_h ucp_worker, ucp_context_h ucp_context, ucx_server_ctx_t *context, ucp_listener_h *listener_p, const char *address_str, uint64_t server_port, p_argv *arguments)
+{
+	struct sockaddr_storage listen_addr;
+	ucp_listener_params_t params;
+	ucp_listener_attr_t attr;
+	ucs_status_t status;
+	char ip_str[IP_STRING_LEN];
+	char port_str[PORT_STRING_LEN];
+
+	set_sock_addr(address_str, &listen_addr, server_port, 1);
+
+	params.field_mask = UCP_LISTENER_PARAM_FIELD_SOCK_ADDR |
+						UCP_LISTENER_PARAM_FIELD_CONN_HANDLER;
+	params.sockaddr.addr = (const struct sockaddr *)&listen_addr;
+	params.sockaddr.addrlen = sizeof(listen_addr);
+	params.conn_handler.cb = server_accept_cb;
+	// params.conn_handler.arg = ucp_context;
+	params.conn_handler.arg = (void *)arguments;
+
+	/* Create a listener on the server side to listen on the given address.*/
+	status = ucp_listener_create(ucp_worker, &params, listener_p);
+	if (status != UCS_OK)
+	{
+		fprintf(stderr, "failed to listen (%s)\n", ucs_status_string(status));
+		goto out;
+	}
+
+	/* Query the created listener to get the port it is listening on. */
+	attr.field_mask = UCP_LISTENER_ATTR_FIELD_SOCKADDR;
+	status = ucp_listener_query(*listener_p, &attr);
+	if (status != UCS_OK)
+	{
+		fprintf(stderr, "failed to query the listener (%s)\n",
+				ucs_status_string(status));
+		ucp_listener_destroy(*listener_p);
+		goto out;
+	}
+
+	fprintf(stderr, "server is listening on IP %s port %s\n",
+			sockaddr_get_ip_str(&attr.sockaddr, ip_str, IP_STRING_LEN),
+			sockaddr_get_port_str(&attr.sockaddr, port_str, PORT_STRING_LEN));
+
+	fprintf(stderr, "Waiting for connection...\n");
+
+out:
+	return status;
+}
+
 // Thread method attending client read-write data requests.
 void *srv_worker(void *th_argv)
 {
@@ -194,9 +412,9 @@ void *srv_worker(void *th_argv)
 	// ep_params.err_handler.cb = err_cb_server;
 	// // ep_params.err_handler.arg = NULL;
 
-	// map_server_eps = map_server_eps_create();
+	map_server_eps = map_server_eps_create();
 
-	// BLOCK_SIZE = arguments->blocksize * 1024;
+	BLOCK_SIZE = arguments->blocksize * 1024;
 
 	ucx_server_ctx_t context;
 	ucp_worker_h ucp_data_worker;
@@ -207,18 +425,18 @@ void *srv_worker(void *th_argv)
 	ucp_request_param_t recv_param;
 	void *request = NULL;
 	// void *msg;
-    // struct msg *msg = NULL;
-	msg_req_t * msg;
+	// struct msg *msg = NULL;
+	msg_req_t *msg;
 	int ret;
 
-	/* Create a data worker (to be used for data exchange between the server
-	 * and the client after the connection between them was established) */
-	ret = init_worker_ori(ucp_context, &ucp_data_worker);
-	if (ret != 0)
-	{
-		// goto err;
-		// exit(NULL);
-	}
+	// /* Create a data worker (to be used for data exchange between the server
+	//  * and the client after the connection between them was established) */
+	// ret = init_worker_ori(ucp_context, &ucp_data_worker);
+	// if (ret != 0)
+	// {
+	// 	// goto err;
+	// 	// exit(NULL);
+	// }
 
 	/* Initialize the server's context. */
 	context.conn_request = NULL;
@@ -226,122 +444,67 @@ void *srv_worker(void *th_argv)
 	// char server_add[] = "192.168.201.162";
 	// FIX: add dynamic address.
 	char server_add[] = "broadwell-001";
-	start_server(ucp_worker, &context, &context.listener, server_add, arguments->port + 1);
+	arguments->ucp_context = ucp_context;
+	start_server(ucp_worker, ucp_context, &context, &context.listener, server_add, arguments->port + 1, arguments);
 
 	/* Server is always up listening */
+	// while (1)
+	// {
+	/* Wait for the server to receive a connection request from the client.
+	 * If there are multiple clients for which the server's connection request
+	 * callback is invoked, i.e. several clients are trying to connect in
+	 * parallel, the server will handle only the first one and reject the rest */
+	// while (context.conn_request == NULL)
+	//  {
+	//  	ucp_worker_progress(ucp_worker);
+	//  }
 	while (1)
 	{
-		/* Wait for the server to receive a connection request from the client.
-		 * If there are multiple clients for which the server's connection request
-		 * callback is invoked, i.e. several clients are trying to connect in
-		 * parallel, the server will handle only the first one and reject the rest */
-		ucp_tag_message_h msg_tag;
-		ucp_tag_recv_info_t info_tag;
-		while (context.conn_request == NULL)
+		status = ucp_worker_wait(ucp_worker);
+		if (status == UCS_ERR_BUSY)
 		{
-			ucp_worker_progress(ucp_worker);
-		}
-
-		
-		ucp_tag_probe_nb(ucp_worker, tag_req, tag_mask, 1, &info_tag);
-		
-		msg = (struct msg *)malloc(info_tag.length);
-
-		CHKERR_ACTION(msg == NULL, "allocate memory\n", ret = -1; continue;);
-
-		peer_addr_len = msg->addr_len;
-		peer_addr = (ucp_address_t *)malloc(peer_addr_len);
-
-		if (peer_addr == NULL)
-		{
-			fprintf(stderr, "unable to allocate memory for peer address\n");
-			free(msg);
-			ret = -1;
+			// Work was already handled, continue the loop
 			continue;
 		}
-
-		memcpy(peer_addr, msg + 1, peer_addr_len);
-
-		free(msg);
-
-		fprintf(stderr, "Creating endpoint\n");
-		/* Server creates an ep to the client on the data worker.
-		 * This is not the worker the listener was created on.
-		 * The client side should have initiated the connection, leading
-		 * to this ep's creation */
-		status = server_create_ep(ucp_data_worker, context.conn_request, &server_ep);
-		if (status != UCS_OK)
+		else if (status != UCS_OK)
 		{
-			fprintf(stderr, "Error creating endpoint\n");
-			ret = -1;
-			continue;
-			// goto err_listener;
+			fprintf(stderr, "Failed to wait on UCX worker: %s\n", ucs_status_string(status));
+			break;
 		}
-		fprintf(stderr, "Endpoint created\n");
-
-		/* The server waits for all the iterations to complete before moving on
-		 * to the next client */
-		// ret = client_server_do_work(ucp_data_worker, server_ep, CLIENT_SERVER_SEND_RECV_TAG, 1);
-		//  if (ret != 0)
-		//  {
-		//  	goto err_ep;
-		//  }
-
-		// recv_param.op_attr_mask = UCP_OP_ATTR_FIELD_CALLBACK |
-		// 						  UCP_OP_ATTR_FIELD_DATATYPE;
-
-		// recv_param.datatype = ucp_dt_make_contig(1);
-		// recv_param.cb.recv = recv_handler;
-
-		// 		param.op_attr_mask = UCP_OP_ATTR_FIELD_CALLBACK |
-		// 					 UCP_OP_ATTR_FIELD_DATATYPE |
-		// 					 UCP_OP_ATTR_FIELD_USER_DATA;
-		// param.datatype = ucp_dt_make_contig(1);
-		// param.user_data = ctx;
-		// param.cb.recv = tag_recv_cb;
-
-		test_req_t ctx;
-		ctx.complete = 0;
-		recv_param.op_attr_mask = UCP_OP_ATTR_FIELD_CALLBACK |
-								  UCP_OP_ATTR_FIELD_DATATYPE |
-								  UCP_OP_ATTR_FIELD_USER_DATA;
-		//   UCP_OP_ATTR_FLAG_NO_IMM_CMPL;
-		recv_param.datatype = ucp_dt_make_contig(1);
-		recv_param.user_data = &ctx;
-		recv_param.cb.recv = tag_recv_cb;
-		request = ucp_tag_msg_recv_nbx(ucp_data_worker, msg, info_tag.length, msg_tag, &recv_param);
-
-		status = request_wait_ori(ucp_data_worker, request, ctx);
-		if (status != UCS_OK)
-		{
-			fprintf(stderr, "unable to %s UCX message (%s)\n",
-					1 ? "receive" : "send", ucs_status_string(status));
-			ret = -1;
-			continue;
-		}
-
-		ucp_worker_address_attr_t attr;
-		attr.field_mask = UCP_WORKER_ADDRESS_ATTR_FIELD_UID;
-		ucp_worker_address_query(peer_addr, &attr);
-
-		arguments->peer_address = peer_addr;
-		arguments->server_ep = server_ep;
-		arguments->worker_uid = attr.worker_uid;
-		arguments->req = (const char *)request;
-
-		p_argv *local_arguments = (p_argv *)malloc(sizeof(p_argv));
-		memcpy(local_arguments, arguments, sizeof(p_argv));
-
-		srv_worker_helper(local_arguments);
-
-		/* Close the endpoint to the client */
-		ep_close(ucp_data_worker, server_ep, UCP_EP_CLOSE_FLAG_FORCE);
-
-		/* Reinitialize the server's context to be used for the next client */
-		context.conn_request = NULL;
-
-		fprintf(stderr, "Waiting for connection...\n");
+		ucp_worker_progress(ucp_worker);
 	}
+
+	// fprintf(stderr, "Creating endpoint\n");
+	// /* Server creates an ep to the client on the data worker.
+	//  * This is not the worker the listener was created on.
+	//  * The client side should have initiated the connection, leading
+	//  * to this ep's creation */
+	// status = server_create_ep(ucp_data_worker, context.conn_request, &server_ep);
+	// if (status != UCS_OK)
+	// {
+	// 	fprintf(stderr, "Error creating endpoint\n");
+	// 	ret = -1;
+	// 	continue;
+	// 	// goto err_listener;
+	// }
+	// fprintf(stderr, "Endpoint created\n");
+
+	/* The server waits for all the iterations to complete before moving on
+	 * to the next client */
+	// ret = client_server_do_work(ucp_data_worker, server_ep, CLIENT_SERVER_SEND_RECV_TAG, 1);
+	//  if (ret != 0)
+	//  {
+	//  	goto err_ep;
+	//  }
+
+	/* Close the endpoint to the client */
+	// 	ep_close(ucp_data_worker, server_ep, UCP_EP_CLOSE_FLAG_FORCE);
+
+	// 	/* Reinitialize the server's context to be used for the next client */
+	// 	context.conn_request = NULL;
+
+	// 	fprintf(stderr, "Waiting for connection...\n");
+	// }
 
 	// for (;;)
 	// {
@@ -486,6 +649,7 @@ void *srv_worker(void *th_argv)
 	// 	// flush_ep(arguments->ucp_worker, ep);
 	// 	// ep_close(arguments->ucp_worker, arguments->server_ep, UCP_EP_CLOSE_MODE_FLUSH);
 	// }
+	pthread_exit(NULL);
 }
 
 // void *srv_worker_helper(void *th_argv)
@@ -2598,7 +2762,8 @@ int srv_worker_helper(void *th_argv)
 				stats = (struct stat *)address_;
 				slog_debug("[srv_worker_thread][READ_OP][READ_OP] Send the requested block with key=%s, block_offset=%ld, block_size_rtvd=%ld kb, to_read=%ld kb, stat->st_nlink=%lu", key.c_str(), block_offset, block_size_rtvd / 1024, to_read / 1024, stats->st_nlink);
 				size_t ret_send_data = 0;
-				ret_send_data = send_data(arguments->ucp_worker, arguments->server_ep, (char *)address_ + block_offset, to_read, arguments->worker_uid);
+				// ret_send_data = send_data(arguments->ucp_worker, arguments->server_ep, (char *)address_ + block_offset, to_read, arguments->worker_uid);
+				ret_send_data = send_data(arguments->ucp_worker, arguments->client_ep, (char *)address_ + block_offset, to_read, arguments->worker_uid);
 				// fprintf(stderr,"\tblock_size_rtvd=%ld, address_=%s\n", block_size_rtvd, address_);
 				slog_debug("[srv_worker_thread][READ_OP][READ_OP] send_data, ret_send_data=%lu", ret_send_data);
 				if (ret_send_data == 0)
@@ -3212,6 +3377,7 @@ int srv_worker_helper(void *th_argv)
 				clock_t tr;
 				// TIMING(recv_data(arguments->ucp_worker, arguments->server_ep, buffer, arguments->worker_uid, 1), "[srv_worker_thread][WRITE_OP] recv_data: Receive the block into the buffer.");
 				size_t msg_length = 0;
+				slog_debug("[srv_worker_thread][WRITE_OP] get_recv_data_length, %s", key.c_str());
 				msg_length = get_recv_data_length(arguments->ucp_worker, arguments->worker_uid);
 				if (msg_length == 0)
 				{
@@ -3221,6 +3387,7 @@ int srv_worker_helper(void *th_argv)
 				}
 
 				// void *aux_buf = (char *)buffer + block_offset;
+				slog_debug("[srv_worker_thread][WRITE_OP] recv_data, %s", key.c_str());
 				msg_length = recv_data(arguments->ucp_worker, arguments->server_ep, (char *)buffer + block_offset, msg_length, arguments->worker_uid, 1);
 				if (msg_length == 0)
 				{

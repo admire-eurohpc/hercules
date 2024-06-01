@@ -196,8 +196,10 @@ int init_context_ori(ucp_context_h *ucp_context, ucp_worker_h *ucp_worker, send_
 	memset(&ucp_params, 0, sizeof(ucp_params));
 
 	/* UCP initialization */
-	ucp_params.field_mask = UCP_PARAM_FIELD_FEATURES | UCP_PARAM_FIELD_NAME;
-	ucp_params.name = "client_server";
+	ucp_params.field_mask = UCP_PARAM_FIELD_FEATURES | 
+							UCP_PARAM_FIELD_NAME;
+	ucp_params.features = UCP_FEATURE_TAG;
+	ucp_params.name = "hercules";
 
 	if (send_recv_type == CLIENT_SERVER_SEND_RECV_STREAM)
 	{
@@ -211,6 +213,8 @@ int init_context_ori(ucp_context_h *ucp_context, ucp_worker_h *ucp_worker, send_
 	{
 		ucp_params.features = UCP_FEATURE_AM;
 	}
+
+	ucp_params.features |= UCP_FEATURE_WAKEUP;
 
 	status = ucp_init(&ucp_params, NULL, ucp_context);
 	if (status != UCS_OK)
@@ -281,6 +285,138 @@ size_t send_data(ucp_worker_h ucp_worker, ucp_ep_h ep, const void *msg, size_t m
  * @return Number of bytes sent on success, on error 0 is returned.
  */
 size_t send_req(ucp_worker_h ucp_worker, ucp_ep_h ep, ucp_address_t *addr, size_t addr_len, char *req)
+{
+
+	ucs_status_t status;
+	struct ucx_context *request;
+	size_t msg_len;
+	ucp_request_param_t send_param;
+	send_req_t ctx;
+
+	// ////////
+	// ucp_context_h ucp_context;
+	// // ucp_worker_h ucp_worker;
+	// init_context_ori(&ucp_context, &ucp_worker, CLIENT_SERVER_SEND_RECV_TAG);
+	// ucp_ep_h client_ep;
+	// // ucs_status_t status;
+	// int ret = -1;
+	// char server_addr[] = "broadwell-001";
+	// status = start_client(ucp_worker, server_addr, 8501, &client_ep);
+	// if (status != UCS_OK)
+	// {
+	// 	fprintf(stderr, "failed to start client (%s)\n", ucs_status_string(status));
+	// 	ret = -1;
+	// 	// goto out;
+	// 	return ret;
+	// }
+	// ////////
+
+	msg_req_t *msg;
+
+	msg_len = sizeof(uint64_t) + REQUEST_SIZE + addr_len;
+	// slog_info("[COMM][send_req] msg_len=%ld", msg_len);
+	// slog_info("[COMM][send_req] msg_len=%ld, before malloc", msg_len);
+	msg = (msg_req_t *)malloc(msg_len);
+	// slog_info("[COMM][send_req] msg_len=%lu", msg_len);
+	//	msg = (msg_req_t *)send_buffer;
+
+	msg->addr_len = addr_len; // imprimir la long de adress_len.
+	memcpy(msg->request, req, REQUEST_SIZE);
+	memcpy(msg + 1, addr, addr_len);
+
+	ctx.complete = 0;
+	ctx.buffer = (char *)msg;
+
+	send_param.op_attr_mask = UCP_OP_ATTR_FIELD_CALLBACK |
+							  UCP_OP_ATTR_FIELD_USER_DATA;
+
+	// send_param.datatype = ucp_dt_make_contig(1);
+	send_param.cb.send = send_handler_req;
+	// send_param.memory_type  = UCS_MEMORY_TYPE_HOST;
+	send_param.user_data = &ctx;
+
+	// slog_info("[COMM][send_req] before ucp_tag_send_nbx");
+	request = (struct ucx_context *)ucp_tag_send_nbx(ep, msg, msg_len, tag_req, &send_param);
+	// request = (struct ucx_context *)ucp_tag_send_sync_nbx(ep, msg, msg_len, tag_req, &send_param);
+	// slog_info("[COMM][send_req] after ucp_tag_send_nbx");
+	// slog_info("[COMM][send_req] before ucx_wait");
+	status = ucx_wait(ucp_worker, request, "send", req);
+	// slog_info("[COMM][send_req] after ucx_wait");
+
+	if (status != UCS_OK)
+	{
+		// slog_error("Connection error\n");
+		free(msg);
+		//     // goto err_ep;
+		// 	ep_close(ucp_worker, ep, UCP_EP_CLOSE_FLAG_FORCE);
+		slog_fatal("[COMM][send_req] Connection error, request=%s", req);
+		// return -1;
+		return 0;
+	}
+
+	free(msg);
+	// slog_info("[COMM][send_req] errno=%d:%s", errno, strerror(errno));
+	return msg_len;
+}
+
+size_t send_req_data(ucp_worker_h ucp_worker, ucp_ep_h ep, ucp_address_t *addr, size_t addr_len, char *req)
+{
+
+	ucs_status_t status;
+	struct ucx_context *request;
+	size_t msg_len;
+	ucp_request_param_t send_param;
+	send_req_t ctx;
+
+	msg_req_t *msg;
+
+	msg_len = sizeof(uint64_t) + REQUEST_SIZE + addr_len;
+	// slog_info("[COMM][send_req] msg_len=%ld", msg_len);
+	// slog_info("[COMM][send_req] msg_len=%ld, before malloc", msg_len);
+	msg = (msg_req_t *)malloc(msg_len);
+	// slog_info("[COMM][send_req] msg_len=%lu", msg_len);
+	//	msg = (msg_req_t *)send_buffer;
+
+	msg->addr_len = addr_len; // imprimir la long de adress_len.
+	memcpy(msg->request, req, REQUEST_SIZE);
+	memcpy(msg + 1, addr, addr_len);
+
+	ctx.complete = 0;
+	ctx.buffer = (char *)msg;
+
+	send_param.op_attr_mask = UCP_OP_ATTR_FIELD_CALLBACK |
+							  UCP_OP_ATTR_FIELD_USER_DATA;
+
+	// send_param.datatype = ucp_dt_make_contig(1);
+	send_param.cb.send = send_handler_req;
+	// send_param.memory_type  = UCS_MEMORY_TYPE_HOST;
+	send_param.user_data = &ctx;
+
+	// slog_info("[COMM][send_req] before ucp_tag_send_nbx");
+	request = (struct ucx_context *)ucp_tag_send_nbx(ep, msg, msg_len, tag_req, &send_param);
+	// request = (struct ucx_context *)ucp_tag_send_sync_nbx(ep, msg, msg_len, tag_req, &send_param);
+	// slog_info("[COMM][send_req] after ucp_tag_send_nbx");
+	// slog_info("[COMM][send_req] before ucx_wait");
+	status = ucx_wait(ucp_worker, request, "send", req);
+	// slog_info("[COMM][send_req] after ucx_wait");
+
+	if (status != UCS_OK)
+	{
+		// slog_error("Connection error\n");
+		free(msg);
+		//     // goto err_ep;
+		// 	ep_close(ucp_worker, ep, UCP_EP_CLOSE_FLAG_FORCE);
+		slog_fatal("[COMM][send_req] Connection error, request=%s", req);
+		// return -1;
+		return 0;
+	}
+
+	free(msg);
+	// slog_info("[COMM][send_req] errno=%d:%s", errno, strerror(errno));
+	return msg_len;
+}
+
+size_t send_req_server(ucp_worker_h ucp_worker, ucp_ep_h ep, ucp_address_t *addr, size_t addr_len, char *req)
 {
 
 	ucs_status_t status;
@@ -1918,54 +2054,7 @@ out:
 	return ret;
 }
 
-ucs_status_t start_server(ucp_worker_h ucp_worker, ucx_server_ctx_t *context, ucp_listener_h *listener_p, const char *address_str, uint64_t server_port)
-{
-	struct sockaddr_storage listen_addr;
-	ucp_listener_params_t params;
-	ucp_listener_attr_t attr;
-	ucs_status_t status;
-	char ip_str[IP_STRING_LEN];
-	char port_str[PORT_STRING_LEN];
-
-	set_sock_addr(address_str, &listen_addr, server_port, 1);
-
-	params.field_mask = UCP_LISTENER_PARAM_FIELD_SOCK_ADDR |
-						UCP_LISTENER_PARAM_FIELD_CONN_HANDLER;
-	params.sockaddr.addr = (const struct sockaddr *)&listen_addr;
-	params.sockaddr.addrlen = sizeof(listen_addr);
-	params.conn_handler.cb = server_conn_handle_cb;
-	params.conn_handler.arg = context;
-
-	/* Create a listener on the server side to listen on the given address.*/
-	status = ucp_listener_create(ucp_worker, &params, listener_p);
-	if (status != UCS_OK)
-	{
-		fprintf(stderr, "failed to listen (%s)\n", ucs_status_string(status));
-		goto out;
-	}
-
-	/* Query the created listener to get the port it is listening on. */
-	attr.field_mask = UCP_LISTENER_ATTR_FIELD_SOCKADDR;
-	status = ucp_listener_query(*listener_p, &attr);
-	if (status != UCS_OK)
-	{
-		fprintf(stderr, "failed to query the listener (%s)\n",
-				ucs_status_string(status));
-		ucp_listener_destroy(*listener_p);
-		goto out;
-	}
-
-	fprintf(stderr, "server is listening on IP %s port %s\n",
-			sockaddr_get_ip_str(&attr.sockaddr, ip_str, IP_STRING_LEN),
-			sockaddr_get_port_str(&attr.sockaddr, port_str, PORT_STRING_LEN));
-
-	fprintf(stderr, "Waiting for connection...\n");
-
-out:
-	return status;
-}
-
-static void server_conn_handle_cb(ucp_conn_request_h conn_request, void *arg)
+void server_conn_handle_cb(ucp_conn_request_h conn_request, void *arg)
 {
 	ucx_server_ctx_t *context = (ucx_server_ctx_t *)arg;
 	ucp_conn_request_attr_t attr;

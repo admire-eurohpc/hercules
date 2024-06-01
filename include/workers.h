@@ -50,6 +50,7 @@ typedef struct {
     ucp_worker_h  ucp_worker;
 	ucp_worker_h  ucp_data_worker;
 	ucp_ep_h      server_ep;
+	ucp_ep_h      client_ep;
 	size_t		  blocksize;
 	uint64_t	  storage_size;
 	ucp_address_t * peer_address;

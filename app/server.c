@@ -426,7 +426,7 @@ int32_t main(int32_t argc, char **argv)
 			sprintf(formated_uri, "%" PRIu32 " GET 0 %s", id, imss_uri);
 			slog_debug("[main] Request - %s, errno=%d:%s", formated_uri, errno, strerror(errno));
 			// Send the request.
-			if (send_req(ucp_worker, client_ep, req_addr, req_addr_len, formated_uri) == 0)
+			if (send_req_server(ucp_worker, client_ep, req_addr, req_addr_len, formated_uri) == 0)
 			{
 				slog_error("HERCULES_ERR__SEND_REQ");
 				perror("HERCULES_ERR__SEND_REQ");
@@ -662,7 +662,7 @@ int32_t main(int32_t argc, char **argv)
 		sprintf(key_plus_size, "%" PRIu32 " SET %lu %s", id, (sizeof(imss_info) + my_imss.num_storages * LINE_LENGTH), my_imss.uri_);
 		// status = ucp_ep_create(ucp_worker, &ep_params, &client_ep);
 		slog_debug("[main] Request - %s", key_plus_size);
-		if (send_req(ucp_worker, client_ep, req_addr, req_addr_len, key_plus_size) == 0)
+		if (send_req_server(ucp_worker, client_ep, req_addr, req_addr_len, key_plus_size) == 0)
 		{
 			perror("ERR_HERCULES_RLSIMSS_SENDADDR");
 			return -1;

@@ -2835,20 +2835,29 @@ int32_t get_data(int32_t dataset_id, int32_t data_id, void *buffer)
 		//  Key related to the requested data element.
 		sprintf(key_, "GET 0 0 %s$%d", curr_dataset.uri_, data_id);
 		slog_debug("[IMSS][get_data] Request - '%s' to server %ld", key_, repl_servers[i]);
-		ep = curr_imss.conns.eps[repl_servers[i]];
+		// ep = curr_imss.conns.eps[repl_servers[i]];
 
 		// new_imss.info.ips[i], new_imss.info.conn_port
 
-		ucs_status_t status = start_client(ucp_worker_data, curr_imss.info.ips[i], curr_imss.info.conn_port, &ep);
+		////////
+		// ucp_context_h ucp_context;
+		// ucp_worker_h ucp_worker;
+		// init_context_ori(&ucp_context, &ucp_worker, CLIENT_SERVER_SEND_RECV_TAG);
+		// ucp_ep_h client_ep;
+		ucs_status_t status;
+		int ret = -1;
+		char server_addr[] = "broadwell-010";
+		status = start_client(ucp_worker_data, server_addr, 8501, &ep);
 		if (status != UCS_OK)
 		{
 			fprintf(stderr, "failed to start client (%s)\n", ucs_status_string(status));
-			// ret = -1;
+			ret = -1;
 			// goto out;
-			return -1;
+			return ret;
 		}
+		////////
 
-		if (send_req(ucp_worker_data, ep, local_addr_data, local_addr_len_data, key_) == 0)
+		if (send_req_data(ucp_worker_data, ep, local_addr_data, local_addr_len_data, key_) == 0)
 		{
 			pthread_mutex_unlock(&lock_network);
 			slog_error("HERCULES_ERR_RLSIMSS_SENDADDR");
@@ -3180,10 +3189,22 @@ int32_t set_data(int32_t dataset_id, int32_t data_id, const void *buffer, size_t
 
 		sprintf(key_, "SET %lu %ld %s$%d", size, offset, curr_dataset.uri_, data_id);
 		slog_info("[IMSS][set_data] BLOCK %d SENT TO %d SERVER with Request: %s (%d)", data_id, n_server_, key_, size);
-		ep = curr_imss.conns.eps[n_server_];
+		//ep = curr_imss.conns.eps[n_server_];
+
+		ucs_status_t status;
+		int ret = -1;
+		char server_addr[] = "broadwell-010";
+		status = start_client(ucp_worker_data, server_addr, 8501, &ep);
+		if (status != UCS_OK)
+		{
+			fprintf(stderr, "failed to start client (%s)\n", ucs_status_string(status));
+			ret = -1;
+			// goto out;
+			return ret;
+		}
 		// send the request to the data server, indicating we will perform a write operation (SET) to certain data block (data_id)
 		// in a dataset (curr_dataset.uri).
-		if (send_req(ucp_worker_data, ep, local_addr_data, local_addr_len_data, key_) == 0)
+		if (send_req_data(ucp_worker_data, ep, local_addr_data, local_addr_len_data, key_) == 0)
 		{
 			pthread_mutex_unlock(&lock_network);
 			perror("HERCULES_ERR_SET_REQ_SEND_REQ");
@@ -3191,6 +3212,8 @@ int32_t set_data(int32_t dataset_id, int32_t data_id, const void *buffer, size_t
 			// return -1;
 			exit(-1);
 		}
+
+		slog_info("[IMSS][set_data]  SENDING DATA TO %d", n_server_);
 
 		// send the data to the data server of the current dataset.
 		if (send_data(ucp_worker_data, ep, buffer, size, local_data_uid) == 0)
