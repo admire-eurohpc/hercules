@@ -196,7 +196,7 @@ int init_context_ori(ucp_context_h *ucp_context, ucp_worker_h *ucp_worker, send_
 	memset(&ucp_params, 0, sizeof(ucp_params));
 
 	/* UCP initialization */
-	ucp_params.field_mask = UCP_PARAM_FIELD_FEATURES | 
+	ucp_params.field_mask = UCP_PARAM_FIELD_FEATURES |
 							UCP_PARAM_FIELD_NAME;
 	ucp_params.features = UCP_FEATURE_TAG;
 	ucp_params.name = "hercules";
@@ -1939,7 +1939,6 @@ void set_sock_addr(const char *address_str, struct sockaddr_storage *saddr, uint
 			struct sockaddr_in *addr;
 			addr = (struct sockaddr_in *)res->ai_addr;
 			// char* ip_address = inet_ntoa((struct in_addr)addr->sin_addr);
-
 			// char *str;//[INET_ADDRSTRLEN];
 			// inet_ntop(AF_INET, &(sa_in->sin_addr), str, INET_ADDRSTRLEN);
 			// str = inet_ntoa(sa_in->sin_addr);
@@ -1953,9 +1952,7 @@ void set_sock_addr(const char *address_str, struct sockaddr_storage *saddr, uint
 			{
 				ip_address = (char *)address_str;
 			}
-
 			// fprintf(stderr, "** IP %s, IP2 %s\n", ip_address, str);
-
 			inet_pton(AF_INET, ip_address, &sa_in->sin_addr);
 		}
 		else

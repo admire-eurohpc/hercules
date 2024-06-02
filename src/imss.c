@@ -920,7 +920,19 @@ int32_t open_imss(char *imss_uri)
 			strcpy(att_deployment, imss_uri);
 		}
 
-		client_create_ep(ucp_worker_data, &new_imss.conns.eps[i], new_imss.conns.peer_addr[i]);
+		// ucs_status_t status;
+		// int ret = -1;
+		// char server_addr[] = "broadwell-010";
+		status = start_client(ucp_worker_data, new_imss.info.ips[i], new_imss.info.conn_port+1, &new_imss.conns.eps[i]);
+		if (status != UCS_OK)
+		{
+			fprintf(stderr, "failed to start client (%s)\n", ucs_status_string(status));
+			ret = -1;
+			// goto out;
+			return ret;
+		}
+
+		//client_create_ep(ucp_worker_data, &new_imss.conns.eps[i], new_imss.conns.peer_addr[i]);
 		slog_debug("[IMSS] open_imss: Created endpoint with %s", (new_imss.info.ips)[i]);
 	}
 
@@ -1009,7 +1021,8 @@ int32_t release_imss(char *imss_uri, uint32_t release_op)
 				slog_error("HERCULES_ERR_RLSHERCULES_SENDADDR");
 				return -1;
 			}
-			close_ucx_endpoint(ucp_worker_data, ep);
+			// slog_live("closing endpoint %d", i);
+			// close_ucx_endpoint(ucp_worker_data, ep);
 
 			// ep_close(ucp_worker_data, ep, 0);
 			//  // ep_close(ucp_worker_data, ep, UCP_EP_CLOSE_MODE_FLUSH);
@@ -1022,12 +1035,14 @@ int32_t release_imss(char *imss_uri, uint32_t release_op)
 		// ep_flush(imss_.conns.eps_[i], ucp_worker_data);
 		free(imss_.info.ips[i]);
 	}
+	slog_live("flusing data worker");
 	// Optionally, flush the worker
 	ucs_status_t status = ucp_worker_flush(ucp_worker_data);
 	if (status != UCS_OK)
 	{
 		fprintf(stderr, "Failed to flush worker: %s\n", ucs_status_string(status));
 	}
+	slog_live("destroying data worker");
 	// Destroy the worker
 	ucp_worker_destroy(ucp_worker_data);
 
@@ -2835,33 +2850,32 @@ int32_t get_data(int32_t dataset_id, int32_t data_id, void *buffer)
 		//  Key related to the requested data element.
 		sprintf(key_, "GET 0 0 %s$%d", curr_dataset.uri_, data_id);
 		slog_debug("[IMSS][get_data] Request - '%s' to server %ld", key_, repl_servers[i]);
-		// ep = curr_imss.conns.eps[repl_servers[i]];
-
+		ep = curr_imss.conns.eps[repl_servers[i]];
 		// new_imss.info.ips[i], new_imss.info.conn_port
-
 		////////
 		// ucp_context_h ucp_context;
 		// ucp_worker_h ucp_worker;
 		// init_context_ori(&ucp_context, &ucp_worker, CLIENT_SERVER_SEND_RECV_TAG);
 		// ucp_ep_h client_ep;
-		ucs_status_t status;
-		int ret = -1;
-		char server_addr[] = "broadwell-010";
-		status = start_client(ucp_worker_data, server_addr, 8501, &ep);
-		if (status != UCS_OK)
-		{
-			fprintf(stderr, "failed to start client (%s)\n", ucs_status_string(status));
-			ret = -1;
-			// goto out;
-			return ret;
-		}
+		// ucs_status_t status;
+		// int ret = -1;
+		// char server_addr[] = "broadwell-010";
+		// status = start_client(ucp_worker_data, server_addr, 8501, &ep);
+		// if (status != UCS_OK)
+		// {
+		// 	fprintf(stderr, "failed to start client (%s)\n", ucs_status_string(status));
+		// 	ret = -1;
+		// 	// goto out;
+		// 	return ret;
+		// }
 		////////
 
-		if (send_req_data(ucp_worker_data, ep, local_addr_data, local_addr_len_data, key_) == 0)
+		//if (send_req_data(ucp_worker_data, ep, local_addr_data, local_addr_len_data, key_) == 0)
+		if (send_req(ucp_worker_data, ep, local_addr_data, local_addr_len_data, key_) == 0)
 		{
 			pthread_mutex_unlock(&lock_network);
-			slog_error("HERCULES_ERR_RLSIMSS_SENDADDR");
-			perror("HERCULES_ERR_RLSIMSS_SENDADDR");
+			slog_error("HERCULES_ERR_GET_DATA_SENDREQDATA");
+			perror("HERCULES_ERR_GET_DATA_SENDREQDATA");
 			return -1;
 		}
 
@@ -3189,19 +3203,20 @@ int32_t set_data(int32_t dataset_id, int32_t data_id, const void *buffer, size_t
 
 		sprintf(key_, "SET %lu %ld %s$%d", size, offset, curr_dataset.uri_, data_id);
 		slog_info("[IMSS][set_data] BLOCK %d SENT TO %d SERVER with Request: %s (%d)", data_id, n_server_, key_, size);
-		//ep = curr_imss.conns.eps[n_server_];
-
-		ucs_status_t status;
-		int ret = -1;
-		char server_addr[] = "broadwell-010";
-		status = start_client(ucp_worker_data, server_addr, 8501, &ep);
-		if (status != UCS_OK)
-		{
-			fprintf(stderr, "failed to start client (%s)\n", ucs_status_string(status));
-			ret = -1;
-			// goto out;
-			return ret;
-		}
+		ep = curr_imss.conns.eps[n_server_];
+		/////////////
+		// ucs_status_t status;
+		// int ret = -1;
+		// char server_addr[] = "broadwell-010";
+		// status = start_client(ucp_worker_data, server_addr, 8501, &ep);
+		// if (status != UCS_OK)
+		// {
+		// 	fprintf(stderr, "failed to start client (%s)\n", ucs_status_string(status));
+		// 	ret = -1;
+		// 	// goto out;
+		// 	return ret;
+		// }
+		/////////////
 		// send the request to the data server, indicating we will perform a write operation (SET) to certain data block (data_id)
 		// in a dataset (curr_dataset.uri).
 		if (send_req_data(ucp_worker_data, ep, local_addr_data, local_addr_len_data, key_) == 0)

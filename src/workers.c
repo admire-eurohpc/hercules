@@ -199,96 +199,103 @@ void *handle_client(void *arg)
 	char *req;
 	msg_req_t *msg;
 	int ret = 0;
-
-	// Handling client communication would go here
-	// For demonstration purposes, we'll just print a message and close the endpoint
 	fprintf(stderr, "Handling client in thread\n");
-	do
+	for (;;)
 	{
-		ucp_worker_progress(ucp_worker);
-		/* Probing incoming events in non-block mode */
-		msg_tag = ucp_tag_probe_nb(ucp_worker, tag_req, tag_mask, 1, &info_tag);
-	} while (msg_tag == NULL);
-	// char recv_buffer[1024];
-	// while (1) {
-	//     msg_tag = ucp_tag_probe_nb(ucp_worker, tag_req, tag_mask, 1, &info_tag);
-	//     if (msg_tag != NULL) {
-	//         request_x = ucp_tag_msg_recv_nb(ucp_worker, recv_buffer, info_tag.length, ucp_dt_make_contig(1), msg_tag, NULL);
-	//         if (UCS_PTR_IS_ERR(request_x)) {
-	//             fprintf(stderr, "Unable to receive UCX message\n");
-	//             break;
-	//         }
-	//         while (ucp_request_check_status(request_x) == UCS_INPROGRESS) {
-	//             ucp_worker_progress(ucp_worker);
-	//         }
-	//         printf("Received message: %s\n", recv_buffer);
-	//         ucp_request_free(request_x);
-	//     }
-	//     ucp_worker_progress(ucp_worker);
-	// }
-	// exit(0);
+		do
+		{
+			ucp_worker_progress(ucp_worker);
+			/* Probing incoming events in non-block mode */
+			msg_tag = ucp_tag_probe_nb(ucp_worker, tag_req, tag_mask, 1, &info_tag);
+		} while (msg_tag == NULL);
+		// char recv_buffer[1024];
+		// while (1) {
+		//     msg_tag = ucp_tag_probe_nb(ucp_worker, tag_req, tag_mask, 1, &info_tag);
+		//     if (msg_tag != NULL) {
+		//         request_x = ucp_tag_msg_recv_nb(ucp_worker, recv_buffer, info_tag.length, ucp_dt_make_contig(1), msg_tag, NULL);
+		//         if (UCS_PTR_IS_ERR(request_x)) {
+		//             fprintf(stderr, "Unable to receive UCX message\n");
+		//             break;
+		//         }
+		//         while (ucp_request_check_status(request_x) == UCS_INPROGRESS) {
+		//             ucp_worker_progress(ucp_worker);
+		//         }
+		//         printf("Received message: %s\n", recv_buffer);
+		//         ucp_request_free(request_x);
+		//     }
+		//     ucp_worker_progress(ucp_worker);
+		// }
+		// exit(0);
 
-	// slog_debug("New req, message length=%ld bytes.", info_tag.length);
-	// info_tag.length = 1000;
-	fprintf(stderr, "New req, message length=%ld bytes.\n", info_tag.length);
-	msg = (msg_req_t *)malloc(info_tag.length);
+		// slog_debug("New req, message length=%ld bytes.", info_tag.length);
+		// info_tag.length = 1000;
+		fprintf(stderr, "New req, message length=%ld bytes.\n", info_tag.length);
+		msg = (msg_req_t *)malloc(info_tag.length);
 
-	recv_param.op_attr_mask = UCP_OP_ATTR_FIELD_CALLBACK |
-							  UCP_OP_ATTR_FIELD_DATATYPE;
+		recv_param.op_attr_mask = UCP_OP_ATTR_FIELD_CALLBACK |
+								  UCP_OP_ATTR_FIELD_DATATYPE;
 
-	recv_param.datatype = ucp_dt_make_contig(1);
-	recv_param.cb.recv = recv_handler;
+		recv_param.datatype = ucp_dt_make_contig(1);
+		recv_param.cb.recv = recv_handler;
 
-	// request = (struct ucx_context *)ucp_tag_msg_recv_nbx(ucp_worker, msg, info_tag.length, msg_tag, &recv_param);
-	request = (struct ucx_context *)ucp_tag_msg_recv_nbx(ucp_worker, msg, info_tag.length, msg_tag, &recv_param);
-	fprintf(stderr, "Waiting to complete recv\n");
-	status = ucx_wait(ucp_worker, request, "receive", "srv_worker");
-	peer_addr_len = msg->addr_len;
-	peer_addr = (ucp_address *)malloc(peer_addr_len);
-	req = msg->request;
+		// request = (struct ucx_context *)ucp_tag_msg_recv_nbx(ucp_worker, msg, info_tag.length, msg_tag, &recv_param);
+		request = (struct ucx_context *)ucp_tag_msg_recv_nbx(ucp_worker, msg, info_tag.length, msg_tag, &recv_param);
+		fprintf(stderr, "Waiting to complete recv\n");
+		status = ucx_wait(ucp_worker, request, "receive", "srv_worker");
+		peer_addr_len = msg->addr_len;
+		peer_addr = (ucp_address *)malloc(peer_addr_len);
+		req = msg->request;
 
-	memcpy(peer_addr, msg + 1, peer_addr_len);
+		memcpy(peer_addr, msg + 1, peer_addr_len);
 
-	ucp_worker_address_attr_t attr;
-	attr.field_mask = UCP_WORKER_ADDRESS_ATTR_FIELD_UID;
-	ucp_worker_address_query(peer_addr, &attr);
-	slog_debug("[srv_worker_thread] Receiving request from %" PRIu64 ".", attr.worker_uid);
+		ucp_worker_address_attr_t attr;
+		attr.field_mask = UCP_WORKER_ADDRESS_ATTR_FIELD_UID;
+		ucp_worker_address_query(peer_addr, &attr);
+		slog_debug("[srv_worker_thread] Receiving request from %" PRIu64 ".", attr.worker_uid);
 
-	// //  look for this peer_addr in the map and get the ep
-	// ret = map_server_eps_search(map_server_eps, attr.worker_uid, &ep);
-	// // create ep if it's not in the map
-	// if (ret < 0)
-	// {
-	// 	// ucp_ep_h new_ep;
-	// 	ep_params.address = peer_addr;
-	// 	ep_params.user_data = &ep_status;
-	// 	// struct worker_info *worker_info = (struct worker_info*)malloc(sizeof(struct worker_info));
-	// 	// worker_info->worker_uid = attr.worker_uid;
-	// 	// worker_info->server_type = 'd';
-	// 	// ep_params.err_handler.arg = &worker_info;
-	// 	ep_params.err_handler.arg = &attr.worker_uid;
+		// //  look for this peer_addr in the map and get the ep
+		// ret = map_server_eps_search(map_server_eps, attr.worker_uid, &ep);
+		// // create ep if it's not in the map
+		// if (ret < 0)
+		// {
+		// 	// ucp_ep_h new_ep;
+		// 	ep_params.address = peer_addr;
+		// 	ep_params.user_data = &ep_status;
+		// 	// struct worker_info *worker_info = (struct worker_info*)malloc(sizeof(struct worker_info));
+		// 	// worker_info->worker_uid = attr.worker_uid;
+		// 	// worker_info->server_type = 'd';
+		// 	// ep_params.err_handler.arg = &worker_info;
+		// 	ep_params.err_handler.arg = &attr.worker_uid;
 
-	// 	status = ucp_ep_create(ucp_worker, &ep_params, &ep);
-	// 	// add ep to the map
-	// 	map_server_eps_put(map_server_eps, attr.worker_uid, ep);
-	// }
-	// else
-	// {
-	// 	slog_debug("\t[srv_worker]['%" PRIu64 "] Endpoint already exist'", attr.worker_uid);
-	// 	// fprintf(stderr, "\t[d]['%" PRIu64 "] Endpoint already exist'\n", attr.worker_uid);
-	// }
+		// 	status = ucp_ep_create(ucp_worker, &ep_params, &ep);
+		// 	// add ep to the map
+		// 	map_server_eps_put(map_server_eps, attr.worker_uid, ep);
+		// }
+		// else
+		// {
+		// 	slog_debug("\t[srv_worker]['%" PRIu64 "] Endpoint already exist'", attr.worker_uid);
+		// 	// fprintf(stderr, "\t[d]['%" PRIu64 "] Endpoint already exist'\n", attr.worker_uid);
+		// }
 
-	arguments.peer_address = peer_addr;
-	// arguments.server_ep = ep;
-	arguments.server_ep = client_ep; // FIX = this is provisional until map_servers_eps is implemented.
-	arguments.worker_uid = attr.worker_uid;
-	arguments.req = req;
-	fprintf(stderr, "Attending request %s\n", req);
-	srv_worker_helper(&arguments);
+		arguments.peer_address = peer_addr;
+		// arguments.server_ep = ep;
+		arguments.server_ep = client_ep; // FIX = this is provisional until map_servers_eps is implemented.
+		arguments.worker_uid = attr.worker_uid;
+		arguments.req = req;
+		fprintf(stderr, "Attending request '%s'\n", req);
+		ret = srv_worker_helper(&arguments);
+		fprintf(stderr, "Request '%s' has been attended\n", req);
 
-	free(peer_addr);
-
-	ucp_ep_close_nb(client_ep, UCP_EP_CLOSE_MODE_FLUSH);
+		free(peer_addr);
+		if (ret == 2)
+		{
+			break;
+		}
+	}
+	fprintf(stderr, "Client is finishing the communication\n");
+	// ucp_ep_close_nb(client_ep, UCP_EP_CLOSE_MODE_FLUSH);
+	ucp_ep_close_nb(client_ep, UCP_EP_CLOSE_MODE_FORCE);
+	fprintf(stderr, "Ending thread\n");
 
 	return NULL;
 }
@@ -332,11 +339,11 @@ void server_accept_cb(ucp_conn_request_h conn_request, void *arg)
 	arguments->client_ep = client_ep;
 
 	memcpy(&thread_arg->arguments, arguments, sizeof(p_argv));
-	//thread_arg->arguments = arguments;
+	// thread_arg->arguments = arguments;
 
 	pthread_create(&thread, NULL, handle_client, thread_arg);
-	pthread_join(thread, NULL);
-	// pthread_detach(thread);
+	// pthread_join(thread, NULL);
+	pthread_detach(thread);
 }
 
 ucs_status_t start_server(ucp_worker_h ucp_worker, ucp_context_h ucp_context, ucx_server_ctx_t *context, ucp_listener_h *listener_p, const char *address_str, uint64_t server_port, p_argv *arguments)
@@ -443,7 +450,8 @@ void *srv_worker(void *th_argv)
 
 	// char server_add[] = "192.168.201.162";
 	// FIX: add dynamic address.
-	char server_add[] = "broadwell-001";
+	// char server_add[] = "broadwell-001";
+	char *server_add = NULL;
 	arguments->ucp_context = ucp_context;
 	start_server(ucp_worker, ucp_context, &context, &context.listener, server_add, arguments->port + 1, arguments);
 
@@ -2778,9 +2786,9 @@ int srv_worker_helper(void *th_argv)
 		case RELEASE:
 		{
 			// sleep(10);
-			map_server_eps_erase(map_server_eps, arguments->worker_uid, arguments->ucp_worker);
+			// map_server_eps_erase(map_server_eps, arguments->worker_uid, arguments->ucp_worker); // commented for testing purposes.
 			slog_debug("[srv_worker_thread][READ_OP][RELEASE]");
-			// return 0;
+			return 2;
 			break;
 		}
 		case DELETE_OP:

@@ -898,9 +898,10 @@ void __attribute__((destructor)) run_me_last()
 		// t_s = clock();
 		release = -1;
 		slog_debug("[POSIX] release_imss()");
-		// release_imss("imss://", CLOSE_DETACHED);
+		release_imss("imss://", CLOSE_DETACHED);
 		slog_debug("[POSIX] stat_release()");
 		// stat_release();
+		
 		//  imss_comm_cleanup();
 		//  t_s = clock() - t_s;
 		//  time_taken = ((double)t_s) / (CLOCKS_PER_SEC);
