@@ -401,7 +401,8 @@ int32_t main(int32_t argc, char **argv)
 								   UCP_EP_PARAM_FIELD_ERR_HANDLER |
 								   UCP_EP_PARAM_FIELD_USER_DATA;
 			ep_params.address = peer_addr;
-			ep_params.err_mode = UCP_ERR_HANDLING_MODE_PEER;
+			// ep_params.err_mode = UCP_ERR_HANDLING_MODE_PEER;
+			ep_params.err_mode = UCP_ERR_HANDLING_MODE_NONE;
 			ep_params.err_handler.cb = err_cb_client;
 			ep_params.err_handler.arg = NULL;
 			ep_params.user_data = &ep_status;
@@ -577,7 +578,7 @@ int32_t main(int32_t argc, char **argv)
 			worker_attr.field_mask = UCP_WORKER_ATTR_FIELD_ADDRESS;
 			status = ucp_worker_query(ucp_worker_threads[indx], &worker_attr);
 			local_addr_len[indx] = worker_attr.address_length;
-			local_addr[indx] = worker_attr.address;
+			f[indx] = worker_attr.address;
 
 			// Add the reference to the map into the set of thread arguments.
 			arguments[i].map = map;

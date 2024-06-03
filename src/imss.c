@@ -923,7 +923,7 @@ int32_t open_imss(char *imss_uri)
 		// ucs_status_t status;
 		// int ret = -1;
 		// char server_addr[] = "broadwell-010";
-		status = start_client(ucp_worker_data, new_imss.info.ips[i], new_imss.info.conn_port+1, &new_imss.conns.eps[i]);
+		status = start_client(ucp_worker_data, new_imss.info.ips[i], new_imss.info.conn_port + 1, &new_imss.conns.eps[i]);
 		if (status != UCS_OK)
 		{
 			fprintf(stderr, "failed to start client (%s)\n", ucs_status_string(status));
@@ -932,7 +932,7 @@ int32_t open_imss(char *imss_uri)
 			return ret;
 		}
 
-		//client_create_ep(ucp_worker_data, &new_imss.conns.eps[i], new_imss.conns.peer_addr[i]);
+		// client_create_ep(ucp_worker_data, &new_imss.conns.eps[i], new_imss.conns.peer_addr[i]);
 		slog_debug("[IMSS] open_imss: Created endpoint with %s", (new_imss.info.ips)[i]);
 	}
 
@@ -1021,6 +1021,40 @@ int32_t release_imss(char *imss_uri, uint32_t release_op)
 				slog_error("HERCULES_ERR_RLSHERCULES_SENDADDR");
 				return -1;
 			}
+
+			size_t msg_length = 0;
+			msg_length = get_recv_data_length(ucp_worker_data, local_data_uid);
+			if (msg_length < 0)
+			{
+				pthread_mutex_unlock(&lock_network);
+				perror("ERR_HERCULES_RLSHERCULES_INVALID_MSG_LENGTH");
+				slog_error("ERR_HERCULES_RLSHERCULES_INVALID_MSG_LENGTH");
+				return -1;
+			}
+
+			// char result[msg_length];
+			void *result = malloc(msg_length);
+			msg_length = recv_data(ucp_worker_data, ep, result, msg_length, local_data_uid, 0);
+			if (msg_length == 0)
+			{
+				pthread_mutex_unlock(&lock_network);
+				perror("ERR_HERCULES_RLSHERCULES_RECV_DATA");
+				slog_error("ERR_HERCULES_RLSHERCULES_RECV_DATA");
+				free(result);
+				return -1;
+			}
+
+			slog_debug("[delete_dataset] result=%s, msg_length=%d", (const char *)result, msg_length);
+			if (!strncmp((const char *)result, "RELEASE", strlen("RELEASE")))
+			{
+				// free the message received from the metadata server.
+				free(result);
+				pthread_mutex_unlock(&lock_network);
+				return 1;
+			}
+			// free the message received from the metadata server.
+			free(result);
+			pthread_mutex_unlock(&lock_network);
 			// slog_live("closing endpoint %d", i);
 			// close_ucx_endpoint(ucp_worker_data, ep);
 
@@ -2870,7 +2904,7 @@ int32_t get_data(int32_t dataset_id, int32_t data_id, void *buffer)
 		// }
 		////////
 
-		//if (send_req_data(ucp_worker_data, ep, local_addr_data, local_addr_len_data, key_) == 0)
+		// if (send_req_data(ucp_worker_data, ep, local_addr_data, local_addr_len_data, key_) == 0)
 		if (send_req(ucp_worker_data, ep, local_addr_data, local_addr_len_data, key_) == 0)
 		{
 			pthread_mutex_unlock(&lock_network);

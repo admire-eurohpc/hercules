@@ -204,8 +204,10 @@ void *handle_client(void *arg)
 	{
 		do
 		{
+			fprintf(stderr, "progressing worker\n");
 			ucp_worker_progress(ucp_worker);
 			/* Probing incoming events in non-block mode */
+			fprintf(stderr, "progressing ucp_tag_probe_nb\n");
 			msg_tag = ucp_tag_probe_nb(ucp_worker, tag_req, tag_mask, 1, &info_tag);
 		} while (msg_tag == NULL);
 		// char recv_buffer[1024];
@@ -1597,7 +1599,8 @@ void *stat_worker(void *th_argv)
 									UCP_EP_PARAM_FIELD_ERR_HANDLING_MODE |
 									UCP_EP_PARAM_FIELD_ERR_HANDLER |
 									UCP_EP_PARAM_FIELD_USER_DATA;
-			ep_params->err_mode = UCP_ERR_HANDLING_MODE_PEER;
+			// ep_params->err_mode = UCP_ERR_HANDLING_MODE_PEER;
+			ep_params->err_mode = UCP_ERR_HANDLING_MODE_NONE;
 			ep_params->err_handler.cb = err_cb_server;
 			// ep_params->err_handler.arg = NULL;
 
@@ -2788,6 +2791,14 @@ int srv_worker_helper(void *th_argv)
 			// sleep(10);
 			// map_server_eps_erase(map_server_eps, arguments->worker_uid, arguments->ucp_worker); // commented for testing purposes.
 			slog_debug("[srv_worker_thread][READ_OP][RELEASE]");
+			char release_msg[] = "RELEASE\0";
+			ret = TIMING(send_data(arguments->ucp_worker, arguments->server_ep, release_msg, strlen(release_msg) + 1, arguments->worker_uid), "[srv_worker_thread][READ_OP][RENAME_OP] Send release", int);
+			if (ret == 0)
+			{
+				perror("ERR_HERCULES_SRV_SEND_DATA_RELEASE");
+				slog_error("ERR_HERCULES_SRV_SEND_DATA_RELEASE");
+				return -1;
+			}
 			return 2;
 			break;
 		}
