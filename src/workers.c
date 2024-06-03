@@ -204,10 +204,10 @@ void *handle_client(void *arg)
 	{
 		do
 		{
-			fprintf(stderr, "progressing worker\n");
+			// fprintf(stderr, "progressing worker\n");
 			ucp_worker_progress(ucp_worker);
 			/* Probing incoming events in non-block mode */
-			fprintf(stderr, "progressing ucp_tag_probe_nb\n");
+			// fprintf(stderr, "progressing ucp_tag_probe_nb\n");
 			msg_tag = ucp_tag_probe_nb(ucp_worker, tag_req, tag_mask, 1, &info_tag);
 		} while (msg_tag == NULL);
 		// char recv_buffer[1024];

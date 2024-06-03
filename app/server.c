@@ -578,7 +578,7 @@ int32_t main(int32_t argc, char **argv)
 			worker_attr.field_mask = UCP_WORKER_ATTR_FIELD_ADDRESS;
 			status = ucp_worker_query(ucp_worker_threads[indx], &worker_attr);
 			local_addr_len[indx] = worker_attr.address_length;
-			f[indx] = worker_attr.address;
+			local_addr[indx] = worker_attr.address;
 
 			// Add the reference to the map into the set of thread arguments.
 			arguments[i].map = map;
