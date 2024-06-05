@@ -866,50 +866,50 @@ int32_t open_imss(char *imss_uri)
 		size_t addr_len;
 		int ret = 0;
 
-		fprintf(stderr, "Connecting to %s:%d\n", new_imss.info.ips[i], new_imss.info.conn_port);
-		// Open a socket communication with a data server dispatcher.
-		oob_sock = connect_common(new_imss.info.ips[i], new_imss.info.conn_port, AF_INET);
-		if (oob_sock < 0)
-		{
-			char err_msg[128];
-			sprintf(err_msg, "HERCULES_ERR_CONNECT_COMMON - i=%d - %s:%d", i, new_imss.info.ips[i], new_imss.info.conn_port);
-			slog_error("%s", err_msg);
-			perror(err_msg);
-			return -1;
-		}
+		// fprintf(stderr, "Connecting to %s:%d\n", new_imss.info.ips[i], new_imss.info.conn_port);
+		// // Open a socket communication with a data server dispatcher.
+		// oob_sock = connect_common(new_imss.info.ips[i], new_imss.info.conn_port, AF_INET);
+		// if (oob_sock < 0)
+		// {
+		// 	char err_msg[128];
+		// 	sprintf(err_msg, "HERCULES_ERR_CONNECT_COMMON - i=%d - %s:%d", i, new_imss.info.ips[i], new_imss.info.conn_port);
+		// 	slog_error("%s", err_msg);
+		// 	perror(err_msg);
+		// 	return -1;
+		// }
 
-		char request[REQUEST_SIZE];
-		sprintf(request, "%" PRIu32 " GET %s", process_rank, "HELLO!JOIN");
-		slog_live("[open_imss] ip_address=%s:%d", new_imss.info.ips[i], new_imss.info.conn_port);
-		// Request for an UCX worker address.
-		if (send(oob_sock, request, REQUEST_SIZE, 0) < 0)
-		{
-			perror("HERCULES_ERR_STAT_HELLO_1");
-			return -1;
-		}
-		// Get the worker address lenght.
-		ret = recv(oob_sock, &addr_len, sizeof(addr_len), MSG_WAITALL);
-		if (ret < 0)
-		{
-			perror("HERCULES_ERR_RECV_1_HELLO");
-			close(oob_sock);
-			return -1;
-		}
-		new_imss.conns.peer_addr[i] = (ucp_address *)malloc(addr_len);
-		// Get the worker address.
-		ret = recv(oob_sock, new_imss.conns.peer_addr[i], addr_len, MSG_WAITALL);
-		if (ret < 0)
-		{
-			perror("HERCULES_ERR_RECV_2_HELLO");
-			close(oob_sock);
-			return -1;
-		}
-		// Close the socket fd.
-		if (ret < close(oob_sock))
-		{
-			perror("HERCULES_ERR_CLOSE_SOCKET");
-			return -1;
-		}
+		// char request[REQUEST_SIZE];
+		// sprintf(request, "%" PRIu32 " GET %s", process_rank, "HELLO!JOIN");
+		// slog_live("[open_imss] ip_address=%s:%d", new_imss.info.ips[i], new_imss.info.conn_port);
+		// // Request for an UCX worker address.
+		// if (send(oob_sock, request, REQUEST_SIZE, 0) < 0)
+		// {
+		// 	perror("HERCULES_ERR_STAT_HELLO_1");
+		// 	return -1;
+		// }
+		// // Get the worker address lenght.
+		// ret = recv(oob_sock, &addr_len, sizeof(addr_len), MSG_WAITALL);
+		// if (ret < 0)
+		// {
+		// 	perror("HERCULES_ERR_RECV_1_HELLO");
+		// 	close(oob_sock);
+		// 	return -1;
+		// }
+		// new_imss.conns.peer_addr[i] = (ucp_address *)malloc(addr_len);
+		// // Get the worker address.
+		// ret = recv(oob_sock, new_imss.conns.peer_addr[i], addr_len, MSG_WAITALL);
+		// if (ret < 0)
+		// {
+		// 	perror("HERCULES_ERR_RECV_2_HELLO");
+		// 	close(oob_sock);
+		// 	return -1;
+		// }
+		// // Close the socket fd.
+		// if (ret < close(oob_sock))
+		// {
+		// 	perror("HERCULES_ERR_CLOSE_SOCKET");
+		// 	return -1;
+		// }
 
 		new_imss.conns.id[i] = i;
 
@@ -934,6 +934,7 @@ int32_t open_imss(char *imss_uri)
 
 		// client_create_ep(ucp_worker_data, &new_imss.conns.eps[i], new_imss.conns.peer_addr[i]);
 		slog_debug("[IMSS] open_imss: Created endpoint with %s", (new_imss.info.ips)[i]);
+		fprintf(stderr, "Created endpoint with %s\n", (new_imss.info.ips)[i]);
 	}
 
 	// /* UCP objects */
@@ -945,8 +946,6 @@ int32_t open_imss(char *imss_uri)
 	// run_client(ucp_worker, server_address, new_imss.info.conn_port + 1, CLIENT_SERVER_SEND_RECV_TAG);
 	// ucp_worker_destroy(ucp_worker);
 	// ucp_cleanup(ucp_context);
-
-	// exit(1);
 
 	// If the struct was found within the vector but uninitialized, once updated, store it in the same position.
 	if (not_initialized)
@@ -3218,25 +3217,22 @@ int32_t set_data(int32_t dataset_id, int32_t data_id, const void *buffer, size_t
 	pthread_mutex_lock(&lock_network);
 	char key_[REQUEST_SIZE];
 	int32_t curr_imss_storages = curr_imss.info.num_storages;
-
 	// slog_debug("[IMSS][set_data] get_data_location(dataset_id:%ld, data_id:%ld, SET:%d), n_server:%ld, curr_imss_storages:%ld", dataset_id, data_id, SET, n_server, curr_imss_storages);
-
 	// Send the data block to every server implementing redundancy.
 	for (int32_t i = 0; i < curr_dataset.repl_factor; i++)
 	{
 		ucp_ep_h ep;
 		// Server receiving the current data block.
 		uint32_t n_server_ = (n_server + i * (curr_imss_storages / curr_dataset.repl_factor)) % curr_imss_storages;
-
 		//	gettimeofday(&start, NULL);
-
 		if (data_id == 0)
 			size = sizeof(struct stat);
 		else if (size == 0)
 			size = curr_dataset.data_entity_size;
 
 		sprintf(key_, "SET %lu %ld %s$%d", size, offset, curr_dataset.uri_, data_id);
-		slog_info("[IMSS][set_data] BLOCK %d SENT TO %d SERVER with Request: %s (%d)", data_id, n_server_, key_, size);
+		slog_info("[IMSS][set_data] BLOCK %d SENT TO %d SERVER with Request: %s (%lu)", data_id, n_server_, key_, size);
+		// fprintf(stderr, "BLOCK %d SENT TO %d SERVER with Request: %s (%lu)\n", data_id, n_server_, key_, size);
 		ep = curr_imss.conns.eps[n_server_];
 		/////////////
 		// ucs_status_t status;
@@ -3255,8 +3251,8 @@ int32_t set_data(int32_t dataset_id, int32_t data_id, const void *buffer, size_t
 		// in a dataset (curr_dataset.uri).
 		if (send_req_data(ucp_worker_data, ep, local_addr_data, local_addr_len_data, key_) == 0)
 		{
-			pthread_mutex_unlock(&lock_network);
 			perror("HERCULES_ERR_SET_REQ_SEND_REQ");
+			pthread_mutex_unlock(&lock_network);
 			slog_error("HERCULES_ERR_SET_REQ_SEND_REQ");
 			// return -1;
 			exit(-1);
@@ -3267,8 +3263,8 @@ int32_t set_data(int32_t dataset_id, int32_t data_id, const void *buffer, size_t
 		// send the data to the data server of the current dataset.
 		if (send_data(ucp_worker_data, ep, buffer, size, local_data_uid) == 0)
 		{
-			pthread_mutex_unlock(&lock_network);
 			perror("HERCULES_ERR_SEND_DATA_SEND_DATA");
+			pthread_mutex_unlock(&lock_network);
 			slog_error("HERCULES_ERR_SEND_DATA_SEND_DATA");
 			return -1;
 		}

@@ -757,13 +757,13 @@ int getConfiguration()
 		strcpy(METADATA_FILE, aux);
 	}
 
-	if (cfg_get(cfg, "DEBUG_LEVEL"))
+	if (getenv("DEBUG_LEVEL") != NULL)
+	{
+		aux = getenv("DEBUG_LEVEL");
+	}
+	else if (cfg_get(cfg, "DEBUG_LEVEL"))
 	{
 		aux = cfg_get(cfg, "DEBUG_LEVEL");
-	}
-	else if (getenv("IMSS_DEBUG") != NULL)
-	{
-		aux = getenv("IMSS_DEBUG");
 	}
 	else
 	{
@@ -795,7 +795,7 @@ int getConfiguration()
 			IMSS_DEBUG_FILE = 0;
 			IMSS_DEBUG_SCREEN = 0;
 			IMSS_DEBUG_LEVEL = SLOG_NONE;
-			unsetenv("IMSS_DEBUG");
+			unsetenv("DEBUG_LEVEL");
 		}
 		else
 		{
@@ -901,7 +901,7 @@ void __attribute__((destructor)) run_me_last()
 		release_imss("imss://", CLOSE_DETACHED);
 		slog_debug("[POSIX] stat_release()");
 		// stat_release();
-		
+
 		//  imss_comm_cleanup();
 		//  t_s = clock() - t_s;
 		//  time_taken = ((double)t_s) / (CLOCKS_PER_SEC);
@@ -3208,10 +3208,10 @@ ssize_t pwrite(int fd, const void *buf, size_t count, off_t offset)
 	char *pathname = map_fd_search_by_val(map_fd, fd);
 	if (pathname != NULL)
 	{
-		slog_debug("[POSIX] Calling Hercules 'pwrite', pathname=%s, fd=%d, count=%ld, offset=%ld, errno=%d:%s", pathname, fd, count, offset, errno, strerror(errno));
+		slog_debug("[POSIX] Calling Hercules 'pwrite', pathname=%s, fd=%d, count=%ld, offset=%ld", pathname, fd, count, offset);
 		// ret = imss_write(pathname, buf, count, offset);
 		ret = generalWrite(pathname, fd, buf, count, offset);
-		slog_debug("[POSIX] Ending Hercules 'pwrite', pathname=%s, fd=%d, ret=%ld, count=%ld, offset=%ld, errno=%d:%s", pathname, fd, ret, count, offset, errno, strerror(errno));
+		slog_debug("[POSIX] Ending Hercules 'pwrite', pathname=%s, fd=%d, ret=%ld, count=%ld, offset=%ld", pathname, fd, ret, count, offset);
 	}
 	else
 	{

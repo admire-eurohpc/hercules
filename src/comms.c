@@ -480,40 +480,40 @@ size_t get_recv_data_length(ucp_worker_h ucp_worker, uint64_t dest)
 	ucp_tag_recv_info_t info_tag;
 	ucp_tag_message_h msg_tag;
 	// async = 1;
-	// do
-	// {
-	// 	/* Progressing before probe to update the state */
-	// 	ucp_worker_progress(ucp_worker);
-	// 	/* Probing incoming events in non-block mode */
-	// 	msg_tag = ucp_tag_probe_nb(ucp_worker, dest, tag_mask, 0, &info_tag);
-	// } while (msg_tag == NULL);
-
-	ucs_status_t status;
-	/* Receive test string from server */
-	for (;;)
+	do
 	{
+		/* Progressing before probe to update the state */
+		ucp_worker_progress(ucp_worker);
 		/* Probing incoming events in non-block mode */
 		msg_tag = ucp_tag_probe_nb(ucp_worker, dest, tag_mask, 0, &info_tag);
-		if (msg_tag != NULL)
-		{
-			/* Message arrived */
-			break;
-		}
-		else if (ucp_worker_progress(ucp_worker))
-		{
-			/* Some events were polled; try again without going to sleep */
-			continue;
-		}
-		/* If we got here, ucp_worker_progress() returned 0, so we can sleep.
-		 * Following blocked methods used to polling internal file descriptor
-		 * to make CPU idle and don't spin loop
-		 */
-		// if (ucp_test_mode == TEST_MODE_WAIT)
-		{
-			/* Polling incoming events*/
-			status = ucp_worker_wait(ucp_worker);
-		}
-	}
+	} while (msg_tag == NULL);
+
+	// ucs_status_t status;
+	// /* Receive test string from server */
+	// for (;;)
+	// {
+	// 	/* Probing incoming events in non-block mode */
+	// 	msg_tag = ucp_tag_probe_nb(ucp_worker, dest, tag_mask, 0, &info_tag);
+	// 	if (msg_tag != NULL)
+	// 	{
+	// 		/* Message arrived */
+	// 		break;
+	// 	}
+	// 	else if (ucp_worker_progress(ucp_worker))
+	// 	{
+	// 		/* Some events were polled; try again without going to sleep */
+	// 		continue;
+	// 	}
+	// 	/* If we got here, ucp_worker_progress() returned 0, so we can sleep.
+	// 	 * Following blocked methods used to polling internal file descriptor
+	// 	 * to make CPU idle and don't spin loop
+	// 	 */
+	// 	// if (ucp_test_mode == TEST_MODE_WAIT)
+	// 	{
+	// 		/* Polling incoming events*/
+	// 		status = ucp_worker_wait(ucp_worker);
+	// 	}
+	// }
 
 	// pthread_mutex_unlock(&lock_ucx_comm);
 
@@ -1467,7 +1467,7 @@ int connect_common(const char *server, uint64_t server_port, sa_family_t af)
 		}
 		struct sockaddr_in *addr;
 		addr = (struct sockaddr_in *)t->ai_addr;
-		fprintf(stderr, "IP %s\n", inet_ntoa((struct in_addr)addr->sin_addr));
+		// fprintf(stderr, "IP %s\n", inet_ntoa((struct in_addr)addr->sin_addr));
 		if (server != NULL)
 		{
 			if (connect(sockfd, t->ai_addr, t->ai_addrlen) == 0)
@@ -1916,7 +1916,7 @@ out:
 
 void set_sock_addr(const char *address_str, struct sockaddr_storage *saddr, uint64_t server_port, int is_server)
 {
-	fprintf(stderr, "Connecting to %s:%lu\n", address_str, server_port);
+	// fprintf(stderr, "Connecting to %s:%lu\n", address_str, server_port);
 	struct sockaddr_in *sa_in;
 	struct sockaddr_in6 *sa_in6;
 	char service[8];
@@ -1948,7 +1948,7 @@ void set_sock_addr(const char *address_str, struct sockaddr_storage *saddr, uint
 			if (!is_server)
 			{
 				ip_address = inet_ntoa((struct in_addr)addr->sin_addr); // inet_ntoa((struct in_addr)sa_in->sin_addr);
-				fprintf(stderr, "** IP %s\n", ip_address);
+				// fprintf(stderr, "** IP %s\n", ip_address);
 			}
 			else
 			{
