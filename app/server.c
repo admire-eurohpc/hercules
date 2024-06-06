@@ -275,7 +275,7 @@ int32_t main(int32_t argc, char **argv)
 	char log_path[1000];
 	slog_debug("Server type=%c\n", args.type);
 	struct tm tm = *localtime(&t);
-	sprintf(log_path, "./%c-server.%02d-%02d-%02d", args.type, tm.tm_hour, tm.tm_min, tm.tm_sec);
+	sprintf(log_path, "./%c-server-%d.%02d-%02d-%02d", args.type, args.id, tm.tm_hour, tm.tm_min, tm.tm_sec);
 	// sprintf(log_path, "./%c-server", args.type);
 	slog_init(log_path, IMSS_DEBUG_LEVEL, IMSS_DEBUG_FILE, IMSS_DEBUG_SCREEN, 1, 1, 1, args.id);
 	// fprintf(stderr, "IMSS DEBUG FILE AT %s\n", log_path);

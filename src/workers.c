@@ -970,10 +970,11 @@ int srv_worker_helper(p_argv *arguments, const char *req)
 				void *buffer = (void *)StsQueue.pop(mem_pool);
 				tp = clock() - tp;
 				double time_taken2 = ((double)tp) / CLOCKS_PER_SEC; // in seconds
-																	// slog_info("[srv_worker_helper] pop time %f s", time_taken2);
-																	//  Receive the block into the buffer.
-																	// if (buffer == NULL)
-																	// char *buffer = (char *)malloc(block_size_recv);
+				// slog_info("[srv_worker_helper] pop time %f s", time_taken2);
+				//  Receive the block into the buffer.
+				if (buffer == NULL)
+					buffer = (void *)calloc(BLOCK_SIZE, sizeof(char));
+				// char *buffer = (char *)malloc(block_size_recv);
 				clock_t tr;
 				// TIMING(recv_data(arguments->ucp_worker, arguments->server_ep, buffer, arguments->worker_uid, 1), "[srv_worker_thread][WRITE_OP] recv_data: Receive the block into the buffer.");
 				size_t msg_length = 0;
@@ -1116,7 +1117,6 @@ void *garbage_collector(void *th_argv)
 	}
 	pthread_exit(NULL);
 }
-
 
 // Thread method attending client read-write metadata requests.
 void *stat_worker(void *th_argv)
@@ -1372,7 +1372,7 @@ int stat_worker_helper(p_argv *arguments, char *req)
 			free(buffer);
 			break;
 		}
-		case READ_OP:	
+		case READ_OP:
 		{
 			// printf("STAT_WORKER READ_OP");
 			// Check if there was an associated block to the key.

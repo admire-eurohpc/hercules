@@ -45,7 +45,7 @@ int32_t map_records::put(std::string key, void *address, uint64_t length)
 	// Block the access to the map structure.
 	std::unique_lock<std::mutex> lock(*mut);
 	// Add a new couple to the map.
-	// printf("total_size=%ld, quantity_occupied=%ld\n",total_size, quantity_occupied);
+	// fprintf(stderr, "total_size=%ld bytes, quantity_occupied=%ld bytes\n",total_size, quantity_occupied);
 	if (quantity_occupied + length > total_size && total_size > 0)
 	{ // out of space
 		fprintf(stderr, "[Map record] Out of space  %ld/%ld.\n", quantity_occupied + length, total_size);
