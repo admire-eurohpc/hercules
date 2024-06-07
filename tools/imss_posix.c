@@ -451,6 +451,15 @@ char *convert_path(const char *name)
 	// add the URL to the new path.
 	strcat(new_path, "imss://");
 
+	// fprintf(stderr, "updated path=%s, desplacements=%ld\n", path, desplacements);
+	// if (!strncmp(path, "/", strlen("/")))
+	// {
+	// 	strcat(new_path, "imss:/");
+	// }
+	// else
+	// {
+	// 	strcat(new_path, "imss://");
+	// }
 	// add the path to the new_path, which has the URL prefix.
 	if (desplacements < len)
 	{
@@ -463,10 +472,16 @@ char *convert_path(const char *name)
 
 __attribute__((constructor)) void imss_posix_init(void)
 {
-	// setenv("UCX_TLS", "rc", 1);
 	errno = 0;
+	// double init_time = 0.0, finish_time = 0.0;
+	// double time_taken = 0.0;
+	// init_time = clock();
+	// time(&init_time);
+
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
+
+	// double begin = (tv.tv_sec) * 1000 + (tv.tv_usec) / 1000;
 
 	map_fd = map_fd_create();
 
@@ -502,6 +517,9 @@ __attribute__((constructor)) void imss_posix_init(void)
 		}
 	}
 
+	// fprintf(stderr, "[%d] ************ Calling constructor, HERCULES_PATH=%s, pid=%d, init=%d ************\n", rank, HERCULES_PATH, getpid(), init);
+
+	// sprintf(log_path, "%s/client.%02d-%02d.%d", HERCULES_PATH, tm.tm_hour, tm.tm_min, rank); // originial.
 	// log init.
 	time_t t = time(NULL);
 	struct tm tm = *localtime(&t);
@@ -517,7 +535,7 @@ __attribute__((constructor)) void imss_posix_init(void)
 	slog_debug(" -- HERCULES_HOSTFILE: %s", IMSS_HOSTFILE);
 	slog_debug(" -- HERCULES_N_SERVERS: %d", N_SERVERS);
 	slog_debug(" -- HERCULES_SRV_PORT: %d", IMSS_SRV_PORT);
-	slog_debug(" -- HERCULES_BUFFSIZE: %ld GB", IMSS_BUFFSIZE);
+	slog_debug(" -- HERCULES_BUFFSIZE: %ld", IMSS_BUFFSIZE);
 	slog_debug(" -- META_HOSTFILE: %s", META_HOSTFILE);
 	slog_debug(" -- HERCULES_META_PORT: %d", METADATA_PORT);
 	slog_debug(" -- HERCULES_META_SERVERS: %d", N_META_SERVERS);
@@ -542,8 +560,6 @@ __attribute__((constructor)) void imss_posix_init(void)
 		// return;
 		exit(1);
 	}
-
-	// exit(1);
 
 	// if (DEPLOYMENT == 2 && release == 1)
 	if (DEPLOYMENT == 2)
@@ -757,13 +773,13 @@ int getConfiguration()
 		strcpy(METADATA_FILE, aux);
 	}
 
-	if (getenv("DEBUG_LEVEL") != NULL)
-	{
-		aux = getenv("DEBUG_LEVEL");
-	}
-	else if (cfg_get(cfg, "DEBUG_LEVEL"))
+	if (cfg_get(cfg, "DEBUG_LEVEL"))
 	{
 		aux = cfg_get(cfg, "DEBUG_LEVEL");
+	}
+	else if (getenv("IMSS_DEBUG") != NULL)
+	{
+		aux = getenv("IMSS_DEBUG");
 	}
 	else
 	{
@@ -795,7 +811,7 @@ int getConfiguration()
 			IMSS_DEBUG_FILE = 0;
 			IMSS_DEBUG_SCREEN = 0;
 			IMSS_DEBUG_LEVEL = SLOG_NONE;
-			unsetenv("DEBUG_LEVEL");
+			unsetenv("IMSS_DEBUG");
 		}
 		else
 		{
@@ -898,10 +914,9 @@ void __attribute__((destructor)) run_me_last()
 		// t_s = clock();
 		release = -1;
 		slog_debug("[POSIX] release_imss()");
-		release_imss("imss://", CLOSE_DETACHED);
+		// release_imss("imss://", CLOSE_DETACHED);
 		slog_debug("[POSIX] stat_release()");
 		// stat_release();
-
 		//  imss_comm_cleanup();
 		//  t_s = clock() - t_s;
 		//  time_taken = ((double)t_s) / (CLOCKS_PER_SEC);
@@ -1534,9 +1549,9 @@ char *realpath(const char *pathname, char *resolved_path)
 	// }
 	// else
 	{
-		slog_full("[POSIX]. Calling real 'realpath', pathname=%s", pathname);
+		slog_debug("[POSIX]. Calling real 'realpath', pathname=%s", pathname);
 		p = real_realpath(pathname, resolved_path);
-		slog_full("[POSIX]. Ending real 'realpath', pathname=%s, resolved_path=%s, ret=%d\n", pathname, resolved_path, ret);
+		slog_debug("[POSIX]. Ending real 'realpath', pathname=%s, resolved_path=%s, ret=%d\n", pathname, resolved_path, ret);
 	}
 	return p;
 }
@@ -3208,10 +3223,10 @@ ssize_t pwrite(int fd, const void *buf, size_t count, off_t offset)
 	char *pathname = map_fd_search_by_val(map_fd, fd);
 	if (pathname != NULL)
 	{
-		slog_debug("[POSIX] Calling Hercules 'pwrite', pathname=%s, fd=%d, count=%ld, offset=%ld", pathname, fd, count, offset);
+		slog_debug("[POSIX] Calling Hercules 'pwrite', pathname=%s, fd=%d, count=%ld, offset=%ld, errno=%d:%s", pathname, fd, count, offset, errno, strerror(errno));
 		// ret = imss_write(pathname, buf, count, offset);
 		ret = generalWrite(pathname, fd, buf, count, offset);
-		slog_debug("[POSIX] Ending Hercules 'pwrite', pathname=%s, fd=%d, ret=%ld, count=%ld, offset=%ld", pathname, fd, ret, count, offset);
+		slog_debug("[POSIX] Ending Hercules 'pwrite', pathname=%s, fd=%d, ret=%ld, count=%ld, offset=%ld, errno=%d:%s", pathname, fd, ret, count, offset, errno, strerror(errno));
 	}
 	else
 	{
@@ -3534,6 +3549,15 @@ int unlink(const char *name)
 		{
 			slog_debug("[POSIX] type=%d, new_path=%s", type, new_path);
 			ret = imss_unlink(new_path);
+			if (ret == 3)
+			{
+				int ret_map = map_fd_erase_by_pathname(map_fd, new_path);
+				if (ret_map == -1)
+				{
+					slog_error("[POSIX]. Error Hercules no file descriptor found for the pathname=%s", new_path);
+				}
+			}
+			ret = 0;
 		}
 
 		// unlink error.

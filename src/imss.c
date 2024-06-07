@@ -2134,7 +2134,7 @@ int32_t get_data_location(int32_t dataset_id, int32_t data_id, int32_t op_type)
 	slog_debug("[IMSS] dataset_id=%d, current_dataset=%d", dataset_id, current_dataset);
 	// fprintf(stderr,"[get_data_location] current_dataset=%d, dataset_id=%d\n", current_dataset, dataset_id);
 
-	// if (current_dataset != dataset_id) // TO FIX: if a thread does not met the condition, their curr_datset could have the value of the previous thread. curr_dataset is global.
+	if (current_dataset != dataset_id) // TO FIX: if a thread does not met the condition, their curr_datset could have the value of the previous thread. curr_dataset is global.
 	{
 		// Retrieve the corresponding dataset_info structure and the associated IMSS.
 		curr_dataset = g_array_index(datasetd, dataset_info, dataset_id);
