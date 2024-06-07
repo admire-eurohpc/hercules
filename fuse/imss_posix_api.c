@@ -2340,6 +2340,8 @@ int imss_unlink(const char *path)
 				slog_error("ERR_HERCULES_RELEASE_DATASET");
 			}
 
+			ret = 3; 
+
 			break;
 		}
 		default: // error deleting the dataset.

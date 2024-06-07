@@ -504,7 +504,7 @@ __attribute__((constructor)) void imss_posix_init(void)
 	{
 		exit(EXIT_FAILURE);
 	}
-	
+
 	IMSS_DATA_BSIZE = IMSS_BLKSIZE * KB; // block size in bytes.
 	// Hercules init -- Attached deploy
 	if (DEPLOYMENT == 1)
@@ -2493,7 +2493,7 @@ ssize_t generalWrite(const char *pathname, int fd, const void *buf, size_t size,
 		slog_debug("current size=%ld", ds_stat_n.st_size);
 
 		// imss_getattr(pathname, &ds_stat_n);
-		//if (ret < 0)
+		// if (ret < 0)
 		if (fd_lkup == -1)
 		{
 			// errno = -ret;
@@ -3440,7 +3440,7 @@ ssize_t pread(int fd, void *buf, size_t count, off_t offset)
 		// }
 		// else
 		{
-			//ret = imss_read(pathname, buf, count, offset);
+			// ret = imss_read(pathname, buf, count, offset);
 			ret = imss_sread(pathname, buf, count, offset);
 			// The file offset is not changed.
 		}
@@ -3549,6 +3549,15 @@ int unlink(const char *name)
 		{
 			slog_debug("[POSIX] type=%d, new_path=%s", type, new_path);
 			ret = imss_unlink(new_path);
+			if (ret == 3)
+			{
+				int ret_map = map_fd_erase_by_pathname(map_fd, new_path);
+				if (ret_map == -1)
+				{
+					slog_error("[POSIX]. Error Hercules no file descriptor found for the pathname=%s", new_path);
+				}
+			}
+			ret = 0;
 		}
 
 		// unlink error.
