@@ -232,10 +232,12 @@ size_t send_req(ucp_worker_h ucp_worker, ucp_ep_h ep, ucp_address_t *addr, size_
 	ctx.complete = 0;
 	ctx.buffer = (char *)msg;
 
-	send_param.op_attr_mask = UCP_OP_ATTR_FIELD_CALLBACK |
+	send_param.op_attr_mask = UCP_OP_ATTR_FIELD_DATATYPE |
+							  UCP_OP_ATTR_FIELD_CALLBACK |
+							  UCP_OP_ATTR_FLAG_NO_IMM_CMPL |
 							  UCP_OP_ATTR_FIELD_USER_DATA;
 
-	// send_param.datatype = ucp_dt_make_contig(1);
+	send_param.datatype = ucp_dt_make_contig(1);
 	send_param.cb.send = send_handler_req;
 	// send_param.memory_type  = UCS_MEMORY_TYPE_HOST;
 	send_param.user_data = &ctx;
