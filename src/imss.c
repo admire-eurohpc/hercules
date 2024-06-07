@@ -399,32 +399,42 @@ int32_t stat_init(char *stat_hostfile,
 		slog_debug("[IMSS][stat_int] Contacting stat dispatcher at %s:%ld", stat_node, port);
 		// fprintf(stderr,"[IMSS][stat_int] Contacting stat dispatcher at %s:%ld\n", stat_node, port);
 
-		oob_sock = connect_common(stat_node, port, AF_INET);
-		if (oob_sock < 0)
+		// oob_sock = connect_common(stat_node, port, AF_INET);
+		// if (oob_sock < 0)
+		// {
+		// 	char err_msg[100];
+		// 	sprintf(err_msg, "ERR_HERCULES_CONNECT-%s:%ld", stat_node, port);
+		// 	perror(err_msg);
+		// 	return -1;
+		// }
+
+		// sprintf(request, "%" PRIu32 " GET HELLO!", rank);
+		// slog_debug("[IMSS][stat_int] request=%s", request);
+		// if (send(oob_sock, request, REQUEST_SIZE, 0) < 0)
+		// {
+		// 	char err_msg[100];
+		// 	sprintf(err_msg, "ERR_HERCULES_STAT_HELLO_2-%s:%ld", stat_node, port);
+		// 	perror(err_msg);
+		// 	return -1;
+		// }
+
+		// ret = recv(oob_sock, &addr_len, sizeof(addr_len), MSG_WAITALL);
+		// stat_addr[i] = (ucp_address *)malloc(addr_len);
+		// ret = recv(oob_sock, stat_addr[i], addr_len, MSG_WAITALL);
+		// // slog_debug("[IMSS][stat_init] stat_addr=%s, len=%d", stat_addr[i], addr_len);
+		// close(oob_sock);
+
+		// client_create_ep(ucp_worker_meta, &stat_eps[i], stat_addr[i]);
+
+		status = start_client(ucp_worker_meta, stat_node, port + 1, &stat_eps[i]);
+		if (status != UCS_OK)
 		{
-			char err_msg[100];
-			sprintf(err_msg, "ERR_HERCULES_CONNECT-%s:%ld", stat_node, port);
-			perror(err_msg);
-			return -1;
+			fprintf(stderr, "failed to start client (%s)\n", ucs_status_string(status));
+			ret = -1;
+			// goto out;
+			return ret;
 		}
 
-		sprintf(request, "%" PRIu32 " GET HELLO!", rank);
-		slog_debug("[IMSS][stat_int] request=%s", request);
-		if (send(oob_sock, request, REQUEST_SIZE, 0) < 0)
-		{
-			char err_msg[100];
-			sprintf(err_msg, "ERR_HERCULES_STAT_HELLO_2-%s:%ld", stat_node, port);
-			perror(err_msg);
-			return -1;
-		}
-
-		ret = recv(oob_sock, &addr_len, sizeof(addr_len), MSG_WAITALL);
-		stat_addr[i] = (ucp_address *)malloc(addr_len);
-		ret = recv(oob_sock, stat_addr[i], addr_len, MSG_WAITALL);
-		// slog_debug("[IMSS][stat_init] stat_addr=%s, len=%d", stat_addr[i], addr_len);
-		close(oob_sock);
-
-		client_create_ep(ucp_worker_meta, &stat_eps[i], stat_addr[i]);
 		slog_debug("[IMSS][stat_init] created ep with %s:%ld", stat_node, port);
 	}
 	// Close the file.
@@ -934,7 +944,7 @@ int32_t open_imss(char *imss_uri)
 
 		// client_create_ep(ucp_worker_data, &new_imss.conns.eps[i], new_imss.conns.peer_addr[i]);
 		slog_debug("[IMSS] open_imss: Created endpoint with %s", (new_imss.info.ips)[i]);
-		fprintf(stderr, "Created endpoint with %s\n", (new_imss.info.ips)[i]);
+		// fprintf(stderr, "Created endpoint with %s\n", (new_imss.info.ips)[i]);
 	}
 
 	// /* UCP objects */
@@ -1053,7 +1063,7 @@ int32_t release_imss(char *imss_uri, uint32_t release_op)
 			}
 			// free the message received from the metadata server.
 			free(result);
-			pthread_mutex_unlock(&lock_network);
+			// pthread_mutex_unlock(&lock_network);
 			// slog_live("closing endpoint %d", i);
 			// close_ucx_endpoint(ucp_worker_data, ep);
 
@@ -1070,11 +1080,11 @@ int32_t release_imss(char *imss_uri, uint32_t release_op)
 	}
 	slog_live("flusing data worker");
 	// Optionally, flush the worker
-	ucs_status_t status = ucp_worker_flush(ucp_worker_data);
-	if (status != UCS_OK)
-	{
-		fprintf(stderr, "Failed to flush worker: %s\n", ucs_status_string(status));
-	}
+	// ucs_status_t status = ucp_worker_flush(ucp_worker_data);
+	// if (status != UCS_OK)
+	// {
+	// 	fprintf(stderr, "Failed to flush worker: %s\n", ucs_status_string(status));
+	// }
 	slog_live("destroying data worker");
 	// Destroy the worker
 	ucp_worker_destroy(ucp_worker_data);

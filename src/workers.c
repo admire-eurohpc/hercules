@@ -90,85 +90,6 @@ int ready(char *tmp_file_path, const char *msg)
 	return 0;
 }
 
-// int write_2_disk(char *filename)
-// {
-// 	char disk_path[PATH_MAX];
-// 	sprintf(disk_path, "/beegfs/home/javier.garciablas/hercules/bash/disk/%s", filename);
-// 	int file_fd = open(disk_path, O_CREAT | O_WRONLY | O_TRUNC, 0600);
-// 	if (file_fd < 0)
-// 	{
-// 		// fprintf(stderr, "Error opening file %s on the server, fd=%d\n", my_path, fd_);
-// 		perror("ERR_HERCULES_OPEN_DISK");
-// 		slog_error("ERR_HERCULES_OPEN_DISK");
-// 		return -1;
-// 	}
-// 	ssize_t bytes = write(file_fd, buffer, block_size_recv);
-// 	if (bytes < 0)
-// 	{
-// 		perror("ERR_HERCULES_WRITE_DISK");
-// 		slog_error("ERR_HERCULES_WRITE_DISK");
-// 		ret = close(file_fd);
-// 		if (ret < 0)
-// 		{
-// 			perror("ERR_HERCULES_CLOSE_DISK");
-// 			slog_error("ERR_HERCULES_CLOSE_DISK");
-// 		}
-// 		return -1;
-// 	}
-// 	ret = close(file_fd);
-// 	if (ret < 0)
-// 	{
-// 		perror("ERR_HERCULES_CLOSE_DISK");
-// 		slog_error("ERR_HERCULES_CLOSE_DISK");
-// 		return -1;
-// 	}
-// 	return 0;
-// }
-
-static ucs_status_t test_poll_wait(ucp_worker_h ucp_worker)
-{
-	int err = 0;
-	ucs_status_t ret = UCS_ERR_NO_MESSAGE;
-	int epoll_fd_local = 0;
-	int epoll_fd = 0;
-	ucs_status_t status;
-	struct epoll_event ev;
-	ev.data.u64 = 0;
-
-	status = ucp_worker_get_efd(ucp_worker, &epoll_fd);
-	// CHKERR_JUMP(UCS_OK != status, "ucp_worker_get_efd", err);
-
-	/* It is recommended to copy original fd */
-	epoll_fd_local = epoll_create(1);
-
-	ev.data.fd = epoll_fd;
-	ev.events = EPOLLIN;
-	err = epoll_ctl(epoll_fd_local, EPOLL_CTL_ADD, epoll_fd, &ev);
-	// CHKERR_JUMP(err < 0, "add original socket to the new epoll\n", err_fd);
-
-	/* Need to prepare ucp_worker before epoll_wait */
-	status = ucp_worker_arm(ucp_worker);
-	if (status == UCS_ERR_BUSY)
-	{ /* some events are arrived already */
-		ret = UCS_OK;
-		goto err_fd;
-	}
-	// CHKERR_JUMP(status != UCS_OK, "ucp_worker_arm\n", err_fd);
-
-	do
-	{
-		err = epoll_wait(epoll_fd_local, &ev, 1, -1);
-	} while ((err == -1) && (errno == EINTR));
-
-	ret = UCS_OK;
-
-err_fd:
-	close(epoll_fd_local);
-
-err:
-	return ret;
-}
-
 typedef struct
 {
 	ucp_worker_h worker;
@@ -200,19 +121,14 @@ void *handle_client(void *arg)
 	msg_req_t *msg;
 	int ret = 0;
 	// fprintf(stderr, "Handling client in thread\n");
-	slog_live("Handling client in thread");
-	int iteration = 0;
-	// pthread_mutex_lock(&lock_server_network);
 	for (;;)
 	{
 		do
 		{
 			// fprintf(stderr, "progressing worker\n");
-			// slog_debug("progressing worker");
 			ucp_worker_progress(ucp_worker);
 			/* Probing incoming events in non-block mode */
 			// fprintf(stderr, "progressing ucp_tag_probe_nb\n");
-			// slog_debug("ucp_tag_probe_nb");
 			msg_tag = ucp_tag_probe_nb(ucp_worker, tag_req, tag_mask, 1, &info_tag);
 		} while (msg_tag == NULL);
 		// char recv_buffer[1024];
@@ -237,7 +153,6 @@ void *handle_client(void *arg)
 		// slog_debug("New req, message length=%ld bytes.", info_tag.length);
 		// info_tag.length = 1000;
 		// fprintf(stderr, "New req, message length=%ld bytes.\n", info_tag.length);
-		slog_live("New req, message length=%ld bytes.", info_tag.length);
 		msg = (msg_req_t *)malloc(info_tag.length);
 
 		recv_param.op_attr_mask = UCP_OP_ATTR_FIELD_CALLBACK |
@@ -259,7 +174,7 @@ void *handle_client(void *arg)
 		ucp_worker_address_attr_t attr;
 		attr.field_mask = UCP_WORKER_ADDRESS_ATTR_FIELD_UID;
 		ucp_worker_address_query(peer_addr, &attr);
-		slog_debug("[srv_worker_thread] Receiving request from %" PRIu64 ".", attr.worker_uid);
+		slog_debug("Receiving request from %" PRIu64 ".", attr.worker_uid);
 
 		// //  look for this peer_addr in the map and get the ep
 		// ret = map_server_eps_search(map_server_eps, attr.worker_uid, &ep);
@@ -290,33 +205,30 @@ void *handle_client(void *arg)
 		arguments.server_ep = client_ep; // FIX = this is provisional until map_servers_eps is implemented.
 		arguments.worker_uid = attr.worker_uid;
 		arguments.req = req;
-		// fprintf(stderr, "Attending request \t'%s' from \t%" PRIu64 "\n", req, attr.worker_uid);
-		// Prints a symbol each 10 iterations to know Hercules is still working
-		// This can be comment.
-		// if (iteration++ % 10 == 0){ 	
-		// 	printf("#");
-		// 	fflush(stdout);
-		// }
-		slog_live("Attending request '%s'", req);
-		ret = srv_worker_helper(&arguments);
-		// fprintf(stderr, "Request '%s' has been attended\n", req);
-		slog_live("Request '%s' has been attended\n", req);
+		// fprintf(stderr, "Attending request '%s'\n", req);
+		switch (arguments.server_type)
+		{
+		case 'd':
+			ret = srv_worker_helper(&arguments);
+			break;
+		case 'm':
+			ret = stat_worker_helper(&arguments);
+			break;
+		default:
+			break;
+		}
 
+		// fprintf(stderr, "Request '%s' has been attended\n", req);
 		free(peer_addr);
-		// Client has release the endpoint.
 		if (ret == 2)
 		{
 			break;
 		}
 	}
-	// printf("\n");
 	// fprintf(stderr, "Client is finishing the communication\n");
-	slog_live("Client is finishing the communication");
-	ucp_ep_close_nb(client_ep, UCP_EP_CLOSE_MODE_FLUSH);
-	// ucp_ep_close_nb(client_ep, UCP_EP_CLOSE_MODE_FORCE);
+	// ucp_ep_close_nb(client_ep, UCP_EP_CLOSE_MODE_FLUSH);
+	ucp_ep_close_nb(client_ep, UCP_EP_CLOSE_MODE_FORCE);
 	// fprintf(stderr, "Ending thread\n");
-	slog_live("Ending thread\n");
-	// pthread_mutex_unlock(&lock_server_network);
 
 	return NULL;
 }
@@ -508,41 +420,81 @@ void *srv_worker(void *th_argv)
 		ucp_worker_progress(ucp_worker);
 	}
 
-	// fprintf(stderr, "Creating endpoint\n");
-	// /* Server creates an ep to the client on the data worker.
-	//  * This is not the worker the listener was created on.
-	//  * The client side should have initiated the connection, leading
-	//  * to this ep's creation */
-	// status = server_create_ep(ucp_data_worker, context.conn_request, &server_ep);
-	// if (status != UCS_OK)
-	// {
-	// 	fprintf(stderr, "Error creating endpoint\n");
-	// 	ret = -1;
-	// 	continue;
-	// 	// goto err_listener;
-	// }
-	// fprintf(stderr, "Endpoint created\n");
+	pthread_exit(NULL);
+}
 
-	/* The server waits for all the iterations to complete before moving on
-	 * to the next client */
-	// ret = client_server_do_work(ucp_data_worker, server_ep, CLIENT_SERVER_SEND_RECV_TAG, 1);
-	//  if (ret != 0)
-	//  {
-	//  	goto err_ep;
-	//  }
+// Thread method searching and cleaning nodes with st_nlink=0
+void *garbage_collector(void *th_argv)
+{
+	// Obtain the current map class element from the set of arguments.
+	map_records *map = (map_records *)th_argv;
 
-	/* Close the endpoint to the client */
-	// 	ep_close(ucp_data_worker, server_ep, UCP_EP_CLOSE_FLAG_FORCE);
+	for (;;)
+	{
+		// Gnodetraverse_garbage_collector(map);//Future
+		sleep(GARBAGE_COLLECTOR_PERIOD);
+		pthread_mutex_lock(&mutex_garbage);
+		map->cleaning();
+		pthread_mutex_unlock(&mutex_garbage);
+	}
+	pthread_exit(NULL);
+}
 
-	// 	/* Reinitialize the server's context to be used for the next client */
-	// 	context.conn_request = NULL;
+// Thread method attending client read-write metadata requests.
+void *stat_worker(void *th_argv)
+{
+	p_argv *arguments = (p_argv *)th_argv;
 
-	// 	fprintf(stderr, "Waiting for connection...\n");
-	// }
+	/* UCP objects */
+	ucp_context_h ucp_context;
+	ucp_worker_h ucp_worker; // = arguments->ucp_worker;
+
+	init_context_ori(&ucp_context, &ucp_worker, CLIENT_SERVER_SEND_RECV_TAG);
+
+	ucx_server_ctx_t context;
+	ucp_worker_h ucp_data_worker;
+	ucp_ep_h server_ep;
+	ucs_status_t status;
+	ucp_address_t *peer_addr;
+	ucp_am_handler_param_t param;
+	size_t peer_addr_len;
+	void *request = NULL;
+	// void *msg;
+	// struct msg *msg = NULL;
+	msg_req_t *msg;
+	int ret = 0;
+
+	/* Initialize the server's context. */
+	context.conn_request = NULL;
+	char *server_add = NULL;
+	arguments->ucp_context = ucp_context;
+	start_server(ucp_worker, ucp_context, &context, &context.listener, server_add, arguments->port + 1, arguments);
+
+	// p_argv *arguments = (p_argv *)th_argv;
+
+	map_server_eps = map_server_eps_create();
+
+	while (1)
+	{
+		status = ucp_worker_wait(ucp_worker);
+		if (status == UCS_ERR_BUSY)
+		{
+			// Work was already handled, continue the loop
+			continue;
+		}
+		else if (status != UCS_OK)
+		{
+			fprintf(stderr, "Failed to wait on UCX worker: %s\n", ucs_status_string(status));
+			break;
+		}
+		ucp_worker_progress(ucp_worker);
+	}
+
+	pthread_exit(NULL);
+	///
 
 	// for (;;)
 	// {
-	// 	// errno = 0;
 	// 	size_t peer_addr_len;
 	// 	ucp_address_t *peer_addr;
 	// 	ucs_status_t ep_status = UCS_OK;
@@ -554,17 +506,6 @@ void *srv_worker(void *th_argv)
 	// 	msg_req_t *msg;
 	// 	ucp_request_param_t recv_param;
 
-	// 	clock_t t;
-	// 	double time_taken;
-	// 	t = clock();
-
-	// 	// do
-	// 	// {
-	// 	// 	/* Progressing before probe to update the state */
-	// 	// 	ucp_worker_progress(arguments->ucp_worker);
-	// 	// 	/* Probing incoming events in non-block mode */
-	// 	// 	msg_tag = ucp_tag_probe_nb(arguments->ucp_worker, tag_req, tag_mask, 1, &info_tag);
-	// 	// } while (msg_tag == NULL);
 	// 	ucs_status_t status;
 	// 	/* Receive test string from server */
 	// 	for (;;)
@@ -589,7 +530,6 @@ void *srv_worker(void *th_argv)
 	// 		{
 	// 			/* Polling incoming events*/
 	// 			status = ucp_worker_wait(arguments->ucp_worker);
-	// 			// status = test_poll_wait(arguments->ucp_worker);
 	// 			// CHKERR_JUMP(status != UCS_OK, "ucp_worker_wait\n", err_ep);
 	// 		}
 	// 		// else if (ucp_test_mode == TEST_MODE_EVENTFD)
@@ -599,19 +539,18 @@ void *srv_worker(void *th_argv)
 	// 		// }
 	// 	}
 
-	// 	slog_debug("New req, message length=%ld bytes.", info_tag.length);
-	// 	msg = (msg_req_t *)malloc(info_tag.length);
+	// 	msg = (msg_req_t *)malloc(info_tag.length); // Should the msg memory be free?
+	// 	memset(msg, 0, info_tag.length);
 
 	// 	recv_param.op_attr_mask = UCP_OP_ATTR_FIELD_CALLBACK |
-	// 							  UCP_OP_ATTR_FIELD_DATATYPE;
-
+	// 							  UCP_OP_ATTR_FIELD_DATATYPE |
+	// 							  UCP_OP_ATTR_FLAG_NO_IMM_CMPL;
 	// 	recv_param.datatype = ucp_dt_make_contig(1);
 	// 	recv_param.cb.recv = recv_handler;
 
 	// 	request = (struct ucx_context *)ucp_tag_msg_recv_nbx(arguments->ucp_worker, msg, info_tag.length, msg_tag, &recv_param);
-	// 	// request = (struct ucx_context *)ucp_tag_recv_nbx(arguments->ucp_worker, msg, info_tag.length, msg_tag, &recv_param);
 
-	// 	status = ucx_wait(arguments->ucp_worker, request, "receive", "srv_worker");
+	// 	status = ucx_wait(arguments->ucp_worker, request, "receive", "stat_worker");
 
 	// 	peer_addr_len = msg->addr_len;
 	// 	peer_addr = (ucp_address *)malloc(peer_addr_len);
@@ -622,1049 +561,66 @@ void *srv_worker(void *th_argv)
 	// 	ucp_worker_address_attr_t attr;
 	// 	attr.field_mask = UCP_WORKER_ADDRESS_ATTR_FIELD_UID;
 	// 	ucp_worker_address_query(peer_addr, &attr);
-	// 	slog_debug("Receiving request from %" PRIu64 ".", attr.worker_uid);
+	// 	slog_debug("[stat_worker] Receiving request from %" PRIu64 ".", attr.worker_uid);
 
 	// 	//  look for this peer_addr in the map and get the ep
 	// 	ret = map_server_eps_search(map_server_eps, attr.worker_uid, &ep);
 	// 	// create ep if it's not in the map
 	// 	if (ret < 0)
-	// 	// if(true)
 	// 	{
-	// 		// ucp_ep_h new_ep;
-	// 		ep_params.address = peer_addr;
-	// 		ep_params.user_data = &ep_status;
+	// 		ucp_ep_params_t *ep_params;
+
+	// 		ep_params = (ucp_ep_params_t *)malloc(sizeof(ucp_ep_params_t));
+	// 		ep_params->field_mask = UCP_EP_PARAM_FIELD_REMOTE_ADDRESS |
+	// 								UCP_EP_PARAM_FIELD_ERR_HANDLING_MODE |
+	// 								UCP_EP_PARAM_FIELD_ERR_HANDLER |
+	// 								UCP_EP_PARAM_FIELD_USER_DATA;
+	// 		ep_params->err_mode = UCP_ERR_HANDLING_MODE_NONE;
+	// 		// ep_params->err_mode = UCP_ERR_HANDLING_MODE_PEER;
+	// 		ep_params->err_handler.cb = err_cb_server;
+	// 		// ep_params->err_handler.arg = NULL;
+
 	// 		// struct worker_info *worker_info = (struct worker_info*)malloc(sizeof(struct worker_info));
 	// 		// worker_info->worker_uid = attr.worker_uid;
-	// 		// worker_info->server_type = 'd';
-	// 		// ep_params.err_handler.arg = &worker_info;
-	// 		ep_params.err_handler.arg = &attr.worker_uid;
+	// 		// worker_info->server_type = 'm';
+	// 		// ep_params->err_handler.arg = &worker_info;
+	// 		ep_params->err_handler.arg = &attr.worker_uid;
 
-	// 		status = ucp_ep_create(arguments->ucp_worker, &ep_params, &ep);
-	// 		// add ep to the map
-	// 		// map_server_eps_put(map_server_eps, attr.worker_uid, ep);
+	// 		// ucp_ep_h new_ep;
+	// 		ep_params->address = peer_addr;
+	// 		ep_params->user_data = &ep_status;
+	// 		status = ucp_ep_create(arguments->ucp_worker, ep_params, &ep);
+	// 		// ucp_ep_print_info(ep, stderr);
+	// 		//  add ep to the map
+	// 		map_server_eps_put(map_server_eps, attr.worker_uid, ep);
 	// 	}
 	// 	else
 	// 	{
-	// 		slog_debug("\t[srv_worker]['%" PRIu64 "] Endpoint already exist'", attr.worker_uid);
-	// 		// fprintf(stderr, "\t[d]['%" PRIu64 "] Endpoint already exist'\n", attr.worker_uid);
+	// 		// fprintf(stderr, "\t[m]['%" PRIu64 "'] Endpoint already exist\n", attr.worker_uid);
+	// 		slog_debug("\t[stat_worker]['%" PRIu64 "'] Endpoint already exist", attr.worker_uid);
 	// 	}
 
 	// 	arguments->peer_address = peer_addr;
 	// 	arguments->server_ep = ep;
 	// 	arguments->worker_uid = attr.worker_uid;
-	// 	arguments->req = req;
+	// 	// arguments->worker_uid = attr.worker_uid;
+	// 	stat_worker_helper(arguments, req);
 
-	// 	p_argv *local_arguments = (p_argv *)malloc(sizeof(p_argv));
-	// 	memcpy(local_arguments, arguments, sizeof(p_argv));
-	// 	// pthread_t thread;
-
-	// 	// if (pthread_create(&thread, NULL, srv_worker_helper, (void *)local_arguments) == -1)
-	// 	// {
-	// 	// 	perror("ERR_HERCULES_SRV_WORKER_DEPLOY");
-	// 	// }
-
-	// 	// pthread_join(thread, NULL);
-
-	// 	// pthread_detach(thread);
-
-	// 	// char msg_[2024];
-	// 	// sprintf(msg_, "[srv_worker] srv_worker_helper req %s", req);
-	// 	// srv_worker_helper(arguments, req);
-	// 	srv_worker_helper(local_arguments);
-	// 	t = clock() - t;
-
-	// 	time_taken = ((double)t) / CLOCKS_PER_SEC; // in seconds
-	// 	// slog_info("[srv_worker] Serving time %f s\n", time_taken);
-
+	// 	// ucp_ep_close_nb(ep, UCP_EP_CLOSE_MODE_FORCE);
 	// 	free(peer_addr);
 
-	// 	// fprintf(stderr, "\t[d]['%" PRIu64 "'] Ending srv worker\n", attr.worker_uid);
-
-	// 	// flush_ep(arguments->ucp_worker, ep);
 	// 	// ep_close(arguments->ucp_worker, arguments->server_ep, UCP_EP_CLOSE_MODE_FLUSH);
 	// }
-	pthread_exit(NULL);
 }
 
-// void *srv_worker_helper(void *th_argv)
-// {
-// 	// slog_init("workers", SLOG_INFO, 1, 0, 1, 1, 1);
-// 	// std::unique_lock<std::mutex> lock(*mut2);
-
-// 	p_argv *arguments = (p_argv *)th_argv;
-// 	const char *req = arguments->req;
-
-// 	ucs_status_t status;
-// 	int ret = -1;
-
-// 	// Cast from generic pointer type to p_argv struct type pointer.
-
-// 	// Obtain the current map class element from the set of arguments.
-// 	std::shared_ptr<map_records> map = arguments->map;
-
-// 	// Resources specifying if the ZMQ_SNDMORE flag was set in the sender.
-// 	int64_t more;
-// 	size_t more_size = sizeof(more);
-
-// 	// Code to be sent if the requested to-be-read key does not exist.
-// 	char err_code[] = "$ERRIMSS_NO_KEY_AVAIL$";
-
-// 	char mode[MODE_SIZE];
-
-// 	// slog_debug("[srv_worker_thread] Waiting for new request.");
-// 	// Save the request to be served.
-// 	// TIMING(ret = recv_data(arguments->ucp_worker, arguments->server_ep, req), "[srv_worker_thread] Save the request to be served");
-// 	slog_debug("[srv_worker_thread] request to be served %s", req);
-
-// 	// slog_info("********** %d",ret);
-
-// 	// Elements conforming the request.
-// 	uint32_t block_size_recv, block_offset;
-// 	char uri_[URI_];
-// 	size_t to_read = 0;
-
-// 	sscanf(req, "%s %" PRIu32 " %" PRIu32 " %s %lu", mode, &block_size_recv, &block_offset, uri_, &to_read);
-
-// 	if (!strcmp(mode, "GET"))
-// 		more = GET_OP;
-// 	else
-// 		more = SET_OP;
-
-// 	slog_debug("[srv_worker_thread] Request - mode '%s', block_size_recv '%" PRIu32 "', block_offset '%" PRIu32 "', uri_ '%s', more %ld", mode, block_size_recv, block_offset, uri_, more);
-
-// 	// Create an std::string in order to be managed by the map structure.
-// 	std::string key;
-// 	key.assign((const char *)uri_);
-
-// 	// Information associated to the arriving key.
-// 	void *address_;
-// 	uint64_t block_size_rtvd;
-
-// 	// Differentiate between READ and WRITE operations.
-// 	switch (more)
-// 	{
-// 	// No more messages will arrive to the socket.
-// 	case READ_OP:
-// 	{
-// 		switch (block_size_recv)
-// 		{
-// 		case READ_OP:
-// 		{
-// 			int32_t ret = map->get(key, &address_, &block_size_rtvd);
-// 			// Check if there was an associated block to the key.
-// 			if (ret == 0)
-// 			{
-// 				// Send the error code block.
-// 				ret = send_dynamic_stream(arguments->ucp_worker, arguments->server_ep, err_code, STRING, arguments->worker_uid);
-// 				if (ret < 0)
-// 				{
-// 					slog_error("ERR_HERCULES_WORKER_SEND_READ_OP");
-// 					perror("ERR_HERCULES_WORKER_SEND_READ_OP");
-// 					pthread_exit(NULL);
-// 				}
-// 			}
-// 			else
-// 			{
-// 				// Send the requested block.
-// 				// ret = TIMING(send_data(arguments->ucp_worker, arguments->server_ep, address_, block_size_rtvd, arguments->worker_uid), "[srv_worker_thread][READ_OP][READ_OP] Send the requested block");
-// 				if (to_read <= 0)
-// 				{
-// 					to_read = block_size_rtvd;
-// 				}
-// 				struct stat *stats;
-// 				stats = (struct stat *)address_;
-// 				slog_debug("[srv_worker_thread][READ_OP][READ_OP] Send the requested block with key=%s, block_offset=%ld, block_size_rtvd=%ld kb, to_read=%ld kb, stat->st_nlink=%lu", key.c_str(), block_offset, block_size_rtvd / 1024, to_read / 1024, stats->st_nlink);
-// 				size_t ret_send_data = 0;
-// 				ret_send_data = send_data(arguments->ucp_worker, arguments->server_ep, (char *)address_ + block_offset, to_read, arguments->worker_uid);
-// 				// fprintf(stderr,"\tblock_size_rtvd=%ld, address_=%s\n", block_size_rtvd, address_);
-// 				slog_debug("[srv_worker_thread][READ_OP][READ_OP] send_data, ret_send_data=%lu", ret_send_data);
-// 				if (ret_send_data == 0)
-// 				{
-// 					slog_error("ERR_HERCULES_WORKER_SENDBLOCK");
-// 					perror("ERR_HERCULES_WORKER_SENDBLOCK");
-// 					pthread_exit(NULL);
-// 				}
-// 			}
-// 			break;
-// 		}
-// 		case RELEASE:
-// 		{
-// 			// sleep(10);
-// 			map_server_eps_erase(map_server_eps, arguments->worker_uid, arguments->ucp_worker);
-// 			slog_debug("[srv_worker_thread][READ_OP][RELEASE]");
-// 			// return 0;
-// 			break;
-// 		}
-// 		case DELETE_OP:
-// 		{
-// 			slog_debug("DELETE_OP");
-// 			slog_debug("Cleaning %s", key.c_str());
-// 			map->cleaning_specific(key);
-// 			char release_msg[] = "DELETE\0";
-// 			ret = send_data(arguments->ucp_worker, arguments->server_ep, release_msg, strlen(release_msg) + 1, arguments->worker_uid);
-// 			if (ret == 0)
-// 			{
-// 				perror("ERR_HERCULES_PUBLISH_DELETEOP");
-// 				slog_error("ERR_HERCULES_PUBLISH_DELETEOP");
-// 				pthread_exit(NULL);
-// 			}
-// 			break;
-// 		}
-// 		case RENAME_OP:
-// 		{
-// 			std::size_t found = key.find(',');
-// 			slog_debug("[srv_worker_thread][RENAME_OP], key=%s, found=%d", key.c_str(), found);
-// 			if (found != std::string::npos)
-// 			{
-// 				slog_debug("[srv_worker_thread][RENAME_OP], found != npos");
-// 				std::string old_key = key.substr(0, found);
-// 				std::string new_key = key.substr(found + 1, key.length());
-// 				slog_debug("[srv_worker_thread][RENAME_OP], old_key=%s, new_key=%s", old_key.c_str(), new_key.c_str());
-// 				// RENAME MAP
-// 				map->cleaning_specific(new_key);
-// 				int32_t result = map->rename_data_srv_worker(old_key, new_key);
-// 				if (result == 0)
-// 				{
-// 					break;
-// 				}
-// 			}
-// 			else
-// 			{
-// 				slog_debug("[srv_worker_thread][RENAME_OP], found == npos");
-// 			}
-
-// 			char release_msg[] = "RENAME\0";
-// 			ret = TIMING(send_data(arguments->ucp_worker, arguments->server_ep, release_msg, strlen(release_msg) + 1, arguments->worker_uid), "[srv_worker_thread][READ_OP][RENAME_OP] Send rename", int);
-// 			if (ret == 0)
-// 			{
-// 				perror("ERR_HERCULES_PUBLISH_RENAMEMSG");
-// 				slog_error("ERR_HERCULES_PUBLISH_RENAMEMSG");
-// 				pthread_exit(NULL);
-// 			}
-// 			break;
-// 		}
-// 		case RENAME_DIR_DIR_OP:
-// 		{
-// 			// printf("SRV_WORKER RENAME_DIR_DIR_OP");
-// 			std::size_t found = key.find(' ');
-// 			if (found != std::string::npos)
-// 			{
-// 				std::string old_dir = key.substr(0, found);
-// 				std::string rdir_dest = key.substr(found + 1, key.length());
-
-// 				// RENAME MAP
-// 				map->rename_data_dir_srv_worker(old_dir, rdir_dest);
-// 			}
-
-// 			char release_msg[] = "RENAME\0";
-// 			ret = TIMING(send_data(arguments->ucp_worker, arguments->server_ep, release_msg, strlen(release_msg) + 1, arguments->worker_uid), "[srv_worker_thread][READ_OP][RENAME_DIR_DIR_OP] Send rename", int);
-// 			if (ret == 0)
-// 			{
-// 				perror("ERR_HERCULES_PUBLISH_RENAMEMSG");
-// 				slog_error("ERR_HERCULES_PUBLISH_RENAMEMSG");
-// 				pthread_exit(NULL);
-// 			}
-// 			break;
-// 		}
-// 		case READV: // Only 1 server work
-// 		{
-// 			// printf("READV CASE");
-// 			std::size_t found = key.find('$');
-// 			std::string path;
-// 			if (found != std::string::npos)
-// 			{
-// 				path = key.substr(0, found + 1);
-// 				// std::cout <<"path:" << path << '';
-// 				key.erase(0, found + 1);
-// 				std::size_t found = key.find(' ');
-// 				int curr_blk = stoi(key.substr(0, found));
-// 				key.erase(0, found + 1);
-
-// 				found = key.find(' ');
-// 				int end_blk = stoi(key.substr(0, found));
-// 				key.erase(0, found + 1);
-
-// 				found = key.find(' ');
-// 				int blocksize = stoi(key.substr(0, found));
-// 				key.erase(0, found + 1);
-
-// 				found = key.find(' ');
-// 				int start_offset = stoi(key.substr(0, found));
-// 				key.erase(0, found + 1);
-
-// 				found = key.find(' ');
-// 				int64_t size = stoi(key.substr(0, found));
-// 				key.erase(0, found + 1);
-
-// 				// Needed variables
-// 				size_t byte_count = 0;
-// 				int first = 0;
-// 				int ds = 0;
-// 				int64_t to_copy = 0;
-// 				uint32_t filled = 0;
-// 				size_t to_read = 0;
-
-// 				int pos = path.find('$');
-// 				std::string first_element = path.substr(0, pos + 1);
-// 				first_element = first_element + std::to_string(0);
-// 				// printf("first_element=%s",first_element.c_str());
-// 				map->get(first_element, &address_, &block_size_rtvd);
-// 				struct stat *stats = (struct stat *)address_;
-// 				void *buf = (void *)malloc(size);
-
-// 				while (curr_blk <= end_blk)
-// 				{
-// 					std::string element = path;
-// 					element = element + std::to_string(curr_blk);
-// 					// std::cout <<"SERVER READV element:" << element << '';
-// 					if (map->get(element, &address_, &block_size_rtvd) == 0)
-// 					{ // If dont exist
-// 					  // Send the error code block.
-// 					  // std::cout <<"SERVER READV NO EXISTE element:" << element << '';
-// 						ret = TIMING(send_dynamic_stream(arguments->ucp_worker, arguments->server_ep, err_code, STRING, arguments->worker_uid), "[srv_worker_thread][READ_OP][READV] send_dynamic_stream", int);
-// 						if (ret < 0)
-// 						{
-// 							perror("ERRIMSS_WORKER_SENDERR");
-// 							pthread_exit(NULL);
-// 						}
-// 					} // If was already stored:
-// 					else
-// 					{
-// 						// First block case
-// 						if (first == 0)
-// 						{
-// 							if (size < stats->st_size - start_offset)
-// 							{
-// 								// to_read = size;
-// 								to_read = blocksize * KB - start_offset;
-// 							}
-// 							else
-// 							{
-// 								if (stats->st_size < blocksize * KB)
-// 								{
-// 									to_read = stats->st_size - start_offset;
-// 								}
-// 								else
-// 								{
-// 									to_read = blocksize * KB - start_offset;
-// 								}
-// 							}
-// 							// Check if offset is bigger than filled, return 0 because is EOF case
-// 							if (start_offset > stats->st_size)
-// 								pthread_exit(NULL);
-// 							memcpy(buf, (char *)address_ + start_offset, to_read);
-// 							byte_count += to_read;
-// 							++first;
-
-// 							// Middle block case
-// 						}
-// 						else if (curr_blk != end_blk)
-// 						{
-// 							memcpy((char *)buf + byte_count, address_, blocksize * KB);
-// 							byte_count += blocksize * KB;
-// 							// End block case
-// 						}
-// 						else
-// 						{
-
-// 							// Read the minimum between end_offset and filled (read_ = min(end_offset, filled))
-// 							int64_t pending = size - byte_count;
-// 							memcpy((char *)buf + byte_count, address_, pending);
-// 							byte_count += pending;
-// 						}
-// 					}
-// 					++curr_blk;
-// 				}
-// 				ret = TIMING(send_data(arguments->ucp_worker, arguments->server_ep, buf, size, arguments->worker_uid), "[srv_worker_thread][READ_OP][READV] send", int);
-// 				// Send the requested block.
-// 				if (ret == 0)
-// 				{
-// 					perror("ERR_HERCULES_WORKER_SENDBLOCK");
-// 					slog_error("ERR_HERCULES_WORKER_SENDBLOCK");
-// 					pthread_exit(NULL);
-// 				}
-// 			}
-// 			break;
-// 		}
-// 		case SPLIT_READV:
-// 		{
-// 			// printf("SPLIT_READV CASE");
-// 			slog_debug("key=%s", key.c_str());
-// 			std::size_t found = key.find(' ');
-// 			std::string path;
-// 			if (found != std::string::npos)
-// 			{
-// 				path = key.substr(0, found);
-// 				key.erase(0, found + 1);
-
-// 				found = key.find(' ');
-// 				int blocksize = stoi(key.substr(0, found)) * KB;
-// 				key.erase(0, found + 1);
-
-// 				found = key.find(' ');
-// 				int start_offset = stoi(key.substr(0, found));
-// 				key.erase(0, found + 1);
-
-// 				found = key.find(' ');
-// 				int stats_size = stoi(key.substr(0, found));
-// 				key.erase(0, found + 1);
-
-// 				size_t msg_size = stoi(key.substr(0, found));
-
-// 				// char *msg = (char *)calloc(msg_size, sizeof(char));
-// 				size_t msg_length = 0;
-// 				msg_length = get_recv_data_length(arguments->ucp_worker, arguments->worker_uid);
-// 				if (msg_length == 0)
-// 				{
-// 					perror("ERRIMSS_DATA_WORKER_INVALID_MSG_LENGTH");
-// 					slog_error("ERRIMSS_DATA_WORKER_INVALID_MSG_LENGTH");
-// 					pthread_exit(NULL);
-// 				}
-// 				void *msg = malloc(msg_length);
-
-// 				msg_length = recv_data(arguments->ucp_worker, arguments->server_ep, msg, msg_length, arguments->worker_uid, 0);
-// 				// msg_length = recv_data_opt(arguments->ucp_worker, arguments->server_ep, &msg, msg_length, arguments->worker_uid, 0);
-// 				// Send the requested block.
-// 				if (msg_length == 0)
-// 				{
-// 					perror("ERRIMSS_DATA_WORKER_RECV_DATA");
-// 					slog_error("ERRIMSS_DATA_WORKER_RECV_DATA");
-// 					free(msg);
-// 					pthread_exit(NULL);
-// 				}
-
-// 				key = (char *)msg;
-// 				found = key.find('$');
-// 				int amount = stoi(key.substr(0, found));
-// 				int size = amount * blocksize;
-// 				key.erase(0, found + 1);
-
-// 				slog_debug("msg=%s", key.c_str());
-// 				slog_debug("msg_size=%lu", msg_size);
-// 				slog_debug("*path=%s", path.c_str());
-// 				slog_debug("*blocksize=%d", blocksize);
-// 				slog_debug("*start_offset=%d", start_offset);
-// 				slog_debug("*size=%d", size);
-// 				slog_debug("*amount=%d", amount);
-
-// 				char *buf = (char *)malloc(size);
-// 				// Needed variables
-// 				size_t byte_count = 0;
-// 				int first = 0;
-// 				int ds = 0;
-// 				int64_t to_copy = 0;
-// 				uint32_t filled = 0;
-// 				size_t to_read = 0;
-// 				int curr_blk = 0;
-
-// 				for (int i = 0; i < amount; i++)
-// 				{
-// 					// substract current block
-// 					found = key.find('$');
-// 					int curr_blk = stoi(key.substr(0, found));
-// 					key.erase(0, found + 1);
-
-// 					std::string element = path;
-// 					element = element + '$' + std::to_string(curr_blk);
-// 					if (map->get(element, &address_, &block_size_rtvd) == 0)
-// 					{ // If dont exist
-// 					  // Send the error code block.
-// 						if (send_dynamic_stream(arguments->ucp_worker, arguments->server_ep, err_code, STRING, arguments->worker_uid) < 0)
-// 						{
-// 							free(msg);
-// 							pthread_exit(NULL);
-// 							pthread_exit(NULL);
-// 						}
-// 					} // If was already stored:
-
-// 					memcpy(buf + byte_count, address_, blocksize);
-// 					byte_count += blocksize;
-// 				}
-// 				// Send the requested block.
-// 				ret = TIMING(send_data(arguments->ucp_worker, arguments->server_ep, buf, byte_count, arguments->worker_uid), "[srv_worker_thread][READ_OP][READV] send buf", int);
-// 				if (ret == 0)
-// 				{
-// 					free(msg);
-// 					perror("ERR_HERCULES_WORKER_SENDBLOCK");
-// 					slog_error("ERR_HERCULES_WORKER_SENDBLOCK");
-// 					pthread_exit(NULL);
-// 				}
-// 			}
-// 			break;
-// 		}
-// 		case WHO:
-// 		{
-// 			// Provide the uri of this instance.
-// 			ret = TIMING(send_data(arguments->ucp_worker, arguments->server_ep, arguments->my_uri, strlen(arguments->my_uri) + 1, arguments->worker_uid), ("[srv_worker_thread][READ_OP][WHO] send uri: %s", arguments->my_uri), int);
-// 			if (ret == 0)
-// 			{
-// 				perror("ERR_HERCULES_WHOREQUEST");
-// 				slog_error("ERR_HERCULES_WHOREQUEST");
-// 				pthread_exit(NULL);
-// 			}
-// 			break;
-// 		}
-// 		default:
-// 			break;
-// 		}
-// 		break;
-// 	}
-// 	// More messages will arrive to the socket.
-// 	case WRITE_OP:
-// 	{
-// 		int op;
-// 		std::size_t found = key.find(' ');
-// 		std::size_t found2 = key.find("[OP]=");
-// 		slog_debug("[srv_worker_thread][WRITE_OP] found=%d, found2=%d", found, found2);
-// 		if (found2 != std::string::npos)
-// 		{
-// 			slog_debug("[srv_worker_thread][WRITE_OP] Entra en found2");
-// 			op = stoi(key.substr(found2 + 5, (found - (found2 + 5))));
-// 			key.erase(0, found + 1);
-// 		}
-
-// 		if (found != std::string::npos && found2 == std::string::npos)
-// 		{
-// 			std::string path = key.substr(0, found);
-// 			key.erase(0, found + 1);
-// 			// std::cout <<"path:" << key << '';
-
-// 			std::size_t found = key.find(' ');
-// 			int curr_blk = stoi(key.substr(0, found));
-// 			key.erase(0, found + 1);
-
-// 			found = key.find(' ');
-// 			int end_blk = stoi(key.substr(0, found));
-// 			key.erase(0, found + 1);
-
-// 			found = key.find(' ');
-// 			int start_offset = stoi(key.substr(0, found));
-// 			key.erase(0, found + 1);
-
-// 			found = key.find(' ');
-// 			int end_offset = stoi(key.substr(0, found));
-// 			key.erase(0, found + 1);
-
-// 			found = key.find(' ');
-// 			int IMSS_DATA_BSIZE = stoi(key.substr(0, found));
-// 			key.erase(0, found + 1);
-
-// 			int size = stoi(key);
-
-// 			size_t msg_length = 0;
-// 			msg_length = get_recv_data_length(arguments->ucp_worker, arguments->worker_uid);
-// 			if (msg_length == 0)
-// 			{
-// 				slog_error("ERRIMSS_DATA_WORKER_WORKER_OP_1_INVALID_MSG_LENGTH");
-// 				perror("ERRIMSS_DATA_WORKER_WORKER_OP_1_INVALID_MSG_LENGTH");
-// 				pthread_exit(NULL);
-// 			}
-
-// 			char *buf = (char *)malloc(msg_length * sizeof(char));
-// 			// Receive all blocks into the buffer.
-// 			msg_length = recv_data(arguments->ucp_worker, arguments->server_ep, (char *)buf, msg_length, arguments->worker_uid, 0);
-// 			// msg_length = recv_data_opt(arguments->ucp_worker, arguments->server_ep, (void **)&buf, msg_length, arguments->worker_uid, 0);
-// 			if (msg_length == 0)
-// 			{
-// 				perror("ERRIMSS_DATA_WORKER_WORKER_OP_1_RECV_DATA");
-// 				slog_error("ERRIMSS_DATA_WORKER_WORKER_OP_1_RECV_DATA");
-// 				free(buf);
-// 				pthread_exit(NULL);
-// 			}
-
-// 			// printf("WRITEV-buffer=%s",buf);
-// 			int pos = path.find('$');
-// 			std::string first_element = path.substr(0, pos + 1);
-// 			first_element = first_element + "0";
-// 			map->get(first_element, &address_, &block_size_rtvd);
-// 			// imss_info * data = (imss_info *) address_;
-// 			// printf("READ_OP SEND data->type=%c",data->type);
-// 			struct stat *stats = (struct stat *)address_;
-
-// 			// Needed variables
-// 			size_t byte_count = 0;
-// 			int first = 0;
-// 			int ds = 0;
-// 			int64_t to_copy = 0;
-// 			uint32_t filled = 0;
-// 			void *aux = (void *)malloc(IMSS_DATA_BSIZE);
-// 			int count = 0;
-// 			// For the rest of blocks
-// 			while (curr_blk <= end_blk)
-// 			{
-// 				// printf("Nodename    - %s current_block=%d", detect.nodename, curr_blk);
-// 				count = count + 1;
-// 				// printf("count=%d",count);
-// 				pos = path.find('$');
-// 				std::string element = path.substr(0, pos + 1);
-// 				element = element + std::to_string(curr_blk);
-// 				// std::cout <<"element:" << element << '';
-
-// 				// First fragmented block
-// 				if (first == 0 && start_offset && stats->st_size != 0)
-// 				{
-// 					// Get previous block
-// 					map->get(element, &aux, &block_size_rtvd); // path por curr_block
-// 															   // Bytes to write are the minimum between the size parameter and the remaining space in the block (BLOCKSIZE-start_offset)
-// 					to_copy = (size < IMSS_DATA_BSIZE - start_offset) ? size : IMSS_DATA_BSIZE - start_offset;
-
-// 					memcpy((char *)aux + start_offset, buf + byte_count, to_copy);
-// 				}
-// 				// Last Block
-// 				else if (curr_blk == end_blk)
-// 				{
-// 					if (end_offset != 0)
-// 					{
-// 						to_copy = end_offset;
-// 					}
-// 					else
-// 					{
-// 						to_copy = IMSS_DATA_BSIZE;
-// 					}
-// 					// Only if last block has contents
-// 					if (curr_blk <= stats->st_blocks && start_offset)
-// 					{
-// 						map->get(element, &aux, &block_size_rtvd); // path por curr_block
-// 					}
-// 					else
-// 					{
-// 						memset(aux, 0, IMSS_DATA_BSIZE);
-// 					}
-// 					if (byte_count == size)
-// 					{
-// 						to_copy = 0;
-// 					}
-// 					// printf("curr_block=%d, end_block=%d, byte_count=%d",curr_blk, end_blk, byte_count);
-// 					memcpy(aux, buf + byte_count, to_copy);
-// 				}
-// 				// middle block
-// 				else
-// 				{
-// 					to_copy = IMSS_DATA_BSIZE;
-// 					memcpy(aux, buf + byte_count, to_copy);
-// 				}
-
-// 				// Write and update variables
-// 				if (!map->get(element, &address_, &block_size_rtvd))
-// 				{
-// 					map->put(element, aux, block_size_rtvd);
-
-// 					// printf("Nodename    - %s after put", detect.nodename);
-// 				}
-// 				else
-// 				{
-// 					memcpy(address_, aux, block_size_rtvd);
-// 				}
-// 				// printf("currblock=%d, byte_count=%d",curr_blk, byte_count);
-// 				byte_count += to_copy;
-// 				++curr_blk;
-// 				++first;
-// 			}
-// 			int16_t off = (end_blk * IMSS_DATA_BSIZE) - 1 - size;
-// 			if (size + off > stats->st_size)
-// 			{
-// 				stats->st_size = size + off;
-// 				stats->st_blocks = curr_blk - 1;
-// 			}
-
-// 			free(buf);
-// 		}
-// 		else if (found != std::string::npos && op == 2)
-// 		{
-// 			std::string path;
-// 			std::size_t found = key.find(' ');
-// 			// printf("Nodename	-%s SPLIT WRITEV",detect.nodename);
-
-// 			path = key.substr(0, found);
-// 			key.erase(0, found + 1);
-
-// 			found = key.find(' ');
-// 			int blocksize = stoi(key.substr(0, found)) * KB;
-// 			key.erase(0, found + 1);
-
-// 			found = key.find(' ');
-// 			int start_offset = stoi(key.substr(0, found));
-// 			key.erase(0, found + 1);
-
-// 			found = key.find(' ');
-// 			int stats_size = stoi(key.substr(0, found));
-// 			key.erase(0, found + 1);
-
-// 			found = key.find('$');
-// 			int amount = stoi(key.substr(0, found));
-// 			int size = amount * blocksize;
-// 			key.erase(0, found + 1);
-
-// 			slog_debug("amount=%d", amount);
-// 			slog_debug("path=%s", path.c_str());
-// 			slog_debug("blocksize=%d", blocksize);
-// 			slog_debug("start_offset=%d", start_offset);
-// 			slog_debug("size=%d", size);
-// 			slog_debug("rest=%s", key.c_str());
-
-// 			// Receive all blocks into the buffer.
-// 			size_t msg_length = 0;
-// 			msg_length = get_recv_data_length(arguments->ucp_worker, arguments->worker_uid);
-// 			if (msg_length == 0)
-// 			{
-// 				perror("ERRIMSS_WORKER_DATA_WRITE_OP_2_INVALID_MSG_LENGTH");
-// 				slog_error("ERRIMSS_WORKER_DATA_WRITE_OP_2_INVALID_MSG_LENGTH");
-// 				pthread_exit(NULL);
-// 			}
-
-// 			void *buf = malloc(msg_length);
-
-// 			msg_length = recv_data(arguments->ucp_worker, arguments->server_ep, buf, msg_length, arguments->worker_uid, 0);
-// 			// msg_length = recv_data_opt(arguments->ucp_worker, arguments->server_ep, &buf, msg_length, arguments->worker_uid, 0);
-// 			if (msg_length == 0)
-// 			{
-// 				perror("ERRIMSS_WORKER_DATA_WRITE_OP_2_RECV_DATA");
-// 				slog_error("ERRIMSS_WORKER_DATA_WRITE_OP_2_RECV_DATA");
-// 				free(buf);
-// 				pthread_exit(NULL);
-// 			}
-
-// 			// size_recv = size; // MIRAR
-// 			int32_t insert_successful;
-
-// 			// printf("Nodename	-%s size_recv=%d",detect.nodename,size_recv);
-// 			// printf("Salida buf full=%c",buf[100]);
-
-// 			int32_t byte_count = 0;
-// 			for (int i = 0; i < amount; i++)
-// 			{
-// 				// substract current block
-// 				found = key.find('$');
-// 				int curr_blk = stoi(key.substr(0, found));
-// 				key.erase(0, found + 1);
-
-// 				std::string element = path;
-// 				element = element + '$' + std::to_string(curr_blk);
-// 				// printf(" element=%s",element.c_str());
-
-// 				if (map->get(element, &address_, &block_size_rtvd) == 0)
-// 				{
-// 					// If don't exist
-// 					char *buffer = (char *)aligned_alloc(1024, blocksize);
-// 					memcpy(buffer, (char *)buf + byte_count, blocksize);
-// 					// printf("Salida buffer part=%c",buffer[100]);
-// 					insert_successful = map->put(element, buffer, block_size_recv);
-// 					if (insert_successful != 0)
-// 					{
-// 						perror("ERRIMSS_WORKER_MAPPUT");
-// 						pthread_exit(NULL);
-// 					}
-// 				}
-// 				else
-// 				{
-// 					// If already exits
-// 					memcpy(address_, (char *)buf + byte_count, blocksize);
-// 					// printf("Alreadt exitsSalida buffer part=%c",buf[100]);
-// 				}
-// 				byte_count = byte_count + blocksize;
-// 				// printf("Nodename	-%s byte_count=%d",detect.nodename,byte_count);
-// 			}
-// 			free(buf);
-// 		}
-// 		else
-// 		{
-// 			slog_debug("[srv_worker_thread][WRITE_OP] WRITE NORMAL CASE. Size %ld, offset=%ld", block_size_recv, block_offset);
-// 			// search for the block to know if it was previously stored.
-// 			int ret = map->get(key, &address_, &block_size_rtvd);
-
-// 			// if the block was not already stored:
-// 			if (ret == 0)
-// 			{
-// 				// fprintf(stderr,"[srv_worker_thread][WRITE_OP] NO key find %s\n", key.c_str());
-// 				slog_debug("[srv_worker_thread][WRITE_OP] NO key find %s", key.c_str());
-// 				clock_t tp;
-// 				tp = clock();
-// 				void *buffer = (void *)StsQueue.pop(mem_pool);
-// 				tp = clock() - tp;
-// 				double time_taken2 = ((double)tp) / CLOCKS_PER_SEC; // in seconds
-// 																	// slog_info("[srv_worker_helper] pop time %f s", time_taken2);
-// 																	//  Receive the block into the buffer.
-// 																	// if (buffer == NULL)
-// 																	// char *buffer = (char *)malloc(block_size_recv);
-// 				clock_t tr;
-// 				// TIMING(recv_data(arguments->ucp_worker, arguments->server_ep, buffer, arguments->worker_uid, 1), "[srv_worker_thread][WRITE_OP] recv_data: Receive the block into the buffer.");
-// 				size_t msg_length = 0;
-// 				msg_length = get_recv_data_length(arguments->ucp_worker, arguments->worker_uid);
-// 				if (msg_length == 0)
-// 				{
-// 					perror("ERRIMSS_DATA_WORKER_WRITE_NEW_BLOCK_INVALID_MSG_LENGTH");
-// 					slog_error("ERRIMSS_DATA_WORKER_WRITE_NEW_BLOCK_INVALID_MSG_LENGTH");
-// 					pthread_exit(NULL);
-// 				}
-
-// 				// void *aux_buf = (char *)buffer + block_offset;
-// 				msg_length = recv_data(arguments->ucp_worker, arguments->server_ep, (char *)buffer + block_offset, msg_length, arguments->worker_uid, 1);
-// 				if (msg_length == 0)
-// 				{
-// 					perror("ERRIMSS_DATA_WORKER_WRITE_NEW_BLOCK_RECV_DATA");
-// 					slog_error("ERRIMSS_DATA_WORKER_WRITE_NEW_BLOCK_RECV_DATA");
-// 					pthread_exit(NULL);
-// 				}
-// 				// sleep(5);
-// 				// struct stat *stats = (struct stat *)buffer;
-// 				int32_t insert_successful;
-
-// 				// Include the new record in the tracking structure.
-// 				tr = clock();
-// 				// fprintf(stderr,"[srv_worker_thread][WRITE_OP] ****[PUT]********* key=%s\n",  key.c_str());
-// 				slog_debug("[srv_worker_thread][WRITE_OP] ****[PUT, block_size_recv=%ld, BLOCK_SIZE=%lu, msg_length=%lu]********* key=%s", block_size_recv, BLOCK_SIZE, msg_length, key.c_str());
-// 				// TODO: should this be block_size_recv or a different size? block_size_recv might not be the full block size
-// 				// insert_successful = map->put(key, buffer, block_size_recv);
-// 				insert_successful = map->put(key, buffer, BLOCK_SIZE);
-
-// 				slog_debug("[srv_worker_thread][WRITE_OP] insert_successful %d key=%s", insert_successful, key.c_str());
-// 				tr = clock() - tr;
-// 				double time_taken = ((double)tr) / CLOCKS_PER_SEC; // in seconds
-
-// 				// Include the new record in the tracking structure.
-// 				if (insert_successful != 0)
-// 				{
-// 					perror("ERR_HERCULES_WORKER_MAPPUT");
-// 					slog_error("ERR_HERCULES_WORKER_MAPPUT");
-// 					pthread_exit(NULL);
-// 				}
-
-// 				// Update the pointer.
-// 				arguments->pt += block_size_recv;
-// 			}
-// 			// if the block was already stored:
-// 			else
-// 			{
-// 				slog_debug("[srv_worker_thread][WRITE_OP] Key find %s", key.c_str());
-// 				// Receive the block into the buffer.
-// 				std::size_t found = key.find("$0");
-// 				if (found != std::string::npos)
-// 				{ // block 0.
-// 					slog_debug("[srv_worker_thread][WRITE_OP] Updating block $0 (%d)", block_size_rtvd);
-// 					struct stat *old, *latest;
-// 					// TODO: make sure this works.
-// 					size_t msg_length = 0;
-// 					msg_length = get_recv_data_length(arguments->ucp_worker, arguments->worker_uid);
-// 					if (msg_length == 0)
-// 					{
-// 						perror("ERRIMSS_DATA_WORKER_WRITE_BLOCK_0_INVALID_MSG_LENGTH");
-// 						slog_error("ERRIMSS_DATA_WORKER_WRITE_BLOCK_0_INVALID_MSG_LENGTH");
-// 						pthread_exit(NULL);
-// 					}
-// 					slog_live("msg_length=%lu", msg_length);
-// 					// void *buffer = malloc(block_size_recv);
-// 					void *buffer = malloc(msg_length);
-// 					msg_length = recv_data(arguments->ucp_worker, arguments->server_ep, buffer, msg_length, arguments->worker_uid, 0);
-// 					// msg_length = recv_data_opt(arguments->ucp_worker, arguments->server_ep, &buffer, msg_length, arguments->worker_uid, 0);
-// 					// slog_live("msg_length=%lu", msg_length);
-// 					if (msg_length == 0)
-// 					{
-// 						perror("ERRIMSS_DATA_WORKER_WRITE_BLOCK_0_RECV_DATA");
-// 						slog_error("ERRIMSS_DATA_WORKER_WRITE_BLOCK_0_RECV_DATA");
-// 						free(buffer);
-// 						pthread_exit(NULL);
-// 					}
-
-// 					old = (struct stat *)address_;
-// 					latest = (struct stat *)buffer;
-// 					slog_debug("[srv_worker_thread] File size new %ld old %ld", latest->st_size, old->st_size);
-// 					latest->st_size = std::max(latest->st_size, old->st_size);
-// 					// slog_debug("[srv_worker_thread] buffer->st_size: %ld, block_offset=%ld", latest->st_size, block_offset);
-// 					slog_debug("[srv_worker_thread] buffer->st_size: %ld, block_offset=%ld, old->st_nlink: %ld, new->st_nlink: %ld", latest->st_size, block_offset, old->st_nlink, latest->st_nlink);
-
-// 					// TODO: make sure this works
-// 					// memcpy((char *)address_ + block_offset, buffer, block_size_recv);
-// 					memcpy((char *)address_ + block_offset, buffer, msg_length);
-// 					// TODO: should we update this block's size in the map?
-// 					free(buffer);
-// 				}
-// 				else
-// 				{ // non block 0.
-// 					// TIMING(recv_data(arguments->ucp_worker, arguments->server_ep, address_, arguments->worker_uid, 1), ("[srv_worker_thread][WRITE_OP] recv_data Updated non 0 existing block"));
-// 					slog_debug("[srv_worker_thread][WRITE_OP] Updated non 0 existing block, key.c_str(): %s", key.c_str());
-// 					size_t msg_length = 0;
-// 					msg_length = get_recv_data_length(arguments->ucp_worker, arguments->worker_uid);
-// 					if (msg_length == 0)
-// 					{
-// 						slog_error("ERRIMSS_DATA_WORKER_WRITE_NON_BLOCK_0_INVALID_MSG_LENGTH");
-// 						perror("ERRIMSS_DATA_WORKER_WRITE_NON_BLOCK_0_INVALID_MSG_LENGTH");
-// 						pthread_exit(NULL);
-// 					}
-
-// 					msg_length = recv_data(arguments->ucp_worker, arguments->server_ep, (char *)address_ + block_offset, msg_length, arguments->worker_uid, 1);
-// 					if (msg_length == 0)
-// 					{
-// 						slog_error("ERRIMSS_DATA_WORKER_WRITE_NON_BLOCK_0_RECV_DATA");
-// 						perror("ERRIMSS_DATA_WORKER_WRITE_NON_BLOCK_0_RECV_DATA");
-// 						pthread_exit(NULL);
-// 					}
-// 					// slog_debug("address_=%x", address_);
-// 				}
-// 			}
-// 			break;
-// 		}
-// 	}
-// 	default:
-// 		break;
-// 	}
-
-// 	// ep_close(arguments->ucp_worker, arguments->server_ep, UCP_EP_CLOSE_FLAG_FORCE);
-// 	slog_debug("[srv_worker_thread] Terminated data helper");
-// 	pthread_exit(NULL);
-// }
-
-// Thread method searching and cleaning nodes with st_nlink=0
-void *garbage_collector(void *th_argv)
-{
-	// Obtain the current map class element from the set of arguments.
-	map_records *map = (map_records *)th_argv;
-
-	for (;;)
-	{
-		// Gnodetraverse_garbage_collector(map);//Future
-		sleep(GARBAGE_COLLECTOR_PERIOD);
-		pthread_mutex_lock(&mutex_garbage);
-		map->cleaning();
-		pthread_mutex_unlock(&mutex_garbage);
-	}
-	pthread_exit(NULL);
-}
-
-// Thread method attending client read-write metadata requests.
-void *stat_worker(void *th_argv)
-{
-	ucp_am_handler_param_t param;
-	ucs_status_t status;
-	int ret = 0;
-
-	p_argv *arguments = (p_argv *)th_argv;
-
-	map_server_eps = map_server_eps_create();
-
-	for (;;)
-	{
-		size_t peer_addr_len;
-		ucp_address_t *peer_addr;
-		ucs_status_t ep_status = UCS_OK;
-		ucp_ep_h ep;
-		struct ucx_context *request = NULL;
-		char *req;
-		ucp_tag_recv_info_t info_tag;
-		ucp_tag_message_h msg_tag;
-		msg_req_t *msg;
-		ucp_request_param_t recv_param;
-
-		ucs_status_t status;
-		/* Receive test string from server */
-		for (;;)
-		{
-			/* Probing incoming events in non-block mode */
-			msg_tag = ucp_tag_probe_nb(arguments->ucp_worker, tag_req, tag_mask, 1, &info_tag);
-			if (msg_tag != NULL)
-			{
-				/* Message arrived */
-				break;
-			}
-			else if (ucp_worker_progress(arguments->ucp_worker))
-			{
-				/* Some events were polled; try again without going to sleep */
-				continue;
-			}
-			/* If we got here, ucp_worker_progress() returned 0, so we can sleep.
-			 * Following blocked methods used to polling internal file descriptor
-			 * to make CPU idle and don't spin loop
-			 */
-			// if (ucp_test_mode == TEST_MODE_WAIT)
-			{
-				/* Polling incoming events*/
-				status = ucp_worker_wait(arguments->ucp_worker);
-				// CHKERR_JUMP(status != UCS_OK, "ucp_worker_wait\n", err_ep);
-			}
-			// else if (ucp_test_mode == TEST_MODE_EVENTFD)
-			// {
-			// 	status = test_poll_wait(ucp_worker);
-			// 	CHKERR_JUMP(status != UCS_OK, "test_poll_wait\n", err_ep);
-			// }
-		}
-
-		msg = (msg_req_t *)malloc(info_tag.length); // Should the msg memory be free?
-		memset(msg, 0, info_tag.length);
-
-		recv_param.op_attr_mask = UCP_OP_ATTR_FIELD_CALLBACK |
-								  UCP_OP_ATTR_FIELD_DATATYPE |
-								  UCP_OP_ATTR_FLAG_NO_IMM_CMPL;
-		recv_param.datatype = ucp_dt_make_contig(1);
-		recv_param.cb.recv = recv_handler;
-
-		request = (struct ucx_context *)ucp_tag_msg_recv_nbx(arguments->ucp_worker, msg, info_tag.length, msg_tag, &recv_param);
-
-		status = ucx_wait(arguments->ucp_worker, request, "receive", "stat_worker");
-
-		peer_addr_len = msg->addr_len;
-		peer_addr = (ucp_address *)malloc(peer_addr_len);
-		req = msg->request;
-
-		memcpy(peer_addr, msg + 1, peer_addr_len);
-
-		ucp_worker_address_attr_t attr;
-		attr.field_mask = UCP_WORKER_ADDRESS_ATTR_FIELD_UID;
-		ucp_worker_address_query(peer_addr, &attr);
-		slog_debug("[stat_worker] Receiving request from %" PRIu64 ".", attr.worker_uid);
-
-		//  look for this peer_addr in the map and get the ep
-		ret = map_server_eps_search(map_server_eps, attr.worker_uid, &ep);
-		// create ep if it's not in the map
-		if (ret < 0)
-		{
-			ucp_ep_params_t *ep_params;
-
-			ep_params = (ucp_ep_params_t *)malloc(sizeof(ucp_ep_params_t));
-			ep_params->field_mask = UCP_EP_PARAM_FIELD_REMOTE_ADDRESS |
-									UCP_EP_PARAM_FIELD_ERR_HANDLING_MODE |
-									UCP_EP_PARAM_FIELD_ERR_HANDLER |
-									UCP_EP_PARAM_FIELD_USER_DATA;
-			// ep_params->err_mode = UCP_ERR_HANDLING_MODE_PEER;
-			ep_params->err_mode = UCP_ERR_HANDLING_MODE_NONE;
-			ep_params->err_handler.cb = err_cb_server;
-			// ep_params->err_handler.arg = NULL;
-
-			// struct worker_info *worker_info = (struct worker_info*)malloc(sizeof(struct worker_info));
-			// worker_info->worker_uid = attr.worker_uid;
-			// worker_info->server_type = 'm';
-			// ep_params->err_handler.arg = &worker_info;
-			ep_params->err_handler.arg = &attr.worker_uid;
-
-			// ucp_ep_h new_ep;
-			ep_params->address = peer_addr;
-			ep_params->user_data = &ep_status;
-			status = ucp_ep_create(arguments->ucp_worker, ep_params, &ep);
-			// ucp_ep_print_info(ep, stderr);
-			//  add ep to the map
-			map_server_eps_put(map_server_eps, attr.worker_uid, ep);
-		}
-		else
-		{
-			// fprintf(stderr, "\t[m]['%" PRIu64 "'] Endpoint already exist\n", attr.worker_uid);
-			slog_debug("\t[stat_worker]['%" PRIu64 "'] Endpoint already exist", attr.worker_uid);
-		}
-
-		arguments->peer_address = peer_addr;
-		arguments->server_ep = ep;
-		arguments->worker_uid = attr.worker_uid;
-		// arguments->worker_uid = attr.worker_uid;
-		stat_worker_helper(arguments, req);
-
-		// ucp_ep_close_nb(ep, UCP_EP_CLOSE_MODE_FORCE);
-		free(peer_addr);
-
-		// ep_close(arguments->ucp_worker, arguments->server_ep, UCP_EP_CLOSE_MODE_FLUSH);
-	}
-}
-
-int stat_worker_helper(p_argv *arguments, char *req)
+// int stat_worker_helper(p_argv *arguments, char *req)
+int stat_worker_helper(void *th_argv)
 {
 	ucs_status_t status;
 	int ret;
+
+	p_argv *arguments = (p_argv *)th_argv;
+	const char *req = arguments->req;
 
 	// Obtain the current map class element from the set of arguments.
 	std::shared_ptr<map_records> map = arguments->map;
@@ -1690,7 +646,7 @@ int stat_worker_helper(p_argv *arguments, char *req)
 	// slog_info("[STAT WORKER] Request - '%s'", req);
 	sscanf(req, "%" PRIu32 " %s", &operation, mode);
 
-	char *req_content = strstr(req, mode);
+	const char *req_content = strstr(req, mode);
 	req_content += 4;
 
 	if (!strcmp(mode, "GET"))
@@ -1842,6 +798,7 @@ int stat_worker_helper(p_argv *arguments, char *req)
 			slog_debug("[stat_worker_thread][READ_OP][RELEASE] Deleting endpoint with %" PRIu64 "", arguments->worker_uid);
 			// sleep(10);
 			map_server_eps_erase(map_server_eps, arguments->worker_uid, arguments->ucp_worker);
+			return 2;
 			// ucp_destroy(arguments->ucp_context);
 			slog_debug("[stat_worker_thread][READ_OP][RELEASE] Endpoints deleted ");
 			break;
@@ -2253,6 +1210,7 @@ int stat_worker_helper(p_argv *arguments, char *req)
 // Metadata dispatcher thread method.
 void *dispatcher(void *th_argv)
 {
+	pthread_exit(NULL);
 
 	// Cast from generic pointer type to p_argv struct type pointer.
 	p_argv *arguments = (p_argv *)th_argv;
@@ -3412,7 +2370,7 @@ int srv_worker_helper(void *th_argv)
 
 			// if the block was not already stored:
 			if (ret == 0)
-			{				
+			{
 				slog_debug("[srv_worker_thread][WRITE_OP] NO key find %s", key.c_str());
 				clock_t tp;
 				tp = clock();
@@ -3420,10 +2378,10 @@ int srv_worker_helper(void *th_argv)
 				void *buffer = (void *)StsQueue.pop(mem_pool);
 				tp = clock() - tp;
 				double time_taken2 = ((double)tp) / CLOCKS_PER_SEC; // in seconds
-																	// slog_info("[srv_worker_helper] pop time %f s", time_taken2);
-																	//  Receive the block into the buffer.
-																	// if (buffer == NULL)
-																	// char *buffer = (char *)malloc(block_size_recv);
+				// slog_info("[srv_worker_helper] pop time %f s", time_taken2);
+				//  Receive the block into the buffer.
+				if (buffer == NULL)
+					buffer = (void *)calloc(BLOCK_SIZE, sizeof(char));
 				clock_t tr;
 				size_t msg_length = 0;
 				slog_debug("[srv_worker_thread][WRITE_OP] get_recv_data_length, %s", key.c_str());

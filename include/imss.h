@@ -83,7 +83,7 @@ extern int32_t IMSS_DEBUG;
 // } send_type_t;
 
 // Structure storing all information related to a certain IMSS.
-typedef struct
+typedef struct	
 {
 
 	// IMSS URI.

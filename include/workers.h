@@ -57,6 +57,7 @@ typedef struct {
 	uint64_t worker_uid;
 	char *tmp_file_path;
 	const char *req;
+	char server_type;
 } p_argv;
 
 
@@ -73,7 +74,8 @@ void * garbage_collector (void * th_argv);
 
 //Thread method attending client metadata requests.
 void * stat_worker (void * th_argv);
-int stat_worker_helper (p_argv *arguments, char * req);
+// int stat_worker_helper (p_argv *arguments, char * req);
+int stat_worker_helper(void *th_argv);
 
 //Dispatcher thread method distributing clients among the pool server threads.
 // void * srv_attached_dispatcher (void * th_argv);

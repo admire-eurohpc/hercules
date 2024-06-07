@@ -379,37 +379,46 @@ int32_t main(int32_t argc, char **argv)
 
 			fprintf(stderr, "Establishing a connection with %s:%ld\n", stat_add, stat_port);
 
-			oob_sock = connect_common(stat_add, stat_port, AF_INET);
+			// oob_sock = connect_common(stat_add, stat_port, AF_INET);
 
-			char request[REQUEST_SIZE];
-			sprintf(request, "%" PRIu32 " GET %s", id, "MAIN!QUERRY");
-			slog_debug("[main] Request - %s", request);
-			if (send(oob_sock, request, REQUEST_SIZE, 0) < 0)
-			{
-				perror("HERCULES_ERR_STAT_HELLO");
-				return -1;
-			}
+			// char request[REQUEST_SIZE];
+			// sprintf(request, "%" PRIu32 " GET %s", id, "MAIN!QUERRY");
+			// slog_debug("[main] Request - %s", request);
+			// if (send(oob_sock, request, REQUEST_SIZE, 0) < 0)
+			// {
+			// 	perror("HERCULES_ERR_STAT_HELLO");
+			// 	return -1;
+			// }
 
-			ret = recv(oob_sock, &addr_len, sizeof(addr_len), MSG_WAITALL);
-			peer_addr = (ucp_address *)malloc(addr_len);
-			ret = recv(oob_sock, peer_addr, addr_len, MSG_WAITALL);
-			close(oob_sock);
+			// ret = recv(oob_sock, &addr_len, sizeof(addr_len), MSG_WAITALL);
+			// peer_addr = (ucp_address *)malloc(addr_len);
+			// ret = recv(oob_sock, peer_addr, addr_len, MSG_WAITALL);
+			// close(oob_sock);
+			
 
 			/* Send client UCX address to server */
-			ep_params.field_mask = UCP_EP_PARAM_FIELD_REMOTE_ADDRESS |
-								   UCP_EP_PARAM_FIELD_ERR_HANDLING_MODE |
-								   UCP_EP_PARAM_FIELD_ERR_HANDLER |
-								   UCP_EP_PARAM_FIELD_USER_DATA;
-			ep_params.address = peer_addr;
-			// ep_params.err_mode = UCP_ERR_HANDLING_MODE_PEER;
-			ep_params.err_mode = UCP_ERR_HANDLING_MODE_NONE;
-			ep_params.err_handler.cb = err_cb_client;
-			ep_params.err_handler.arg = NULL;
-			ep_params.user_data = &ep_status;
+			// ep_params.field_mask = UCP_EP_PARAM_FIELD_REMOTE_ADDRESS |
+			// 					   UCP_EP_PARAM_FIELD_ERR_HANDLING_MODE |
+			// 					   UCP_EP_PARAM_FIELD_ERR_HANDLER |
+			// 					   UCP_EP_PARAM_FIELD_USER_DATA;
+			// ep_params.address = peer_addr;
+			// // ep_params.err_mode = UCP_ERR_HANDLING_MODE_PEER;
+			// ep_params.err_mode = UCP_ERR_HANDLING_MODE_NONE;
+			// ep_params.err_handler.cb = err_cb_client;
+			// ep_params.err_handler.arg = NULL;
+			// ep_params.user_data = &ep_status;
 
-			status = ucp_ep_create(ucp_worker, &ep_params, &client_ep);
+			// status = ucp_ep_create(ucp_worker, &ep_params, &client_ep);
 
 			// status = ucp_worker_get_address(ucp_worker, &req_addr, &req_addr_len);
+			status = start_client(ucp_worker, stat_add, stat_port + 1, &client_ep);
+			if (status != UCS_OK)
+			{
+				fprintf(stderr, "failed to start client (%s)\n", ucs_status_string(status));
+				ret = -1;
+				// goto out;
+				return ret;
+			}
 
 			ucp_worker_attr_t worker_attr;
 			worker_attr.field_mask = UCP_WORKER_ATTR_FIELD_ADDRESS;
@@ -444,8 +453,8 @@ int32_t main(int32_t argc, char **argv)
 				return -1;
 			}
 			// Receive the associated structure.
-			//void *data = (void *)malloc(length);
-			imss_info imss_info_ = *(imss_info*)malloc(sizeof(imss_info)*length);
+			// void *data = (void *)malloc(length);
+			imss_info imss_info_ = *(imss_info *)malloc(sizeof(imss_info) * length);
 			// memcpy(&imss_info_, data, sizeof(imss_info));
 			// free(data);
 			ret = recv_dynamic_stream(ucp_worker, client_ep, &imss_info_, BUFFER, attr.worker_uid, length);
@@ -545,6 +554,7 @@ int32_t main(int32_t argc, char **argv)
 		arguments[i].storage_size = max_storage_size;
 		arguments[i].port = bind_port;
 		arguments[i].tmp_file_path = tmp_file_path;
+		arguments[i].server_type = args.type; // 'm' for metadata and 'd' for data server.
 
 		// Add the instance URI to the thread arguments.
 		strcpy(arguments[i].my_uri, imss_uri);
