@@ -690,7 +690,7 @@ int32_t main(int32_t argc, char **argv)
 
 		// ucp_ep_close_nb(client_ep, UCP_EP_CLOSE_MODE_FORCE);
 	}
-	sleep(1);
+	// sleep(1);
 	// Wait for threads to finish.
 	for (int32_t i = 0; i < (args.thread_pool + 1); i++)
 	{
@@ -704,6 +704,7 @@ int32_t main(int32_t argc, char **argv)
 			perror("ERR_HERCULES_SERVER_THREAD_JOIN");
 			return -1;
 		}
+		fprintf(stderr,"Ending %c server %d\n", args.type, args.id);
 		unlink(tmp_file_path);
 	}
 

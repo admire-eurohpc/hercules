@@ -56,8 +56,11 @@ pthread_mutex_t lock_server_network = PTHREAD_MUTEX_INITIALIZER;
 ucp_worker_h *ucp_worker_threads;
 ucp_address_t **local_addr;
 size_t *local_addr_len;
+ucx_server_ctx_t context;
+ucp_worker_h global_ucp_worker;
 
 extern int IMSS_THREAD_POOL;
+int finished = 0;
 
 // const char *TESTX = "imss://lorem_text.txt$1";
 // const char *TESTX = "imss://wfc1.dat$1";
@@ -88,6 +91,25 @@ int ready(char *tmp_file_path, const char *msg)
 		exit(1);
 	}
 	return 0;
+}
+
+void handle_signal(int signal)
+{
+	if (signal == SIGUSR1)
+	{
+		// fprintf(stderr, "Received SIGUSR1\n");
+		finished = 1;
+		ucs_status_t status;
+		status = ucp_worker_signal(global_ucp_worker);
+		if (status != UCS_OK)
+		{
+			fprintf(stderr, "Failed to signal to UCX worker: %s\n", ucs_status_string(status));
+		}
+
+		// ucp_listener_destroy(context.listener);
+		// pthread_exit(NULL);
+		// exit(0);
+	}
 }
 
 typedef struct
@@ -345,9 +367,9 @@ void *srv_worker(void *th_argv)
 
 	/* UCP objects */
 	ucp_context_h ucp_context;
-	ucp_worker_h ucp_worker; // = arguments->ucp_worker;
+	// ucp_worker_h ucp_worker; // = arguments->ucp_worker;
 
-	init_context_ori(&ucp_context, &ucp_worker, CLIENT_SERVER_SEND_RECV_TAG);
+	init_context_ori(&ucp_context, &global_ucp_worker, CLIENT_SERVER_SEND_RECV_TAG);
 
 	// ep_params.field_mask = UCP_EP_PARAM_FIELD_REMOTE_ADDRESS |
 	// 					   UCP_EP_PARAM_FIELD_ERR_HANDLING_MODE |
@@ -391,7 +413,7 @@ void *srv_worker(void *th_argv)
 	// char server_add[] = "broadwell-001";
 	char *server_add = NULL;
 	arguments->ucp_context = ucp_context;
-	start_server(ucp_worker, ucp_context, &context, &context.listener, server_add, arguments->port + 1, arguments);
+	start_server(global_ucp_worker, ucp_context, &context, &context.listener, server_add, arguments->port + 1, arguments);
 
 	/* Server is always up listening */
 	// while (1)
@@ -404,9 +426,13 @@ void *srv_worker(void *th_argv)
 	//  {
 	//  	ucp_worker_progress(ucp_worker);
 	//  }
-	while (1)
+
+	// Register signal handler
+	signal(SIGUSR1, handle_signal);
+
+	while (!finished)
 	{
-		status = ucp_worker_wait(ucp_worker);
+		status = ucp_worker_wait(global_ucp_worker);
 		if (status == UCS_ERR_BUSY)
 		{
 			// Work was already handled, continue the loop
@@ -417,8 +443,10 @@ void *srv_worker(void *th_argv)
 			fprintf(stderr, "Failed to wait on UCX worker: %s\n", ucs_status_string(status));
 			break;
 		}
-		ucp_worker_progress(ucp_worker);
+		ucp_worker_progress(global_ucp_worker);
 	}
+
+	ucp_listener_destroy(context.listener);
 
 	pthread_exit(NULL);
 }
@@ -447,11 +475,10 @@ void *stat_worker(void *th_argv)
 
 	/* UCP objects */
 	ucp_context_h ucp_context;
-	ucp_worker_h ucp_worker; // = arguments->ucp_worker;
+	// ucp_worker_h ucp_worker; // = arguments->ucp_worker;
 
-	init_context_ori(&ucp_context, &ucp_worker, CLIENT_SERVER_SEND_RECV_TAG);
+	init_context_ori(&ucp_context, &global_ucp_worker, CLIENT_SERVER_SEND_RECV_TAG);
 
-	ucx_server_ctx_t context;
 	ucp_worker_h ucp_data_worker;
 	ucp_ep_h server_ep;
 	ucs_status_t status;
@@ -468,15 +495,17 @@ void *stat_worker(void *th_argv)
 	context.conn_request = NULL;
 	char *server_add = NULL;
 	arguments->ucp_context = ucp_context;
-	start_server(ucp_worker, ucp_context, &context, &context.listener, server_add, arguments->port + 1, arguments);
+	start_server(global_ucp_worker, ucp_context, &context, &context.listener, server_add, arguments->port + 1, arguments);
 
 	// p_argv *arguments = (p_argv *)th_argv;
-
 	map_server_eps = map_server_eps_create();
 
-	while (1)
+	// Register signal handler
+	signal(SIGUSR1, handle_signal);
+
+	while (!finished)
 	{
-		status = ucp_worker_wait(ucp_worker);
+		status = ucp_worker_wait(global_ucp_worker);
 		if (status == UCS_ERR_BUSY)
 		{
 			// Work was already handled, continue the loop
@@ -487,136 +516,17 @@ void *stat_worker(void *th_argv)
 			fprintf(stderr, "Failed to wait on UCX worker: %s\n", ucs_status_string(status));
 			break;
 		}
-		ucp_worker_progress(ucp_worker);
+		ucp_worker_progress(global_ucp_worker);
 	}
 
+	ucp_listener_destroy(context.listener);
 	pthread_exit(NULL);
-	///
-
-	// for (;;)
-	// {
-	// 	size_t peer_addr_len;
-	// 	ucp_address_t *peer_addr;
-	// 	ucs_status_t ep_status = UCS_OK;
-	// 	ucp_ep_h ep;
-	// 	struct ucx_context *request = NULL;
-	// 	char *req;
-	// 	ucp_tag_recv_info_t info_tag;
-	// 	ucp_tag_message_h msg_tag;
-	// 	msg_req_t *msg;
-	// 	ucp_request_param_t recv_param;
-
-	// 	ucs_status_t status;
-	// 	/* Receive test string from server */
-	// 	for (;;)
-	// 	{
-	// 		/* Probing incoming events in non-block mode */
-	// 		msg_tag = ucp_tag_probe_nb(arguments->ucp_worker, tag_req, tag_mask, 1, &info_tag);
-	// 		if (msg_tag != NULL)
-	// 		{
-	// 			/* Message arrived */
-	// 			break;
-	// 		}
-	// 		else if (ucp_worker_progress(arguments->ucp_worker))
-	// 		{
-	// 			/* Some events were polled; try again without going to sleep */
-	// 			continue;
-	// 		}
-	// 		/* If we got here, ucp_worker_progress() returned 0, so we can sleep.
-	// 		 * Following blocked methods used to polling internal file descriptor
-	// 		 * to make CPU idle and don't spin loop
-	// 		 */
-	// 		// if (ucp_test_mode == TEST_MODE_WAIT)
-	// 		{
-	// 			/* Polling incoming events*/
-	// 			status = ucp_worker_wait(arguments->ucp_worker);
-	// 			// CHKERR_JUMP(status != UCS_OK, "ucp_worker_wait\n", err_ep);
-	// 		}
-	// 		// else if (ucp_test_mode == TEST_MODE_EVENTFD)
-	// 		// {
-	// 		// 	status = test_poll_wait(ucp_worker);
-	// 		// 	CHKERR_JUMP(status != UCS_OK, "test_poll_wait\n", err_ep);
-	// 		// }
-	// 	}
-
-	// 	msg = (msg_req_t *)malloc(info_tag.length); // Should the msg memory be free?
-	// 	memset(msg, 0, info_tag.length);
-
-	// 	recv_param.op_attr_mask = UCP_OP_ATTR_FIELD_CALLBACK |
-	// 							  UCP_OP_ATTR_FIELD_DATATYPE |
-	// 							  UCP_OP_ATTR_FLAG_NO_IMM_CMPL;
-	// 	recv_param.datatype = ucp_dt_make_contig(1);
-	// 	recv_param.cb.recv = recv_handler;
-
-	// 	request = (struct ucx_context *)ucp_tag_msg_recv_nbx(arguments->ucp_worker, msg, info_tag.length, msg_tag, &recv_param);
-
-	// 	status = ucx_wait(arguments->ucp_worker, request, "receive", "stat_worker");
-
-	// 	peer_addr_len = msg->addr_len;
-	// 	peer_addr = (ucp_address *)malloc(peer_addr_len);
-	// 	req = msg->request;
-
-	// 	memcpy(peer_addr, msg + 1, peer_addr_len);
-
-	// 	ucp_worker_address_attr_t attr;
-	// 	attr.field_mask = UCP_WORKER_ADDRESS_ATTR_FIELD_UID;
-	// 	ucp_worker_address_query(peer_addr, &attr);
-	// 	slog_debug("[stat_worker] Receiving request from %" PRIu64 ".", attr.worker_uid);
-
-	// 	//  look for this peer_addr in the map and get the ep
-	// 	ret = map_server_eps_search(map_server_eps, attr.worker_uid, &ep);
-	// 	// create ep if it's not in the map
-	// 	if (ret < 0)
-	// 	{
-	// 		ucp_ep_params_t *ep_params;
-
-	// 		ep_params = (ucp_ep_params_t *)malloc(sizeof(ucp_ep_params_t));
-	// 		ep_params->field_mask = UCP_EP_PARAM_FIELD_REMOTE_ADDRESS |
-	// 								UCP_EP_PARAM_FIELD_ERR_HANDLING_MODE |
-	// 								UCP_EP_PARAM_FIELD_ERR_HANDLER |
-	// 								UCP_EP_PARAM_FIELD_USER_DATA;
-	// 		ep_params->err_mode = UCP_ERR_HANDLING_MODE_NONE;
-	// 		// ep_params->err_mode = UCP_ERR_HANDLING_MODE_PEER;
-	// 		ep_params->err_handler.cb = err_cb_server;
-	// 		// ep_params->err_handler.arg = NULL;
-
-	// 		// struct worker_info *worker_info = (struct worker_info*)malloc(sizeof(struct worker_info));
-	// 		// worker_info->worker_uid = attr.worker_uid;
-	// 		// worker_info->server_type = 'm';
-	// 		// ep_params->err_handler.arg = &worker_info;
-	// 		ep_params->err_handler.arg = &attr.worker_uid;
-
-	// 		// ucp_ep_h new_ep;
-	// 		ep_params->address = peer_addr;
-	// 		ep_params->user_data = &ep_status;
-	// 		status = ucp_ep_create(arguments->ucp_worker, ep_params, &ep);
-	// 		// ucp_ep_print_info(ep, stderr);
-	// 		//  add ep to the map
-	// 		map_server_eps_put(map_server_eps, attr.worker_uid, ep);
-	// 	}
-	// 	else
-	// 	{
-	// 		// fprintf(stderr, "\t[m]['%" PRIu64 "'] Endpoint already exist\n", attr.worker_uid);
-	// 		slog_debug("\t[stat_worker]['%" PRIu64 "'] Endpoint already exist", attr.worker_uid);
-	// 	}
-
-	// 	arguments->peer_address = peer_addr;
-	// 	arguments->server_ep = ep;
-	// 	arguments->worker_uid = attr.worker_uid;
-	// 	// arguments->worker_uid = attr.worker_uid;
-	// 	stat_worker_helper(arguments, req);
-
-	// 	// ucp_ep_close_nb(ep, UCP_EP_CLOSE_MODE_FORCE);
-	// 	free(peer_addr);
-
-	// 	// ep_close(arguments->ucp_worker, arguments->server_ep, UCP_EP_CLOSE_MODE_FLUSH);
-	// }
 }
 
 // int stat_worker_helper(p_argv *arguments, char *req)
 int stat_worker_helper(void *th_argv)
 {
-	ucs_status_t status;
+	// ucs_status_t status;
 	int ret;
 
 	p_argv *arguments = (p_argv *)th_argv;
@@ -1274,7 +1184,7 @@ void *dispatcher(void *th_argv)
 	int new_socket = -1;
 	while (1)
 	{
-		ucs_status_t status;
+		// ucs_status_t status;
 		char mode[MODE_SIZE];
 
 		slog_debug("[DISPATCHER] Waiting for connection requests.");
@@ -1336,336 +1246,7 @@ void *dispatcher(void *th_argv)
 	pthread_exit(NULL);
 }
 
-// // Server dispatcher thread method.
-// void *srv_attached_dispatcher(void *th_argv)
-// {
-// 	// Cast from generic pointer type to p_argv struct type pointer.
-// 	p_argv *arguments = (p_argv *)th_argv;
-
-// 	ucx_server_ctx_t context;
-// 	ucp_worker_h ucp_data_worker;
-// 	ucp_am_handler_param_t param;
-// 	ucp_ep_h server_ep;
-// 	ucs_status_t status;
-// 	int ret;
-
-// 	// Variable specifying the ID that will be granted to the next client.
-// 	uint32_t client_id_ = 0;
-// 	// char req[256];
-// 	char *req;
-
-// 	ret = init_worker(arguments->ucp_context, &ucp_data_worker);
-// 	if (ret != 0)
-// 	{
-// 		perror("ERRIMSS_INIT_WORKER");
-// 		pthread_exit(NULL);
-// 	}
-
-// 	/* Initialize the server's context. */
-// 	context.conn_request = StsQueue.create();
-// 	// status = start_server(arguments->ucp_worker, &context, &context.listener, NULL, arguments->port);
-// 	// if (status != UCS_OK)
-// 	//{
-// 	//	perror("ERRIMSS_STAR_SERVER");
-// 	//	pthread_exit(NULL);
-// 	// }
-
-// 	for (;;)
-// 	{
-// 		ucp_conn_request_h conn_req;
-// 		slog_debug("[DATA DISPATCHER] Waiting for connection requests.");
-
-// 		while (StsQueue.size(context.conn_request) == 0)
-// 		{
-// 			ucp_worker_progress(arguments->ucp_worker);
-// 			//  sleep(1);
-// 		}
-
-// 		// ucs_status_t status;
-// 		/* Receive test string from server */
-// 		// while (StsQueue.size(context.conn_request) == 0)
-// 		// {
-// 		// 	/* Probing incoming events in non-block mode */
-// 		// 	// msg_tag = ucp_tag_probe_nb(arguments->ucp_worker, tag_req, tag_mask, 1, &info_tag);
-// 		// 	// if (msg_tag != NULL)
-// 		// 	// {
-// 		// 	// 	/* Message arrived */
-// 		// 	// 	break;
-// 		// 	// }
-// 		// 	// else
-// 		// 	if (ucp_worker_progress(arguments->ucp_worker))
-// 		// 	{
-// 		// 		/* Some events were polled; try again without going to sleep */
-// 		// 		continue;
-// 		// 	}
-// 		// 	/* If we got here, ucp_worker_progress() returned 0, so we can sleep.
-// 		// 	 * Following blocked methods used to polling internal file descriptor
-// 		// 	 * to make CPU idle and don't spin loop
-// 		// 	 */
-// 		// 	/* Polling incoming events*/
-// 		// 	status = ucp_worker_wait(arguments->ucp_worker);
-// 		// }
-
-// 		conn_req = (ucp_conn_request_h)StsQueue.pop(context.conn_request);
-
-// 		status = server_create_ep(ucp_data_worker, conn_req, &server_ep);
-// 		if (status != UCS_OK)
-// 		{
-// 			perror("ERRIMSS_SERVER_CREATE_EP");
-// 			// ep_flush(server_ep, ucp_data_worker);
-// 			ep_close(ucp_data_worker, server_ep, UCP_EP_CLOSE_MODE_FLUSH);
-// 			pthread_exit(NULL);
-// 		}
-
-// 		// Save the identity of the requesting client.
-// 		size_t msg_length = 0;
-// 		msg_length = get_recv_data_length(ucp_data_worker, arguments->worker_uid);
-// 		if (msg_length == 0)
-// 		{
-// 			perror("ERRIMSS_SRV_DISPATCHER_INVALID_MSG_LENGTH");
-// 			slog_error("ERRIMSS_SRV_DISPATCHER_INVALID_MSG_LENGTH");
-// 			pthread_exit(NULL);
-// 		}
-
-// 		// char mode[msg_length];
-// 		req = (char *)malloc(msg_length * sizeof(char));
-// 		// char mode[MODE_SIZE];
-// 		msg_length = recv_data(ucp_data_worker, server_ep, (char *)req, msg_length, arguments->worker_uid, 0);
-// 		// msg_length = recv_data_opt(ucp_data_worker, server_ep, (void **)&req, msg_length, arguments->worker_uid, 0);
-// 		if (msg_length == 0)
-// 		{
-// 			perror("HERCULES_ERR_SRV_DISPATCHER_DATA_RECV_DATA");
-// 			slog_error("HERCULES_ERR_SRV_DISPATCHER_DATA_RECV_DATA");
-// 			// free(mode);
-// 			free(req);
-// 			pthread_exit(NULL);
-// 		}
-
-// 		char *mode = (char *)malloc(msg_length * sizeof(char));
-// 		slog_info("Req=%s", req);
-
-// 		sscanf(req, "%" PRIu32 " %s", &client_id_, mode);
-// 		char *req_content = strstr(req, mode);
-// 		req_content += 4;
-
-// 		uint32_t c_id = client_id_;
-// 		slog_info("req_content=%s", req_content);
-// 		// Check if the client is requesting connection resources.
-// 		if (!strncmp(req_content, "HELLO!", 6))
-// 		{
-// 			slog_info("Requesting resources, req=%s", req);
-// 			if (strncmp(req_content, "HELLO!JOIN", 10) != 0)
-// 			{
-// 				// Retrieve the buffer size that will be asigned to the current server process.
-// 				char buff[6];
-// 				sscanf(req, "%s %ld %s", buff, &buffer_KB, att_imss_uri);
-// 				strcpy(arguments->my_uri, att_imss_uri);
-
-// 				// printf("MU URI: %s", att_imss_uri);
-
-// 				// Notify that the value has been received.
-// 				pthread_mutex_lock(&buff_size_mut);
-// 				copied = 1;
-// 				pthread_cond_signal(&buff_size_cond);
-// 				pthread_mutex_unlock(&buff_size_mut);
-// 			}
-
-// 			// Message containing the client's communication ID plus its connection port.
-// 			char response_[RESPONSE_SIZE];
-// 			memset(response_, '\0', RESPONSE_SIZE);
-// 			// Port that the new client will be forwarded to.
-// 			int32_t port_ = arguments->port + 1 + (client_id_ % IMSS_THREAD_POOL);
-// 			// Wrap the previous info into the ZMQ message.
-// 			sprintf(response_, "%d%c%d", port_, '-', client_id_++);
-// 			slog_info("Seding response_=%s", response_);
-// 			// Send communication specifications.
-// 			if (send_data(ucp_data_worker, server_ep, response_, strlen(response_) + 1, arguments->worker_uid) == 0)
-// 			{
-// 				perror("HERCULES_ERR_SRVDISP_SENDBLOCK");
-// 				slog_error("HERCULES_ERR_SRVDISP_SENDBLOCK");
-// 				// ep_flush(server_ep, ucp_data_worker);
-// 				ep_close(ucp_data_worker, server_ep, UCP_EP_CLOSE_MODE_FLUSH);
-// 				free(mode);
-// 				free(req);
-// 				pthread_exit(NULL);
-// 			}
-
-// 			slog_debug("[DATA DISPATCHER] Replied client %s.", response_);
-// 			free(mode);
-// 			free(req);
-// 			continue;
-// 		}
-// 		// Check if someone is requesting identity resources.
-// 		else if (*((int32_t *)req) == WHO) // MIRAR
-// 		{
-// 			// Provide the uri of this instance.
-// 			if (send_data(ucp_data_worker, server_ep, arguments->my_uri, strlen(arguments->my_uri) + 1, arguments->worker_uid) == 0) // MIRAR
-// 			{
-// 				perror("ERR_HERCULES_WHOREQUEST");
-// 				slog_error("ERR_HERCULES_WHOREQUEST");
-// 				// ep_flush(server_ep, ucp_data_worker);
-// 				ep_close(ucp_data_worker, server_ep, UCP_EP_CLOSE_MODE_FLUSH);
-// 				free(mode);
-// 				free(req);
-// 				pthread_exit(NULL);
-// 			}
-// 		}
-// 		// context.conn_request = NULL;
-// 		ep_close(ucp_data_worker, server_ep, UCP_EP_CLOSE_MODE_FLUSH);
-// 		free(mode);
-// 		free(req);
-// 	}
-// 	pthread_exit(NULL);
-// }
-
-// void *srv_worker(void *th_argv)
-// {
-// 	ucp_ep_params_t ep_params;
-
-// 	ucp_am_handler_param_t param;
-// 	ucs_status_t status;
-// 	int ret = 0;
-// 	p_argv *arguments = (p_argv *)th_argv;
-
-// 	ep_params.field_mask = UCP_EP_PARAM_FIELD_REMOTE_ADDRESS |
-// 						   UCP_EP_PARAM_FIELD_ERR_HANDLING_MODE |
-// 						   UCP_EP_PARAM_FIELD_ERR_HANDLER |
-// 						   UCP_EP_PARAM_FIELD_USER_DATA;
-// 	ep_params.err_mode = UCP_ERR_HANDLING_MODE_PEER;
-// 	ep_params.err_handler.cb = err_cb_server;
-// 	// ep_params.err_handler.arg = NULL;
-
-// 	map_server_eps = map_server_eps_create();
-
-// 	BLOCK_SIZE = arguments->blocksize * 1024;
-
-// 	for (;;)
-// 	{
-// 		errno = 0;
-// 		size_t peer_addr_len;
-// 		ucp_address_t *peer_addr;
-// 		ucs_status_t ep_status = UCS_OK;
-// 		ucp_ep_h ep;
-// 		struct ucx_context *request = NULL;
-// 		char *req;
-// 		ucp_tag_recv_info_t info_tag;
-// 		ucp_tag_message_h msg_tag;
-// 		msg_req_t *msg;
-// 		ucp_request_param_t recv_param;
-
-// 		clock_t t;
-// 		double time_taken;
-// 		t = clock();
-
-// 		// do
-// 		// {
-// 		// 	/* Progressing before probe to update the state */
-// 		// 	TIMING(ucp_worker_progress(arguments->ucp_worker), "[srv_worker]ucp_worker_progress", unsigned int);
-// 		// 	/* Probing incoming events in non-block mode */
-// 		// 	msg_tag = ucp_tag_probe_nb(arguments->ucp_worker, tag_req, tag_mask, 1, &info_tag);
-// 		// } while (msg_tag == NULL);
-// 		ucs_status_t status;
-// 		/* Receive test string from server */
-// 		for (;;)
-// 		{
-// 			/* Probing incoming events in non-block mode */
-// 			msg_tag = ucp_tag_probe_nb(arguments->ucp_worker, tag_req, tag_mask, 1, &info_tag);
-// 			if (msg_tag != NULL)
-// 			{
-// 				/* Message arrived */
-// 				break;
-// 			}
-// 			else if (ucp_worker_progress(arguments->ucp_worker))
-// 			{
-// 				/* Some events were polled; try again without going to sleep */
-// 				continue;
-// 			}
-// 			/* If we got here, ucp_worker_progress() returned 0, so we can sleep.
-// 			 * Following blocked methods used to polling internal file descriptor
-// 			 * to make CPU idle and don't spin loop
-// 			 */
-// 			// if (ucp_test_mode == TEST_MODE_WAIT)
-// 			{
-// 				/* Polling incoming events*/
-// 				status = ucp_worker_wait(arguments->ucp_worker);
-// 				// CHKERR_JUMP(status != UCS_OK, "ucp_worker_wait\n", err_ep);
-// 			}
-// 			// else if (ucp_test_mode == TEST_MODE_EVENTFD)
-// 			// {
-// 			// 	status = test_poll_wait(ucp_worker);
-// 			// 	CHKERR_JUMP(status != UCS_OK, "test_poll_wait\n", err_ep);
-// 			// }
-// 		}
-
-// 		slog_debug("[srv_worker] Message length=%ld bytes.", info_tag.length);
-// 		msg = (msg_req_t *)malloc(info_tag.length);
-
-// 		recv_param.op_attr_mask = UCP_OP_ATTR_FIELD_CALLBACK |
-// 								  UCP_OP_ATTR_FIELD_DATATYPE;
-
-// 		recv_param.datatype = ucp_dt_make_contig(1);
-// 		recv_param.cb.recv = recv_handler;
-
-// 		request = (struct ucx_context *)ucp_tag_msg_recv_nbx(arguments->ucp_worker, msg, info_tag.length, msg_tag, &recv_param);
-// 		// request = (struct ucx_context *)ucp_tag_recv_nbx(arguments->ucp_worker, msg, info_tag.length, msg_tag, &recv_param);
-
-// 		status = ucx_wait(arguments->ucp_worker, request, "receive", "srv_worker");
-
-// 		peer_addr_len = msg->addr_len;
-// 		peer_addr = (ucp_address *)malloc(peer_addr_len);
-// 		req = msg->request;
-
-// 		memcpy(peer_addr, msg + 1, peer_addr_len);
-
-// 		ucp_worker_address_attr_t attr;
-// 		attr.field_mask = UCP_WORKER_ADDRESS_ATTR_FIELD_UID;
-// 		ucp_worker_address_query(peer_addr, &attr);
-// 		slog_debug("[srv_worker_thread] Receiving request from %" PRIu64 ".", attr.worker_uid);
-
-// 		//  look for this peer_addr in the map and get the ep
-// 		ret = map_server_eps_search(map_server_eps, attr.worker_uid, &ep);
-// 		// create ep if it's not in the map
-// 		if (ret < 0)
-// 		{
-// 			// ucp_ep_h new_ep;
-// 			ep_params.address = peer_addr;
-// 			ep_params.user_data = &ep_status;
-// 			// struct worker_info *worker_info = (struct worker_info*)malloc(sizeof(struct worker_info));
-// 			// worker_info->worker_uid = attr.worker_uid;
-// 			// worker_info->server_type = 'd';
-// 			// ep_params.err_handler.arg = &worker_info;
-// 			ep_params.err_handler.arg = &attr.worker_uid;
-
-// 			status = ucp_ep_create(arguments->ucp_worker, &ep_params, &ep);
-// 			// add ep to the map
-// 			map_server_eps_put(map_server_eps, attr.worker_uid, ep);
-// 		}
-// 		else
-// 		{
-// 			slog_debug("\t[srv_worker]['%" PRIu64 "] Endpoint already exist'", attr.worker_uid);
-// 			// fprintf(stderr, "\t[d]['%" PRIu64 "] Endpoint already exist'\n", attr.worker_uid);
-// 		}
-
-// 		arguments->peer_address = peer_addr;
-// 		arguments->server_ep = ep;
-// 		arguments->worker_uid = attr.worker_uid;
-
-// 		// char msg_[2024];
-// 		// sprintf(msg_, "[srv_worker] srv_worker_helper req %s", req);
-// 		srv_worker_helper(arguments, req);
-// 		t = clock() - t;
-
-// 		time_taken = ((double)t) / CLOCKS_PER_SEC; // in seconds
-// 		slog_info("[srv_worker] Serving time %f s\n", time_taken);
-
-// 		free(peer_addr);
-
-// 		// fprintf(stderr, "\t[d]['%" PRIu64 "'] Ending srv worker\n", attr.worker_uid);
-
-// 		// flush_ep(arguments->ucp_worker, ep);
-// 		// ep_close(arguments->ucp_worker, arguments->server_ep, UCP_EP_CLOSE_MODE_FLUSH);
-// 	}
-// }
+// Server dispatcher thread method.
 // int srv_worker_helper(p_argv *arguments, const char *req)
 int srv_worker_helper(void *th_argv)
 {
@@ -1674,7 +1255,7 @@ int srv_worker_helper(void *th_argv)
 	p_argv *arguments = (p_argv *)th_argv;
 	const char *req = arguments->req;
 
-	ucs_status_t status;
+	// ucs_status_t status;
 	int ret = -1;
 
 	// Cast from generic pointer type to p_argv struct type pointer.

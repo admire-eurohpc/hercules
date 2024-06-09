@@ -88,8 +88,8 @@ int32_t prefetch_offset = 0;
 
 pthread_cond_t cond_prefetch;
 pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t lock2 = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t system_lock = PTHREAD_MUTEX_INITIALIZER;
+// pthread_mutex_t lock2 = PTHREAD_MUTEX_INITIALIZER;
+// pthread_mutex_t system_lock = PTHREAD_MUTEX_INITIALIZER;
 
 #define MAX_PATH 1024
 // char *aux_refresh;
@@ -773,13 +773,13 @@ int getConfiguration()
 		strcpy(METADATA_FILE, aux);
 	}
 
-	if (cfg_get(cfg, "DEBUG_LEVEL"))
+	if (getenv("HERCULES_DEBUG_LEVEL") != NULL)
+	{
+		aux = getenv("HERCULES_DEBUG_LEVEL");
+	}
+	else if (cfg_get(cfg, "DEBUG_LEVEL"))
 	{
 		aux = cfg_get(cfg, "DEBUG_LEVEL");
-	}
-	else if (getenv("IMSS_DEBUG") != NULL)
-	{
-		aux = getenv("IMSS_DEBUG");
 	}
 	else
 	{
@@ -3472,31 +3472,75 @@ size_t fread(void *buf, size_t size, size_t count, FILE *fp)
 	char *pathname = map_fd_search_by_val(map_fd, fd);
 	if (pathname != NULL)
 	{
+		if (size <= 0)
+		{
+			buf = '\0';
+			return 0;
+		}
+
+		if (fd < 0)
+		{
+			errno = EBADF;
+			fp->_flags |= _IO_ERR_SEEN;
+			slog_error("[POSIX] Error Hercules 'fread' %s : %s", pathname, strerror(errno));
+			return -1;
+		}
+
 		unsigned long offset = 0;
 		slog_debug("[POSIX]. Calling Hercules 'fread', pathname=%s", pathname);
 		map_fd_search(map_fd, pathname, fd, &offset);
 
-		struct stat ds_stat_n;
-		ret = imss_getattr(pathname, &ds_stat_n);
-		slog_debug("[POSIX]. pathname=%s, stat.size=%ld, ret=%d.", pathname, ds_stat_n.st_size, ret);
-		if (ret < 0)
+		// struct stat ds_stat_n;
+		// char *aux = NULL;
+		// // ret = imss_getattr(pathname, &ds_stat_n);
+		// int fd_lkup = -1;
+		// fd_lookup(pathname, &fd_lkup, &ds_stat_n, &aux);
+		// slog_debug("current size=%ld", ds_stat_n.st_size);
+		// // imss_getattr(pathname, &ds_stat_n);
+		// // if (ret < 0)
+		// if (fd_lkup == -1)
+		// {
+		// 	// errno = -ret;
+		// 	errno = ENOENT;
+		// 	ret = -1;
+		// 	slog_error("[POSIX] Error Hercules 'fread'	: %d:%s", errno, strerror(errno));
+		// 	fp->_flags |= _IO_ERR_SEEN;
+		// 	return ret;
+		// }
+		slog_debug("[POSIX]. pathname=%s, ret=%d.", pathname, ret);
+		// if (ret < 0)
+		// {
+		// 	errno = -ret;
+		// 	ret = -1;
+		// 	fp->_flags |= _IO_ERR_SEEN;
+		// 	slog_error("[POSIX] Error Hercules 'fread'	: %s", strerror(errno));
+		// }
+		// else if
+		// if(offset >= ds_stat_n.st_size)
+		// {
+		// 	fp->_flags |= _IO_EOF_SEEN;
+		// 	ret = 0;
+		// }
+		// else
+		// {
+		// ret = imss_read(pathname, buf, count, offset);
+		ret = imss_sread(pathname, buf, count, offset);		
+
+		if (ret > 0) // Success case.
+		{
+			offset += ret;
+			slog_debug("[POSIX] Updating map_fd, offset=%d", offset);
+			map_fd_update_value(map_fd, pathname, fd, offset);
+		}
+		if (ret < 0) // Error case.
 		{
 			errno = -ret;
 			ret = -1;
 			fp->_flags |= _IO_ERR_SEEN;
-			slog_error("[POSIX] Error Hercules 'fread'	: %s", strerror(errno));
+			slog_error("[POSIX] Error Hercules 'fread' %s : %s", pathname, strerror(errno));
 		}
-		else if (offset >= ds_stat_n.st_size)
-		{
+		if(ret == 0) { // End of file.
 			fp->_flags |= _IO_EOF_SEEN;
-			ret = 0;
-		}
-		else
-		{
-			ret = imss_read(pathname, buf, count, offset);
-			offset += ret;
-			slog_debug("[POSIX] Updating map_fd, offset=%d", offset);
-			map_fd_update_value(map_fd, pathname, fd, offset);
 		}
 		slog_debug("[POSIX]. End Hercules 'fread', ret=%ld\n", ret);
 	}

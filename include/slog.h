@@ -72,7 +72,7 @@ extern "C"
 #define SLOG_TIME 8
 #define SLOG_FULL 9
 
-// #define USESLOG
+#define USESLOG
 #ifdef USESLOG
 #define slog_none(...) \
     slog(SLOG_NONE, __func__, __VA_ARGS__);
