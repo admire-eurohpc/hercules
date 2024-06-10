@@ -11,7 +11,7 @@ StopServers() {
     for node in "${hosts[@]}"
     do
         echo "ssh $node pkill hercules_server"
-        ( ssh $node "pkill hercules_server" )
+        ( ssh $node "pkill -SIGUSR1 hercules_server" )
     done
 }
 

@@ -63,7 +63,7 @@ extern int IMSS_THREAD_POOL;
 
 // const char *TESTX = "imss://lorem_text.txt$1";
 // const char *TESTX = "imss://wfc1.dat$1";
-const char *TESTX = "p4x2.save/wfc1.dat";
+// const char *TESTX = "p4x2.save/wfc1.dat";
 
 #define GARBAGE_COLLECTOR_PERIOD 120
 
@@ -90,6 +90,32 @@ int ready(char *tmp_file_path, const char *msg)
 		exit(1);
 	}
 	return 0;
+}
+
+// ucp_worker_h *global_ucp_worker;
+int finished = 0;
+int global_server_fd = -1;
+void handle_signal(int signal)
+{
+	if (signal == SIGUSR1)
+	{
+		fprintf(stderr, "Received SIGUSR1\n");
+		finished = 1;
+		// To dispatcher thread. 
+		if(shutdown(global_server_fd, SHUT_RD)  == -1) {
+			fprintf(stderr, "Error closing server_fd\n");
+		}
+		// ucs_status_t status;
+		// status = ucp_worker_signal(global_ucp_worker);
+		// if (status != UCS_OK)
+		// {
+		// 	fprintf(stderr, "Failed to signal to UCX worker: %s\n", ucs_status_string(status));
+		// }
+
+		// ucp_listener_destroy(context.listener);
+		// pthread_exit(NULL);
+		// exit(0);
+	}
 }
 
 // int write_2_disk(char *filename)
@@ -167,45 +193,53 @@ void *srv_worker(void *th_argv)
 		double time_taken;
 		t = clock();
 
-		// do
-		// {
-		// 	/* Progressing before probe to update the state */
-		// 	TIMING(ucp_worker_progress(arguments->ucp_worker), "[srv_worker]ucp_worker_progress", unsigned int);
-		// 	/* Probing incoming events in non-block mode */
-		// 	msg_tag = ucp_tag_probe_nb(arguments->ucp_worker, tag_req, tag_mask, 1, &info_tag);
-		// } while (msg_tag == NULL);
-		ucs_status_t status;
-		/* Receive test string from server */
-		for (;;)
+		// Register signal handler
+		signal(SIGUSR1, handle_signal);
+
+		do
 		{
+			/* Progressing before probe to update the state */
+			TIMING(ucp_worker_progress(arguments->ucp_worker), "[srv_worker]ucp_worker_progress", unsigned int);
 			/* Probing incoming events in non-block mode */
 			msg_tag = ucp_tag_probe_nb(arguments->ucp_worker, tag_req, tag_mask, 1, &info_tag);
-			if (msg_tag != NULL)
+			if (finished)
 			{
-				/* Message arrived */
-				break;
+				fprintf(stderr, "Ending data server thread.\n");
+				pthread_exit(NULL);
 			}
-			else if (ucp_worker_progress(arguments->ucp_worker))
-			{
-				/* Some events were polled; try again without going to sleep */
-				continue;
-			}
-			/* If we got here, ucp_worker_progress() returned 0, so we can sleep.
-			 * Following blocked methods used to polling internal file descriptor
-			 * to make CPU idle and don't spin loop
-			 */
-			// if (ucp_test_mode == TEST_MODE_WAIT)
-			{
-				/* Polling incoming events*/
-				status = ucp_worker_wait(arguments->ucp_worker);
-				// CHKERR_JUMP(status != UCS_OK, "ucp_worker_wait\n", err_ep);
-			}
-			// else if (ucp_test_mode == TEST_MODE_EVENTFD)
-			// {
-			// 	status = test_poll_wait(ucp_worker);
-			// 	CHKERR_JUMP(status != UCS_OK, "test_poll_wait\n", err_ep);
-			// }
-		}
+		} while (msg_tag == NULL);
+		// ucs_status_t status;
+		// /* Receive test string from server */
+		// for (;;)
+		// {
+		// 	/* Probing incoming events in non-block mode */
+		// 	msg_tag = ucp_tag_probe_nb(arguments->ucp_worker, tag_req, tag_mask, 1, &info_tag);
+		// 	if (msg_tag != NULL)
+		// 	{
+		// 		/* Message arrived */
+		// 		break;
+		// 	}
+		// 	else if (ucp_worker_progress(arguments->ucp_worker))
+		// 	{
+		// 		/* Some events were polled; try again without going to sleep */
+		// 		continue;
+		// 	}
+		// 	/* If we got here, ucp_worker_progress() returned 0, so we can sleep.
+		// 	 * Following blocked methods used to polling internal file descriptor
+		// 	 * to make CPU idle and don't spin loop
+		// 	 */
+		// 	// if (ucp_test_mode == TEST_MODE_WAIT)
+		// 	{
+		// 		/* Polling incoming events*/
+		// 		status = ucp_worker_wait(arguments->ucp_worker);
+		// 		// CHKERR_JUMP(status != UCS_OK, "ucp_worker_wait\n", err_ep);
+		// 	}
+		// 	// else if (ucp_test_mode == TEST_MODE_EVENTFD)
+		// 	// {
+		// 	// 	status = test_poll_wait(ucp_worker);
+		// 	// 	CHKERR_JUMP(status != UCS_OK, "test_poll_wait\n", err_ep);
+		// 	// }
+		// }
 
 		slog_debug("[srv_worker] Message length=%ld bytes.", info_tag.length);
 		msg = (msg_req_t *)malloc(info_tag.length);
@@ -380,7 +414,15 @@ int srv_worker_helper(p_argv *arguments, const char *req)
 			// sleep(10);
 			map_server_eps_erase(map_server_eps, arguments->worker_uid, arguments->ucp_worker);
 			slog_debug("[srv_worker_thread][READ_OP][RELEASE]");
-			// return 0;
+			char release_msg[] = "RELEASE\0";
+
+			ret = TIMING(send_data(arguments->ucp_worker, arguments->server_ep, release_msg, strlen(release_msg) + 1, arguments->worker_uid), "[srv_worker_thread][READ_OP][RENAME_OP] Send release", int);
+			if (ret == 0)
+			{
+				perror("ERR_HERCULES_SRV_SEND_DATA_RELEASE");
+				slog_error("ERR_HERCULES_SRV_SEND_DATA_RELEASE");
+				return -1;
+			}
 			break;
 		}
 		case DELETE_OP:
@@ -1104,6 +1146,7 @@ int srv_worker_helper(p_argv *arguments, const char *req)
 // Thread method searching and cleaning nodes with st_nlink=0
 void *garbage_collector(void *th_argv)
 {
+	fprintf(stderr, "Init garbage collector\n");
 	// Obtain the current map class element from the set of arguments.
 	map_records *map = (map_records *)th_argv;
 
@@ -1142,38 +1185,54 @@ void *stat_worker(void *th_argv)
 		msg_req_t *msg;
 		ucp_request_param_t recv_param;
 
+		// Register signal handler
+		signal(SIGUSR1, handle_signal);
+
 		ucs_status_t status;
 		/* Receive test string from server */
-		for (;;)
+		do
 		{
+			/* Progressing before probe to update the state */
+			ucp_worker_progress(arguments->ucp_worker);
 			/* Probing incoming events in non-block mode */
 			msg_tag = ucp_tag_probe_nb(arguments->ucp_worker, tag_req, tag_mask, 1, &info_tag);
-			if (msg_tag != NULL)
+			if (finished == 1)
 			{
-				/* Message arrived */
-				break;
+				fprintf(stderr, "Ending metadata thread.\n");
+				pthread_exit(NULL);
 			}
-			else if (ucp_worker_progress(arguments->ucp_worker))
-			{
-				/* Some events were polled; try again without going to sleep */
-				continue;
-			}
-			/* If we got here, ucp_worker_progress() returned 0, so we can sleep.
-			 * Following blocked methods used to polling internal file descriptor
-			 * to make CPU idle and don't spin loop
-			 */
-			// if (ucp_test_mode == TEST_MODE_WAIT)
-			{
-				/* Polling incoming events*/
-				status = ucp_worker_wait(arguments->ucp_worker);
-				// CHKERR_JUMP(status != UCS_OK, "ucp_worker_wait\n", err_ep);
-			}
-			// else if (ucp_test_mode == TEST_MODE_EVENTFD)
-			// {
-			// 	status = test_poll_wait(ucp_worker);
-			// 	CHKERR_JUMP(status != UCS_OK, "test_poll_wait\n", err_ep);
-			// }
-		}
+		} while (msg_tag == NULL);
+
+		// for (;;)
+		// {
+		/* Probing incoming events in non-block mode */
+		// msg_tag = ucp_tag_probe_nb(arguments->ucp_worker, tag_req, tag_mask, 1, &info_tag);
+		// if (msg_tag != NULL)
+		// {
+		// 	/* Message arrived */
+		// 	break;
+		// }
+		// else if (ucp_worker_progress(arguments->ucp_worker))
+		// {
+		// 	/* Some events were polled; try again without going to sleep */
+		// 	continue;
+		// }
+		// /* If we got here, ucp_worker_progress() returned 0, so we can sleep.
+		//  * Following blocked methods used to polling internal file descriptor
+		//  * to make CPU idle and don't spin loop
+		//  */
+		// // if (ucp_test_mode == TEST_MODE_WAIT)
+		// {
+		// 	/* Polling incoming events*/
+		// 	status = ucp_worker_wait(arguments->ucp_worker);
+		// 	// CHKERR_JUMP(status != UCS_OK, "ucp_worker_wait\n", err_ep);
+		// }
+		// else if (ucp_test_mode == TEST_MODE_EVENTFD)
+		// {
+		// 	status = test_poll_wait(ucp_worker);
+		// 	CHKERR_JUMP(status != UCS_OK, "test_poll_wait\n", err_ep);
+		// }
+		// }
 
 		msg = (msg_req_t *)malloc(info_tag.length); // Should the msg memory be free?
 		memset(msg, 0, info_tag.length);
@@ -1864,12 +1923,9 @@ void *srv_attached_dispatcher(void *th_argv)
 
 	/* Initialize the server's context. */
 	context.conn_request = StsQueue.create();
-	// status = start_server(arguments->ucp_worker, &context, &context.listener, NULL, arguments->port);
-	// if (status != UCS_OK)
-	//{
-	//	perror("ERRIMSS_STAR_SERVER");
-	//	pthread_exit(NULL);
-	// }
+
+	// Register signal handler
+	signal(SIGUSR1, handle_signal);
 
 	for (;;)
 	{
@@ -1879,6 +1935,11 @@ void *srv_attached_dispatcher(void *th_argv)
 		while (StsQueue.size(context.conn_request) == 0)
 		{
 			ucp_worker_progress(arguments->ucp_worker);
+			if (finished == 1)
+			{
+				fprintf(stderr, "Ending srv_attached_dispatcher thread\n");
+				pthread_exit(NULL);
+			}
 		}
 
 		conn_req = (ucp_conn_request_h)StsQueue.pop(context.conn_request);
@@ -2005,7 +2066,7 @@ void *dispatcher(void *th_argv)
 	struct sockaddr_in server_addr;
 	socklen_t addrlen = sizeof(server_addr);
 	int ret;
-	int server_fd = -1;
+	// int server_fd = -1;
 	int listenfd = -1;
 	int optval = 1;
 	// char service[8];
@@ -2014,16 +2075,18 @@ void *dispatcher(void *th_argv)
 
 	// snprintf(service, sizeof(service), "%ld", arguments->port);
 	// Get a socket file descriptor.
-	server_fd = socket(AF_INET, SOCK_STREAM, 0);
-	if (server_fd < 0)
+	global_server_fd = socket(AF_INET, SOCK_STREAM, 0);
+	if (global_server_fd < 0)
 	{
 		perror("ERR_HERCULES_DISPATCHER_SOCKET");
 		ready(tmp_file_path, "ERROR");
 		pthread_exit(NULL);
 	}
 
+	// global_server_fd = &server_fd;
+
 	// To reuse the address and port.
-	ret = setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval));
+	ret = setsockopt(global_server_fd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval));
 	if (ret < 0)
 	{
 		perror("ERR_HERCULES_DISPATCHER_SET_SOCKET_OPT");
@@ -2038,7 +2101,7 @@ void *dispatcher(void *th_argv)
 	server_addr.sin_port = htons(arguments->port);
 
 	// Asociamos el socket a la dirección del servidor
-	if (bind(server_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0)
+	if (bind(global_server_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0)
 	{
 		perror("ERR_HERCULES_DISPATCHER_BIND");
 		ready(tmp_file_path, "ERROR");
@@ -2046,7 +2109,7 @@ void *dispatcher(void *th_argv)
 	}
 
 	// Prepare to accept connections.
-	ret = listen(server_fd, 3);
+	ret = listen(global_server_fd, 3);
 	if (ret < 0)
 	{
 		perror("ERR_HERCULES_DISPATCHER_LISTEN");
@@ -2064,7 +2127,13 @@ void *dispatcher(void *th_argv)
 
 		slog_debug("[DISPATCHER] Waiting for connection requests.");
 		// fprintf(stderr, "[DISPATCHER] Waiting for connection requests.\n");
-		new_socket = accept(server_fd, (struct sockaddr *)&server_addr, &addrlen);
+		new_socket = accept(global_server_fd, (struct sockaddr *)&server_addr, &addrlen);
+
+		if(finished == 1){
+			fprintf(stderr, "Ending dispatcher thread.\n");
+			pthread_exit(NULL);
+		}
+
 		if (new_socket < 0)
 		{
 			slog_error("ERR_HERCULES_DISPATCHER_ACCEPT");
@@ -2114,7 +2183,7 @@ void *dispatcher(void *th_argv)
 		// MIRAR ucp_worker_release_address(ucp_worker_threads[client_id_ % IMSS_THREAD_POOL], local_addr);
 		close(new_socket);
 	}
-	close(server_fd);
+	close(global_server_fd);
 
 	pthread_exit(NULL);
 }

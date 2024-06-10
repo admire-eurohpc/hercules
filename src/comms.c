@@ -184,13 +184,18 @@ size_t send_data(ucp_worker_h ucp_worker, ucp_ep_h ep, const void *msg, size_t m
 	send_param.op_attr_mask = UCP_OP_ATTR_FIELD_CALLBACK |
 							  UCP_OP_ATTR_FIELD_USER_DATA;
 	send_param.cb.send = send_handler_data;
-	// send_param.datatype    = ucp_dt_make_contig(1);
-	// send_param.memory_type  = UCS_MEMORY_TYPE_HOST;
+	send_param.datatype    = ucp_dt_make_contig(1);
+	send_param.memory_type  = UCS_MEMORY_TYPE_HOST;
 	send_param.user_data = &ctx;
 
+	clock_t t;
+	t = clock();
 	request = (struct ucx_context *)ucp_tag_send_nbx(ep, ctx.buffer, msg_len, from, &send_param);
 	// request = (struct ucx_context *)ucp_tag_send_sync_nbx(ep, ctx.buffer, msg_len, from, &send_param);
 	status = ucx_wait(ucp_worker, request, "send", "data");
+	t = clock() - t;
+	double time_taken = ((double)t) / CLOCKS_PER_SEC; // in seconds
+	// fprintf(stderr,"********** send data %lu time = %lf\n", msg_len, time_taken);
 
 	if (UCS_PTR_IS_ERR(request))
 	{
@@ -209,7 +214,7 @@ size_t send_data(ucp_worker_h ucp_worker, ucp_ep_h ep, const void *msg, size_t m
  */
 size_t send_req(ucp_worker_h ucp_worker, ucp_ep_h ep, ucp_address_t *addr, size_t addr_len, char *req)
 {
-	
+
 	ucs_status_t status;
 	struct ucx_context *request;
 	size_t msg_len;
@@ -268,7 +273,7 @@ size_t send_req(ucp_worker_h ucp_worker, ucp_ep_h ep, ucp_address_t *addr, size_
 
 size_t get_recv_data_length(ucp_worker_h ucp_worker, uint64_t dest)
 {
-	//pthread_mutex_lock(&lock_ucx_comm);
+	// pthread_mutex_lock(&lock_ucx_comm);
 
 	ucp_tag_recv_info_t info_tag;
 	ucp_tag_message_h msg_tag;
@@ -335,6 +340,8 @@ size_t recv_data(ucp_worker_h ucp_worker, ucp_ep_h ep, void *msg, size_t msg_len
 
 	slog_debug("[COMM] Probe tag (%lu bytes)", msg_length);
 	//	t = clock();
+	clock_t t;
+	t = clock();
 	if (async)
 	{
 		request = (struct ucx_context *)ucp_tag_recv_nbx(ucp_worker, msg, msg_length, dest, tag_mask, &recv_param);
@@ -351,7 +358,14 @@ size_t recv_data(ucp_worker_h ucp_worker, ucp_ep_h ep, void *msg, size_t msg_len
 	// }
 
 	// sleep(1);
+
+	
 	status = ucx_wait(ucp_worker, request, "recv", "data");
+
+	t = clock() - t;
+	double time_taken = ((double)t) / CLOCKS_PER_SEC; // in seconds
+	// fprintf(stderr,"********** recv data = %lf\n", time_taken);
+
 	// slog_debug("[COMM] status=%s.", ucs_status_string(status));
 	// slog_debug("--- %s\n", msg);
 
@@ -951,7 +965,7 @@ int32_t recv_dynamic_stream_opt(ucp_worker_h ucp_worker, ucp_ep_h ep, void **dat
 		return -1;
 	}
 
-	if(*data_struct == NULL)
+	if (*data_struct == NULL)
 		*data_struct = (void *)malloc(length * sizeof(imss_info));
 
 	char *msg_data = (char *)result;

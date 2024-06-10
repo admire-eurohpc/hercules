@@ -442,8 +442,8 @@ int32_t main(int32_t argc, char **argv)
 				return -1;
 			}
 			// Receive the associated structure.
-			//void *data = (void *)malloc(length);
-			imss_info imss_info_ = *(imss_info*)malloc(sizeof(imss_info)*length);
+			// void *data = (void *)malloc(length);
+			imss_info imss_info_ = *(imss_info *)malloc(sizeof(imss_info) * length);
 			// memcpy(&imss_info_, data, sizeof(imss_info));
 			// free(data);
 			ret = recv_dynamic_stream(ucp_worker, client_ep, &imss_info_, BUFFER, attr.worker_uid, length);
@@ -690,12 +690,14 @@ int32_t main(int32_t argc, char **argv)
 			perror("ERR_HERCULES_SERVER_THREAD_JOIN");
 			return -1;
 		}
+		// fprintf(stderr,"Ending %c server %d\n", args.type, args.id);
 		unlink(tmp_file_path);
 	}
 
 	// Write the metadata structures retrieved by the metadata server threads.
 	if (args.type == TYPE_METADATA_SERVER)
 	{
+		// save metadata info in disk.
 		// if (metadata_write(metadata_file, buffer, map.get(), arguments, buffer_segment, bytes_written) == -1)
 		// 	return -1;
 
@@ -709,9 +711,13 @@ int32_t main(int32_t argc, char **argv)
 			perror("ERRIMSS_TREEMUT_DESTROY");
 			pthread_exit(NULL);
 		}
+		fprintf(stderr, "Ending metadata server.\n");
 	}
 	else
+	{
 		free(region_locks);
+		fprintf(stderr, "Ending data server.\n");
+	}
 
 	// Close publisher socket.
 	// ep_close(ucp_worker, pub_ep, UCP_EP_CLOSE_MODE_FORCE);

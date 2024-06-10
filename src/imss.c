@@ -955,9 +955,9 @@ void close_ucx_endpoint(ucp_worker_h worker, ucp_ep_h ep)
 	// ucp_worker_progress(worker);
 }
 
-void ucx_cleanup(){ 
+void ucx_cleanup()
+{
 	ucp_worker_destroy(ucp_worker_data);
-
 }
 
 // Method releasing client-side and/or server-side resources related to a certain IMSS instance.
@@ -982,12 +982,12 @@ int32_t release_imss(char *imss_uri, uint32_t release_op)
 		// Request IMSS instance closure per server if the instance is a DETACHED one and the corresponding argumet was provided.
 		if (release_op == CLOSE_DETACHED)
 		{
-			//char release_msg[REQUEST_SIZE];
+			// char release_msg[REQUEST_SIZE];
 			ucp_ep_h ep;
 
 			ep = imss_.conns.eps[i];
 
-			//sprintf(release_msg, "GET 2 0 RELEASE");
+			// sprintf(release_msg, "GET 2 0 RELEASE");
 			char release_msg[] = "GET 2 0 RELEASE\0";
 			slog_live("release_msg=%s to server %d", release_msg, i);
 			if (send_req(ucp_worker_data, ep, local_addr_data, local_addr_len_data, release_msg) == 0)
@@ -997,7 +997,41 @@ int32_t release_imss(char *imss_uri, uint32_t release_op)
 				slog_error("HERCULES_ERR_RLSHERCULES_SENDADDR");
 				return -1;
 			}
-			close_ucx_endpoint(ucp_worker_data, ep);
+
+			size_t msg_length = 0;
+			msg_length = get_recv_data_length(ucp_worker_data, local_data_uid);
+			if (msg_length < 0)
+			{
+				pthread_mutex_unlock(&lock_network);
+				perror("ERR_HERCULES_RLSHERCULES_INVALID_MSG_LENGTH");
+				slog_error("ERR_HERCULES_RLSHERCULES_INVALID_MSG_LENGTH");
+				return -1;
+			}
+
+			// char result[msg_length];
+			void *result = malloc(msg_length);
+			msg_length = recv_data(ucp_worker_data, ep, result, msg_length, local_data_uid, 0);
+			if (msg_length == 0)
+			{
+				pthread_mutex_unlock(&lock_network);
+				perror("ERR_HERCULES_RLSHERCULES_RECV_DATA");
+				slog_error("ERR_HERCULES_RLSHERCULES_RECV_DATA");
+				free(result);
+				return -1;
+			}
+
+			slog_debug("[delete_dataset] result=%s, msg_length=%d", (const char *)result, msg_length);
+			if (!strncmp((const char *)result, "RELEASE", strlen("RELEASE")))
+			{
+				// free the message received from the metadata server.
+				free(result);
+				pthread_mutex_unlock(&lock_network);
+				return 1;
+			}
+			// free the message received from the metadata server.
+			free(result);
+
+			// close_ucx_endpoint(ucp_worker_data, ep);
 
 			// ep_close(ucp_worker_data, ep, 0);
 			//  // ep_close(ucp_worker_data, ep, UCP_EP_CLOSE_MODE_FLUSH);
@@ -2064,7 +2098,7 @@ int32_t get_data_location(int32_t dataset_id, int32_t data_id, int32_t op_type)
 	slog_debug("[IMSS] dataset_id=%d, current_dataset=%d", dataset_id, current_dataset);
 	// fprintf(stderr,"[get_data_location] current_dataset=%d, dataset_id=%d\n", current_dataset, dataset_id);
 
-	// if (current_dataset != dataset_id) // TO FIX: if a thread does not met the condition, their curr_datset could have the value of the previous thread. curr_dataset is global.
+	if (current_dataset != dataset_id) // TO FIX: if a thread does not met the condition, their curr_datset could have the value of the previous thread. curr_dataset is global.
 	{
 		// Retrieve the corresponding dataset_info structure and the associated IMSS.
 		curr_dataset = g_array_index(datasetd, dataset_info, dataset_id);
@@ -2086,11 +2120,18 @@ int32_t get_data_location(int32_t dataset_id, int32_t data_id, int32_t op_type)
 	// Search for the server that is supposed to have the specified data element.
 	// slog_debug("[get_data_location] curr_dataset.uri_=%s", curr_dataset.uri_);
 	// if ((server = find_server(curr_dataset.n_servers, data_id, curr_dataset.uri_, op_type)) < 0)
-	if ((server = find_server(curr_imss.info.num_storages, data_id, curr_dataset.uri_, op_type)) < 0)
+	if (curr_imss.info.num_storages > 1)
 	{
-		perror("HERCULES_ERR_FIND_SERVER");
-		slog_fatal("HERCULES_ERR_FIND_SERVER");
-		return -1;
+		if ((server = find_server(curr_imss.info.num_storages, data_id, curr_dataset.uri_, op_type)) < 0)
+		{
+			perror("HERCULES_ERR_FIND_SERVER");
+			slog_fatal("HERCULES_ERR_FIND_SERVER");
+			return -1;
+		}
+	}
+	else
+	{
+		server = 0;
 	}
 	slog_debug("[IMSS][get_data_location] next_server=%d", server);
 
@@ -3165,7 +3206,7 @@ int32_t set_data(int32_t dataset_id, int32_t data_id, const void *buffer, size_t
 			pthread_mutex_unlock(&lock_network);
 			perror("HERCULES_ERR_SET_REQ_SEND_REQ");
 			slog_error("HERCULES_ERR_SET_REQ_SEND_REQ");
-			//return -1;
+			// return -1;
 			exit(-1);
 		}
 
