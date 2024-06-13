@@ -692,7 +692,8 @@ ssize_t imss_sread(const char *path, void *buf, size_t size, off_t offset)
 		end_blk = ceil((double)(offset + stats.st_size) / IMSS_DATA_BSIZE);
 	}
 
-	slog_debug("[imss_read] TotalSizeToRead=%ld, start_offset=%ld, curr_blk=%ld, end_blk=%ld, num_of_blks=%ld, offset=%ld, end_offset=%ld, IMSS_DATA_BSIZE=%ld, stats.st_size=%ld", size, start_offset, curr_blk, end_blk, num_of_blk, offset, end_offset, IMSS_DATA_BSIZE, stats.st_size);
+
+	slog_debug("[imss_read] TotalSizeToRead=%ld (%ld kb), start_offset=%ld, curr_blk=%ld, end_blk=%ld, num_of_blks=%ld, offset=%ld, end_offset=%ld, IMSS_DATA_BSIZE=%ld, stats.st_size=%ld", size, size/1024, start_offset, curr_blk, end_blk, num_of_blk, offset, end_offset, IMSS_DATA_BSIZE, stats.st_size);
 
 	// Check if offset is bigger than filled, return 0 because is EOF case
 	if (offset >= stats.st_size)
@@ -820,6 +821,9 @@ ssize_t imss_sread(const char *path, void *buf, size_t size, off_t offset)
 		++curr_blk;
 		byte_count += to_read;
 	}
+
+	slog_read("TotalSizeToRead=%lu B (%lu kB, %lu mB), offset=%lu, total(to_read+offset)=%lu B (%lu mB), file size=%ld B (%ld mB), readed=%lu B", size, size/1024, size/1024/1024, offset, size+offset, (size+offset)/1024/10240, stats.st_size, stats.st_size/1024/1024, byte_count);
+
 
 	// free(rpath);
 	return byte_count;

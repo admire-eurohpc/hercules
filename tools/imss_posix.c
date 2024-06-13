@@ -3517,7 +3517,7 @@ size_t fread(void *buf, size_t size, size_t count, FILE *fp)
 		}
 
 		unsigned long offset = 0;
-		slog_debug("[POSIX]. Calling Hercules 'fread', pathname=%s", pathname);
+		slog_debug("[POSIX]. Calling Hercules 'fread', pathname=%s, size=%lu", pathname, count);
 		map_fd_search(map_fd, pathname, fd, &offset);
 
 		// struct stat ds_stat_n;
@@ -3537,7 +3537,7 @@ size_t fread(void *buf, size_t size, size_t count, FILE *fp)
 		// 	fp->_flags |= _IO_ERR_SEEN;
 		// 	return ret;
 		// }
-		slog_debug("[POSIX]. pathname=%s, ret=%d.", pathname, ret);
+		// slog_debug("[POSIX]. pathname=%s, ret=%d.", pathname, ret);
 		// if (ret < 0)
 		// {
 		// 	errno = -ret;
