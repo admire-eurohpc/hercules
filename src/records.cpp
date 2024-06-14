@@ -69,7 +69,7 @@ int32_t map_records::get(std::string key, void **add_, uint64_t *size_)
 	// Map iterator that will be searching for the key.
 	std::map<std::string, std::pair<void *, uint64_t>>::iterator it;
 	// Block the access to the map structure.
-	std::unique_lock<std::mutex> lock(*mut);
+	// std::unique_lock<std::mutex> lock(*mut);
 
 	// struct utsname detect;
 	// uname(&detect);

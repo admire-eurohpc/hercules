@@ -28,6 +28,9 @@ gcc -Wall imss.c `pkg-config fuse --cflags --libs` -o imss
 
 #include "imss_posix_api.h"
 
+#include <sys/ipc.h>
+#include <sys/shm.h>
+
 #define KB 1024
 #define GB 1073741824
 #define HEADER sizeof(uint32_t)
