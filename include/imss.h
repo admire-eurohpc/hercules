@@ -90,11 +90,12 @@ typedef struct
 	char type; // = 'I';
 	// Set of ips comforming the IMSS.
 	char **ips;
+	// Server status.
+	int *status;
 	// Number of IMSS servers.
 	int32_t num_storages;
 	// Server's dispatcher thread connection port.
 	uint16_t conn_port;
-
 } imss_info;
 
 // Structure storing the required connection resources to the IMSS in the client side.

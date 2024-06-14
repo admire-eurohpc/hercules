@@ -840,6 +840,7 @@ int getConfiguration()
 	{
 		N_SERVERS = atoi(getenv("IMSS_N_SERVERS"));
 	}
+	// fprintf(stderr,"N_SERVERS=%d\n", N_SERVERS);
 
 	if (getenv("IMSS_SRV_PORT") != NULL)
 	{

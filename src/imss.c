@@ -862,9 +862,18 @@ int32_t open_imss(char *imss_uri)
 	local_data_uid = attr.worker_uid;
 
 	NUM_DATA_SERVERS = new_imss.info.num_storages;
+	// fprintf(stderr, "NUM_DATA_SERVERS=%d\n", NUM_DATA_SERVERS);
 	// Connect to the requested IMSS.
 	for (int32_t i = 0; i < new_imss.info.num_storages; i++)
 	{
+		fprintf(stderr, "node=%s, status=%d\n", new_imss.info.ips[i], new_imss.info.status[i]);
+		if (new_imss.info.status[i] == 0)
+		{
+			fprintf(stderr, "Skipping - i=%d - %s:%d, status=%d\n", i, new_imss.info.ips[i], new_imss.info.conn_port, new_imss.info.status[i]);
+			continue;
+		}
+		
+
 		int oob_sock;
 		size_t addr_len;
 		int ret = 0;
@@ -980,7 +989,7 @@ int32_t release_imss(char *imss_uri, uint32_t release_op)
 	for (int32_t i = 0; i < imss_.info.num_storages; i++)
 	{
 		// Request IMSS instance closure per server if the instance is a DETACHED one and the corresponding argumet was provided.
-		if (release_op == CLOSE_DETACHED)
+		if (release_op == CLOSE_DETACHED && imss_.info.status[i] == 1)
 		{
 			// char release_msg[REQUEST_SIZE];
 			ucp_ep_h ep;
@@ -1070,6 +1079,8 @@ int32_t release_imss(char *imss_uri, uint32_t release_op)
 }
 
 // Method retrieving information related to a certain IMSS instance.
+// This function only connects to the metadata server when the IMSS instance
+// is not locally.
 int32_t stat_imss(char *imss_uri, imss_info *imss_info_)
 {
 	// Check for the IMSS info structure in the local vector.

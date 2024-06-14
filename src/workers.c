@@ -101,8 +101,9 @@ void handle_signal(int signal)
 	{
 		fprintf(stderr, "Received SIGUSR1\n");
 		finished = 1;
-		// To dispatcher thread. 
-		if(shutdown(global_server_fd, SHUT_RD)  == -1) {
+		// To dispatcher thread.
+		if (shutdown(global_server_fd, SHUT_RD) == -1)
+		{
 			fprintf(stderr, "Error closing server_fd\n");
 		}
 		// ucs_status_t status;
@@ -1743,6 +1744,7 @@ int stat_worker_helper(p_argv *arguments, char *req)
 			// Receive the block into the buffer.
 			void *buffer = malloc(block_size_recv);
 			ret = recv_dynamic_stream(arguments->ucp_worker, arguments->server_ep, buffer, BUFFER, arguments->worker_uid, length);
+			// ret = recv_dynamic_stream(arguments->ucp_worker, arguments->server_ep, buffer, BUFFER, arguments->worker_uid, length);
 			// length = recv_dynamic_stream_opt(arguments->ucp_worker, arguments->server_ep, &buffer, BUFFER, arguments->worker_uid, length);
 			slog_debug("[STAT WORKER] END Recv dynamic");
 
@@ -1788,10 +1790,9 @@ int stat_worker_helper(p_argv *arguments, char *req)
 		// If was already stored:
 		else
 		{
-			pthread_mutex_unlock(&mp);
 			// Follow a certain behavior if the received block was already stored.
 			slog_debug("[STAT WORKER] LOCAL DATASET_UPDATE %ld", block_size_recv);
-			switch (block_size_recv)
+			switch (1) // TO CKECK!S
 			{
 			// Update where the blocks of a LOCAL dataset have been stored.
 			case LOCAL_DATASET_UPDATE:
@@ -1854,31 +1855,66 @@ int stat_worker_helper(p_argv *arguments, char *req)
 
 			default:
 			{
+				int delete_dataserver_indx = operation;
 				slog_debug("[STAT_WORKER] Updating existing dataset %s.", key.c_str());
+
+				char *address_aux = (char *)address_;
+
+				imss_info *imss_info_ = (imss_info *) malloc(block_size_rtvd*sizeof(imss_info));
+				// = (imss_info *)address_aux;
+				memcpy(imss_info_, address_aux, sizeof(imss_info));
+
+				address_aux += sizeof(imss_info);
+				address_aux += imss_info_->num_storages * LINE_LENGTH;
+
+				imss_info_->status = (int *)malloc(imss_info_->num_storages * sizeof(int));
+				memcpy(imss_info_->status, address_aux, imss_info_->num_storages * sizeof(int));
+
+				// int current_num_storages = imss_info_->num_storages;
+				slog_debug("[STAT_WORKER] prev. num data servers=%d", imss_info_->num_storages);
+				slog_debug("[STAT_WORKER] freeing %d with status=%d", delete_dataserver_indx, imss_info_->status[delete_dataserver_indx]);
+				// free(imss_info_->ips[delete_dataserver_indx]);
+				// for (int i = delete_dataserver_indx; i < imss_info_->num_storages-1; i++)
+				// {
+				// 	slog_debug("[STAT_WORKER] moving %d - %s to %d - %s", i + 1, imss_info_->ips[i + 1], i, imss_info_->ips[i]);
+				// 	imss_info_->ips[i] = imss_info_->ips[i + 1];
+				// }
+				imss_info_->status[delete_dataserver_indx] = 0;
+				// imss_info_->num_storages--;
+				slog_debug("[STAT_WORKER] new num data servers=%d, new status=%d", imss_info_->num_storages, imss_info_->status[delete_dataserver_indx]);
+
+				// address_ += sizeof(imss_info);
+				// address_ += imss_info_->num_storages * LINE_LENGTH;
+				
+				memcpy(address_aux, imss_info_->status, imss_info_->num_storages * sizeof(int));
+				// memcpy((char*)address_+sizeof(imss_info)+imss_info_->num_storages * LINE_LENGTH, imss_info_->status, imss_info_->num_storages * sizeof(int));
+				// memcpy(address_, address_aux, sizeof(char));
+
+				// free(imss_info_->ips[current_num_storages - 1]);
 				// Get the length of the message to be received.
-				size_t length = 0;
-				int32_t ret = -1;
-				length = get_recv_data_length(arguments->ucp_worker, arguments->worker_uid);
-				if (length == 0)
-				{
-					slog_error("HERCULES_ERR_METADATA_WORKER_GET_RECV_DATA_LENGTH_UPDATE_DATASET");
-					perror("HERCULES_ERR_METADATA_WORKER_GET_RECV_DATA_LENGTH_UPDATE_DATASET");
-					return -1;
-				}
-				// Clear the corresponding memory region.
-				void *buffer = (void *)malloc(length);
-				// void *buffer = NULL;
-				// Receive the block into the buffer.
-				ret = recv_dynamic_stream(arguments->ucp_worker, arguments->server_ep, buffer, BUFFER, arguments->worker_uid, length);
-				// ret = recv_dynamic_stream_opt(arguments->ucp_worker, arguments->server_ep, &buffer, BUFFER, arguments->worker_uid, length);
-				if (ret < 0)
-				{
-					perror("ERR_HERCULES_UPDATING_EXISTING_DATASET");
-					slog_error("ERR_HERCULES_UPDATING_EXISTING_DATASET");
-					free(buffer);
-					return -1;
-				}
-				free(buffer);
+				// size_t length = 0;
+				// int32_t ret = -1;
+				// length = get_recv_data_length(arguments->ucp_worker, arguments->worker_uid);
+				// if (length == 0)
+				// {
+				// 	slog_error("HERCULES_ERR_METADATA_WORKER_GET_RECV_DATA_LENGTH_UPDATE_DATASET");
+				// 	perror("HERCULES_ERR_METADATA_WORKER_GET_RECV_DATA_LENGTH_UPDATE_DATASET");
+				// 	return -1;
+				// }
+				// // Clear the corresponding memory region.
+				// void *buffer = (void *)malloc(length);
+				// // void *buffer = NULL;
+				// // Receive the block into the buffer.
+				// ret = recv_dynamic_stream(arguments->ucp_worker, arguments->server_ep, buffer, BUFFER, arguments->worker_uid, length);
+				// // ret = recv_dynamic_stream_opt(arguments->ucp_worker, arguments->server_ep, &buffer, BUFFER, arguments->worker_uid, length);
+				// if (ret < 0)
+				// {
+				// 	perror("ERR_HERCULES_UPDATING_EXISTING_DATASET");
+				// 	slog_error("ERR_HERCULES_UPDATING_EXISTING_DATASET");
+				// 	free(buffer);
+				// 	return -1;
+				// }
+				// free(buffer);
 
 				slog_debug("[STAT_WORKER] End Updating existing dataset %s.", key.c_str());
 				break;
@@ -1890,6 +1926,7 @@ int stat_worker_helper(p_argv *arguments, char *req)
 	default:
 		break;
 	}
+	pthread_mutex_unlock(&mp);
 
 	slog_debug("[srv_worker_thread] Terminated meta helper\n");
 
@@ -2129,7 +2166,8 @@ void *dispatcher(void *th_argv)
 		// fprintf(stderr, "[DISPATCHER] Waiting for connection requests.\n");
 		new_socket = accept(global_server_fd, (struct sockaddr *)&server_addr, &addrlen);
 
-		if(finished == 1){
+		if (finished == 1)
+		{
 			fprintf(stderr, "Ending dispatcher thread.\n");
 			pthread_exit(NULL);
 		}

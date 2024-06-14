@@ -367,59 +367,61 @@ int32_t main(int32_t argc, char **argv)
 
 		// Check if the provided URI has been already reserved by any other instance.
 		slog_info("args.id=%d", args.id);
+
+		ucs_status_t status;
+		int oob_sock;
+		int ret = 0;
+		ucs_status_t ep_status = UCS_OK;
+
+		uint32_t id = args.id;
+
+		fprintf(stderr, "Establishing a connection with %s:%ld\n", stat_add, stat_port);
+
+		oob_sock = connect_common(stat_add, stat_port, AF_INET);
+
+		char request[REQUEST_SIZE];
+		sprintf(request, "%" PRIu32 " GET %s", id, "MAIN!QUERRY");
+		slog_debug("[main] Request - %s, errno=%d:%s", request, errno, strerror(errno));
+		if (send(oob_sock, request, REQUEST_SIZE, 0) < 0)
+		{
+			perror("HERCULES_ERR_STAT_HELLO");
+			slog_error("HERCULES_ERR_STAT_HELLO");
+			return -1;
+		}
+
+		ret = recv(oob_sock, &addr_len, sizeof(addr_len), MSG_WAITALL);
+		peer_addr = (ucp_address *)malloc(addr_len);
+		ret = recv(oob_sock, peer_addr, addr_len, MSG_WAITALL);
+		close(oob_sock);
+
+		/* Send client UCX address to server */
+		ep_params.field_mask = UCP_EP_PARAM_FIELD_REMOTE_ADDRESS |
+							   UCP_EP_PARAM_FIELD_ERR_HANDLING_MODE |
+							   UCP_EP_PARAM_FIELD_ERR_HANDLER |
+							   UCP_EP_PARAM_FIELD_USER_DATA;
+		ep_params.address = peer_addr;
+		ep_params.err_mode = UCP_ERR_HANDLING_MODE_PEER;
+		ep_params.err_handler.cb = err_cb_client;
+		ep_params.err_handler.arg = NULL;
+		ep_params.user_data = &ep_status;
+
+		status = ucp_ep_create(ucp_worker, &ep_params, &client_ep);
+
+		// status = ucp_worker_get_address(ucp_worker, &req_addr, &req_addr_len);
+
+		ucp_worker_attr_t worker_attr;
+		worker_attr.field_mask = UCP_WORKER_ATTR_FIELD_ADDRESS;
+		status = ucp_worker_query(ucp_worker, &worker_attr);
+		// printf ("Len %ld \n", worker_attr.address_length);
+		req_addr_len = worker_attr.address_length;
+		req_addr = worker_attr.address;
+
+		attr.field_mask = UCP_WORKER_ADDRESS_ATTR_FIELD_UID;
+		ucp_worker_address_query(req_addr, &attr);
+		slog_debug("[srv_worker_thread] Server UID %" PRIu64 ".", attr.worker_uid);
+
 		if (!args.id)
 		{
-			ucs_status_t status;
-			int oob_sock;
-			int ret = 0;
-			ucs_status_t ep_status = UCS_OK;
-
-			uint32_t id = args.id;
-
-			fprintf(stderr, "Establishing a connection with %s:%ld\n", stat_add, stat_port);
-
-			oob_sock = connect_common(stat_add, stat_port, AF_INET);
-
-			char request[REQUEST_SIZE];
-			sprintf(request, "%" PRIu32 " GET %s", id, "MAIN!QUERRY");
-			slog_debug("[main] Request - %s, errno=%d:%s", request, errno, strerror(errno));
-			if (send(oob_sock, request, REQUEST_SIZE, 0) < 0)
-			{
-				perror("HERCULES_ERR_STAT_HELLO");
-				return -1;
-			}
-
-			ret = recv(oob_sock, &addr_len, sizeof(addr_len), MSG_WAITALL);
-			peer_addr = (ucp_address *)malloc(addr_len);
-			ret = recv(oob_sock, peer_addr, addr_len, MSG_WAITALL);
-			close(oob_sock);
-
-			/* Send client UCX address to server */
-			ep_params.field_mask = UCP_EP_PARAM_FIELD_REMOTE_ADDRESS |
-								   UCP_EP_PARAM_FIELD_ERR_HANDLING_MODE |
-								   UCP_EP_PARAM_FIELD_ERR_HANDLER |
-								   UCP_EP_PARAM_FIELD_USER_DATA;
-			ep_params.address = peer_addr;
-			ep_params.err_mode = UCP_ERR_HANDLING_MODE_PEER;
-			ep_params.err_handler.cb = err_cb_client;
-			ep_params.err_handler.arg = NULL;
-			ep_params.user_data = &ep_status;
-
-			status = ucp_ep_create(ucp_worker, &ep_params, &client_ep);
-
-			// status = ucp_worker_get_address(ucp_worker, &req_addr, &req_addr_len);
-
-			ucp_worker_attr_t worker_attr;
-			worker_attr.field_mask = UCP_WORKER_ATTR_FIELD_ADDRESS;
-			status = ucp_worker_query(ucp_worker, &worker_attr);
-			// printf ("Len %ld \n", worker_attr.address_length);
-			req_addr_len = worker_attr.address_length;
-			req_addr = worker_attr.address;
-
-			attr.field_mask = UCP_WORKER_ADDRESS_ATTR_FIELD_UID;
-			ucp_worker_address_query(req_addr, &attr);
-			slog_debug("[srv_worker_thread] Server UID %" PRIu64 ".", attr.worker_uid);
-
 			// Formated imss uri to be sent to the metadata server.
 			char formated_uri[REQUEST_SIZE];
 			sprintf(formated_uri, "%" PRIu32 " GET 0 %s", id, imss_uri);
@@ -614,6 +616,7 @@ int32_t main(int32_t argc, char **argv)
 
 		strcpy(my_imss.uri_, imss_uri);
 		my_imss.ips = (char **)calloc(num_servers, sizeof(char *));
+		my_imss.status = (int *)malloc(num_servers * sizeof(int)); // calloc(num_servers, sizeof(int32_t));
 		my_imss.num_storages = num_servers;
 		my_imss.conn_port = bind_port;
 		my_imss.type = 'I'; // extremely important
@@ -644,6 +647,9 @@ int32_t main(int32_t argc, char **argv)
 			{
 				((my_imss.ips)[i])[n_chars - 1] = '\0';
 			}
+
+			my_imss.status[i] = 1;
+			fprintf(stderr,"status=%d\n", my_imss.status[i]);
 		}
 
 		// Close the file.
@@ -656,12 +662,12 @@ int32_t main(int32_t argc, char **argv)
 		char key_plus_size[REQUEST_SIZE];
 		uint32_t id = CLOSE_EP;
 		// Send the created structure to the metadata server.
-		sprintf(key_plus_size, "%" PRIu32 " SET %lu %s", id, (sizeof(imss_info) + my_imss.num_storages * LINE_LENGTH), my_imss.uri_);
+		sprintf(key_plus_size, "%" PRIu32 " SET %lu %s", id, (sizeof(imss_info) + my_imss.num_storages * LINE_LENGTH + my_imss.num_storages  * sizeof(int)), my_imss.uri_);
 		// status = ucp_ep_create(ucp_worker, &ep_params, &client_ep);
 		slog_debug("[main] Request - %s, errno=%d:%s", key_plus_size, errno, strerror(errno));
 		if (send_req(ucp_worker, client_ep, req_addr, req_addr_len, key_plus_size) == 0)
 		{
-			perror("ERRIMSS_RLSIMSS_SENDADDR");
+			perror("ERR_HERCULES_RLSIMSS_SENDADDR");
 			return -1;
 		}
 
@@ -715,6 +721,20 @@ int32_t main(int32_t argc, char **argv)
 	}
 	else
 	{
+		// tell metadata server to reduce number of servers.
+		char key_plus_size[REQUEST_SIZE];
+		uint32_t id = CLOSE_EP;
+		// Send the created structure to the metadata server.
+		sprintf(key_plus_size, "%d SET %lu %s", args.id, strlen(imss_uri), imss_uri);
+		fprintf(stderr, "Request - %s\n", key_plus_size);
+		// status = ucp_ep_create(ucp_worker, &ep_params, &client_ep);
+		slog_debug("[main] Request - %s", key_plus_size);
+		if (send_req(ucp_worker, client_ep, req_addr, req_addr_len, key_plus_size) == 0)
+		{
+			perror("ERR_HERCULES_RLS_SERVER_SEND_REQ");
+			return -1;
+		}
+
 		free(region_locks);
 		fprintf(stderr, "Ending data server.\n");
 	}
