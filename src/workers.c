@@ -95,12 +95,19 @@ int ready(char *tmp_file_path, const char *msg)
 // ucp_worker_h *global_ucp_worker;
 int finished = 0;
 int global_server_fd = -1;
+// if malleability_on = 1, new requests will be not handled and server will
+// respond with a "malleability" string.
+int malleability_on = 0;
+char malleability_message = "MALLEABILITY";
+
 void handle_signal(int signal)
 {
 	if (signal == SIGUSR1)
 	{
 		fprintf(stderr, "Received SIGUSR1\n");
 		finished = 1;
+		malleability_on = 1;
+
 		// To dispatcher thread.
 		if (shutdown(global_server_fd, SHUT_RD) == -1)
 		{
@@ -1860,19 +1867,24 @@ int stat_worker_helper(p_argv *arguments, char *req)
 
 				char *address_aux = (char *)address_;
 
-				imss_info *imss_info_ = (imss_info *) malloc(block_size_rtvd*sizeof(imss_info));
+				imss_info *imss_info_ = (imss_info *)malloc(block_size_rtvd * sizeof(imss_info));
 				// = (imss_info *)address_aux;
 				memcpy(imss_info_, address_aux, sizeof(imss_info));
 
+				imss_info_->num_active_storages--;
+				memcpy(address_aux, imss_info_, sizeof(imss_info));
+
+				// skip imss_info and num_storages.
 				address_aux += sizeof(imss_info);
 				address_aux += imss_info_->num_storages * LINE_LENGTH;
-
+				// reserve memory to store the status list.
 				imss_info_->status = (int *)malloc(imss_info_->num_storages * sizeof(int));
+				// copy the status list.
 				memcpy(imss_info_->status, address_aux, imss_info_->num_storages * sizeof(int));
 
 				// int current_num_storages = imss_info_->num_storages;
-				slog_debug("[STAT_WORKER] prev. num data servers=%d", imss_info_->num_storages);
-				slog_debug("[STAT_WORKER] freeing %d with status=%d", delete_dataserver_indx, imss_info_->status[delete_dataserver_indx]);
+				// slog_debug("[STAT_WORKER] prev. num data servers=%d", imss_info_->num_storages);
+				slog_debug("[STAT_WORKER] stopping %d with status=%d", delete_dataserver_indx, imss_info_->status[delete_dataserver_indx]);
 				// free(imss_info_->ips[delete_dataserver_indx]);
 				// for (int i = delete_dataserver_indx; i < imss_info_->num_storages-1; i++)
 				// {
@@ -1880,13 +1892,16 @@ int stat_worker_helper(p_argv *arguments, char *req)
 				// 	imss_info_->ips[i] = imss_info_->ips[i + 1];
 				// }
 				imss_info_->status[delete_dataserver_indx] = 0;
-				// imss_info_->num_storages--;
-				slog_debug("[STAT_WORKER] new num data servers=%d, new status=%d", imss_info_->num_storages, imss_info_->status[delete_dataserver_indx]);
+				slog_debug("[STAT_WORKER] new num data servers=%d, new status=%d", imss_info_->num_active_storages, imss_info_->status[delete_dataserver_indx]);
 
 				// address_ += sizeof(imss_info);
 				// address_ += imss_info_->num_storages * LINE_LENGTH;
-				
+
 				memcpy(address_aux, imss_info_->status, imss_info_->num_storages * sizeof(int));
+
+				// address_ += sizeof(int);
+				// memcpy(address_aux, imss_info_->status, imss_info_->num_storages * sizeof(int));
+
 				// memcpy((char*)address_+sizeof(imss_info)+imss_info_->num_storages * LINE_LENGTH, imss_info_->status, imss_info_->num_storages * sizeof(int));
 				// memcpy(address_, address_aux, sizeof(char));
 

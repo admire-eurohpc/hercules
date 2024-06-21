@@ -75,6 +75,13 @@ extern int32_t IMSS_DEBUG;
 		function_to_call;                             \
 	})
 #endif
+
+int32_t get_data_location(int32_t, int32_t, int32_t);
+int32_t
+find_server(int32_t n_servers,
+			int32_t n_msg,
+			const char *fname,
+			int32_t op_type);
 // typedef enum {
 //     CLIENT_SERVER_SEND_RECV_STREAM  = UCS_BIT(0),
 //     CLIENT_SERVER_SEND_RECV_DEFAULT = CLIENT_SERVER_SEND_RECV_STREAM
@@ -90,8 +97,10 @@ typedef struct
 	char type; // = 'I';
 	// Set of ips comforming the IMSS.
 	char **ips;
-	// Server status.
+	// List of data server status.
 	int *status;
+	// Number of active data servers.
+	int num_active_storages;
 	// Number of IMSS servers.
 	int32_t num_storages;
 	// Server's dispatcher thread connection port.
@@ -468,6 +477,9 @@ RETURNS:	 0 - The requested block was successfully stored.
 	int32_t set_data(int32_t dataset_id, int32_t data_id, const void *buffer, size_t size, off_t offset);
 
 	int32_t set_data_mall(int32_t dataset_id, int32_t data_id, const void *buffer, size_t size, off_t offset, int32_t num_storages);
+
+	int32_t set_data_server(const char* data_uri, int32_t data_id, const void *buffer, size_t size, off_t offset, int next_server);
+	
 
 	/* Method retrieving the location of a specific data object.
 

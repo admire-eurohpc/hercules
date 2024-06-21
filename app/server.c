@@ -37,14 +37,16 @@ extern size_t *local_addr_len;
 
 extern StsHeader *mem_pool;
 
+char META_HOSTFILE[512];
+
 /* UCP objects */
 ucp_context_h ucp_context;
 ucp_worker_h ucp_worker;
 
 ucp_ep_h pub_ep;
 
-void *map_ep;		   // map_ep used for async write; server doesn't use it
-int32_t is_client = 0; // also used for async write
+// void *map_ep;		   // map_ep used for async write; server doesn't use it
+// int32_t is_client = 0; // also used for async write
 
 int32_t IMSS_DEBUG_FILE = 0;
 int IMSS_DEBUG_LEVEL = SLOG_FATAL;
@@ -204,6 +206,12 @@ int32_t main(int32_t argc, char **argv)
 
 	if (cfg_get(cfg, "METADATA_PORT"))
 		args.stat_port = atol(cfg_get(cfg, "METADATA_PORT"));
+
+	if (cfg_get(cfg, "METADATA_HOSTFILE"))
+	{
+		aux = cfg_get(cfg, "METADATA_HOSTFILE");
+		strcpy(META_HOSTFILE, aux);
+	}
 
 	if (cfg_get(cfg, "DATA_PORT"))
 		args.port = atol(cfg_get(cfg, "DATA_PORT"));
@@ -618,6 +626,7 @@ int32_t main(int32_t argc, char **argv)
 		my_imss.ips = (char **)calloc(num_servers, sizeof(char *));
 		my_imss.status = (int *)malloc(num_servers * sizeof(int)); // calloc(num_servers, sizeof(int32_t));
 		my_imss.num_storages = num_servers;
+		my_imss.num_active_storages = num_servers;
 		my_imss.conn_port = bind_port;
 		my_imss.type = 'I'; // extremely important
 		// FILE entity managing the IMSS deployfile.
@@ -649,7 +658,7 @@ int32_t main(int32_t argc, char **argv)
 			}
 
 			my_imss.status[i] = 1;
-			fprintf(stderr,"status=%d\n", my_imss.status[i]);
+			// fprintf(stderr,"status=%d\n", my_imss.status[i]);
 		}
 
 		// Close the file.
@@ -662,7 +671,7 @@ int32_t main(int32_t argc, char **argv)
 		char key_plus_size[REQUEST_SIZE];
 		uint32_t id = CLOSE_EP;
 		// Send the created structure to the metadata server.
-		sprintf(key_plus_size, "%" PRIu32 " SET %lu %s", id, (sizeof(imss_info) + my_imss.num_storages * LINE_LENGTH + my_imss.num_storages  * sizeof(int)), my_imss.uri_);
+		sprintf(key_plus_size, "%" PRIu32 " SET %lu %s", id, (sizeof(imss_info) + my_imss.num_storages * LINE_LENGTH + my_imss.num_storages * sizeof(int)), my_imss.uri_);
 		// status = ucp_ep_create(ucp_worker, &ep_params, &client_ep);
 		slog_debug("[main] Request - %s, errno=%d:%s", key_plus_size, errno, strerror(errno));
 		if (send_req(ucp_worker, client_ep, req_addr, req_addr_len, key_plus_size) == 0)
@@ -734,6 +743,77 @@ int32_t main(int32_t argc, char **argv)
 			perror("ERR_HERCULES_RLS_SERVER_SEND_REQ");
 			return -1;
 		}
+		
+		// this sleep ensures all others servers have time to tell metadata server 
+		// they will be shut down, and then this servers has the updated value of the
+		// active number of servers.
+		sleep(1);
+
+		// Here data server should to move the datablocks.
+		// print all key/value elements.
+		// fix: set real number of metadata servers.
+		fprintf(stderr, "Connecting to metadata server\n");
+		if (stat_init(META_HOSTFILE, args.stat_port, 1, args.id) == -1)
+		{
+			// In case of error notify and exit
+			slog_error("Stat init failed, cannot connect to Metadata server.");
+			perror("Stat init failed, cannot connect to Metadata server.");
+			// return;
+			exit(1);
+		}
+
+		// Creates endpoints to all data servers.
+		fprintf(stderr, "Connecting to data server\n");
+		int number_active_storage_servers = open_imss(imss_uri);
+		if (number_active_storage_servers < 0)
+		{
+			slog_fatal("Error creating HERCULES's resources, the process cannot be started");
+			// printf("Error creating HERCULES's resources, the process cannot be started\n");
+			exit(1);
+		}
+
+		void *address_;
+		uint64_t block_size;
+		int curr_map_size = 0;
+		const char *uri_;
+		size_t size;
+		char key_[REQUEST_SIZE];
+
+		while ((curr_map_size = map->size()) > 0 && number_active_storage_servers > 0)
+		{
+			std::string key;
+			// get next key.
+			key = map->get_head_element();
+			// key.assign((const char *)uri_);
+			// get the element.
+			map->get(key, &address_, &block_size);
+			fprintf(stderr, "**** curr_map_size=%d, head element=%s, block_size=%ld\n", curr_map_size, key.c_str(), block_size);
+
+			int pos = key.find('$') + 1;						   // +1 to skip '$' on the block number.
+			std::string block = key.substr(pos, key.length() + 1); // substract the block number from the key.
+			int block_number = stoi(block, 0, 10);				   //  string to number.
+			pos -= 1;											   // -1 to skip '$' on the data uri.
+			std::string data_uri = key.substr(0, pos);			   // substract the data uri from the key.
+			fprintf(stderr, "key='%s',\turi='%s',\tblock='%s'\n", key.c_str(), data_uri.c_str(), block.c_str());
+			int next_server = find_server(number_active_storage_servers, block_number, data_uri.c_str(), 0);
+			fprintf(stderr, "new server=%d, curr_server=%d\n", next_server, args.id);
+
+			// here we can send key.c_str() directly to reduce the number of operations.
+			if (set_data_server(data_uri.c_str(), block_number, address_, block_size, 0, next_server) < 0)
+			{
+				slog_error("ERR_HERCULES_SET_DATA_IN_SERVER\n");		
+				perror("ERR_HERCULES_SET_DATA_IN_SERVER");		
+				return -ENOENT;
+			}
+
+			// delete the element.
+			map->erase_head_element();
+			// get new map size to print it.
+			curr_map_size = map->size();
+			fprintf(stderr, "**** curr_map_size=%d\n", curr_map_size);
+		}
+
+		// map->print_map();
 
 		free(region_locks);
 		fprintf(stderr, "Ending data server.\n");

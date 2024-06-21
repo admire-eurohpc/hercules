@@ -16,7 +16,7 @@ static sa_family_t ai_family = AF_INET;
 
 /* asynchronous writes stuff */
 extern void *map_ep;	  // map_ep used for async write
-extern int32_t is_client; // used to make sure the server doesn't do map_ep stuff
+// extern int32_t is_client; // used to make sure the server doesn't do map_ep stuff
 pthread_mutex_t map_ep_mutex;
 pthread_mutex_t lock_ucx_comm = PTHREAD_MUTEX_INITIALIZER;
 
@@ -582,14 +582,18 @@ void send_cb(void *request, ucs_status_t status, void *user_data)
  */
 void err_cb_client(void *arg, ucp_ep_h ep, ucs_status_t status)
 {
-	ucs_status_t *arg_status = (ucs_status_t *)arg;
+	int *server_status = (int *) arg;
+	*server_status = 0;
+	// ucs_status_t *arg_status = (ucs_status_t *)arg;
 	// if (status != UCS_ERR_CONNECTION_RESET && status != UCS_ERR_ENDPOINT_TIMEOUT)
 	// {
 	// }
 	// slog_error("[COMM] Client error handling callback was invoked with status %d (%s)", status, ucs_status_string(status));
 	// fprintf(stderr, "client error handling callback was invoked with status %d (%s)", status, ucs_status_string(status));
 	slog_error("failure handler called with status %d (%s)\n", status, ucs_status_string(status));
-	*arg_status = status;
+	fprintf(stderr,"failure handler called with status %d (%s)\n", status, ucs_status_string(status));
+	// *arg_status = status;
+
 }
 
 void err_cb_server(void *arg, ucp_ep_h ep, ucs_status_t status)
@@ -670,7 +674,40 @@ ucs_status_t server_create_ep(ucp_worker_h data_worker,
 	return status;
 }
 
-ucs_status_t client_create_ep(ucp_worker_h worker, ucp_ep_h *ep, ucp_address_t *peer_addr)
+ucs_status_t client_create_ep_data(ucp_worker_h worker, ucp_ep_h *ep, ucp_address_t *peer_addr, int *server_status)
+{
+	ucp_ep_params_t ep_params;
+	ucs_status_t status;
+	ucs_status_t ep_status = UCS_OK;
+
+	/* Server creates an ep to the client on the data worker.
+	 * This is not the worker the listener was created on.
+	 * The client side should have initiated the connection, leading
+	 * to this ep's creation */
+
+	ep_params.field_mask = UCP_EP_PARAM_FIELD_REMOTE_ADDRESS |
+						   UCP_EP_PARAM_FIELD_ERR_HANDLING_MODE |
+						   UCP_EP_PARAM_FIELD_ERR_HANDLER |
+						   UCP_EP_PARAM_FIELD_USER_DATA;
+	ep_params.address = peer_addr;
+	ep_params.err_mode = UCP_ERR_HANDLING_MODE_PEER;
+	ep_params.err_handler.cb = err_cb_client;
+	// ep_params.err_handler.arg = NULL;
+	ep_params.err_handler.arg = &server_status;
+	ep_params.user_data = &ep_status;
+
+	// ucp_worker_print_info(worker, stderr);
+	status = ucp_ep_create(worker, &ep_params, ep);
+	if (status != UCS_OK)
+	{
+		fprintf(stderr, "failed to create an endpoint on the server: (%s)", ucs_status_string(status));
+	}
+
+	slog_debug("[COMM] Created client endpoint");
+	return status;
+}
+
+ucs_status_t client_create_ep_metadata(ucp_worker_h worker, ucp_ep_h *ep, ucp_address_t *peer_addr)
 {
 	ucp_ep_params_t ep_params;
 	ucs_status_t status;
@@ -870,13 +907,19 @@ int32_t recv_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, void *data_str
 		{
 			struct_->ips[i] = (char *)malloc(LINE_LENGTH * sizeof(char));
 			memcpy(struct_->ips[i], msg_data, LINE_LENGTH);
-			slog_debug("pointer address = %p", &msg_data);
+			// slog_debug("pointer address = %p", &msg_data);
 			msg_data += LINE_LENGTH;
 		}
 
 		struct_->status = (int *)malloc(struct_->num_storages * sizeof(int));
 		memcpy(struct_->status, msg_data, struct_->num_storages * sizeof(int));
-		slog_debug("pointer address = %p", &msg_data);
+
+		// msg_data += struct_->num_storages * sizeof(int);
+
+		// memcpy(struct_->num_active_storages, msg_data, sizeof(int));
+
+
+		// slog_debug("pointer address = %p", &msg_data);
 
 		break;
 	}
@@ -1304,7 +1347,7 @@ ucs_status_t ucx_wait(ucp_worker_h ucp_worker, struct ucx_context *request, cons
 
 	if (status != UCS_OK)
 	{
-		fprintf(stderr, "unable to %s %s (%s)", op_str, data_str,
+		fprintf(stderr, "unable to %s %s (%s)\n", op_str, data_str,
 				ucs_status_string(status));
 		slog_error("[COMM][ucx_wait] unable to %s %s (%s)", op_str, data_str, ucs_status_string(status));
 	}

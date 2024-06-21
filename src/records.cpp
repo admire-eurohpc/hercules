@@ -37,6 +37,80 @@ int64_t map_records::get_size()
 	return total_size;
 }
 
+std::string map_records::get_head_element()
+{
+	// Block the access to the map structure.
+	std::unique_lock<std::mutex> lock(*mut);
+	std::map<std::string, std::pair<void *, uint64_t>>::iterator it;
+	it = buffer.begin();
+	// string key = it->first();
+	string key = it->first;
+	// fprintf(stderr, "head element = %s", key.c_str());
+	// return key.c_str();
+	return key;
+}
+
+// Method retrieving the address associated to a certain record.
+int32_t map_records::erase_head_element()
+{
+
+	// fprintf(stderr, "GET KEY=%s\n",key.c_str());
+	// Map iterator that will be searching for the key.
+	// std::map<std::string, std::pair<void *, uint64_t>>::iterator it;
+	// Block the access to the map structure.
+	// std::unique_lock<std::mutex> lock(*mut);
+
+	// struct utsname detect;
+	// uname(&detect);
+
+	// if (buffer.empty())
+	// 	return 0;
+
+	// // Search for the address related to the key.
+	// it = buffer.find(key);
+	// // Check if the value did exist within the map.
+	// if (it == buffer.end())
+	// {
+	// 	// fprintf(stderr,"Nodename-%s NO EXIST=%s\n",detect.nodename, key.c_str());
+	// 	// fprintf(stderr,"NO EXIST=%s\n", key.c_str());
+	// 	return 0;
+	// }
+
+	// fprintf(stderr,"GET-%s \n", key.c_str());
+	// fprintf(stderr,"Nodename    - %s	GET-%s \n", detect.nodename, key.c_str());
+
+	// Erase the first element.
+	buffer.erase(buffer.begin());
+
+	// Return the address associated to the record.
+	return 1;
+}
+
+void map_records::print_map()
+{
+	// Block the access to the map structure.
+	std::unique_lock<std::mutex> lock(*mut);
+
+	// save partners for later deletion and new insertion of news paths
+	// std::vector<string> vec;
+	// get_data_location(0, 0, SET);
+
+	// Iterate using C++17 facilities
+	slog_info("Datasets in this servers");
+	for (const auto &[key, value] : buffer)
+	{
+		slog_info("key = %s\n", key.c_str());
+		int pos = key.find('$');
+		string block = key.substr(pos, key.length() + 1);
+		// int uri_string_lenght = key.length() - pos;
+		string data_uri = key.substr(0, pos);
+		// find_server(1, stoi(block, 0, 10), data_uri.c_str(), 0);
+		fprintf(stderr, "key=%s,\turi=%s,\tblock=%s\n", key.c_str(), data_uri.c_str(), block.c_str());
+	}
+	// fprintf(stderr, "key = %s\n", key.c_str());
+	// std::cout << '[' << key << "] = " << value << "; ";
+}
+
 // Method storing a new record.
 int32_t map_records::put(std::string key, void *address, uint64_t length)
 {
@@ -99,10 +173,11 @@ int32_t map_records::get(std::string key, void **add_, uint64_t *size_)
 	return 1;
 }
 
+
 /***
  * @brief Method renaming from stat_worker
- * @return 1 in case of success or 0 in case of error. 
-*/
+ * @return 1 in case of success or 0 in case of error.
+ */
 int32_t map_records::rename_metadata_stat_worker(std::string old_key, std::string new_key)
 {
 	// Map iterator that will be searching for the key.
