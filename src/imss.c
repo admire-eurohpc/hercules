@@ -863,7 +863,6 @@ int32_t open_imss(char *imss_uri)
 	local_data_uid = attr.worker_uid;
 
 	int num_down_storages = 0;
-
 	// fprintf(stderr, "NUM_DATA_SERVERS=%d\n", NUM_DATA_SERVERS);
 	// Connect to the requested IMSS.
 	for (int32_t i = 0; i < new_imss.info.num_storages; i++)
@@ -935,7 +934,7 @@ int32_t open_imss(char *imss_uri)
 		slog_debug("[IMSS] open_imss: Created endpoint with %s", (new_imss.info.ips)[i]);
 	}
 
-	new_imss.info.num_storages -= num_down_storages;
+	// new_imss.info.num_storages -= num_down_storages;
 	NUM_DATA_SERVERS = new_imss.info.num_storages;
 
 	// If the struct was found within the vector but uninitialized, once updated, store it in the same position.
@@ -952,7 +951,7 @@ int32_t open_imss(char *imss_uri)
 	// Add the created struture into the underlying IMSSs.
 	GInsert(&imssd_pos, &imssd_max_size, (char *)&new_imss, imssd, free_imssd);
 	// return 0;
-	return NUM_DATA_SERVERS;
+	return new_imss.info.num_active_storages;
 }
 
 // Function to flush and close the endpoint
@@ -2199,11 +2198,27 @@ int32_t get_data_location(int32_t dataset_id, int32_t data_id, int32_t op_type)
 	// if ((server = find_server(curr_dataset.n_servers, data_id, curr_dataset.uri_, op_type)) < 0)
 	if (curr_imss.info.num_storages > 1)
 	{
-		if ((server = find_server(curr_imss.info.num_storages, data_id, curr_dataset.uri_, op_type)) < 0)
+		int num_storages = curr_imss.info.num_storages;
+		int it = 0;
+		while (true)
 		{
-			perror("HERCULES_ERR_FIND_SERVER");
-			slog_fatal("HERCULES_ERR_FIND_SERVER");
-			return -1;
+			if ((server = find_server(curr_imss.info.num_storages, data_id, curr_dataset.uri_, op_type)) < 0)
+			{
+				perror("HERCULES_ERR_FIND_SERVER");
+				slog_fatal("HERCULES_ERR_FIND_SERVER");
+				return -1;
+			}
+			if (curr_imss.info.status[server] == 1)
+			{
+				break;
+			}
+			slog_warn("Server %d is not avaiable, recalculating\n", server);
+			num_storages = curr_imss.info.num_active_storages;
+			it++;
+			if (it >= curr_imss.info.num_storages)
+			{
+				break;
+			}
 		}
 	}
 	else
@@ -2904,8 +2919,6 @@ int32_t get_data(int32_t dataset_id, int32_t data_id, void *buffer)
 		return -1;
 	}
 
-	slog_debug("[IMSS][get_data] next_server=%d, curr_dataset.repl_factor=%d, curr_dataset.n_servers=%d, curr_imss.info.num_storages=%d", n_server, curr_dataset.repl_factor, curr_dataset.n_servers, curr_imss.info.num_storages);
-
 	// Servers that the data block is going to be requested to.
 	int32_t repl_servers[curr_dataset.repl_factor];
 	// int32_t curr_imss_storages = curr_imss.info.num_storages; // (original)
@@ -2917,6 +2930,8 @@ int32_t get_data(int32_t dataset_id, int32_t data_id, void *buffer)
 	{
 		// Server storing the current data block.
 		uint32_t n_server_ = (n_server + i * (curr_imss_storages / curr_dataset.repl_factor)) % curr_imss_storages;
+		slog_debug("[IMSS][get_data] next_server=%d, curr_dataset.repl_factor=%d, curr_dataset.n_servers=%d, curr_imss.info.num_storages=%d", n_server_, curr_dataset.repl_factor, curr_dataset.n_servers, curr_imss.info.num_storages);
+
 		// printf("Server storing is=%d",n_server_);
 		repl_servers[i] = n_server_;
 
@@ -3258,7 +3273,8 @@ int32_t set_data(int32_t dataset_id, int32_t data_id, const void *buffer, size_t
 	pthread_mutex_lock(&lock_network);
 	char key_[REQUEST_SIZE];
 	int32_t curr_imss_storages = curr_imss.info.num_active_storages; // curr_imss.info.num_storages;
-	fprintf(stderr, "********** current server status = %d, curr_imss_storages=%d\n", curr_imss.info.status[1], curr_imss_storages);
+	//  fprintf(stderr, "********** current server status = %d, curr_imss_storages=%d\n", curr_imss.info.status[1], curr_imss_storages);
+	slog_debug("current server status = %d, curr_imss_storages=%d\n", curr_imss.info.status[1], curr_imss_storages);
 
 	// slog_debug("[IMSS][set_data] get_data_location(dataset_id:%ld, data_id:%ld, SET:%d), n_server:%ld, curr_imss_storages:%ld", dataset_id, data_id, SET, n_server, curr_imss_storages);
 

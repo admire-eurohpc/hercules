@@ -98,13 +98,13 @@ int global_server_fd = -1;
 // if malleability_on = 1, new requests will be not handled and server will
 // respond with a "malleability" string.
 int malleability_on = 0;
-char malleability_message = "MALLEABILITY";
+#define MALLEABILITY_MESSAGE = "MALLEABILITY";
 
 void handle_signal(int signal)
 {
 	if (signal == SIGUSR1)
 	{
-		fprintf(stderr, "Received SIGUSR1\n");
+		fprintf(stderr, "*** Received SIGUSR1\n");
 		finished = 1;
 		malleability_on = 1;
 

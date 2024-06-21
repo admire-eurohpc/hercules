@@ -7,11 +7,60 @@
 StopServers() {
     NAME=$1
     hosts=$2
-    echo "# Hercules: Stopping $NAME servers in $hosts"
-    for node in "${hosts[@]}"
+
+    length=${#hosts[@]}
+    reversed=()
+    for (( i=$length-1; i>=0; i-- )); do
+        reversed+=("${hosts[$i]}")
+    done
+
+    # echo "# Hercules: Stopping $NAME servers in $hosts"
+    echo "# Hercules: Stopping $NAME servers in ${reversed[@]}"
+    # for node in "${hosts[@]}"
+    for node in "${reversed[@]}"
     do
         echo "ssh $node pkill hercules_server"
+        # Move blocks from this server to another.
+        ( ssh $node "pkill -SIGUSR2 hercules_server" ) 
+        # Kill threads and finish the server.
         ( ssh $node "pkill -SIGUSR1 hercules_server" )
+
+        WaitForServersDown "data" "d" $node
+    done
+}
+
+## To wait until all the servers are down.
+WaitForServersDown() {
+    i=0
+    # get server name by arguments.
+    SERVER_NAME=$1
+    shift
+    # get server type by arguments.
+    SERVER_TYPE=$1
+    shift
+    hosts=("$@")
+    # echo "hostnames=${hosts[@]}"
+    for node in "${hosts[@]}"
+    do
+        COMMAND="$HERCULES_BASH_PATH/check-servers.sh $SERVER_TYPE $i down"
+        echo "[+] Running comprobation $i in $node... $COMMAND"
+        # if slurm is not available.
+        if [[ "$SLURM" -eq "0" ]]; then
+            if [ -z "$(ssh-keygen -F $node)" ]; then
+                ssh-keyscan -H $node >> ~/.ssh/known_hosts
+            fi
+            ssh $node "$COMMAND"
+        else # if slurm is available.
+            srun --exclusive --export=ALL -N 1 -n 1 -w $node $COMMAND
+        fi
+        # ret=$?
+        # if [ "$ret" -gt 0 ]; then
+        #     echo "[Error: $ret] It has not been possible to run a $SERVER_NAME server on $node, please verify the configuration file and logs."
+        #     # StopServers $SERVER_NAME $hosts
+        #     exit 1
+        # fi
+        echo "[OK] $SERVER_NAME $i server running in $node"
+        i=$((i+1))
     done
 }
 
@@ -28,7 +77,7 @@ WaitForServers() {
     # echo "hostnames=${hosts[@]}"
     for node in "${hosts[@]}"
     do
-        COMMAND="$HERCULES_BASH_PATH/check-servers.sh $SERVER_TYPE $i"
+        COMMAND="$HERCULES_BASH_PATH/check-servers.sh $SERVER_TYPE $i start"
         echo "[+] Running comprobation $i in $node... $COMMAND"
         # if slurm is not available.
         if [[ "$SLURM" -eq "0" ]]; then
@@ -58,7 +107,7 @@ if [[ $STATUS != "stop" && $STATUS != "start" ]]; then
 fi
 
 ## Check if user pass arguments.
-while getopts :m:d:o:c:s:f: flag
+while getopts :m:d:o:c:s:f:k: flag
 do
     # echo "Entra en getopts"
     case "${flag}" in
@@ -69,6 +118,8 @@ do
         s) SLURM_OPTION=${OPTARG};;
         # Configuration file path.
         f) FILE=${OPTARG};;
+        # 1 to indicate that the metadata server should not be stopped.
+        k) KEEP_METADATA_ALIVE_OPTION=1
     esac
 done
 
@@ -88,6 +139,27 @@ if [[ ! -z "$SLURM_OPTION" ]]; then
             exit 1
     esac
 fi
+
+
+KEEP_METADATA_ALIVE=0 # default value.
+# If "keep alive" option is set by the user (optional).
+if [[ ! -z "$KEEP_METADATA_ALIVE_OPTION" ]]; then
+    case "$KEEP_METADATA_ALIVE_OPTION" in
+        "0") 
+        # metadata server will be stopped.
+        KEEP_METADATA_ALIVE=0
+        ;; 
+        "1") 
+        # metadata server will not be stopped.
+        KEEP_METADATA_ALIVE=1
+        ;;
+        *)
+            echo "Incorrect argument in KEEP_METADATA_ALIVE option: -k <0|1>"
+            exit 1
+    esac
+fi
+# echo "KEEP_METADATA_ALIVE_OPTION=$KEEP_METADATA_ALIVE_OPTION"
+
 
 # if [[ "$SLURM" -eq "-1" && $HOSTFILES_OPTION -eq "-1" ]]; then
 # if slurm option is not set by the user, we check if it is installed.
@@ -241,12 +313,28 @@ HERCULES_METADATA_HOSTFILE=$(cat $FILE | grep "METADATA_HOSTFILE" | awk '{print 
 if [[ $STATUS = "stop" ]];
 then
     ## Stops data and metadata servers.
-    # readarray -t hosts < data_hostfile
+
+    # Checks if a list of data servers was passed by the user.
+    # If the user does not pass any list, all dataservers will be 
+    # stopped.
+    if [ ! -z "$DATA_SERVER_FILE" ]; then
+        echo "Data server file - $DATA_SERVER_FILE"
+        if [ ! -f "$DATA_SERVER_FILE" ]; then
+            echo "Data server file " $DATA_SERVER_FILE " does not exists"
+            exit 0
+        fi
+        HERCULES_DATA_HOSTFILE=$DATA_SERVER_FILE
+    fi
     readarray -t hosts < $HERCULES_DATA_HOSTFILE
     echo "data hosts=$hosts"
     StopServers "data" $hosts
     
-    # readarray -t hosts < meta_hostfile
+    # Checks if user do not want to stop metadata server (KEEP_METADATA_ALIVE==1).
+    ## echo "KEEP_METADATA_ALIVE=$KEEP_METADATA_ALIVE"
+    if [ "$KEEP_METADATA_ALIVE" -eq "1" ]; then
+        exit 0
+    fi
+    # Stop metadata servers.
     readarray -t hosts < $HERCULES_METADATA_HOSTFILE
     echo "meta hosts=$hosts"
     StopServers "metadata" $hosts

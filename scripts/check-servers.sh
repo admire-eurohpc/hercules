@@ -2,10 +2,11 @@
 
 SERVER_TYPE=$1
 SERVER_NUMBER=$2
-ATTEMPS=100
+ACTION=$3 # expected string action, e.g., down when servers are stopped.
+ATTEMPS=10
 i=1
 
-FILE="/tmp/$SERVER_TYPE-hercules-$SERVER_NUMBER"
+FILE="/tmp/$SERVER_TYPE-hercules-$SERVER_NUMBER-$ACTION"
 ## Checks if the file exists.
 until [ -f $FILE ]; do
     # echo "Waiting for $FILE, attemp $i"
