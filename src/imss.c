@@ -797,6 +797,164 @@ uint32_t get_dir(char *requested_uri, char **buffer, char ***items)
 
 // Method initializing the required resources to make use of an existing IMSS.
 // return: number of active storage servers.
+int32_t open_imss_temp(char *imss_uri, int num_active_servers)
+{
+	// New IMSS structure storing the entity to be created.
+	imss new_imss;
+	// ucp_config_t *config;
+	ucs_status_t status;
+
+	// if (getenv("IMSS_DEBUG") != NULL)
+	// {
+	// 	IMSS_DEBUG = 1;
+	// }
+
+	// if (IMSS_DEBUG)
+	// {
+	// 	//		status = ucp_config_read(NULL, NULL, &config);
+	// 	//		ucp_config_print(config, stderr, NULL, UCS_CONFIG_PRINT_CONFIG);
+	// 	//		ucp_config_release(config);
+	// }
+
+	int32_t not_initialized = 0;
+
+	slog_live("[IMSS][open_imss] starting function, imss_uri=%s", imss_uri);
+	// Retrieve the actual information from the metadata server.
+	int32_t imss_existance = stat_imss(imss_uri, &new_imss.info);
+	slog_live("[IMSS][open_imss] imss_uri=%s, imss_existance=%d", imss_uri, imss_existance);
+	// Check if the requested IMSS did not exist or was already stored in the local vector.
+	switch (imss_existance)
+	{
+	case 0:
+	{
+		slog_fatal("HERCULES_ERR_OPEN_IMSS_NOT_EXISTS");
+		return -1;
+	}
+	case 2:
+	{
+		imss check_imss = g_array_index(imssd, imss, found_in);
+
+		if (check_imss.conns.matching_server != -2)
+			return -2;
+
+		for (int32_t i = 0; i < check_imss.info.num_storages; i++)
+			free(check_imss.info.ips[i]);
+
+		free(check_imss.info.ips);
+		not_initialized = 1;
+		break;
+	}
+	case -1:
+	{
+		return -1;
+	}
+	}
+	slog_debug("[IMSS][open_imss] new_imss.info.num_storages=%ld", new_imss.info.num_storages);
+
+	new_imss.conns.peer_addr = (ucp_address_t **)malloc(new_imss.info.num_storages * sizeof(ucp_address_t *));
+	new_imss.conns.eps = (ucp_ep_h *)malloc(new_imss.info.num_storages * sizeof(ucp_ep_h));
+	new_imss.conns.id = (uint32_t *)malloc(new_imss.info.num_storages * sizeof(uint32_t));
+	new_imss.conns.matching_server = -1;
+
+	status = ucp_worker_get_address(ucp_worker_data, &local_addr_data, &local_addr_len_data);
+	ucp_worker_address_attr_t attr;
+	attr.field_mask = UCP_WORKER_ADDRESS_ATTR_FIELD_UID;
+	ucp_worker_address_query(local_addr_data, &attr);
+	local_data_uid = attr.worker_uid;
+
+	int num_down_storages = 0;
+	new_imss.info.num_active_storages = num_active_servers;
+	// fprintf(stderr, "NUM_DATA_SERVERS=%d\n", NUM_DATA_SERVERS);
+	// Connect to the requested IMSS.
+	for (int32_t i = 0; i < new_imss.info.num_storages - num_active_servers; i++)
+	{
+		// fprintf(stderr, "node=%s, status=%d\n", new_imss.info.ips[i], new_imss.info.status[i]);
+		if (new_imss.info.status[i] == 0)
+		{
+			// fprintf(stderr, "Skipping - i=%d - %s:%d, status=%d, num active storages=%d, total storages=%d\n", i, new_imss.info.ips[i], new_imss.info.conn_port, new_imss.info.status[i], new_imss.info.num_active_storages, new_imss.info.num_storages);
+			slog_debug("Skipping - i=%d - %s:%d, status=%d, num active storages=%d, total storages=%d", i, new_imss.info.ips[i], new_imss.info.conn_port, new_imss.info.status[i], new_imss.info.num_active_storages, new_imss.info.num_storages);
+			num_down_storages++;
+			continue;
+		}
+
+		int oob_sock;
+		size_t addr_len;
+		int ret = 0;
+
+		oob_sock = connect_common(new_imss.info.ips[i], new_imss.info.conn_port, AF_INET);
+		if (oob_sock < 0)
+		{
+			char err_msg[128];
+			sprintf(err_msg, "HERCULES_ERR_CONNECT_COMMON - i=%d - %s:%d", i, new_imss.info.ips[i], new_imss.info.conn_port);
+			slog_error("%s", err_msg);
+			perror(err_msg);
+			return -1;
+		}
+		// else
+		// {
+		// 	printf("Cliente socket fd=%d\n", oob_sock);
+		// }
+
+		char request[REQUEST_SIZE];
+		sprintf(request, "%" PRIu32 " GET %s", process_rank, "HELLO!JOIN");
+		slog_live("[open_imss] ip_address=%s:%d", new_imss.info.ips[i], new_imss.info.conn_port);
+		// fprintf(stderr, "[open_imss] ip_address=%s:%d\n", new_imss.info.ips[i], new_imss.info.conn_port);
+
+		if (send(oob_sock, request, REQUEST_SIZE, 0) < 0)
+		{
+			perror("HERCULES_ERR_STAT_HELLO_1");
+			return -1;
+		}
+
+		ret = recv(oob_sock, &addr_len, sizeof(addr_len), MSG_WAITALL);
+		if (ret < 0)
+		{
+			perror("HERCULES_ERR_RECV_1_HELLO");
+			close(oob_sock);
+			return -1;
+		}
+		new_imss.conns.peer_addr[i] = (ucp_address *)malloc(addr_len);
+		ret = recv(oob_sock, new_imss.conns.peer_addr[i], addr_len, MSG_WAITALL);
+		if (ret < 0)
+		{
+			perror("HERCULES_ERR_RECV_2_HELLO");
+			close(oob_sock);
+			return -1;
+		}
+		close(oob_sock);
+
+		new_imss.conns.id[i] = i;
+
+		// Save the current socket value when the IMSS ip matches the clients' one.
+		if (!strncmp((new_imss.info.ips)[i], client_node, len_client_node) || !strncmp((new_imss.info.ips)[i], client_ip, strlen(new_imss.info.ips[i])))
+		{
+			new_imss.conns.matching_server = i;
+			strcpy(att_deployment, imss_uri);
+		}
+
+		client_create_ep_data(ucp_worker_data, &new_imss.conns.eps[i], new_imss.conns.peer_addr[i], &new_imss.info.status[i]);
+		slog_debug("[IMSS] open_imss: Created endpoint with %s", (new_imss.info.ips)[i]);
+	}
+
+	// new_imss.info.num_storages -= num_down_storages;
+	NUM_DATA_SERVERS = new_imss.info.num_storages;
+
+	// If the struct was found within the vector but uninitialized, once updated, store it in the same position.
+	if (not_initialized)
+	{
+		g_array_remove_index(imssd, found_in);
+		g_array_insert_val(imssd, found_in, new_imss);
+
+		return 0;
+	}
+
+	curr_imss = new_imss;
+
+	// Add the created struture into the underlying IMSSs.
+	GInsert(&imssd_pos, &imssd_max_size, (char *)&new_imss, imssd, free_imssd);
+	// return 0;
+	return new_imss.info.num_active_storages;
+}
 int32_t open_imss(char *imss_uri)
 {
 	// New IMSS structure storing the entity to be created.
@@ -870,7 +1028,7 @@ int32_t open_imss(char *imss_uri)
 		// fprintf(stderr, "node=%s, status=%d\n", new_imss.info.ips[i], new_imss.info.status[i]);
 		if (new_imss.info.status[i] == 0)
 		{
-			fprintf(stderr, "Skipping - i=%d - %s:%d, status=%d, num active storages=%d\n", i, new_imss.info.ips[i], new_imss.info.conn_port, new_imss.info.status[i], new_imss.info.num_active_storages);
+			fprintf(stderr, "Skipping - i=%d - %s:%d, status=%d, num active storages=%d, total storages=%d\n", i, new_imss.info.ips[i], new_imss.info.conn_port, new_imss.info.status[i], new_imss.info.num_active_storages, new_imss.info.num_storages);
 			num_down_storages++;
 			continue;
 		}
@@ -2202,7 +2360,8 @@ int32_t get_data_location(int32_t dataset_id, int32_t data_id, int32_t op_type)
 		int it = 0;
 		while (true)
 		{
-			if ((server = find_server(curr_imss.info.num_storages, data_id, curr_dataset.uri_, op_type)) < 0)
+			// if ((server = find_server(curr_imss.info.num_storages, data_id, curr_dataset.uri_, op_type)) < 0)
+			if ((server = find_server(num_storages, data_id, curr_dataset.uri_, op_type)) < 0)
 			{
 				perror("HERCULES_ERR_FIND_SERVER");
 				slog_fatal("HERCULES_ERR_FIND_SERVER");
@@ -2212,10 +2371,13 @@ int32_t get_data_location(int32_t dataset_id, int32_t data_id, int32_t op_type)
 			{
 				break;
 			}
-			slog_warn("Server %d is not avaiable, recalculating\n", server);
-			num_storages = curr_imss.info.num_active_storages;
+			// slog_warn("Server %d is not avaiable, number of active nodes was %d\n", server, curr_imss.info.arr_num_active_storages[server]);
+			// fprintf(stderr, "Server %d is not avaiable, recalculating\n", server);
+			fprintf(stderr, "Server %d is not avaiable, number of active nodes was %d\n", server, curr_imss.info.arr_num_active_storages[server]);
+			num_storages = curr_imss.info.arr_num_active_storages[server]; // curr_imss.info.num_active_storages;
 			it++;
-			if (it >= curr_imss.info.num_storages)
+			// if (it >= curr_imss.info.num_storages)
+			if (it >= 10)
 			{
 				break;
 			}

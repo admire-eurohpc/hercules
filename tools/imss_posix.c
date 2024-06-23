@@ -571,7 +571,7 @@ __attribute__((constructor)) void imss_posix_init(void)
 		{
 			release = 0;
 			slog_fatal("Error creating HERCULES's resources, the process cannot be started");
-			// printf("Error creating HERCULES's resources, the process cannot be started\n");
+			printf("Error creating HERCULES's resources, the process cannot be started. Please, make sure servers are running and clients can stablish conections.\n");
 			return;
 		}
 	}

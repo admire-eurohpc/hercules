@@ -16,6 +16,7 @@
 #include "cfg_parse.h"
 #include <inttypes.h>
 #include <unistd.h>
+#include <fcntl.h>
 // #include <disk.h>
 
 // Pointer to the tree's root node.
@@ -57,11 +58,14 @@ int32_t IMSS_DEBUG_FILE = 0;
 int IMSS_DEBUG_LEVEL = SLOG_FATAL;
 int32_t IMSS_DEBUG_SCREEN = 0;
 int IMSS_THREAD_POOL = 1;
+unsigned long number_active_storage_servers = 0;
 
 #define RAM_STORAGE_USE_PCT 0.75f // percentage of free system RAM to be used for storage
 
 int move_blocks_2_server(uint64_t stat_port, uint32_t server_id, char *imss_uri, std::shared_ptr<map_records> map)
 {
+	// fprintf(stderr, "* * * number_active_storage_servers=%s\n", getenv("NUMBER_ACTIVE_STORAGE_SERVERS"));
+
 	// Here data server should to move the datablocks.
 	// print all key/value elements.
 	// fix: set real number of metadata servers.
@@ -78,7 +82,7 @@ int move_blocks_2_server(uint64_t stat_port, uint32_t server_id, char *imss_uri,
 	// Creates endpoints to all data servers.
 	// fprintf(stderr, "Connecting to data server\n");
 	slog_debug("Connecting to data server\n");
-	int number_active_storage_servers = open_imss(imss_uri);
+	number_active_storage_servers = open_imss_temp(imss_uri, number_active_storage_servers);
 	if (number_active_storage_servers < 0)
 	{
 		slog_fatal("Error creating HERCULES's resources, the process cannot be started");
@@ -93,6 +97,7 @@ int move_blocks_2_server(uint64_t stat_port, uint32_t server_id, char *imss_uri,
 	size_t size;
 	char key_[REQUEST_SIZE];
 
+	fprintf(stderr, "Server %d, moving %d blocks, active storage servers=%lu\n", args.id, map->size(), number_active_storage_servers);
 	while ((curr_map_size = map->size()) > 0 && number_active_storage_servers > 0)
 	{
 		std::string key;
@@ -135,11 +140,29 @@ int move_blocks_2_server(uint64_t stat_port, uint32_t server_id, char *imss_uri,
 
 int stop_server()
 {
+	char buf[100];
+	int fd = open("./hercules_num_act_nodes", O_RDONLY);
+	if (fd == -1)
+	{
+		perror("ERR_HERCULES_OPEN_NUM_ACTVIES_NODES");
+	}
+
+	int ret = read(fd, buf, 1);
+	// fprintf(stderr, "* * * fd=%d, ret=%d, number_active_storage_servers=%s\n", fd, ret, buf);
+	ret = close(fd);
+	if (fd == -1)
+	{
+		perror("ERR_HERCULES_CLOSE_NUM_ACTVIES_NODES");
+	}
+
+	number_active_storage_servers = atoi(buf);
+
 	// tell metadata server to reduce number of servers.
 	char key_plus_size[REQUEST_SIZE];
 	uint32_t id = CLOSE_EP;
 	// Send the created structure to the metadata server.
-	sprintf(key_plus_size, "%d SET %lu %s", args.id, strlen(imss_uri), imss_uri);
+	// sprintf(key_plus_size, "%d SET %lu %s", args.id, strlen(imss_uri), imss_uri);
+	sprintf(key_plus_size, "%d SET %lu %s", args.id, number_active_storage_servers, imss_uri);
 	// fprintf(stderr, "Request - %s\n", key_plus_size);
 	// status = ucp_ep_create(ucp_worker, &ep_params, &client_ep);
 	slog_debug("[main] Request - %s", key_plus_size);
@@ -740,7 +763,8 @@ int32_t main(int32_t argc, char **argv)
 
 		strcpy(my_imss.uri_, imss_uri);
 		my_imss.ips = (char **)calloc(num_servers, sizeof(char *));
-		my_imss.status = (int *)malloc(num_servers * sizeof(int)); // calloc(num_servers, sizeof(int32_t));
+		my_imss.status = (int *)malloc(num_servers * sizeof(int));					// calloc(num_servers, sizeof(int32_t));
+		my_imss.arr_num_active_storages = (int *)malloc(num_servers * sizeof(int)); // calloc(num_servers, sizeof(int32_t));
 		my_imss.num_storages = num_servers;
 		my_imss.num_active_storages = num_servers;
 		my_imss.conn_port = bind_port;
@@ -774,6 +798,8 @@ int32_t main(int32_t argc, char **argv)
 			}
 
 			my_imss.status[i] = 1;
+			my_imss.arr_num_active_storages[i] = num_servers;
+
 			// fprintf(stderr,"status=%d\n", my_imss.status[i]);
 		}
 
@@ -787,7 +813,7 @@ int32_t main(int32_t argc, char **argv)
 		char key_plus_size[REQUEST_SIZE];
 		uint32_t id = CLOSE_EP;
 		// Send the created structure to the metadata server.
-		sprintf(key_plus_size, "%" PRIu32 " SET %lu %s", id, (sizeof(imss_info) + my_imss.num_storages * LINE_LENGTH + my_imss.num_storages * sizeof(int)), my_imss.uri_);
+		sprintf(key_plus_size, "%" PRIu32 " SET %lu %s", id, (sizeof(imss_info) + my_imss.num_storages * LINE_LENGTH + my_imss.num_storages * sizeof(int) + my_imss.num_storages * sizeof(int)), my_imss.uri_);
 		// status = ucp_ep_create(ucp_worker, &ep_params, &client_ep);
 		slog_debug("[main] Request - %s, errno=%d:%s", key_plus_size, errno, strerror(errno));
 		if (send_req(ucp_worker, client_ep, req_addr, req_addr_len, key_plus_size) == 0)
@@ -842,7 +868,7 @@ int32_t main(int32_t argc, char **argv)
 			perror("ERRIMSS_TREEMUT_DESTROY");
 			pthread_exit(NULL);
 		}
-		fprintf(stderr, "Ending metadata server.\n");
+		// fprintf(stderr, "Ending metadata server.\n");
 	}
 	else
 	{
@@ -863,7 +889,15 @@ int32_t main(int32_t argc, char **argv)
 		// this sleep ensures all others servers have time to tell metadata server
 		// they will be shut down, and then this servers has the updated value of the
 		// active number of servers.
-		sleep(1);
+		// sleep(1);
+
+		char tmp_file_path[100];
+		sprintf(tmp_file_path, "./tmp/%c-hercules-%d-down", args.type, args.id);
+
+		stop_server();
+		move_blocks_2_server(args.stat_port, args.id, imss_uri, g_map);
+		fprintf(stderr,"Writting file %s\n", tmp_file_path);
+		ready(tmp_file_path, "OK");
 
 		// move_blocks_2_server(args.stat_port, args.id, imss_uri, map);
 
@@ -934,7 +968,7 @@ int32_t main(int32_t argc, char **argv)
 		// map->print_map();
 
 		free(region_locks);
-		fprintf(stderr, "Ending data server.\n");
+		// fprintf(stderr, "Ending data server.\n");
 	}
 
 	// Close publisher socket.

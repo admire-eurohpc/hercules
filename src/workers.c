@@ -74,7 +74,8 @@ int ready(char *tmp_file_path, const char *msg)
 	tmp_file = fopen(tmp_file_path, "w");
 	if (tmp_file == NULL)
 	{
-		puts("Error in creating temporary file");
+		// puts("Error in creating temporary file");
+		fprintf(stderr, "Error in creating temporary file %s", tmp_file_path);
 		return -1;
 	}
 
@@ -1368,7 +1369,12 @@ int stat_worker_helper(p_argv *arguments, char *req)
 	int32_t number_length = (int32_t)strlen(number);
 	// Elements conforming the request.
 	char *uri_ = raw_msg + number_length + 1;
+	// raw_msg += number_length + 1;
+	// memcpy(uri, raw_msg, number_length + 1);
 	uint64_t block_size_recv = (uint64_t)atoi(number);
+
+	// req_content += req_size;
+
 
 	slog_info("[workers][stat_worker_helper] operation=%d, number=%s, number_length=%d, uri=%s, block_size_recv=%ld", operation, number, number_length, uri_, block_size_recv);
 
@@ -1862,8 +1868,9 @@ int stat_worker_helper(p_argv *arguments, char *req)
 
 			default:
 			{
+				unsigned long num_active_storages = atol(number);
 				int delete_dataserver_indx = operation;
-				slog_debug("[STAT_WORKER] Updating existing dataset %s.", key.c_str());
+				slog_debug("[STAT_WORKER] Updating existing dataset %s, number_active_storage_servers=%lu.", key.c_str(), num_active_storages);
 
 				char *address_aux = (char *)address_;
 
@@ -1871,7 +1878,8 @@ int stat_worker_helper(p_argv *arguments, char *req)
 				// = (imss_info *)address_aux;
 				memcpy(imss_info_, address_aux, sizeof(imss_info));
 
-				imss_info_->num_active_storages--;
+				// imss_info_->num_active_storages--;
+				imss_info_->num_active_storages = num_active_storages;
 				memcpy(address_aux, imss_info_, sizeof(imss_info));
 
 				// skip imss_info and num_storages.
@@ -1886,18 +1894,22 @@ int stat_worker_helper(p_argv *arguments, char *req)
 				// slog_debug("[STAT_WORKER] prev. num data servers=%d", imss_info_->num_storages);
 				slog_debug("[STAT_WORKER] stopping %d with status=%d", delete_dataserver_indx, imss_info_->status[delete_dataserver_indx]);
 				// free(imss_info_->ips[delete_dataserver_indx]);
-				// for (int i = delete_dataserver_indx; i < imss_info_->num_storages-1; i++)
-				// {
-				// 	slog_debug("[STAT_WORKER] moving %d - %s to %d - %s", i + 1, imss_info_->ips[i + 1], i, imss_info_->ips[i]);
-				// 	imss_info_->ips[i] = imss_info_->ips[i + 1];
-				// }
 				imss_info_->status[delete_dataserver_indx] = 0;
 				slog_debug("[STAT_WORKER] new num data servers=%d, new status=%d", imss_info_->num_active_storages, imss_info_->status[delete_dataserver_indx]);
-
 				// address_ += sizeof(imss_info);
 				// address_ += imss_info_->num_storages * LINE_LENGTH;
-
 				memcpy(address_aux, imss_info_->status, imss_info_->num_storages * sizeof(int));
+				// move the pointer to the arr_num_active_storages position.
+				address_aux += (imss_info_->num_storages * sizeof(int));
+
+				// copy the arr_num_active_storages list.
+				imss_info_->arr_num_active_storages = (int *)malloc(imss_info_->num_storages * sizeof(int));
+				memcpy(imss_info_->arr_num_active_storages, address_aux, imss_info_->num_storages * sizeof(int));
+				// set the value.
+				imss_info_->arr_num_active_storages[delete_dataserver_indx] = imss_info_->num_active_storages;
+				memcpy(address_aux, imss_info_->arr_num_active_storages, imss_info_->num_storages * sizeof(int));
+				
+
 
 				// address_ += sizeof(int);
 				// memcpy(address_aux, imss_info_->status, imss_info_->num_storages * sizeof(int));

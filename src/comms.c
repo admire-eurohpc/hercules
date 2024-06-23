@@ -756,7 +756,8 @@ int32_t send_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, void *data_str
 		imss_info *struct_ = (imss_info *)data_struct;
 
 		// Calculate the total size of the buffer storing the structure.
-		msg_size = sizeof(imss_info) + (LINE_LENGTH * struct_->num_storages) + (sizeof(int) * struct_->num_storages);
+		// ips + status list + arr num active storages list.
+		msg_size = sizeof(imss_info) + (LINE_LENGTH * struct_->num_storages) + (sizeof(int) * struct_->num_storages) + (sizeof(int) * struct_->num_storages);
 
 		// Reserve the corresponding amount of memory for the previous buffer.
 		info_buffer = (char *)malloc(msg_size * sizeof(char));
@@ -778,6 +779,10 @@ int32_t send_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, void *data_str
 		}
 
 		memcpy(offset_pt, struct_->status, sizeof(int) * struct_->num_storages);
+
+		offset_pt += (sizeof(int) * struct_->num_storages);
+		memcpy(offset_pt, struct_->arr_num_active_storages, sizeof(int) * struct_->num_storages);
+
 		// slog_debug("pointer address = %p", &offset_pt);
 
 		break;
@@ -913,6 +918,11 @@ int32_t recv_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, void *data_str
 
 		struct_->status = (int *)malloc(struct_->num_storages * sizeof(int));
 		memcpy(struct_->status, msg_data, struct_->num_storages * sizeof(int));
+
+		msg_data += (struct_->num_storages * sizeof(int));
+		struct_->arr_num_active_storages = (int *)malloc(struct_->num_storages * sizeof(int));
+		memcpy(struct_->arr_num_active_storages, msg_data, struct_->num_storages * sizeof(int));
+
 
 		// msg_data += struct_->num_storages * sizeof(int);
 

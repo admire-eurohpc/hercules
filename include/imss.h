@@ -88,6 +88,10 @@ find_server(int32_t n_servers,
 // } send_type_t;
 
 // Structure storing all information related to a certain IMSS.
+// Note: if you add more elements to the imss_info struct, you should 
+// modify the serialization in stat_worker_helper > SET_OP > else > default case,
+// send_dynamic_stream > IMSS_INFO case, and recv_dynamic_stream > IMSS_INFO. Also, it is important to
+// recalculate the msg_size in case you add a list of pointers.
 typedef struct
 {
 
@@ -99,6 +103,8 @@ typedef struct
 	char **ips;
 	// List of data server status.
 	int *status;
+	// List used to indicate how many data servers was active in the moment of a server "n" was down.
+	int *arr_num_active_storages;
 	// Number of active data servers.
 	int num_active_storages;
 	// Number of IMSS servers.
@@ -249,6 +255,7 @@ RETURNS:	 0 - Resources successfully initialized. Communication channels created
 -1 - In case of error.
 -2 - The imss instance has been already opened or created.
 	 */
+	int32_t open_imss_temp(char *imss_uri, int num_active_servers);
 	int32_t open_imss(char *imss_uri);
 
 	/* Method releasing client-side and/or server-side resources related to a certain IMSS instance.
