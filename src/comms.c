@@ -15,13 +15,15 @@
 static sa_family_t ai_family = AF_INET;
 
 /* asynchronous writes stuff */
-extern void *map_ep;	  // map_ep used for async write
+extern void *map_ep; // map_ep used for async write
 // extern int32_t is_client; // used to make sure the server doesn't do map_ep stuff
 pthread_mutex_t map_ep_mutex;
 pthread_mutex_t lock_ucx_comm = PTHREAD_MUTEX_INITIALIZER;
 
 void *send_buffer;
 void *recv_buffer;
+
+int ep_timeout = 0;
 
 ucs_status_t ucp_mem_alloc(ucp_context_h ucp_context, size_t length, void **address_p)
 {
@@ -184,15 +186,26 @@ size_t send_data(ucp_worker_h ucp_worker, ucp_ep_h ep, const void *msg, size_t m
 	send_param.op_attr_mask = UCP_OP_ATTR_FIELD_CALLBACK |
 							  UCP_OP_ATTR_FIELD_USER_DATA;
 	send_param.cb.send = send_handler_data;
-	send_param.datatype    = ucp_dt_make_contig(1);
-	send_param.memory_type  = UCS_MEMORY_TYPE_HOST;
+	send_param.datatype = ucp_dt_make_contig(1);
+	send_param.memory_type = UCS_MEMORY_TYPE_HOST;
 	send_param.user_data = &ctx;
 
 	clock_t t;
 	t = clock();
 	request = (struct ucx_context *)ucp_tag_send_nbx(ep, ctx.buffer, msg_len, from, &send_param);
 	// request = (struct ucx_context *)ucp_tag_send_sync_nbx(ep, ctx.buffer, msg_len, from, &send_param);
-	status = ucx_wait(ucp_worker, request, "send", "data");
+	status = ucx_wait(ucp_worker, request, "send", "data"); // original.
+	// if (request == NULL)
+	// {
+	// 	status = UCS_OK;
+	// }
+	// else
+	// {
+	// 	while (((status = ucp_request_check_status(request)) == UCS_INPROGRESS) && ep_timeout != 1)
+	// 	{
+	// 		ucp_worker_progress(ucp_worker);
+	// 	}
+	// }
 	t = clock() - t;
 	double time_taken = ((double)t) / CLOCKS_PER_SEC; // in seconds
 	// fprintf(stderr,"********** send data %lu time = %lf\n", msg_len, time_taken);
@@ -201,6 +214,7 @@ size_t send_data(ucp_worker_h ucp_worker, ucp_ep_h ep, const void *msg, size_t m
 	{
 		// slog_fatal("[COMM] Error sending to endpoint.");
 		slog_fatal("HERCULES_ERR_SEND_DATA");
+		fprintf(stderr, "HERCULES_ERR_SEND_DATA\n");
 		perror("HERCULES_ERR_SEND_DATA");
 		return 0;
 	}
@@ -244,6 +258,7 @@ size_t send_req(ucp_worker_h ucp_worker, ucp_ep_h ep, ucp_address_t *addr, size_
 
 	send_param.datatype = ucp_dt_make_contig(1);
 	send_param.cb.send = send_handler_req;
+	// send.param.cb.err = err_cb_client();
 	// send_param.memory_type  = UCS_MEMORY_TYPE_HOST;
 	send_param.user_data = &ctx;
 
@@ -252,16 +267,29 @@ size_t send_req(ucp_worker_h ucp_worker, ucp_ep_h ep, ucp_address_t *addr, size_
 	// request = (struct ucx_context *)ucp_tag_send_sync_nbx(ep, msg, msg_len, tag_req, &send_param);
 	// slog_info("[COMM][send_req] after ucp_tag_send_nbx");
 	// slog_info("[COMM][send_req] before ucx_wait");
-	status = ucx_wait(ucp_worker, request, "send", req);
+	status = ucx_wait(ucp_worker, request, "send", req); // original
+	// if (request == NULL)
+	// {
+	// 	status = UCS_OK;
+	// }
+	// else
+	// {
+	// 	while (((status = ucp_request_check_status(request)) == UCS_INPROGRESS) && ep_timeout != 1)
+	// 	{
+	// 		ucp_worker_progress(ucp_worker);
+	// 	}
+	// }
 	// slog_info("[COMM][send_req] after ucx_wait");
 
 	if (status != UCS_OK)
 	{
 		// slog_error("Connection error\n");
+		ep_timeout = 0;
 		free(msg);
 		//     // goto err_ep;
 		// 	ep_close(ucp_worker, ep, UCP_EP_CLOSE_FLAG_FORCE);
 		slog_fatal("[COMM][send_req] Connection error, request=%s", req);
+		fprintf(stderr, "[COMM][send_req] Connection error, request=%s\n", req);
 		// return -1;
 		return 0;
 	}
@@ -359,7 +387,6 @@ size_t recv_data(ucp_worker_h ucp_worker, ucp_ep_h ep, void *msg, size_t msg_len
 
 	// sleep(1);
 
-	
 	status = ucx_wait(ucp_worker, request, "recv", "data");
 
 	t = clock() - t;
@@ -582,8 +609,8 @@ void send_cb(void *request, ucs_status_t status, void *user_data)
  */
 void err_cb_client(void *arg, ucp_ep_h ep, ucs_status_t status)
 {
-	int *server_status = (int *) arg;
-	*server_status = 0;
+	// int *server_status = (int *) arg;
+	// *server_status = 0;
 	// ucs_status_t *arg_status = (ucs_status_t *)arg;
 	// if (status != UCS_ERR_CONNECTION_RESET && status != UCS_ERR_ENDPOINT_TIMEOUT)
 	// {
@@ -591,9 +618,11 @@ void err_cb_client(void *arg, ucp_ep_h ep, ucs_status_t status)
 	// slog_error("[COMM] Client error handling callback was invoked with status %d (%s)", status, ucs_status_string(status));
 	// fprintf(stderr, "client error handling callback was invoked with status %d (%s)", status, ucs_status_string(status));
 	slog_error("failure handler called with status %d (%s)\n", status, ucs_status_string(status));
-	fprintf(stderr,"failure handler called with status %d (%s)\n", status, ucs_status_string(status));
+	fprintf(stderr, "failure handler called with status %d (%s)\n", status, ucs_status_string(status));
+	// if(status == UCS_ERR_ENDPOINT_TIMEOUT) {
+	ep_timeout = 1;
+	// }
 	// *arg_status = status;
-
 }
 
 void err_cb_server(void *arg, ucp_ep_h ep, ucs_status_t status)
@@ -692,8 +721,8 @@ ucs_status_t client_create_ep_data(ucp_worker_h worker, ucp_ep_h *ep, ucp_addres
 	ep_params.address = peer_addr;
 	ep_params.err_mode = UCP_ERR_HANDLING_MODE_PEER;
 	ep_params.err_handler.cb = err_cb_client;
-	// ep_params.err_handler.arg = NULL;
-	ep_params.err_handler.arg = &server_status;
+	ep_params.err_handler.arg = NULL;
+	// ep_params.err_handler.arg = &server_status;
 	ep_params.user_data = &ep_status;
 
 	// ucp_worker_print_info(worker, stderr);
@@ -904,7 +933,7 @@ int32_t recv_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, void *data_str
 		}
 
 		msg_data += sizeof(imss_info);
-		
+
 		// Copy the dynamic fields into the structure.
 		struct_->ips = (char **)malloc(struct_->num_storages * sizeof(char *));
 
@@ -923,11 +952,9 @@ int32_t recv_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, void *data_str
 		struct_->arr_num_active_storages = (int *)malloc(struct_->num_storages * sizeof(int));
 		memcpy(struct_->arr_num_active_storages, msg_data, struct_->num_storages * sizeof(int));
 
-
 		// msg_data += struct_->num_storages * sizeof(int);
 
 		// memcpy(struct_->num_active_storages, msg_data, sizeof(int));
-
 
 		// slog_debug("pointer address = %p", &msg_data);
 
@@ -1332,6 +1359,12 @@ err_close_sockfd:
 ucs_status_t ucx_wait(ucp_worker_h ucp_worker, struct ucx_context *request, const char *op_str, const char *data_str)
 {
 	ucs_status_t status;
+
+	/* if operation was completed immediately */
+	if (request == NULL)
+	{
+		return UCS_OK;
+	}
 
 	if (UCS_PTR_IS_ERR(request))
 	{

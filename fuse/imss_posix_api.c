@@ -1450,12 +1450,9 @@ ssize_t imss_read(const char *path, void *buf, size_t size, off_t offset)
 
 ssize_t imss_write(const char *path, const void *buf, size_t size, off_t off)
 {
-	// slog_live("[%s] -----------------------------------------", buf + size - 1);
 	ssize_t ret;
 	clock_t t, tm, tmm;
-
 	// int MALLEABILITY = 0;
-
 	tmm = 0;
 
 	t = clock();
@@ -1572,9 +1569,7 @@ ssize_t imss_write(const char *path, const void *buf, size_t size, off_t off)
 
 			int32_t num_storages = 0;
 			num_storages = get_number_of_data_servers(i_blk, num_of_blk);
-
 			slog_debug("[imss_write] i_blk=%ld, num_storages=%ld, N_SERVERS=%ld", i_blk, num_storages, N_SERVERS);
-
 			if (set_data_mall(ds, curr_blk, data_pointer, bytes_to_copy, block_offset, num_storages) < 0)
 			{
 				slog_error("[IMSS-FUSE]	Error writing to imss.\n");

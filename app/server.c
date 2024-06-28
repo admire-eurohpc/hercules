@@ -46,7 +46,7 @@ std::shared_ptr<map_records> g_map;
 ucp_context_h ucp_context;
 ucp_worker_h ucp_worker;
 
-ucp_ep_h pub_ep;
+// ucp_ep_h pub_ep;
 ucp_address_t *req_addr;
 ucp_ep_h client_ep;
 size_t req_addr_len;
@@ -66,23 +66,10 @@ int move_blocks_2_server(uint64_t stat_port, uint32_t server_id, char *imss_uri,
 {
 	// fprintf(stderr, "* * * number_active_storage_servers=%s\n", getenv("NUMBER_ACTIVE_STORAGE_SERVERS"));
 
-	// Here data server should to move the datablocks.
-	// print all key/value elements.
-	// fix: set real number of metadata servers.
-	// fprintf(stderr, "Connecting to metadata server\n");
-	slog_debug("Connecting to metadata server\n");
-	if (stat_init(META_HOSTFILE, stat_port, 1, server_id) == -1)
-	{
-		// In case of error notify and exit
-		slog_error("Stat init failed, cannot connect to Metadata server.");
-		perror("Stat init failed, cannot connect to Metadata server.");
-		return -1;
-	}
-
-	// Creates endpoints to all data servers.
-	// fprintf(stderr, "Connecting to data server\n");
+	// Creates endpoints to all data servers. It is use in case of
+	// malleability to move blocks between data servers.
 	slog_debug("Connecting to data server\n");
-	number_active_storage_servers = open_imss_temp(imss_uri, number_active_storage_servers);
+	open_imss(imss_uri); // open_imss_temp(imss_uri, number_active_storage_servers);
 	if (number_active_storage_servers < 0)
 	{
 		slog_fatal("Error creating HERCULES's resources, the process cannot be started");
@@ -90,14 +77,20 @@ int move_blocks_2_server(uint64_t stat_port, uint32_t server_id, char *imss_uri,
 		return -1;
 	}
 
+	// Here data server should to move the datablocks.
+	// print all key/value elements.
+	double time_taken;
+	time_t t = clock();
+
 	void *address_;
 	uint64_t block_size;
 	int curr_map_size = 0;
 	const char *uri_;
 	size_t size;
 	char key_[REQUEST_SIZE];
+	int number_of_blocks_2_move = map->size();
 
-	fprintf(stderr, "Server %d, moving %d blocks, active storage servers=%lu\n", args.id, map->size(), number_active_storage_servers);
+	fprintf(stderr, "Server %d, moving %d blocks, active storage servers=%lu, UCX_IB_RCACHE_MAX_REGIONS=%s\n", args.id, map->size(), number_active_storage_servers, getenv("UCX_IB_RCACHE_MAX_REGIONS"));
 	while ((curr_map_size = map->size()) > 0 && number_active_storage_servers > 0)
 	{
 		std::string key;
@@ -135,25 +128,36 @@ int move_blocks_2_server(uint64_t stat_port, uint32_t server_id, char *imss_uri,
 		// fprintf(stderr, "**** curr_map_size=%d\n", curr_map_size);
 		slog_debug("**** curr_map_size=%d\n", curr_map_size);
 	}
+
+	t = clock() - t;
+	time_taken = ((double)t) / (CLOCKS_PER_SEC);
+
+	if (number_active_storage_servers > 0)
+		fprintf(stderr, "[HS] Data movement %d blocks %lu %f sec.\n", number_of_blocks_2_move, number_active_storage_servers, time_taken);
+
 	return 0;
 }
 
 int stop_server()
 {
-	char buf[100];
+	char buf[10];
 	int fd = open("./hercules_num_act_nodes", O_RDONLY);
 	if (fd == -1)
 	{
 		perror("ERR_HERCULES_OPEN_NUM_ACTVIES_NODES");
 	}
 
-	int ret = read(fd, buf, 1);
+	int ret = read(fd, buf, sizeof(buf)-1);
+	buf[ret] = '\0';
+
 	// fprintf(stderr, "* * * fd=%d, ret=%d, number_active_storage_servers=%s\n", fd, ret, buf);
 	ret = close(fd);
 	if (fd == -1)
 	{
 		perror("ERR_HERCULES_CLOSE_NUM_ACTVIES_NODES");
 	}
+
+	fprintf(stderr,"The new number of active data nodes is %s\n", buf);
 
 	number_active_storage_servers = atoi(buf);
 
@@ -640,7 +644,7 @@ int32_t main(int32_t argc, char **argv)
 
 	// Map tracking saved records.
 	std::shared_ptr<map_records> map(new map_records(buffer_size * KB));
-
+	// copy the reference to a global map.
 	g_map = map;
 
 	int64_t data_reserved;
@@ -834,6 +838,24 @@ int32_t main(int32_t argc, char **argv)
 		// ucp_ep_close_nb(client_ep, UCP_EP_CLOSE_MODE_FORCE);
 	}
 
+	if (args.type == TYPE_DATA_SERVER)
+	{
+		// Init an endpoint to the metadata server, it is use
+		// to notify to the metadata server the status of this server.
+		// e.g., in malleability scenarios, this servers send a
+		// request to change the metadata to status = 0 (not avaiable).
+		// fix: set real number of metadata servers.
+		// fprintf(stderr, "Connecting to metadata server\n");
+		slog_debug("Connecting to metadata server\n");
+		if (stat_init(META_HOSTFILE, stat_port, 1, args.id) == -1)
+		{
+			// In case of error notify and exit
+			slog_error("Stat init failed, cannot connect to Metadata server.");
+			perror("Stat init failed, cannot connect to Metadata server.");
+			return -1;
+		}
+	}
+
 	// Wait for threads to finish.
 	for (int32_t i = 0; i < (args.thread_pool + 1); i++)
 	{
@@ -896,7 +918,7 @@ int32_t main(int32_t argc, char **argv)
 
 		stop_server();
 		move_blocks_2_server(args.stat_port, args.id, imss_uri, g_map);
-		fprintf(stderr,"Writting file %s\n", tmp_file_path);
+		fprintf(stderr, "Writting file %s\n", tmp_file_path);
 		ready(tmp_file_path, "OK");
 
 		// move_blocks_2_server(args.stat_port, args.id, imss_uri, map);
@@ -973,6 +995,7 @@ int32_t main(int32_t argc, char **argv)
 
 	// Close publisher socket.
 	// ep_close(ucp_worker, pub_ep, UCP_EP_CLOSE_MODE_FORCE);
+	// ep_close(ucp_worker, client_ep, UCP_EP_CLOSE_MODE_FORCE);
 
 	// Free the memory buffer.
 	free(buffer);

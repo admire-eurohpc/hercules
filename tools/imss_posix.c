@@ -566,6 +566,7 @@ __attribute__((constructor)) void imss_posix_init(void)
 	// if (DEPLOYMENT == 2 && release == 1)
 	if (DEPLOYMENT == 2)
 	{
+		// fprintf(stderr,"Constructor has been called\n");
 		ret = open_imss(IMSS_ROOT);
 		if (ret < 0)
 		{
@@ -1132,21 +1133,21 @@ int __xstat(int ver, const char *pathname, struct stat *stat_buf)
 	return ret;
 }
 
-pid_t wait(int *wstatus)
-{
-	if (!real_wait)
-		real_wait = dlsym(RTLD_NEXT, "wait");
+// pid_t wait(int *wstatus)
+// {
+// 	if (!real_wait)
+// 		real_wait = dlsym(RTLD_NEXT, "wait");
 
-	if (!init)
-	{
-		return real_wait(wstatus);
-	}
+// 	if (!init)
+// 	{
+// 		return real_wait(wstatus);
+// 	}
 
-	errno = 0;
-	slog_debug("[POSIX] Calling wait");
+// 	errno = 0;
+// 	slog_debug("[POSIX] Calling wait");
 
-	return real_wait(wstatus);
-}
+// 	return real_wait(wstatus);
+// }
 
 // pid_t waitpid(pid_t pid, int *wstatus, int options)
 // {

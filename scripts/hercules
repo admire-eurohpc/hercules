@@ -160,7 +160,7 @@ WaitForServers() {
 
 STATUS=$1
 shift
-if [[ $STATUS != "stop" && $STATUS != "start" ]]; then
+if [[ $STATUS != "stop" && $STATUS != "start" && $STATUS != "remove" && $STATUS != "add" ]]; then
     echo "Incorrect argument in STATUS option, usage: hercules <start|stop>"
     exit 1
 fi
@@ -358,7 +358,7 @@ META_PORT=$(cat $FILE | grep "METADATA_PORT" | awk '{print $3}')
 DATA_PORT=$(cat $FILE | grep "DATA_PORT" | awk '{print $3}')
 MALLEABILITY=$(cat $FILE | grep "MALLEABILITY" | awk '{print $3}')
 HERCULES_NUM_METADATA=$(cat $FILE | grep "NUM_META_SERVERS" | awk '{print $3}')
-HERCULES_NUM_DATA=$(cat $FILE | grep "NUM_DATA_SERVERS" | awk '{print $3}')
+export HERCULES_NUM_DATA=$(cat $FILE | grep "NUM_DATA_SERVERS" | awk '{print $3}')
 NUM_NODES_FOR_CLIENTS=$(cat $FILE | grep "NUM_NODES_FOR_CLIENTS" | awk '{print $3}')
 NUM_CLIENTS_PER_NODE=$(cat $FILE | grep "NUM_CLIENTS_PER_NODE" | awk '{print $3}')
 ATTACHED=$(cat $FILE | grep "ATTACHED" | awk '{print $3}')
@@ -402,6 +402,12 @@ then
     exit 0
 fi
 
+## Checks if the user wants to add more servers.
+# if [[ $STATUS = "add" ]];
+# then
+    
+
+# fi
 
 ## If hostfiles was not set, then we create a hostfile containing the allocated nodes.
 # if [[ $SLURM -eq "1" ]]; then
