@@ -1018,13 +1018,13 @@ int srv_worker_helper(p_argv *arguments, const char *req)
 				slog_debug("[srv_worker_thread][WRITE_OP] NO key find %s", key.c_str());
 				clock_t tp;
 				tp = clock();
-				void *buffer = (void *)StsQueue.pop(mem_pool);
+				void *buffer = NULL;
+				// (void *)StsQueue.pop(mem_pool);
 				tp = clock() - tp;
 				double time_taken2 = ((double)tp) / CLOCKS_PER_SEC; // in seconds
 				// slog_info("[srv_worker_helper] pop time %f s", time_taken2);
 				//  Receive the block into the buffer.
-				if (buffer == NULL)
-					buffer = (void *)calloc(BLOCK_SIZE, sizeof(char));
+
 				// char *buffer = (char *)malloc(block_size_recv);
 				clock_t tr;
 				// TIMING(recv_data(arguments->ucp_worker, arguments->server_ep, buffer, arguments->worker_uid, 1), "[srv_worker_thread][WRITE_OP] recv_data: Receive the block into the buffer.");
@@ -1036,6 +1036,23 @@ int srv_worker_helper(p_argv *arguments, const char *req)
 					slog_error("ERRIMSS_DATA_WORKER_WRITE_NEW_BLOCK_INVALID_MSG_LENGTH");
 					return -1;
 				}
+
+				int size_asigned_to_block = 0;
+				if (buffer == NULL)
+				{
+					// buffer = (void *)calloc(BLOCK_SIZE, sizeof(char));
+					std::size_t found = key.find("$0");
+					if (found != std::string::npos)
+					{ // block 0.
+						size_asigned_to_block = BLOCK_SIZE;
+					}
+					else
+					{ // non block 0.
+						// buffer = (void *)calloc(msg_length + block_offset, sizeof(char));
+						size_asigned_to_block = msg_length + block_offset;
+					}
+				}
+				buffer = (void *)calloc(size_asigned_to_block, sizeof(char));
 
 				// void *aux_buf = (char *)buffer + block_offset;
 				msg_length = recv_data(arguments->ucp_worker, arguments->server_ep, (char *)buffer + block_offset, msg_length, arguments->worker_uid, 1);
@@ -1055,7 +1072,8 @@ int srv_worker_helper(p_argv *arguments, const char *req)
 				slog_debug("[srv_worker_thread][WRITE_OP] ****[PUT, block_size_recv=%ld, BLOCK_SIZE=%lu, msg_length=%lu]********* key=%s", block_size_recv, BLOCK_SIZE, msg_length, key.c_str());
 				// TODO: should this be block_size_recv or a different size? block_size_recv might not be the full block size
 				// insert_successful = map->put(key, buffer, block_size_recv);
-				insert_successful = map->put(key, buffer, BLOCK_SIZE);
+				// insert_successful = map->put(key, buffer, BLOCK_SIZE);
+				insert_successful = map->put(key, buffer, size_asigned_to_block);
 
 				slog_debug("[srv_worker_thread][WRITE_OP] insert_successful %d key=%s", insert_successful, key.c_str());
 				tr = clock() - tr;
@@ -1130,8 +1148,23 @@ int srv_worker_helper(p_argv *arguments, const char *req)
 						perror("ERRIMSS_DATA_WORKER_WRITE_NON_BLOCK_0_INVALID_MSG_LENGTH");
 						return -1;
 					}
+					// void *buffer = NULL;
+					if (msg_length + block_offset > block_size_rtvd)
+					{
+						// buffer = (void *)calloc(msg_length + block_offset, sizeof(char));
+						size_t new_size = msg_length + block_offset;
+						// fprintf(stderr, "** Extra size=%lu, msg_length=%lu, block_offset=%u, block_size_rtvd=%lu, address_=%p, ", new_size, msg_length, block_offset, block_size_rtvd, address_);
+						address_ = (void *)realloc(address_, new_size);
+						// fprintf(stderr, "new address = %p\n", address_);
+						map->update(key, address_, new_size);
+					}
+					// else
+					// {
+					// 	buffer = address_;
+					// }
 
 					msg_length = recv_data(arguments->ucp_worker, arguments->server_ep, (char *)address_ + block_offset, msg_length, arguments->worker_uid, 1);
+					// msg_length = recv_data(arguments->ucp_worker, arguments->server_ep, (char *)buffer + block_offset, msg_length, arguments->worker_uid, 1);
 					if (msg_length == 0)
 					{
 						slog_error("ERRIMSS_DATA_WORKER_WRITE_NON_BLOCK_0_RECV_DATA");
@@ -1374,7 +1407,6 @@ int stat_worker_helper(p_argv *arguments, char *req)
 	uint64_t block_size_recv = (uint64_t)atoi(number);
 
 	// req_content += req_size;
-
 
 	slog_info("[workers][stat_worker_helper] operation=%d, number=%s, number_length=%d, uri=%s, block_size_recv=%ld", operation, number, number_length, uri_, block_size_recv);
 
@@ -1908,8 +1940,6 @@ int stat_worker_helper(p_argv *arguments, char *req)
 				// set the value.
 				imss_info_->arr_num_active_storages[delete_dataserver_indx] = imss_info_->num_active_storages;
 				memcpy(address_aux, imss_info_->arr_num_active_storages, imss_info_->num_storages * sizeof(int));
-				
-
 
 				// address_ += sizeof(int);
 				// memcpy(address_aux, imss_info_->status, imss_info_->num_storages * sizeof(int));
