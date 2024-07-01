@@ -36,9 +36,9 @@
 
 // #include <sys/ptrace.h>
 
-#ifndef FCNTL_ADJUST_CMD
-#define FCNTL_ADJUST_CMD(__cmd) __cmd
-#endif
+// #ifndef FCNTL_ADJUST_CMD
+// #define FCNTL_ADJUST_CMD(__cmd) __cmd
+// #endif
 
 #define KB 1024
 #define GB 1073741824
@@ -920,7 +920,7 @@ void __attribute__((destructor)) run_me_last()
 		// t_s = clock();
 		release = -1;
 		slog_debug("[POSIX] release_imss()");
-		release_imss("imss://", CLOSE_DETACHED);
+		// release_imss("imss://", CLOSE_DETACHED);
 		slog_debug("[POSIX] stat_release()");
 		// stat_release();
 		//  imss_comm_cleanup();
@@ -1487,10 +1487,10 @@ int statfs(const char *restrict path, struct statfs *restrict buf)
 	}
 	else
 	{
-		slog_debug("[POSIX]. Calling Real 'statfs', path=%s.", path);
+		slog_full("[POSIX]. Calling Real 'statfs', path=%s.", path);
 		// fprintf(stderr, "[POSIX]. Calling Real 'statfs', path=%s.\n", path);
 		ret = real_statfs(path, buf);
-		slog_debug("[POSIX]. Ending Real 'statfs', path=%s.", path);
+		slog_full("[POSIX]. Ending Real 'statfs', path=%s.", path);
 	}
 	return ret;
 }
@@ -2366,7 +2366,7 @@ FILE *fopen(const char *restrict pathname, const char *restrict mode)
 
 		// fprintf(stderr, "Hercules fd =%d\n", ret);
 
-		ret = generalOpen(new_path, oflags, DEFFILEMODE, ret);
+		ret = generalOpen(new_path, oflags, ALLPERMS, ret);
 		// ret = generalOpen(new_path, flags, new_mode);
 
 		// slog_debug("[POSIX][fopen] File descriptor=%d", ret);
@@ -3233,7 +3233,7 @@ int ftruncate(int fd, off_t length)
 	}
 	else
 	{
-		slog_debug("[POSIX] Calling real 'ftruncate', fd=%d", fd);
+		slog_full("[POSIX] Calling real 'ftruncate', fd=%d", fd);
 		ret = real_ftruncate(fd, length);
 	}
 
