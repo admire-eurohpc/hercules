@@ -551,7 +551,7 @@ __attribute__((constructor)) void imss_posix_init(void)
 	slog_debug(" -- LOWER_BOUND_SERVERS: %d", LOWER_BOUND_SERVERS);
 	slog_debug(" -- REPL_FACTOR: %d", REPL_FACTOR);
 	slog_debug(" -- POLICY: %s", POLICY);
-	slog_debug(" -- RELEASE: %d", release);
+	slog_debug(" -- RELEASE: %d", 1);
 
 	// Metadata server
 	// if (release == 1)
@@ -1235,61 +1235,61 @@ pid_t fork(void)
 	return pid;
 }
 
-pid_t vfork(void)
-{
-	if (!real_vfork)
-		real_vfork = dlsym(RTLD_NEXT, __func__);
+// pid_t vfork(void)
+// {
+// 	if (!real_vfork)
+// 		real_vfork = dlsym(RTLD_NEXT, "vfork");
 
-	if (!init)
-	{
-		return real_vfork();
-	}
-	// pid_t pid = real_vfork();
-	// slog_debug("[POSIX] Ending real '%s', pid=%d", __func__, pid);
+// 	if (!init)
+// 	{
+// 		return real_vfork();
+// 	}
+// 	// pid_t pid = real_vfork();
+// 	// slog_debug("[POSIX] Ending real '%s', pid=%d", __func__, pid);
 
-	errno = 0;
-	slog_debug("[POSIX] Calling vfork");
-	// pid_t pid = real_vfork();
-	int status = -1;
-	pid_t pid = real_vfork(); // vfork(); // real_fork();
+// 	errno = 0;
+// 	slog_debug("[POSIX] Calling vfork");
+// 	// pid_t pid = real_vfork();
+// 	int status = -1;
+// 	pid_t pid = real_vfork(); // vfork(); // real_fork();
 
-	if (pid == -1)
-	{
+// 	if (pid == -1)
+// 	{
 
-		slog_error("[POSIX] Error 'real %s', errno=%d:%s", __func__, errno, strerror(errno));
-		perror("Vfork error");
-		// exit(EXIT_FAILURE);
-		return pid;
-	}
+// 		slog_error("[POSIX] Error 'real %s', errno=%d:%s", __func__, errno, strerror(errno));
+// 		perror("Vfork error");
+// 		// exit(EXIT_FAILURE);
+// 		return pid;
+// 	}
 
-	if (pid == 0) // child process.
-	{
-		// release is set to 0 to prevent clossing the communication twice (only the parent process must do it).
-		// release = 0;
-		// slog_debug("[POSIX] Child process");
-	}
-	else
-	{
-		// release = 0;
-		// errno = 0;
-		slog_debug("[POSIX] Parent process, pid=%d", pid);
-		// while (wait(&status) != pid)
-		// 	;
-		// if (status == 0)
-		// {
-		// 	slog_debug("[POSIX] Child process has ended, pid=%d", pid);
-		// }
-		// else
-		// {
-		// 	slog_error("[POSIX] Child process has failed, pid=%d", pid);
-		// }
+// 	if (pid == 0) // child process.
+// 	{
+// 		// release is set to 0 to prevent clossing the communication twice (only the parent process must do it).
+// 		release = 0;
+// 		// slog_debug("[POSIX] Child process");
+// 	}
+// 	// else
+// 	// {
+// 		// release = 0;
+// 		// errno = 0;
+// 		//// slog_debug("[POSIX] Parent process, pid=%d", pid);
+// 		// while (wait(&status) != pid)
+// 		// 	;
+// 		// if (status == 0)
+// 		// {
+// 		// 	slog_debug("[POSIX] Child process has ended, pid=%d", pid);
+// 		// }
+// 		// else
+// 		// {
+// 		// 	slog_error("[POSIX] Child process has failed, pid=%d", pid);
+// 		// }
 
-		// sleep(120);
-		// slog_debug("[POSIX] Ending '%s'", __func__);
-	}
+// 		// sleep(120);
+// 		// slog_debug("[POSIX] Ending '%s'", __func__);
+// 	// }
 
-	return pid;
-}
+// 	return pid;
+// }
 
 int lstat(const char *pathname, struct stat *buf)
 {
@@ -5649,22 +5649,22 @@ int fchdir(int fd)
 // 	return ret;
 // }
 
-void exit(int status)
-{
-	if (!real_exit)
-		real_exit = dlsym(RTLD_NEXT, __func__);
+// void exit(int status)
+// {
+// 	if (!real_exit)
+// 		real_exit = dlsym(RTLD_NEXT, __func__);
 
-	if (!init)
-	{
-		real_exit(status);
-	}
+// 	if (!init)
+// 	{
+// 		real_exit(status);
+// 	}
 
-	if (init)
-	{
-		slog_warn("Hercules must be destroy here");
-	}
-	real_exit(status);
-}
+// 	if (init)
+// 	{
+// 		slog_warn("Hercules must be destroy here");
+// 	}
+// 	real_exit(status);
+// }
 
 // int fcntl(int fd, int cmd, ... /* arg */)
 // {
