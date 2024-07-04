@@ -75,12 +75,23 @@ extern int32_t IMSS_DEBUG;
 		function_to_call;                             \
 	})
 #endif
+
+int32_t get_data_location(int32_t, int32_t, int32_t);
+int32_t
+find_server(int32_t n_servers,
+			int32_t n_msg,
+			const char *fname,
+			int32_t op_type);
 // typedef enum {
 //     CLIENT_SERVER_SEND_RECV_STREAM  = UCS_BIT(0),
 //     CLIENT_SERVER_SEND_RECV_DEFAULT = CLIENT_SERVER_SEND_RECV_STREAM
 // } send_type_t;
 
 // Structure storing all information related to a certain IMSS.
+// Note: if you add more elements to the imss_info struct, you should 
+// modify the serialization in stat_worker_helper > SET_OP > else > default case,
+// send_dynamic_stream > IMSS_INFO case, and recv_dynamic_stream > IMSS_INFO. Also, it is important to
+// recalculate the msg_size in case you add a list of pointers.
 typedef struct
 {
 
@@ -90,11 +101,16 @@ typedef struct
 	char type; // = 'I';
 	// Set of ips comforming the IMSS.
 	char **ips;
+	// List of data server status.
+	int *status;
+	// List used to indicate how many data servers was active in the moment of a server "n" was down.
+	int *arr_num_active_storages;
+	// Number of active data servers.
+	int num_active_storages;
 	// Number of IMSS servers.
 	int32_t num_storages;
 	// Server's dispatcher thread connection port.
 	uint16_t conn_port;
-
 } imss_info;
 
 // Structure storing the required connection resources to the IMSS in the client side.
@@ -122,6 +138,7 @@ typedef struct
 	// URI identifying a certain dataset.
 	char uri_[URI_];
 	// Byte specifying the type of structure.
+	// L = Local, D = Distributed.
 	char type; // = 'D';
 	// Policy that was followed in order to write the dataset.
 	char policy[8];
@@ -238,6 +255,7 @@ RETURNS:	 0 - Resources successfully initialized. Communication channels created
 -1 - In case of error.
 -2 - The imss instance has been already opened or created.
 	 */
+	int32_t open_imss_temp(char *imss_uri, int num_active_servers);
 	int32_t open_imss(char *imss_uri);
 
 	/* Method releasing client-side and/or server-side resources related to a certain IMSS instance.
@@ -330,11 +348,13 @@ RETURNS:	> 0 - Number identifying the retrieved dataset among the client's sessi
 	 */
 	int32_t open_dataset(char *dataset_uri, int opened);
 
+	int32_t imss_check(char *dataset_uri);
+
 	/*Method deleting a dataset.
 
 RETURNS:	 0 - Release operation took place successfully.
 -1 - In case of error.*/
-	int32_t delete_dataset(const char *dataset_uri);
+	int32_t delete_dataset(const char *dataset_uri, int32_t dataset_id);
 
 	int32_t close_dataset(const char *dataset_uri, int fd);
 
@@ -418,19 +438,36 @@ The current function does not allocate memory.
 				   int64_t start_offset,
 				   int64_t size);
 
-	/* Method retrieving a data element associated to a certain dataset.
-
-RECEIVES:	dataset_id - Number identifying the concerned dataset among the client's session.
-data_id    - Data block number identifying the data block to be retrieved.
-buffer     - Memory address where the requested block will be received. WARNING: memory must have been allocated.
-
-RETURNS:	 0 - The requested block was successfully retrieved.
--1 - In case of error.
+	/**
+	 * @brief Method retrieving a data element associated to a certain dataset.
+	 * @param dataset_id - Number identifying the concerned dataset among the client's session.
+	 * @param data_id    - Data block number identifying the data block to be retrieved.
+	 * @param buffer     - Memory address where the requested block will be received. WARNING: memory must have been allocated.
+	 * @returns 0 if the requested block was successfully retrieved, 0 if the requested block was not find in the remote server,
+	 * or -1 in case of error.
 	 */
-	int32_t get_data(int32_t dataset_id, int32_t data_id, char *buffer);
+	int32_t get_data(int32_t dataset_id, int32_t data_id, void *buffer);
 
+	/**
+	 * @brief Method retrieving a data element associated to a certain dataset starting in an offset.
+	 * @param dataset_id - Number identifying the concerned dataset among the client's session.
+	 * @param data_id    - Data block number identifying the data block to be retrieved.
+	 * @param buffer     - Memory address where the requested block will be received. WARNING: memory must have been allocated.
+	 * @param offset	 - Offset of the requested block.
+	 * @returns 0 if the requested block was successfully retrieved, 0 if the requested block was not find in the remote server,
+	 * or -1 in case of error.
+	 */
 	size_t get_ndata(int32_t dataset_id, int32_t data_id, void *buffer, ssize_t to_read, off_t offset);
 
+	/**
+	 * @brief Method used during malleability to retrieving a data element associated to a certain dataset starting in an offset.
+	 * @param dataset_id - Number identifying the concerned dataset among the client's session.
+	 * @param data_id    - Data block number identifying the data block to be retrieved.
+	 * @param buffer     - Memory address where the requested block will be received. WARNING: memory must have been allocated.
+	 * @param offset	 - Offset of the requested block.
+	 * @returns 0 if the requested block was successfully retrieved, 0 if the requested block was not find in the remote server,
+	 * or -1 in case of error.
+	 */
 	size_t get_data_mall(int32_t dataset_id, int32_t data_id, void *buffer, ssize_t to_read, off_t offset, int32_t num_storages);
 	/* Method storing a specific data element.
 
@@ -447,6 +484,9 @@ RETURNS:	 0 - The requested block was successfully stored.
 	int32_t set_data(int32_t dataset_id, int32_t data_id, const void *buffer, size_t size, off_t offset);
 
 	int32_t set_data_mall(int32_t dataset_id, int32_t data_id, const void *buffer, size_t size, off_t offset, int32_t num_storages);
+
+	int32_t set_data_server(const char* data_uri, int32_t data_id, const void *buffer, size_t size, off_t offset, int next_server);
+	
 
 	/* Method retrieving the location of a specific data object.
 
@@ -490,7 +530,7 @@ RETURNS:	0 - No entity associated to the URI provided exists.
 2 - The URI provided corresponds to a dataset.
 -1 - In case of error.
 	 */
-	int32_t get_type(char *uri);
+	int32_t get_type(const char *uri);
 
 	// Method retriving list of servers to read.
 	int32_t
@@ -536,6 +576,8 @@ RETURNS:	0 - Resources were released successfully.
 	int32_t imss_flush_data();
 
 	int32_t imss_comm_cleanup();
+
+	void close_ucx_endpoint(ucp_worker_h worker, ucp_ep_h ep);
 
 #ifdef __cplusplus
 }

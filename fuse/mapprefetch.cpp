@@ -76,7 +76,7 @@ extern "C"
     m->erase(path);
   }
 
-  void map_init_prefetch(void *map, char *path, char *buff)
+  void map_init_prefetch(void *map, const char *path, char *buff)
   {
     // critical section (exclusive access to std::cout signaled by lifetime of lck):
     std::unique_lock<std::mutex> lck(mtx);

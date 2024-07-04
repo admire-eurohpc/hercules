@@ -15,13 +15,15 @@
 static sa_family_t ai_family = AF_INET;
 
 /* asynchronous writes stuff */
-extern void *map_ep;	  // map_ep used for async write
-extern int32_t is_client; // used to make sure the server doesn't do map_ep stuff
+extern void *map_ep; // map_ep used for async write
+// extern int32_t is_client; // used to make sure the server doesn't do map_ep stuff
 pthread_mutex_t map_ep_mutex;
 pthread_mutex_t lock_ucx_comm = PTHREAD_MUTEX_INITIALIZER;
 
 void *send_buffer;
 void *recv_buffer;
+
+int ep_timeout = 0;
 
 ucs_status_t ucp_mem_alloc(ucp_context_h ucp_context, size_t length, void **address_p)
 {
@@ -70,13 +72,13 @@ int init_worker(ucp_context_h ucp_context, ucp_worker_h *ucp_worker)
 	memset(&worker_params, 0, sizeof(worker_params));
 
 	worker_params.field_mask = UCP_WORKER_PARAM_FIELD_THREAD_MODE;
-	// worker_params.thread_mode = UCS_THREAD_MODE_MULTI;
-	worker_params.thread_mode = UCS_THREAD_MODE_SERIALIZED;
+	worker_params.thread_mode = UCS_THREAD_MODE_MULTI;
+	// worker_params.thread_mode = UCS_THREAD_MODE_SERIALIZED;
 
 	status = ucp_worker_create(ucp_context, &worker_params, ucp_worker);
 	if (status != UCS_OK)
 	{
-		//fprintf(stderr, "failed to ucp_worker_create (%s)", ucs_status_string(status));
+		// fprintf(stderr, "failed to ucp_worker_create (%s)", ucs_status_string(status));
 		slog_error("failed to ucp_worker_create (%s)", ucs_status_string(status));
 		perror("ERRIMSS_WORKER_INIT");
 		ret = -1;
@@ -114,6 +116,7 @@ int init_context(ucp_context_h *ucp_context, ucp_config_t *config, ucp_worker_h 
 							UCP_PARAM_FIELD_REQUEST_INIT |
 							UCP_PARAM_FIELD_NAME;
 	ucp_params.features = UCP_FEATURE_TAG;
+	ucp_params.features |= UCP_FEATURE_WAKEUP;
 	ucp_params.request_size = sizeof(struct ucx_context);
 	ucp_params.request_init = request_init;
 	ucp_params.name = "hercules";
@@ -160,6 +163,10 @@ err:
 	return ret;
 }
 
+/***
+ * @brief send data to the endpoint specified in "ep".
+ * @return number of bytes sent on success, on error, 0 is returned.
+ */
 size_t send_data(ucp_worker_h ucp_worker, ucp_ep_h ep, const void *msg, size_t msg_len, uint64_t from)
 {
 	ucs_status_t status;
@@ -179,24 +186,49 @@ size_t send_data(ucp_worker_h ucp_worker, ucp_ep_h ep, const void *msg, size_t m
 	send_param.op_attr_mask = UCP_OP_ATTR_FIELD_CALLBACK |
 							  UCP_OP_ATTR_FIELD_USER_DATA;
 	send_param.cb.send = send_handler_data;
-	// send_param.datatype    = ucp_dt_make_contig(1);
-	// send_param.memory_type  = UCS_MEMORY_TYPE_HOST;
+	send_param.datatype = ucp_dt_make_contig(1);
+	send_param.memory_type = UCS_MEMORY_TYPE_HOST;
 	send_param.user_data = &ctx;
 
+	clock_t t;
+	t = clock();
 	request = (struct ucx_context *)ucp_tag_send_nbx(ep, ctx.buffer, msg_len, from, &send_param);
 	// request = (struct ucx_context *)ucp_tag_send_sync_nbx(ep, ctx.buffer, msg_len, from, &send_param);
-	status = ucx_wait(ucp_worker, request, "send", "data");
+	status = ucx_wait(ucp_worker, request, "send", "data"); // original.
+	// if (request == NULL)
+	// {
+	// 	status = UCS_OK;
+	// }
+	// else
+	// {
+	// 	while (((status = ucp_request_check_status(request)) == UCS_INPROGRESS) && ep_timeout != 1)
+	// 	{
+	// 		ucp_worker_progress(ucp_worker);
+	// 	}
+	// }
+	t = clock() - t;
+	double time_taken = ((double)t) / CLOCKS_PER_SEC; // in seconds
+	// fprintf(stderr,"********** send data %lu time = %lf\n", msg_len, time_taken);
 
-	/*	if  (UCS_PTR_IS_ERR(request)) {
-			slog_fatal("[COMM] Error sending to endpoint.");
-			return 0;
-		}
-	*/
+	if (UCS_PTR_IS_ERR(request))
+	{
+		// slog_fatal("[COMM] Error sending to endpoint.");
+		slog_fatal("HERCULES_ERR_SEND_DATA");
+		fprintf(stderr, "HERCULES_ERR_SEND_DATA\n");
+		perror("HERCULES_ERR_SEND_DATA");
+		return 0;
+	}
+
 	return msg_len;
 }
 
+/**
+ * @brief Send a request to an endpoint specified by "ep".
+ * @return Number of bytes sent on success, on error 0 is returned.
+ */
 size_t send_req(ucp_worker_h ucp_worker, ucp_ep_h ep, ucp_address_t *addr, size_t addr_len, char *req)
 {
+
 	ucs_status_t status;
 	struct ucx_context *request;
 	size_t msg_len;
@@ -219,11 +251,14 @@ size_t send_req(ucp_worker_h ucp_worker, ucp_ep_h ep, ucp_address_t *addr, size_
 	ctx.complete = 0;
 	ctx.buffer = (char *)msg;
 
-	send_param.op_attr_mask = UCP_OP_ATTR_FIELD_CALLBACK |
+	send_param.op_attr_mask = UCP_OP_ATTR_FIELD_DATATYPE |
+							  UCP_OP_ATTR_FIELD_CALLBACK |
+							  UCP_OP_ATTR_FLAG_NO_IMM_CMPL |
 							  UCP_OP_ATTR_FIELD_USER_DATA;
 
-	// send_param.datatype = ucp_dt_make_contig(1);
+	send_param.datatype = ucp_dt_make_contig(1);
 	send_param.cb.send = send_handler_req;
+	// send.param.cb.err = err_cb_client();
 	// send_param.memory_type  = UCS_MEMORY_TYPE_HOST;
 	send_param.user_data = &ctx;
 
@@ -232,16 +267,29 @@ size_t send_req(ucp_worker_h ucp_worker, ucp_ep_h ep, ucp_address_t *addr, size_
 	// request = (struct ucx_context *)ucp_tag_send_sync_nbx(ep, msg, msg_len, tag_req, &send_param);
 	// slog_info("[COMM][send_req] after ucp_tag_send_nbx");
 	// slog_info("[COMM][send_req] before ucx_wait");
-	status = ucx_wait(ucp_worker, request, "send", req);
+	status = ucx_wait(ucp_worker, request, "send", req); // original
+	// if (request == NULL)
+	// {
+	// 	status = UCS_OK;
+	// }
+	// else
+	// {
+	// 	while (((status = ucp_request_check_status(request)) == UCS_INPROGRESS) && ep_timeout != 1)
+	// 	{
+	// 		ucp_worker_progress(ucp_worker);
+	// 	}
+	// }
 	// slog_info("[COMM][send_req] after ucx_wait");
 
 	if (status != UCS_OK)
 	{
 		// slog_error("Connection error\n");
+		ep_timeout = 0;
 		free(msg);
 		//     // goto err_ep;
 		// 	ep_close(ucp_worker, ep, UCP_EP_CLOSE_FLAG_FORCE);
 		slog_fatal("[COMM][send_req] Connection error, request=%s", req);
+		fprintf(stderr, "[COMM][send_req] Connection error, request=%s\n", req);
 		// return -1;
 		return 0;
 	}
@@ -260,7 +308,9 @@ size_t get_recv_data_length(ucp_worker_h ucp_worker, uint64_t dest)
 	// async = 1;
 	do
 	{
+		/* Progressing before probe to update the state */
 		ucp_worker_progress(ucp_worker);
+		/* Probing incoming events in non-block mode */
 		msg_tag = ucp_tag_probe_nb(ucp_worker, dest, tag_mask, 0, &info_tag);
 	} while (msg_tag == NULL);
 
@@ -269,13 +319,17 @@ size_t get_recv_data_length(ucp_worker_h ucp_worker, uint64_t dest)
 	return info_tag.length;
 }
 
+/**
+ * @brief Fill "msg" with the message received from the server. "msg" must be allocated.
+ * @return number of bytes received, on error 0 is returned.
+ */
 size_t recv_data(ucp_worker_h ucp_worker, ucp_ep_h ep, void *msg, size_t msg_length, uint64_t dest, int async)
 {
 	// pthread_mutex_lock(&lock_ucx_comm);
 
 	// slog_debug("Init recv_data");
 	// ucp_tag_recv_info_t info_tag;
-	// 	ucp_tag_message_h msg_tag;
+	// ucp_tag_message_h msg_tag;
 	ucp_request_param_t recv_param;
 	struct ucx_context *request;
 	ucs_status_t status;
@@ -289,6 +343,8 @@ size_t recv_data(ucp_worker_h ucp_worker, ucp_ep_h ep, void *msg, size_t msg_len
 	// 	ucp_worker_progress(ucp_worker);
 	// 	msg_tag = ucp_tag_probe_nb(ucp_worker, dest, tag_mask, 0, &info_tag);
 	// } while (msg_tag == NULL);
+
+	// msg = (void *)malloc(info_tag.length);
 
 	/*
 	   for (;;) {
@@ -312,6 +368,8 @@ size_t recv_data(ucp_worker_h ucp_worker, ucp_ep_h ep, void *msg, size_t msg_len
 
 	slog_debug("[COMM] Probe tag (%lu bytes)", msg_length);
 	//	t = clock();
+	clock_t t;
+	t = clock();
 	if (async)
 	{
 		request = (struct ucx_context *)ucp_tag_recv_nbx(ucp_worker, msg, msg_length, dest, tag_mask, &recv_param);
@@ -320,6 +378,121 @@ size_t recv_data(ucp_worker_h ucp_worker, ucp_ep_h ep, void *msg, size_t msg_len
 	{
 		request = (struct ucx_context *)ucp_tag_recv_nbx(ucp_worker, recv_buffer, msg_length, dest, tag_mask, &recv_param);
 		memcpy(msg, recv_buffer, msg_length);
+	}
+
+	// if (errno != 0)
+	// {
+	// 	slog_debug("[COMM] Msg in error: %s, length=%d, errno=%d:%s", msg, msg_length, errno, strerror(errno));
+	// }
+
+	// sleep(1);
+
+	status = ucx_wait(ucp_worker, request, "recv", "data");
+
+	t = clock() - t;
+	double time_taken = ((double)t) / CLOCKS_PER_SEC; // in seconds
+	// fprintf(stderr,"********** recv data = %lf\n", time_taken);
+
+	// slog_debug("[COMM] status=%s.", ucs_status_string(status));
+	// slog_debug("--- %s\n", msg);
+
+	// t = clock() -t;
+	//	double time_taken = ((double)t) / CLOCKS_PER_SEC; // in seconds
+	//               slog_info("[srv_worker_helper] recv_nbx time %f s", time_taken);
+
+	// slog_debug("[COMM] Recv tag (%ld bytes).", msg_length);
+	// fprintf(stderr, "[COMM] Recv tag (%ld bytes).\n", msg_length);
+	// pthread_mutex_unlock(&lock_ucx_comm);
+
+	if (status != UCS_OK)
+	{
+		slog_error("[COMM] HERCULES_RECV_DATA_ERR, msg_length=%lu", msg_length);
+		// pthread_mutex_unlock(&lock_ucx_comm);
+		// return -1;
+		return 0;
+	}
+
+	// pthread_mutex_unlock(&lock_ucx_comm);
+
+	return msg_length;
+}
+
+/**
+ * @brief
+ * Malloc and fill "msg" with the message received from the server. "msg" is free in case of error
+ * or when the length of the message received is 0. In other case "msg" must be free by the calling function.
+ * @param ucp_worker
+ * @param ep
+ * @param msg
+ * @param msg_length
+ * @param dest
+ * @param async
+ * @return number of bytes received, on error 0 is returned.
+ */
+size_t recv_data_opt(ucp_worker_h ucp_worker, ucp_ep_h ep, void **msg, size_t msg_length, uint64_t dest, int async)
+{
+
+	// slog_debug("Init recv_data");
+	ucp_tag_recv_info_t info_tag;
+	ucp_tag_message_h msg_tag;
+	ucp_request_param_t recv_param;
+	struct ucx_context *request;
+	ucs_status_t status;
+
+	async = 1;
+	// clock_t t;
+
+	slog_debug("[COMM] Waiting message  as  %" PRIu64 ".", dest);
+	pthread_mutex_lock(&lock_ucx_comm);
+	do
+	{
+		ucp_worker_progress(ucp_worker);
+		msg_tag = ucp_tag_probe_nb(ucp_worker, dest, tag_mask, 0, &info_tag);
+	} while (msg_tag == NULL);
+	msg_length = info_tag.length;
+	slog_debug("[COMM] Probe tag (%lu bytes)", msg_length);
+	if (msg_length <= 0)
+	{
+		pthread_mutex_unlock(&lock_ucx_comm);
+		perror("ERROR_GETTING_MESSAGE_LENGTH");
+		slog_error("ERROR_GETTING_MESSAGE_LENGTH");
+		return 0;
+	}
+	if (*msg == NULL)
+	{
+		slog_live("Allocating memory=%lu", msg_length);
+		*msg = (void *)malloc(msg_length);
+	}
+
+	/*
+	   for (;;) {
+	   msg_tag = ucp_tag_probe_nb(ucp_worker, tag_data, tag_mask, 0, &info_tag);
+	   if (msg_tag != NULL) {
+	   break;
+	   } else if (ucp_worker_progress(ucp_worker)) {
+	   continue;
+	   }
+	   status = ucp_worker_wait(ucp_worker);
+
+	   }
+	 */
+	recv_param.op_attr_mask = UCP_OP_ATTR_FIELD_DATATYPE |
+							  UCP_OP_ATTR_FIELD_CALLBACK |
+							  UCP_OP_ATTR_FLAG_NO_IMM_CMPL |
+							  UCP_OP_ATTR_FIELD_USER_DATA;
+
+	recv_param.datatype = ucp_dt_make_contig(1);
+	recv_param.cb.recv = recv_handler;
+
+	//	t = clock();
+	if (async)
+	{
+		request = (struct ucx_context *)ucp_tag_recv_nbx(ucp_worker, *msg, msg_length, dest, tag_mask, &recv_param);
+	}
+	else
+	{
+		request = (struct ucx_context *)ucp_tag_recv_nbx(ucp_worker, recv_buffer, msg_length, dest, tag_mask, &recv_param);
+		memcpy(*msg, recv_buffer, msg_length);
 	}
 
 	// if (errno != 0)
@@ -338,15 +511,18 @@ size_t recv_data(ucp_worker_h ucp_worker, ucp_ep_h ep, void *msg, size_t msg_len
 
 	// slog_debug("[COMM] Recv tag (%ld bytes).", msg_length);
 	// fprintf(stderr, "[COMM] Recv tag (%ld bytes).\n", msg_length);
-	//  pthread_mutex_unlock(&lock_ucx_comm);
+	// pthread_mutex_unlock(&lock_ucx_comm);
 
 	if (status != UCS_OK)
 	{
-		slog_error("[COMM] HERCULES_RECV_DATA_ERRR, msg_length=%lu", msg_length);
+		slog_error("[COMM] HERCULES_RECV_DATA_ERR, msg_length=%lu", msg_length);
+		free(*msg);
+		pthread_mutex_unlock(&lock_ucx_comm);
 		// return -1;
 		return 0;
 	}
 
+	pthread_mutex_unlock(&lock_ucx_comm);
 	return msg_length;
 }
 
@@ -433,14 +609,20 @@ void send_cb(void *request, ucs_status_t status, void *user_data)
  */
 void err_cb_client(void *arg, ucp_ep_h ep, ucs_status_t status)
 {
-	ucs_status_t *arg_status = (ucs_status_t *)arg;
+	// int *server_status = (int *) arg;
+	// *server_status = 0;
+	// ucs_status_t *arg_status = (ucs_status_t *)arg;
 	// if (status != UCS_ERR_CONNECTION_RESET && status != UCS_ERR_ENDPOINT_TIMEOUT)
 	// {
 	// }
 	// slog_error("[COMM] Client error handling callback was invoked with status %d (%s)", status, ucs_status_string(status));
 	// fprintf(stderr, "client error handling callback was invoked with status %d (%s)", status, ucs_status_string(status));
 	slog_error("failure handler called with status %d (%s)\n", status, ucs_status_string(status));
-	*arg_status = status;
+	fprintf(stderr, "failure handler called with status %d (%s)\n", status, ucs_status_string(status));
+	// if(status == UCS_ERR_ENDPOINT_TIMEOUT) {
+	ep_timeout = 1;
+	// }
+	// *arg_status = status;
 }
 
 void err_cb_server(void *arg, ucp_ep_h ep, ucs_status_t status)
@@ -521,7 +703,40 @@ ucs_status_t server_create_ep(ucp_worker_h data_worker,
 	return status;
 }
 
-ucs_status_t client_create_ep(ucp_worker_h worker, ucp_ep_h *ep, ucp_address_t *peer_addr)
+ucs_status_t client_create_ep_data(ucp_worker_h worker, ucp_ep_h *ep, ucp_address_t *peer_addr, int *server_status)
+{
+	ucp_ep_params_t ep_params;
+	ucs_status_t status;
+	ucs_status_t ep_status = UCS_OK;
+
+	/* Server creates an ep to the client on the data worker.
+	 * This is not the worker the listener was created on.
+	 * The client side should have initiated the connection, leading
+	 * to this ep's creation */
+
+	ep_params.field_mask = UCP_EP_PARAM_FIELD_REMOTE_ADDRESS |
+						   UCP_EP_PARAM_FIELD_ERR_HANDLING_MODE |
+						   UCP_EP_PARAM_FIELD_ERR_HANDLER |
+						   UCP_EP_PARAM_FIELD_USER_DATA;
+	ep_params.address = peer_addr;
+	ep_params.err_mode = UCP_ERR_HANDLING_MODE_PEER;
+	ep_params.err_handler.cb = err_cb_client;
+	ep_params.err_handler.arg = NULL;
+	// ep_params.err_handler.arg = &server_status;
+	ep_params.user_data = &ep_status;
+
+	// ucp_worker_print_info(worker, stderr);
+	status = ucp_ep_create(worker, &ep_params, ep);
+	if (status != UCS_OK)
+	{
+		fprintf(stderr, "failed to create an endpoint on the server: (%s)", ucs_status_string(status));
+	}
+
+	slog_debug("[COMM] Created client endpoint");
+	return status;
+}
+
+ucs_status_t client_create_ep_metadata(ucp_worker_h worker, ucp_ep_h *ep, ucp_address_t *peer_addr)
 {
 	ucp_ep_params_t ep_params;
 	ucs_status_t status;
@@ -570,7 +785,8 @@ int32_t send_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, void *data_str
 		imss_info *struct_ = (imss_info *)data_struct;
 
 		// Calculate the total size of the buffer storing the structure.
-		msg_size = sizeof(imss_info) + (LINE_LENGTH * struct_->num_storages);
+		// ips + status list + arr num active storages list.
+		msg_size = sizeof(imss_info) + (LINE_LENGTH * struct_->num_storages) + (sizeof(int) * struct_->num_storages) + (sizeof(int) * struct_->num_storages);
 
 		// Reserve the corresponding amount of memory for the previous buffer.
 		info_buffer = (char *)malloc(msg_size * sizeof(char));
@@ -587,8 +803,16 @@ int32_t send_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, void *data_str
 		for (int32_t i = 0; i < struct_->num_storages; i++)
 		{
 			memcpy(offset_pt, struct_->ips[i], LINE_LENGTH);
+			// slog_debug("pointer address = %p", &offset_pt);
 			offset_pt += LINE_LENGTH;
 		}
+
+		memcpy(offset_pt, struct_->status, sizeof(int) * struct_->num_storages);
+
+		offset_pt += (sizeof(int) * struct_->num_storages);
+		memcpy(offset_pt, struct_->arr_num_active_storages, sizeof(int) * struct_->num_storages);
+
+		// slog_debug("pointer address = %p", &offset_pt);
 
 		break;
 	}
@@ -638,7 +862,9 @@ int32_t send_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, void *data_str
 	}
 	}
 
-	if (send_data(ucp_worker, ep, info_buffer, msg_size, from) < 0)
+	// if (send_data(ucp_worker, ep, info_buffer, msg_size, from) < 0)
+	msg_size = send_data(ucp_worker, ep, info_buffer, msg_size, from);
+	if (msg_size <= 0)
 	{
 		slog_error("HERCULES_ERR_SENDDYNAMSTRUCT");
 		perror("HERCULES_ERR_SENDDYNAMSTRUCT");
@@ -649,12 +875,15 @@ int32_t send_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, void *data_str
 	return msg_size;
 }
 
-// Method retrieving a serialized dynamic data structure.
+/**
+ * @brief  Method retrieving a serialized dynamic data structure.
+ * @return bytes of the message received or -1 on error.
+ */
 int32_t recv_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, void *data_struct, int32_t data_type, uint64_t dest, size_t length)
 {
 	// size_t length = -1;
 	// char result[BUFFER_SIZE];
-	char *result; //= (char*)malloc(1024*130);
+	char *result = NULL; //= (char*)malloc(1024*130);
 	// if (length < 0)
 	// {
 	// 	// get the length of the message to be received.
@@ -672,13 +901,14 @@ int32_t recv_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, void *data_str
 	slog_info("[COMM] recv_dynamic_stream start, data_type=%d", data_type);
 	// receive the message from the backend.
 	size_t ret = recv_data(ucp_worker, ep, result, length, dest, 0);
-	if(ret == 0) {
+	// length = recv_data(ucp_worker, ep, result, length, dest, 0);
+	if (ret == 0)
+	{
 		slog_error("HERCULES_RECV_DATA_DYNAMIC_STREAM");
 		perror("HERCULES_RECV_DATA_DYNAMIC_STREAM");
 		free(result);
 		return -1;
 	}
-
 
 	char *msg_data = result;
 	// Formalize the received information.
@@ -705,15 +935,28 @@ int32_t recv_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, void *data_str
 		msg_data += sizeof(imss_info);
 
 		// Copy the dynamic fields into the structure.
-
 		struct_->ips = (char **)malloc(struct_->num_storages * sizeof(char *));
 
 		for (int32_t i = 0; i < struct_->num_storages; i++)
 		{
 			struct_->ips[i] = (char *)malloc(LINE_LENGTH * sizeof(char));
 			memcpy(struct_->ips[i], msg_data, LINE_LENGTH);
+			// slog_debug("pointer address = %p", &msg_data);
 			msg_data += LINE_LENGTH;
 		}
+
+		struct_->status = (int *)malloc(struct_->num_storages * sizeof(int));
+		memcpy(struct_->status, msg_data, struct_->num_storages * sizeof(int));
+
+		msg_data += (struct_->num_storages * sizeof(int));
+		struct_->arr_num_active_storages = (int *)malloc(struct_->num_storages * sizeof(int));
+		memcpy(struct_->arr_num_active_storages, msg_data, struct_->num_storages * sizeof(int));
+
+		// msg_data += struct_->num_storages * sizeof(int);
+
+		// memcpy(struct_->num_active_storages, msg_data, sizeof(int));
+
+		// slog_debug("pointer address = %p", &msg_data);
 
 		break;
 	}
@@ -765,7 +1008,143 @@ int32_t recv_dynamic_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, void *data_str
 	}
 	}
 	slog_info("[COMM] recv_dynamic_stream end %lu", length);
-	free(result);
+	// free(result);
+	return length;
+}
+
+/**
+ * @brief  Method retrieving a serialized dynamic data structure.
+ *
+ * @param ucp_worker
+ * @param ep
+ * @param data_struct
+ * @param data_type
+ * @param dest
+ * @param length
+ * @return bytes of the message received or -1 on error.
+ */
+int32_t recv_dynamic_stream_opt(ucp_worker_h ucp_worker, ucp_ep_h ep, void **data_struct, int32_t data_type, uint64_t dest, size_t length)
+{
+	// size_t length = -1;
+	// char result[BUFFER_SIZE];
+	void *result = NULL; //= (char*)malloc(1024*130);
+	// ucp_tag_recv_info_t info_tag;
+	// ucp_tag_message_h msg_tag;
+	// async = 1;
+	// do
+	// {
+	// 	ucp_worker_progress(ucp_worker);
+	// 	msg_tag = ucp_tag_probe_nb(ucp_worker, dest, tag_mask, 0, &info_tag);
+	// } while (msg_tag == NULL);
+	// length = info_tag.length
+
+	// reserve memory to the buffer to store the message.
+	// result = (char *)malloc(sizeof(char) * length);
+
+	slog_info("[COMM] recv_dynamic_stream start, data_type=%d", data_type);
+	// receive the message from the backend.
+	// size_t ret = recv_data_opt(ucp_worker, ep, &result, length, dest, 0);
+	length = recv_data_opt(ucp_worker, ep, &result, length, dest, 0);
+	if (length == 0)
+	{
+		slog_error("HERCULES_RECV_DATA_DYNAMIC_STREAM");
+		perror("HERCULES_RECV_DATA_DYNAMIC_STREAM");
+		// free(result);
+		return -1;
+	}
+
+	if (*data_struct == NULL)
+		*data_struct = (void *)malloc(length * sizeof(imss_info));
+
+	char *msg_data = (char *)result;
+	// Formalize the received information.
+	switch (data_type)
+	{
+	case IMSS_INFO:
+	{
+		slog_info(" \t\t receiving IMSS_INFO %lu", length);
+		imss_info *struct_ = (imss_info *)*data_struct;
+
+		// Copy the actual structure into the one provided through reference.
+		memcpy(struct_, msg_data, sizeof(imss_info));
+
+		slog_info(" \t\t msg_data=%s", msg_data);
+
+		if (!strncmp("$ERRIMSS_NO_KEY_AVAIL$", struct_->uri_, 22))
+		{
+			slog_error("[COMM] recv_dynamic_stream end  with error, length=%lu", length);
+			// return length;
+			free(result);
+			free(*data_struct);
+			return -1;
+		}
+
+		msg_data += sizeof(imss_info);
+
+		// Copy the dynamic fields into the structure.
+		slog_live("struct_->num_storages=%d", struct_->num_storages);
+		struct_->ips = (char **)malloc(struct_->num_storages * sizeof(char *));
+
+		for (int32_t i = 0; i < struct_->num_storages; i++)
+		{
+			struct_->ips[i] = (char *)malloc(LINE_LENGTH * sizeof(char));
+			memcpy(struct_->ips[i], msg_data, LINE_LENGTH);
+			msg_data += LINE_LENGTH;
+		}
+
+		break;
+	}
+
+	case DATASET_INFO:
+	{
+		if (!strncmp("$ERRIMSS_NO_KEY_AVAIL$", msg_data, 22))
+		{
+			slog_error("[COMM] recv_dynamic_stream end  with error, err code 22");
+			// return 22;
+			free(result);
+			free(*data_struct);
+			return -1;
+		}
+		slog_info(" \t\t DATASET_INFO %lu", length);
+		dataset_info *struct_ = (dataset_info *)*data_struct;
+
+		// Copy the actual structure into the one provided through reference.
+		memcpy(struct_, msg_data, sizeof(dataset_info));
+
+		// If the size of the message received was bigger than sizeof(dataset_info), something more came with it.
+
+		/*if (zmq_msg_size(&msg_struct) > sizeof(dataset_info)) MIRAR
+		  {
+		  msg_data += sizeof(dataset_info);
+
+		//Copy the remaining 'data_locations' field into the structure.
+		struct_->data_locations = (uint16_t *) malloc(struct_->num_data_elem * sizeof(uint16_t));
+		memcpy(struct_->data_locations, msg_data, (struct_->num_data_elem * sizeof(uint16_t)));
+		}*/
+		break;
+	}
+	case STRING:
+	case BUFFER:
+	{
+		// if (*data_struct == NULL)
+		// {
+		// 	*data_struct = (char *)malloc(length);
+		// }
+		slog_info(" \t\t receiving STRING or BUFFER %ld", length);
+		if (!strncmp("$ERRIMSS_NO_KEY_AVAIL$", msg_data, 22))
+		{
+			slog_error("[COMM] recv_dynamic_stream end with error %lu, msg_data=%s", length, msg_data);
+			free(result);
+			free(*data_struct);
+			// return length;
+			return -1;
+		}
+		memcpy(*data_struct, result, length);
+		break;
+	}
+	}
+	slog_info("[COMM] recv_dynamic_stream end %lu", length);
+	// free(result);
 	return length;
 }
 
@@ -981,6 +1360,12 @@ ucs_status_t ucx_wait(ucp_worker_h ucp_worker, struct ucx_context *request, cons
 {
 	ucs_status_t status;
 
+	/* if operation was completed immediately */
+	if (request == NULL)
+	{
+		return UCS_OK;
+	}
+
 	if (UCS_PTR_IS_ERR(request))
 	{
 		status = UCS_PTR_STATUS(request);
@@ -1005,7 +1390,7 @@ ucs_status_t ucx_wait(ucp_worker_h ucp_worker, struct ucx_context *request, cons
 
 	if (status != UCS_OK)
 	{
-		fprintf(stderr, "unable to %s %s (%s)", op_str, data_str,
+		fprintf(stderr, "unable to %s %s (%s)\n", op_str, data_str,
 				ucs_status_string(status));
 		slog_error("[COMM][ucx_wait] unable to %s %s (%s)", op_str, data_str, ucs_status_string(status));
 	}

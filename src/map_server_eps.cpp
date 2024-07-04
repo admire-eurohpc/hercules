@@ -7,7 +7,6 @@
 #include <map>
 #include "comms.h"
 
-
 #include <ucp/api/ucp.h>
 // #include <ucx/ucx.h>
 #include "map_server_eps.hpp"
@@ -38,10 +37,11 @@ void map_server_eps_erase(void *map, uint64_t uuid, ucp_worker_h ucp_worker)
 
 	// TODO
 	//  close ep if found
-	if (search != m->end())
+	// if (search != m->end())
 	{
 		// ucp_ep_flush(search->second);
-		ucp_ep_close_nb(search->second, UCP_EP_CLOSE_MODE_FLUSH);
+		// ucp_ep_close_nb(search->second, UCP_EP_CLOSE_MODE_FLUSH);
+
 		// * ucp_ep_h ep;
 		// * ep = search->second;
 		// * ucp_worker_progress(ucp_worker);

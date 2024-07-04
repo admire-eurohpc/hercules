@@ -74,7 +74,10 @@ set_policy(dataset_info *dataset)
 	return 0;
 }
 
-// Method retrieving the server that will receive the following message attending a policy.
+/**
+ * @brief Method retrieving the server that will receive the following message attending a policy.
+ * @return next server number (positive integer, >= 0) to send the operation according to the policy, on error -1 is returned, 
+*/
 int32_t
 find_server(int32_t n_servers,
 			int32_t n_msg,
@@ -82,7 +85,7 @@ find_server(int32_t n_servers,
 			int32_t op_type)
 {
 	int32_t next_server = -1;
-	slog_debug("[find_server] session_plcy=%ld", session_plcy);
+	slog_debug("session_plcy=%ld", session_plcy);
 	switch (session_plcy)
 	{
 	// Follow a round robin policy.
@@ -97,13 +100,13 @@ find_server(int32_t n_servers,
 			uint16_t crc_ = crc16(fname, strlen(fname));
 			// First server that received a block from the current file.
 			next_server = crc_ % n_servers;
-			slog_debug("[find_server] fname=%s, stat_dataset_res=%ld, next_server=%d, crc_=%d, n_servers=%d", fname, stat_dataset_res, next_server, crc_, n_servers);
+			slog_debug("fname=%s, stat_dataset_res=%ld, next_server=%d, crc_=%d, n_servers=%d", fname, stat_dataset_res, next_server, crc_, n_servers);
 		}
 		else
 		{
 			uint16_t crc_ = crc16(new_dataset.original_name, strlen(new_dataset.original_name));
 			next_server = crc_ % n_servers;
-			slog_debug("[find_server] fname=%s, new_dataset.original_name=%s, stat_dataset_res=%ld, next_server=%d, crc_=%d, n_servers=%d", fname, new_dataset.original_name, stat_dataset_res, next_server, crc_, n_servers);
+			slog_debug("fname=%s, new_dataset.original_name=%s, stat_dataset_res=%ld, next_server=%d, crc_=%d, n_servers=%d", fname, new_dataset.original_name, stat_dataset_res, next_server, crc_, n_servers);
 		}
 
 		// Next server receiving the following block.

@@ -223,7 +223,7 @@ void slog(int flag, char const *caller_name, const char *msg, ...)
 {
     int prev_errno = errno;
 
-    if (flag > slg.level)
+    if (flag > slg.level || (slg.level >= SLOG_READ && flag != SLOG_READ))
     {
         return;
     }
@@ -265,11 +265,14 @@ void slog(int flag, char const *caller_name, const char *msg, ...)
     sprintf(string, "[%d][%ld][%d:%s][%s]\t>\t%s", getpid(), pthread_self(), errno, strerror(errno), caller_name, in_string);
 
     /* Check logging levels. */
-    if (flag <= slg.level || flag <= slg.file_level)
+    if ((flag <= slg.level || flag <= slg.file_level))
     {
         /* Handle flags. */
         switch (flag)
         {
+        case SLOG_NONE:
+            strncpy(prints, string, sizeof(string));
+            break;
         case SLOG_LIVE:
             strncpy(color, CLR_NORMAL, sizeof(color));
             strncpy(alarm, "LIVE", sizeof(alarm));
@@ -307,8 +310,10 @@ void slog(int flag, char const *caller_name, const char *msg, ...)
             strncpy(color, CLR_BLUE, sizeof(color));
             strncpy(alarm, "FULL", sizeof(alarm));
             break;
-        case SLOG_NONE:
-            strncpy(prints, string, sizeof(string));
+        case SLOG_READ:
+            strncpy(color, CLR_GREEN, sizeof(color));
+            strncpy(alarm, "READ", sizeof(alarm));
+            slg.to_console = 0;
             break;
         default:
             strncpy(prints, string, sizeof(string));
@@ -446,6 +451,10 @@ int getLevel(char *str)
         ret = SLOG_PANIC;
     if (!strcmp(str, "SLOG_TIME"))
         ret = SLOG_TIME;
+    if (!strcmp(str, "SLOG_FULL"))
+        ret = SLOG_FULL;
+    if (!strcmp(str, "SLOG_READ"))
+        ret = SLOG_READ;
 
     if (ret == -1)
     {
